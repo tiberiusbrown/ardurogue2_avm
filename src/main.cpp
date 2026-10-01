@@ -120,16 +120,28 @@ void status_item(Item item)
     }
 }
 
-// Four vertical columns per symbol. The fifth pixel is left blank between tiles.
-static const uint8_t AVM_PROGMEM icons[][4] = {
-    {0x06, 0x09, 0x0b, 0x06}, // player
-    {0x06, 0x0f, 0x09, 0x06}, // ordinary monster
-    {0x09, 0x06, 0x0f, 0x09}, // Lord of Darkness
-    {0x04, 0x0e, 0x0e, 0x04}, // item
-    {0x04, 0x04, 0x0f, 0x06}, // down stairs
-    {0x06, 0x0f, 0x04, 0x04}, // up stairs
-    {0x0f, 0x09, 0x09, 0x0f}, // door
+// ArduRogue's four-column sprites (draw.cpp), with each column in one nibble.
+static const uint16_t PROGMEM monster_icons[] = {
+    0x0000, // none
+    0xf211, // rat
+    0x0bd0, // snake
+    0x9db9, // skeleton: ArduRogue's zombie
+    0x0f9f, // orc
+    0x01f1, // troll
+    0x0f88, // Lord of Darkness
 };
+static const uint16_t PROGMEM item_icons[] = {
+    0x0000, // none
+    0x9429, // food
+    0x0bb0, // healing potion
+    0x04f4, // sword
+    0x0f90, // armor
+    0x0606, // amulet
+};
+static constexpr uint16_t PLAYER_ICON = 0x6ff6;
+static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
+static constexpr uint16_t UP_STAIRS_ICON = 0x8cef;
+static constexpr uint16_t DOOR_ICON = 0xf99f;
 
 void pixel(int16_t x, int16_t y)
 {
@@ -149,10 +161,14 @@ void column(uint8_t x, uint8_t y, uint8_t bits)
         __avm_framebuffer[offset + 128] |= static_cast<uint8_t>(bits >> (8 - shift));
 }
 
-void icon(uint8_t kind, uint8_t x, uint8_t y)
+void icon(uint16_t shape, uint8_t x, uint8_t y)
 {
-    for(uint8_t col = 0; col < 4; ++col)
-        column(static_cast<uint8_t>(x + col), y, icons[kind][col]);
+    avm_draw_filled_rect_black(x, y, 4, 4);
+    for(uint8_t col = 0; col < 4; ++col) {
+        column(static_cast<uint8_t>(x + col), y,
+               static_cast<uint8_t>(shape >> 12));
+        shape = static_cast<uint16_t>(shape << 4);
+    }
 }
 
 bool screen_tile(uint8_t x, uint8_t y, uint8_t& sx, uint8_t& sy)
@@ -259,29 +275,33 @@ void render_play()
         uint8_t sx, sy;
         if(!door_open(i) && screen_tile(door.x, door.y, sx, sy) &&
            explored(door.x, door.y))
-            icon(6, static_cast<uint8_t>(sx * 5),
+            icon(DOOR_ICON, static_cast<uint8_t>(sx * 5),
                     static_cast<uint8_t>(sy * 5));
     }
     uint8_t sx, sy;
     if(screen_tile(game.up_x, game.up_y, sx, sy) &&
        explored(game.up_x, game.up_y))
-        icon(5, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+        icon(UP_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
+             static_cast<uint8_t>(sy * 5));
     if(game.floor < FLOORS - 1 &&
        screen_tile(game.down_x, game.down_y, sx, sy) &&
        explored(game.down_x, game.down_y))
-        icon(4, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+        icon(DOWN_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
+             static_cast<uint8_t>(sy * 5));
     for(const GroundItem& item : game.ground)
         if(item.type && in_sight(item.x, item.y, sight, sx, sy))
-            icon(3, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+            icon(item_icons[item.type], static_cast<uint8_t>(sx * 5),
+                 static_cast<uint8_t>(sy * 5));
     for(const DroppedItem& item : game.dropped)
         if(item.type && item.floor == game.floor &&
            in_sight(item.x, item.y, sight, sx, sy))
-            icon(3, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+            icon(item_icons[item.type], static_cast<uint8_t>(sx * 5),
+                 static_cast<uint8_t>(sy * 5));
     for(const Monster& monster : game.monsters)
         if(monster.type && in_sight(monster.x, monster.y, sight, sx, sy))
-            icon(monster.type == LORD ? 2 : 1,
+            icon(monster_icons[monster.type],
                  static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
-    icon(0, 30, 30);
+    icon(PLAYER_ICON, 30, 30);
     for(uint8_t y = 0; y < 64; ++y)
         pixel(64, y);
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
