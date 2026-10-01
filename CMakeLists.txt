@@ -2,12 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(ardurogue2 LANGUAGES NONE)
 
-if(NOT DEFINED AVM_SDK_ROOT)
-    set(AVM_SDK_ROOT "" CACHE PATH "Path to the installed AVM SDK")
-endif()
-if(NOT AVM_SDK_ROOT)
-    message(FATAL_ERROR "Set AVM_SDK_ROOT to the installed AVM SDK directory")
-endif()
+set(AVM_SDK_ROOT "" CACHE PATH "Path to the installed AVM SDK")
 
 if(CMAKE_HOST_WIN32)
     set(AVM_HOST_EXE_SUFFIX ".exe")
@@ -15,16 +10,43 @@ else()
     set(AVM_HOST_EXE_SUFFIX "")
 endif()
 
-set(AVM_SDK_BIN "${AVM_SDK_ROOT}/bin")
+if(AVM_SDK_ROOT)
+    set(AVM_SDK_BIN "${AVM_SDK_ROOT}/bin")
+    set(AVM_CLANG "${AVM_SDK_BIN}/avm-clang${AVM_HOST_EXE_SUFFIX}")
+    set(AVM_LD "${AVM_SDK_BIN}/avm-ld${AVM_HOST_EXE_SUFFIX}")
+    set(AVM_IMAGE "${AVM_SDK_BIN}/avm-image${AVM_HOST_EXE_SUFFIX}")
+else()
+    find_program(AVM_CLANG NAMES avm-clang)
+    if(NOT AVM_CLANG)
+        message(FATAL_ERROR
+            "avm-clang was not found on PATH; set AVM_SDK_ROOT or add the AVM SDK bin directory to PATH")
+    endif()
+    file(REAL_PATH "${AVM_CLANG}" AVM_CLANG_REAL)
+    get_filename_component(AVM_SDK_BIN "${AVM_CLANG_REAL}" DIRECTORY)
+    get_filename_component(AVM_SDK_ROOT "${AVM_SDK_BIN}/.." ABSOLUTE)
+    find_program(AVM_LD NAMES avm-ld HINTS "${AVM_SDK_BIN}")
+    find_program(AVM_IMAGE NAMES avm-image HINTS "${AVM_SDK_BIN}")
+    if(NOT AVM_LD OR NOT AVM_IMAGE)
+        message(FATAL_ERROR
+            "avm-ld and avm-image must be on PATH or in ${AVM_SDK_BIN}")
+    endif()
+endif()
+
 set(AVM_SYSROOT "${AVM_SDK_ROOT}/sysroot")
-set(AVM_CLANG "${AVM_SDK_BIN}/avm-clang${AVM_HOST_EXE_SUFFIX}")
-set(AVM_LD "${AVM_SDK_BIN}/avm-ld${AVM_HOST_EXE_SUFFIX}")
-set(AVM_IMAGE "${AVM_SDK_BIN}/avm-image${AVM_HOST_EXE_SUFFIX}")
 set(AVM_INTERPRETER "${AVM_SDK_BIN}/avm/interp.hex")
 
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
-        AND NOT EXISTS "${AVM_CLANG}")
-    message(FATAL_ERROR "AVM SDK not found at ${AVM_SDK_ROOT}; build and install it first")
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    foreach(AVM_REQUIRED_FILE IN ITEMS
+            "${AVM_CLANG}" "${AVM_LD}" "${AVM_IMAGE}"
+            "${AVM_INTERPRETER}"
+            "${AVM_SYSROOT}/include/avm.h"
+            "${AVM_SYSROOT}/lib/crt0.o"
+            "${AVM_SYSROOT}/lib/libavm.a"
+            "${AVM_SYSROOT}/lib/libavm-builtins.a")
+        if(NOT EXISTS "${AVM_REQUIRED_FILE}")
+            message(FATAL_ERROR "AVM SDK file not found: ${AVM_REQUIRED_FILE}")
+        endif()
+    endforeach()
 endif()
 
 set(ARDUROGUE2_OBJECTS)

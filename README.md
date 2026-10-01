@@ -48,10 +48,14 @@ accumulate there; the next action clears them. Longer messages pause at
 ## Build
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DAVM_SDK_ROOT=/path/to/avm-sdk
+cmake -S . -B build
 cmake --build build --config RelWithDebInfo --target ardurogue2
 ```
+
+The build finds `avm-clang`, `avm-ld`, and `avm-image` on `PATH` and uses the
+compiler's SDK directory for headers, libraries, and interpreter files. You can
+set `-DAVM_SDK_ROOT=/path/to/avm-sdk` to choose a specific installation.
+Open this project folder in VS Code to use the default build task.
 
 The Arduboy FX package is written to `projects/ardurogue2/ardurogue2.arduboy`.
 When built from the parent `avm` repository, CMake builds and installs the SDK
