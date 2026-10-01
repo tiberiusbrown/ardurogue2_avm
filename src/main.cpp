@@ -75,7 +75,7 @@ void status_entity(uint8_t type)
     switch(type) {
     case RAT: status_words_P(F("rat")); break;
     case SNAKE: status_words_P(F("snake")); break;
-    case SKELETON: status_words_P(F("skeleton")); break;
+    case ZOMBIE: status_words_P(F("zombie")); break;
     case ORC: status_words_P(F("orc")); break;
     case TROLL: status_words_P(F("troll")); break;
     case LORD: status_words_P(F("Lord of Darkness")); break;
@@ -125,7 +125,7 @@ static const uint16_t PROGMEM monster_icons[] = {
     0x0000, // none
     0xf211, // rat
     0x0bd0, // snake
-    0x9db9, // skeleton: ArduRogue's zombie
+    0x9db9, // zombie
     0x0f9f, // orc
     0x01f1, // troll
     0x0f88, // Lord of Darkness

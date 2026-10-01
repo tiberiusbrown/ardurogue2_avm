@@ -30,7 +30,7 @@ enum ItemType : uint8_t {
 };
 
 enum MonsterType : uint8_t {
-    NO_MONSTER, RAT, SNAKE, SKELETON, ORC, TROLL, LORD
+    NO_MONSTER, RAT, SNAKE, ZOMBIE, ORC, TROLL, LORD
 };
 
 struct Room { uint8_t x, y, w, h; };
