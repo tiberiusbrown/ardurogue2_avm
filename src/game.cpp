@@ -6,6 +6,57 @@ namespace rogue {
 Session session = {NONE, 0, false};
 
 static const uint8_t PROGMEM monster_damage[] = {0, 1, 2, 2, 3, 4, 6};
+static const uint8_t PROGMEM monster_health[] = {0, 3, 5, 8, 12, 17, 48};
+
+uint8_t monster_effect(const Monster& monster, MonsterEffect effect)
+{
+    uint8_t packed = monster.effects[effect >> 1];
+    return effect & 1 ? packed >> 4 : packed & 0x0f;
+}
+
+static void set_monster_effect(Monster& monster, MonsterEffect effect,
+                               uint8_t duration)
+{
+    uint8_t& packed = monster.effects[effect >> 1];
+    if(effect & 1)
+        packed = static_cast<uint8_t>((packed & 0x0f) | (duration << 4));
+    else
+        packed = static_cast<uint8_t>((packed & 0xf0) | duration);
+}
+
+static void monster_status(const Monster& monster,
+                           const char PROGMEM* message)
+{
+    status(F("The"));
+    status(static_cast<MonsterType>(monster.type));
+    status(message);
+}
+
+static void age_monster_effects(Monster& monster)
+{
+    for(uint8_t i = MON_CONFUSED; i <= MON_INVISIBLE; ++i) {
+        auto effect = static_cast<MonsterEffect>(i);
+        uint8_t duration = monster_effect(monster, effect);
+        if(duration) {
+            set_monster_effect(monster, effect,
+                               static_cast<uint8_t>(duration - 1));
+            if(duration == 1) {
+                switch(effect) {
+                case MON_CONFUSED:
+                    monster_status(monster, F("is no longer confused."));
+                    break;
+                case MON_SLOWED:
+                    monster_status(monster, F("moves normally again."));
+                    break;
+                case MON_INVISIBLE:
+                    monster_status(monster, F("becomes visible again."));
+                    break;
+                default: break;
+                }
+            }
+        }
+    }
+}
 
 uint8_t roll(uint8_t limit)
 {
@@ -131,17 +182,25 @@ void enemy_turn()
     for(Monster& monster : game.monsters) {
         if(!monster.type)
             continue;
+        bool confused = monster_effect(monster, MON_CONFUSED) != 0;
+        bool slowed = monster_effect(monster, MON_SLOWED) != 0;
         if(monster.stun) {
             --monster.stun;
+            if(!monster.stun)
+                monster_status(monster, F("can move again."));
             continue;
         }
+        if(slowed && (game.turns & 1))
+            continue;
         if(game.invisible)
             continue;
         uint8_t range = distance(monster.x, monster.y, game.px, game.py);
-        if(range == 1) {
+        if(range == 1 && !confused) {
             if(roll(100) < 70) {
                 uint8_t raw = static_cast<uint8_t>(monster_damage[monster.type] +
                     game.floor / 5 + roll(3));
+                if(monster_effect(monster, MON_WEAKENED))
+                    raw = static_cast<uint8_t>((raw + 1) / 2);
                 uint8_t damage = raw > game.defense ? raw - game.defense : 1;
                 game.hp = damage >= game.hp ? 0 : game.hp - damage;
                 status(F("The"));
@@ -154,10 +213,14 @@ void enemy_turn()
             }
             continue;
         }
-        if(range > 8 && roll(4) != 0)
+        if(!confused && range > 8 && roll(4) != 0)
             continue;
         int8_t dx = 0, dy = 0;
-        if(range <= 8) {
+        if(confused) {
+            uint8_t direction = roll(4);
+            dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
+            dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+        } else if(range <= 8) {
             dx = monster.x < game.px ? 1 : monster.x > game.px ? -1 : 0;
             dy = monster.y < game.py ? 1 : monster.y > game.py ? -1 : 0;
         } else {
@@ -177,10 +240,17 @@ void enemy_turn()
 void end_turn()
 {
     ++game.turns;
-    if(game.confused) --game.confused;
-    if(game.paralyzed) --game.paralyzed;
-    if(game.slowed) --game.slowed;
-    if(game.invisible) --game.invisible;
+    for(Monster& monster : game.monsters)
+        if(monster.type)
+            age_monster_effects(monster);
+    if(game.confused && !--game.confused)
+        status(F("You are no longer confused."));
+    if(game.paralyzed && !--game.paralyzed)
+        status(F("You can move again."));
+    if(game.slowed && !--game.slowed)
+        status(F("You move normally again."));
+    if(game.invisible && !--game.invisible)
+        status(F("You become visible again."));
     if(game.turns % 3 == 0 && game.hunger)
         --game.hunger;
     if(game.hunger == 0 && game.turns % 4 == 0) {
@@ -194,6 +264,23 @@ void end_turn()
     enemy_turn();
     if(!session.ended && game.slowed && (game.turns & 1))
         enemy_turn();
+}
+
+static void defeat_monster(uint8_t index)
+{
+    Monster& target = game.monsters[index];
+    uint8_t killed_type = target.type;
+    uint8_t x = target.x, y = target.y;
+    mark(game.marks[game.floor], KILLED_MONSTERS, index);
+    target.type = NO_MONSTER;
+    game.score += static_cast<uint16_t>(5 + killed_type * 3);
+    if(killed_type == LORD &&
+       !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
+        game.ground[15] = {x, y, AMULET, 1};
+    status(F("You defeat the"));
+    status(static_cast<MonsterType>(killed_type));
+    status(F("."));
+    gain_xp(1);
 }
 
 void attack_monster(uint8_t index)
@@ -214,18 +301,7 @@ void attack_monster(uint8_t index)
         (game.attack > game.weakened ? game.attack - game.weakened : 1) +
         bonus + roll(3));
     if(damage >= target.hp) {
-        uint8_t killed_type = target.type;
-        uint8_t x = target.x, y = target.y;
-        mark(game.marks[game.floor], KILLED_MONSTERS, index);
-        target.type = 0;
-        game.score += static_cast<uint16_t>(5 + killed_type * 3);
-        if(killed_type == LORD &&
-           !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
-            game.ground[15] = {x, y, AMULET, 1};
-        status(F("You defeat the"));
-        status(static_cast<MonsterType>(killed_type));
-        status(F("."));
-        gain_xp(1);
+        defeat_monster(index);
     } else {
         target.hp -= damage;
         status(F("You hit the"));
@@ -411,14 +487,20 @@ bool use_inventory(uint8_t slot)
                 roll(static_cast<uint8_t>(game.max_hp / 2 + 1)));
             uint16_t hp = static_cast<uint16_t>(game.hp) + healed;
             game.hp = hp > game.max_hp ? game.max_hp : static_cast<uint8_t>(hp);
+            if(game.weakened)
+                status(F("Your strength returns."));
             game.weakened = 0;
             status(F("You feel better."));
             break;
         }
         case STRENGTH:
-            if(game.weakened) game.weakened = 0;
-            else if(game.attack < 250) ++game.attack;
-            status(F("You feel stronger."));
+            if(game.weakened) {
+                game.weakened = 0;
+                status(F("Your strength returns."));
+            } else if(game.attack < 250) {
+                ++game.attack;
+                status(F("You feel stronger."));
+            }
             break;
         case DEXTERITY:
             if(game.dexterity < 12) ++game.dexterity;
@@ -428,8 +510,9 @@ bool use_inventory(uint8_t slot)
             gain_xp(50);
             break;
         case INVISIBILITY:
+            if(!game.invisible)
+                status(F("You turn invisible."));
             game.invisible = static_cast<uint8_t>(12 + roll(16));
-            status(F("You turn invisible."));
             break;
         case HARMING: {
             uint8_t base = static_cast<uint8_t>(game.max_hp / 8 + 1);
@@ -441,20 +524,24 @@ bool use_inventory(uint8_t slot)
             break;
         }
         case POISON:
+            if(!game.weakened)
+                status(F("You feel weaker."));
             if(game.weakened < 3) ++game.weakened;
-            status(F("You feel weaker."));
             break;
         case CONFUSION:
+            if(!game.confused)
+                status(F("You feel confused."));
             game.confused = static_cast<uint8_t>(8 + roll(8));
-            status(F("You feel confused."));
             break;
         case PARALYSIS:
+            if(!game.paralyzed)
+                status(F("You are paralyzed!"));
             game.paralyzed = static_cast<uint8_t>(3 + roll(4));
-            status(F("You are paralyzed!"));
             break;
         case SLOWING:
+            if(!game.slowed)
+                status(F("You feel sluggish."));
             game.slowed = static_cast<uint8_t>(8 + roll(8));
-            status(F("You feel sluggish."));
             break;
         default: break;
         }
@@ -476,6 +563,130 @@ bool use_inventory(uint8_t slot)
     default:
         return false;
     }
+    if(!session.ended)
+        end_turn();
+    return true;
+}
+
+static void apply_monster_potion(uint8_t type, uint8_t index)
+{
+    Monster& target = game.monsters[index];
+    uint8_t maximum = static_cast<uint8_t>(monster_health[target.type] +
+                                            game.floor / 2);
+    switch(type) {
+    case HEALING: {
+        uint8_t old_hp = target.hp;
+        bool was_weakened = monster_effect(target, MON_WEAKENED) != 0;
+        uint8_t healed = static_cast<uint8_t>(maximum / 4 +
+            roll(static_cast<uint8_t>(maximum / 2 + 1)));
+        uint16_t hp = static_cast<uint16_t>(target.hp) + healed;
+        target.hp = hp > maximum ? maximum : static_cast<uint8_t>(hp);
+        set_monster_effect(target, MON_WEAKENED, 0);
+        if(target.hp > old_hp)
+            monster_status(target, F("looks healthier."));
+        if(was_weakened)
+            monster_status(target, F("regains its strength."));
+        break;
+    }
+    case STRENGTH:
+        if(monster_effect(target, MON_WEAKENED))
+            monster_status(target, F("regains its strength."));
+        else
+            status(F("It has no effect."));
+        set_monster_effect(target, MON_WEAKENED, 0);
+        break;
+    case HARMING: {
+        uint8_t base = static_cast<uint8_t>(maximum / 8 + 1);
+        uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
+        if(damage > 10) damage = 10;
+        if(damage >= target.hp)
+            defeat_monster(index);
+        else {
+            target.hp = static_cast<uint8_t>(target.hp - damage);
+            monster_status(target, F("is hurt!"));
+        }
+        break;
+    }
+    case POISON:
+        if(!monster_effect(target, MON_WEAKENED))
+            monster_status(target, F("grows weaker."));
+        set_monster_effect(target, MON_WEAKENED, 15);
+        break;
+    case CONFUSION:
+        if(!monster_effect(target, MON_CONFUSED))
+            monster_status(target, F("becomes confused."));
+        set_monster_effect(target, MON_CONFUSED,
+                           static_cast<uint8_t>(8 + roll(8)));
+        break;
+    case PARALYSIS:
+        if(!target.stun)
+            monster_status(target, F("is paralyzed!"));
+        target.stun = static_cast<uint8_t>(3 + roll(4));
+        break;
+    case SLOWING:
+        if(!monster_effect(target, MON_SLOWED))
+            monster_status(target, F("slows down."));
+        set_monster_effect(target, MON_SLOWED,
+                           static_cast<uint8_t>(8 + roll(8)));
+        break;
+    case INVISIBILITY:
+        if(!monster_effect(target, MON_INVISIBLE))
+            monster_status(target, F("vanishes."));
+        set_monster_effect(target, MON_INVISIBLE,
+                           static_cast<uint8_t>(12 + roll(4)));
+        break;
+    case DEXTERITY:
+    case EXPERIENCE:
+        status(F("It has no effect."));
+        break;
+    default:
+        break;
+    }
+}
+
+bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
+{
+    if(slot >= INVENTORY || game.paralyzed ||
+       !is_potion(game.inventory[slot].type) ||
+       (dx == 0 && dy == 0) || (dx != 0 && dy != 0) ||
+       dx < -1 || dx > 1 || dy < -1 || dy > 1)
+        return false;
+    Item& item = game.inventory[slot];
+    uint8_t type = item.type;
+    status(F("You throw"));
+    status(Item{type, 1, {0, 0}});
+    status(F("."));
+    if(--item.amount == 0)
+        item.type = NO_ITEM;
+
+    uint8_t hit = NONE;
+    int16_t x = game.px, y = game.py;
+    for(uint8_t step = 0; step < 8; ++step) {
+        x += dx;
+        y += dy;
+        if(wall_at(x, y))
+            break;
+        uint8_t door = door_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
+        if(door != NONE && !door_open(door))
+            break;
+        hit = monster_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
+        if(hit != NONE)
+            break;
+    }
+    if(hit != NONE) {
+        status(F("It hits the"));
+        status(static_cast<MonsterType>(game.monsters[hit].type));
+        status(F("."));
+        bool known = potion_identified(type);
+        identify_potion(type);
+        if(!known) {
+            status(F("It was"));
+            status(Item{type, 1, {0, 0}});
+            status(F("."));
+        }
+        apply_monster_potion(type, hit);
+    }
+    status(F("The potion shatters."));
     if(!session.ended)
         end_turn();
     return true;

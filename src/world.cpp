@@ -234,7 +234,8 @@ void make_floor()
         if(marked(marks, KILLED_MONSTERS, i))
             continue;
         game.monsters[i] = {x, y, type,
-            static_cast<uint8_t>(monster_health[type] + game.floor / 2), 0};
+            static_cast<uint8_t>(monster_health[type] + game.floor / 2),
+            0, {0, 0}};
     }
 
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {

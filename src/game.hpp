@@ -30,7 +30,7 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t DROPPED_ITEMS = 8;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
-constexpr uint8_t SAVE_VERSION = 5;
+constexpr uint8_t SAVE_VERSION = 6;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -49,7 +49,12 @@ enum MonsterType : uint8_t {
 
 struct Room { uint8_t x, y, w, h; };
 struct Door { uint8_t x, y; };
-struct Monster { uint8_t x, y, type, hp, stun; };
+// Four independent four-bit effects: confusion, slowing, invisibility, weakness.
+// Paralysis uses stun. Two bytes per monster keep the image within AVM RAM.
+struct Monster { uint8_t x, y, type, hp, stun, effects[2]; };
+enum MonsterEffect : uint8_t {
+    MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
+};
 struct GroundItem { uint8_t x, y, type, amount; };
 struct DroppedItem { uint8_t floor, x, y, type, amount; };
 struct Item { uint8_t type, amount, reserved[2]; };
@@ -124,6 +129,8 @@ void move_player(int8_t dx, int8_t dy);
 void action();
 bool use_inventory(uint8_t slot);
 bool drop_inventory(uint8_t slot);
+bool throw_potion(uint8_t slot, int8_t dx, int8_t dy);
+uint8_t monster_effect(const Monster& monster, MonsterEffect effect);
 bool potion_identified(uint8_t type);
 uint8_t potion_color(uint8_t type);
 

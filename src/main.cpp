@@ -11,13 +11,13 @@ using namespace rogue;
 namespace {
 
 enum Mode : uint8_t {
-    TITLE, PLAY, MENU, INVENTORY_MENU, FULL_MAP, END
+    TITLE, PLAY, MENU, INVENTORY_MENU, THROW_DIRECTION, FULL_MAP, END
 };
 
 struct Ui {
     uint8_t mode, selection, previous_buttons, held_direction;
     uint16_t next_repeat_ms;
-    bool has_save, dirty, repeat_suppressed;
+    bool has_save, dirty, repeat_suppressed, throwing;
 };
 static Ui ui = {};
 static uint8_t status_x = 67, status_y = 28;
@@ -359,7 +359,8 @@ void render_play()
             icon(item_icons[item.type], static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
     for(const Monster& monster : game.monsters)
-        if(monster.type && in_sight(monster.x, monster.y, sight, sx, sy))
+        if(monster.type && !monster_effect(monster, MON_INVISIBLE) &&
+           in_sight(monster.x, monster.y, sight, sx, sy))
             icon(monster_icons[monster.type],
                  static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
     icon(PLAYER_ICON, 30, 30);
@@ -381,20 +382,21 @@ void render_title()
 void render_menu()
 {
     static const char AVM_PROGMEM* const AVM_PROGMEM names[] = {
-        F("WAIT"), F("INVENTORY"), F("FULL MAP"),
+        F("WAIT"), F("INVENTORY"), F("THROW POTION"), F("FULL MAP"),
         F("SAVE & EXIT"), F("ABANDON")
     };
     avm_draw_text_P(10, 8, F("ACTION MENU"));
-    for(uint8_t i = 0; i < 5; ++i) {
+    for(uint8_t i = 0; i < 6; ++i) {
         if(i == ui.selection)
-            avm_draw_text_P(4, static_cast<int16_t>(20 + 9 * i), F(">"));
-        avm_draw_text_P(12, static_cast<int16_t>(20 + 9 * i), names[i]);
+            avm_draw_text_P(4, static_cast<int16_t>(17 + 8 * i), F(">"));
+        avm_draw_text_P(12, static_cast<int16_t>(17 + 8 * i), names[i]);
     }
 }
 
 void render_inventory()
 {
-    avm_draw_text_P(2, 7, F("A USE > DROP B BACK"));
+    avm_draw_text_P(2, 7, ui.throwing ? F("A PICK POTION B BACK") :
+                                   F("A USE > DROP B BACK"));
     uint8_t start = ui.selection < 8 ? 0 : 8;
     for(uint8_t row = 0; row < 8; ++row) {
         uint8_t i = start + row;
@@ -419,6 +421,15 @@ void render_inventory()
         if(game.weapon_slot == i || game.armor_slot == i)
             avm_draw_text_P(75, y, F("*"));
     }
+}
+
+void render_throw_direction()
+{
+    avm_draw_text_P(8, 12, F("THROW POTION"));
+    avm_draw_text_P(8, 27,
+        potion_display_name(game.inventory[ui.selection].type));
+    avm_draw_text_P(8, 43, F("D-PAD: DIRECTION"));
+    avm_draw_text_P(8, 56, F("B: BACK"));
 }
 
 void render_full_map()
@@ -460,6 +471,7 @@ void render()
     case PLAY: render_play(); break;
     case MENU: render_menu(); break;
     case INVENTORY_MENU: render_inventory(); break;
+    case THROW_DIRECTION: render_throw_direction(); break;
     case FULL_MAP: render_full_map(); break;
     case END: render_end(); break;
     }
@@ -509,6 +521,15 @@ void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
+uint8_t next_potion_slot(int16_t start, int8_t step)
+{
+    for(int16_t slot = start + step;
+        slot >= 0 && slot < INVENTORY; slot += step)
+        if(is_potion(game.inventory[slot].type))
+            return static_cast<uint8_t>(slot);
+    return NONE;
+}
+
 void handle_input(uint8_t buttons)
 {
     uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
@@ -549,11 +570,29 @@ void handle_input(uint8_t buttons)
         }
         return;
     }
+    if(ui.mode == THROW_DIRECTION) {
+        if(edges & AVM_BUTTON_B) {
+            ui.mode = INVENTORY_MENU;
+            ui.dirty = true;
+        } else if(direction) {
+            int8_t dx = direction == AVM_BUTTON_L ? -1 :
+                        direction == AVM_BUTTON_R ? 1 : 0;
+            int8_t dy = direction == AVM_BUTTON_U ? -1 :
+                        direction == AVM_BUTTON_D ? 1 : 0;
+            status_clear();
+            if(throw_potion(ui.selection, dx, dy)) {
+                ui.throwing = false;
+                ui.mode = PLAY;
+            }
+            ui.dirty = true;
+        }
+        return;
+    }
     if(ui.mode == MENU) {
         if(direction == AVM_BUTTON_U && ui.selection) {
             --ui.selection;
             ui.dirty = true;
-        } else if(direction == AVM_BUTTON_D && ui.selection < 4) {
+        } else if(direction == AVM_BUTTON_D && ui.selection < 5) {
             ++ui.selection;
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_B) {
@@ -568,28 +607,48 @@ void handle_input(uint8_t buttons)
                 status(F("You wait."));
                 end_turn();
                 break;
-            case 1: ui.mode = INVENTORY_MENU; ui.selection = 0; break;
-            case 2: ui.mode = FULL_MAP; break;
-            case 3:
+            case 1:
+                ui.throwing = false;
+                ui.mode = INVENTORY_MENU;
+                ui.selection = 0;
+                break;
+            case 2:
+                ui.throwing = true;
+                ui.selection = next_potion_slot(-1, 1);
+                if(ui.selection != NONE)
+                    ui.mode = INVENTORY_MENU;
+                else {
+                    ui.throwing = false;
+                    ui.mode = PLAY;
+                    status_clear();
+                    status(F("You have no potions."));
+                }
+                break;
+            case 3: ui.mode = FULL_MAP; break;
+            case 4:
                 game.valid = 1;
                 avm_save();
                 ui.has_save = true;
                 ui.mode = TITLE;
                 break;
-            case 4: finish(2); break;
+            case 5: finish(2); break;
             }
             ui.dirty = true;
         }
         return;
     }
     if(ui.mode == INVENTORY_MENU) {
-        if(direction == AVM_BUTTON_U && ui.selection) {
-            --ui.selection;
+        if(direction == AVM_BUTTON_U || direction == AVM_BUTTON_D) {
+            int8_t step = direction == AVM_BUTTON_U ? -1 : 1;
+            if(ui.throwing) {
+                uint8_t next = next_potion_slot(ui.selection, step);
+                if(next != NONE) ui.selection = next;
+            } else if((step < 0 && ui.selection > 0) ||
+                      (step > 0 && ui.selection < INVENTORY - 1)) {
+                ui.selection = static_cast<uint8_t>(ui.selection + step);
+            }
             ui.dirty = true;
-        } else if(direction == AVM_BUTTON_D && ui.selection < INVENTORY - 1) {
-            ++ui.selection;
-            ui.dirty = true;
-        } else if(direction == AVM_BUTTON_R) {
+        } else if(direction == AVM_BUTTON_R && !ui.throwing) {
             status_clear();
             if(drop_inventory(ui.selection)) {
                 ui.mode = PLAY;
@@ -601,7 +660,10 @@ void handle_input(uint8_t buttons)
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_A) {
             status_clear();
-            if(use_inventory(ui.selection)) {
+            if(ui.throwing) {
+                if(is_potion(game.inventory[ui.selection].type))
+                    ui.mode = THROW_DIRECTION;
+            } else if(use_inventory(ui.selection)) {
                 ui.mode = PLAY;
             }
             ui.dirty = true;

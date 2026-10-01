@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+
+static std::string status_text;
 
 namespace rogue {
 Game game = {};
@@ -13,7 +16,7 @@ using namespace rogue;
 
 namespace rogue {
 void status_word(const char*) {}
-void status(const char*) {}
+void status(const char* words) { status_text += words; status_text += ' '; }
 void status(Item) {}
 void status(MonsterType) {}
 void status_number(uint8_t) {}
@@ -248,9 +251,198 @@ void check_potions()
     require(kinds >= 8, "floor generation lacks potion variety");
 }
 
+void check_thrown_potions()
+{
+    static_assert(sizeof(Monster) == 7, "monster effects exceed two bytes");
+    start_new(0x3456);
+    std::memset(game.walls, 0, sizeof(game.walls));
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.door_count = 0;
+    game.px = 10;
+    game.py = 10;
+    game.invisible = 100; // Keep the target in place during assertions.
+    game.hunger = 255;
+
+    game.inventory[0] = {HARMING, 2, {0, 0}};
+    require(!throw_potion(0, 1, 1) && game.inventory[0].amount == 2,
+            "invalid throwing direction consumed a potion");
+    require(throw_potion(0, 1, 0) && game.inventory[0].amount == 1 &&
+            !potion_identified(HARMING),
+            "a missed throw did not consume one unknown potion");
+
+    game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
+    uint16_t wall = static_cast<uint16_t>(10 * MAP_W + 11);
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    game.inventory[0] = {POISON, 3, {0, 0}};
+    require(throw_potion(0, 1, 0) && !potion_identified(POISON) &&
+            !monster_effect(game.monsters[0], MON_WEAKENED),
+            "potion passed through a wall");
+    game.walls[wall >> 3] = 0;
+    game.door_count = 1;
+    game.doors[0] = {11, 10};
+    require(throw_potion(0, 1, 0) && !potion_identified(POISON),
+            "potion passed through a closed door");
+    mark(game.marks[game.floor], OPENED_DOORS, 0);
+    game.monsters[1] = {14, 10, ORC, 5, 0, {0, 0}};
+    require(throw_potion(0, 1, 0) && potion_identified(POISON) &&
+            monster_effect(game.monsters[0], MON_WEAKENED) &&
+            !monster_effect(game.monsters[1], MON_WEAKENED) &&
+            game.inventory[0].type == NO_ITEM,
+            "throw did not hit only the first monster or consume its stack");
+
+    auto throw_at_target = [](uint8_t type) {
+        game.inventory[0] = {type, 1, {0, 0}};
+        require(throw_potion(0, 1, 0) && potion_identified(type),
+                "thrown potion failed to identify on hit");
+    };
+    game.monsters[0].hp = 2;
+    throw_at_target(HEALING);
+    require(game.monsters[0].hp > 2 &&
+            !monster_effect(game.monsters[0], MON_WEAKENED),
+            "healing did not restore monster health and strength");
+    throw_at_target(CONFUSION);
+    require(monster_effect(game.monsters[0], MON_CONFUSED),
+            "confusion did not affect the monster");
+    throw_at_target(SLOWING);
+    require(monster_effect(game.monsters[0], MON_SLOWED),
+            "slowing did not affect the monster");
+    throw_at_target(INVISIBILITY);
+    require(monster_effect(game.monsters[0], MON_INVISIBLE),
+            "invisibility did not affect the monster");
+    Game saved = game;
+    std::memset(&game, 0, sizeof(game));
+    game = saved;
+    require(monster_effect(game.monsters[0], MON_CONFUSED) &&
+            monster_effect(game.monsters[0], MON_SLOWED) &&
+            monster_effect(game.monsters[0], MON_INVISIBLE),
+            "monster effects were not retained in the save state");
+    throw_at_target(PARALYSIS);
+    require(game.monsters[0].stun, "paralysis did not stun the monster");
+    throw_at_target(POISON);
+    throw_at_target(STRENGTH);
+    require(!monster_effect(game.monsters[0], MON_WEAKENED),
+            "strength did not cure monster weakness");
+    uint8_t hp = game.monsters[0].hp;
+    throw_at_target(DEXTERITY);
+    throw_at_target(EXPERIENCE);
+    require(game.monsters[0].hp == hp,
+            "player-only potion changed monster health");
+    for(uint8_t i = 0; i < 16; ++i)
+        end_turn();
+    require(!monster_effect(game.monsters[0], MON_CONFUSED) &&
+            !monster_effect(game.monsters[0], MON_SLOWED) &&
+            !monster_effect(game.monsters[0], MON_INVISIBLE),
+            "monster potion effects did not expire");
+
+    game.monsters[0].hp = 1;
+    game.monsters[0].x = 13;
+    game.monsters[0].y = 10;
+    uint16_t old_score = game.score;
+    throw_at_target(HARMING);
+    require(game.monsters[0].type == NO_MONSTER &&
+            marked(game.marks[game.floor], KILLED_MONSTERS, 0) &&
+            game.score > old_score,
+            "harming did not defeat and credit the monster");
+}
+
+void check_effect_messages()
+{
+    auto player_effect = [](uint8_t type, uint8_t Game::*duration,
+                            const char* began, const char* ended) {
+        start_new(0x4567);
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        game.inventory[0] = {type, 1, {0, 0}};
+        status_text.clear();
+        require(use_inventory(0) && status_text.find(began) != std::string::npos,
+                "player effect start message is missing");
+        game.*duration = 1;
+        status_text.clear();
+        end_turn();
+        require(status_text.find(ended) != std::string::npos,
+                "player effect end message is missing");
+    };
+    player_effect(CONFUSION, &Game::confused,
+                  "You feel confused.", "You are no longer confused.");
+    player_effect(PARALYSIS, &Game::paralyzed,
+                  "You are paralyzed!", "You can move again.");
+    player_effect(SLOWING, &Game::slowed,
+                  "You feel sluggish.", "You move normally again.");
+    player_effect(INVISIBILITY, &Game::invisible,
+                  "You turn invisible.", "You become visible again.");
+
+    start_new(0x4567);
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.inventory[0] = {POISON, 1, {0, 0}};
+    status_text.clear();
+    require(use_inventory(0) &&
+            status_text.find("You feel weaker.") != std::string::npos,
+            "player poison start message is missing");
+    game.inventory[0] = {HEALING, 1, {0, 0}};
+    status_text.clear();
+    require(use_inventory(0) &&
+            status_text.find("Your strength returns.") != std::string::npos,
+            "player weakness recovery message is missing");
+
+    auto monster_effect_message = [](uint8_t type, const char* began,
+                                     const char* ended) {
+        start_new(0x5678);
+        std::memset(game.walls, 0, sizeof(game.walls));
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        game.door_count = 0;
+        game.px = 10;
+        game.py = 10;
+        game.invisible = 100;
+        game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
+        game.inventory[0] = {type, 1, {0, 0}};
+        status_text.clear();
+        require(throw_potion(0, 1, 0) &&
+                status_text.find(began) != std::string::npos,
+                "monster effect start message is missing");
+        game.inventory[0] = {type, 1, {0, 0}};
+        status_text.clear();
+        require(throw_potion(0, 1, 0) &&
+                status_text.find(began) == std::string::npos,
+                "refreshing a monster effect repeated its start message");
+        status_text.clear();
+        for(uint8_t i = 0; i < 16; ++i)
+            end_turn();
+        require(status_text.find(ended) != std::string::npos,
+                "monster effect end message is missing");
+    };
+    monster_effect_message(CONFUSION, "becomes confused.",
+                           "is no longer confused.");
+    monster_effect_message(PARALYSIS, "is paralyzed!",
+                           "can move again.");
+    monster_effect_message(SLOWING, "slows down.",
+                           "moves normally again.");
+    monster_effect_message(INVISIBILITY, "vanishes.",
+                           "becomes visible again.");
+
+    start_new(0x5678);
+    std::memset(game.walls, 0, sizeof(game.walls));
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.door_count = 0;
+    game.px = 10;
+    game.py = 10;
+    game.invisible = 100;
+    game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
+    game.inventory[0] = {POISON, 1, {0, 0}};
+    status_text.clear();
+    require(throw_potion(0, 1, 0) &&
+            status_text.find("grows weaker.") != std::string::npos,
+            "monster poison start message is missing");
+    game.inventory[0] = {STRENGTH, 1, {0, 0}};
+    status_text.clear();
+    require(throw_potion(0, 1, 0) &&
+            status_text.find("regains its strength.") != std::string::npos,
+            "monster weakness recovery message is missing");
+}
+
 int main()
 {
     check_potions();
+    check_thrown_potions();
+    check_effect_messages();
     start_new(0x1234);
     require(game.floor == 0 && game.hp == 18 && game.valid &&
             game.version == SAVE_VERSION,

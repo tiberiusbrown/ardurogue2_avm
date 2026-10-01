@@ -17,7 +17,8 @@ each floor from a seed and compact progress flags to conserve RAM.
 The active floor's explored map uses one bit per tile. Floor progress flags
 use 51 bits per floor; door open state and monster spawn identity are derived
 from those flags and array positions. Inventory items reserve two bytes for
-future attributes. Save version 5 stores potion appearances and discoveries;
+future attributes. Save version 6 stores potion appearances, discoveries, and
+monster potion effects;
 older saves are not compatible.
 
 The ten potions from ArduRogue are healing, strength, dexterity, experience,
@@ -27,6 +28,15 @@ color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
 can increase attack. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
+
+Select **Throw Potion** from the action menu, choose a potion, then press a
+direction. It travels up to eight tiles and shatters on the first monster,
+closed door, or wall. A hit applies the potion to that monster and identifies
+its type; a miss consumes the potion without revealing it. Harming can kill a
+monster, while healing and strength cure poison. Confusion, paralysis,
+slowing, and invisibility affect monsters temporarily. Dexterity and
+experience have no effect on monsters. Status messages announce when these
+conditions begin, expire, or are cured.
 
 ### Controls
 
@@ -38,9 +48,11 @@ after several turns.
 | Dungeon | A | Pick up an item, use stairs, repeat the last inventory action, or wait |
 | Dungeon | B | Open the action menu |
 | Status prompt | A | Continue a long message after `[more]` |
-| Action menu | Up/Down, A | Choose wait, inventory, full map, save and exit, or abandon |
+| Action menu | Up/Down, A | Choose wait, inventory, throw potion, full map, save and exit, or abandon |
 | Inventory | Up/Down, A | Select and use or equip an item |
 | Inventory | Right | Drop the selected item |
+| Throw selection | Up/Down, A | Choose a potion from inventory |
+| Throw direction | Direction pad | Throw the selected potion |
 | Inventory, full map | B | Return to the dungeon |
 
 Saving exits to the title screen. Continuing consumes the save so a death
