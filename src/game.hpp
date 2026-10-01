@@ -30,11 +30,18 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t DROPPED_ITEMS = 8;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
-constexpr uint8_t SAVE_VERSION = 4;
+constexpr uint8_t SAVE_VERSION = 5;
 
 enum ItemType : uint8_t {
-    NO_ITEM, FOOD, HEALING, SWORD, ARMOR, AMULET
+    NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
+    STRENGTH, DEXTERITY, PARALYSIS, SLOWING, EXPERIENCE,
+    INVISIBILITY, SWORD, ARMOR, AMULET
 };
+constexpr uint8_t POTION_COUNT = INVISIBILITY - HEALING + 1;
+constexpr bool is_potion(uint8_t type)
+{
+    return type >= HEALING && type <= INVISIBILITY;
+}
 
 enum MonsterType : uint8_t {
     NO_MONSTER, RAT, SNAKE, ZOMBIE, ORC, TROLL, LORD
@@ -71,8 +78,10 @@ struct Game {
     uint16_t run_seed, random_state, score, best_score;
     uint8_t magic, version, valid, floor;
     uint8_t px, py, up_x, up_y, down_x, down_y;
-    uint8_t hp, max_hp, level, xp, attack, defense, hunger, turns;
+    uint8_t hp, max_hp, level, xp, attack, dexterity, defense, hunger, turns;
+    uint8_t weakened, confused, paralyzed, slowed, invisible;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
+    uint8_t potion_appearance[POTION_COUNT], identified_potions[2];
     DroppedItem dropped[DROPPED_ITEMS];
 };
 
@@ -115,5 +124,7 @@ void move_player(int8_t dx, int8_t dy);
 void action();
 bool use_inventory(uint8_t slot);
 bool drop_inventory(uint8_t slot);
+bool potion_identified(uint8_t type);
+uint8_t potion_color(uint8_t type);
 
 } // namespace rogue

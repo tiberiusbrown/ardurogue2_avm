@@ -9,7 +9,7 @@ Descend through 16 dungeon floors, defeat the Lord of Darkness on the last
 floor, pick up the amulet, then climb back to the surface. Returning without
 the amulet ends the run. Death also ends the run.
 
-Each floor has connected rooms, corridors, doors, monsters, food, healing,
+Each floor has connected rooms, corridors, doors, monsters, food, potions,
 weapons, and armor. Explore the dungeon, fight by walking into enemies, manage
 hunger, and gain levels. Explored rooms, opened doors, collected items, and
 defeated monsters remain recorded when you revisit a floor. The game rebuilds
@@ -17,8 +17,16 @@ each floor from a seed and compact progress flags to conserve RAM.
 The active floor's explored map uses one bit per tile. Floor progress flags
 use 51 bits per floor; door open state and monster spawn identity are derived
 from those flags and array positions. Inventory items reserve two bytes for
-future attributes. Saves from the previous layout are not compatible with
-version 4.
+future attributes. Save version 5 stores potion appearances and discoveries;
+older saves are not compatible.
+
+The ten potions from ArduRogue are healing, strength, dexterity, experience,
+invisibility, harming, poison, confusion, paralysis, and slowing. Every new
+run assigns each type a different color. Potions of the same type keep that
+color until drinking one reveals its effect for the rest of the run. Healing
+also removes poison's weakening, while strength removes weakening before it
+can increase attack. Confusion, paralysis, slowing, and invisibility wear off
+after several turns.
 
 ### Controls
 

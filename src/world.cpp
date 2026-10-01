@@ -242,8 +242,9 @@ void make_floor()
         uint8_t x = static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2));
         uint8_t y = static_cast<uint8_t>(room.y + 1 + floor_roll(seed, room.h - 2));
         uint8_t chance = floor_roll(seed, 12);
-        uint8_t type = chance < 4 ? FOOD : chance < 8 ? HEALING :
-                       chance < 10 ? SWORD : ARMOR;
+        uint8_t type = chance < 4 ? FOOD : chance < 8
+            ? static_cast<uint8_t>(HEALING + floor_roll(seed, POTION_COUNT)) :
+              chance < 10 ? SWORD : ARMOR;
         uint8_t amount = type == SWORD || type == ARMOR
             ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
         if(marked(marks, TAKEN_ITEMS, i) || (game.floor == FLOORS - 1 && i == 15))

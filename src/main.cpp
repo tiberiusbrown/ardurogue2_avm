@@ -83,8 +83,39 @@ void status_entity(uint8_t type)
     }
 }
 
+static const char PROGMEM* const PROGMEM potion_effect_names[] = {
+    F("healing"), F("confusion"), F("poison"), F("harming"),
+    F("strength"), F("dexterity"), F("paralysis"), F("slowing"),
+    F("experience"), F("invisibility")
+};
+static const char PROGMEM* const PROGMEM potion_color_names[] = {
+    F("red"), F("clear"), F("orange"), F("green"), F("blue"),
+    F("white"), F("yellow"), F("violet"), F("black"), F("pink")
+};
+
+const char PROGMEM* potion_display_name(uint8_t type)
+{
+    return potion_identified(type)
+        ? potion_effect_names[type - HEALING]
+        : potion_color_names[potion_color(type)];
+}
+
 void status_item(Item item)
 {
+    if(is_potion(item.type)) {
+        if(item.amount > 1)
+            rogue::status_number(item.amount);
+        else
+            status_words_P(F("a"));
+        if(potion_identified(item.type)) {
+            status_words_P(item.amount > 1 ? F("potions of") : F("potion of"));
+            status_words_P(potion_display_name(item.type));
+        } else {
+            status_words_P(potion_display_name(item.type));
+            status_words_P(item.amount > 1 ? F("potions") : F("potion"));
+        }
+        return;
+    }
     switch(item.type) {
     case FOOD:
         if(item.amount > 1) {
@@ -92,14 +123,6 @@ void status_item(Item item)
             status_words_P(F("food rations"));
         } else {
             status_words_P(F("some food"));
-        }
-        break;
-    case HEALING:
-        if(item.amount > 1) {
-            rogue::status_number(item.amount);
-            status_words_P(F("healing potions"));
-        } else {
-            status_words_P(F("a healing potion"));
         }
         break;
     case SWORD: status_words_P(F("a sword")); break;
@@ -133,7 +156,9 @@ static const uint16_t PROGMEM monster_icons[] = {
 static const uint16_t PROGMEM item_icons[] = {
     0x0000, // none
     0x9429, // food
-    0x0bb0, // healing potion
+    0x0bb0, // potions
+    0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0,
+    0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0,
     0x04f4, // sword
     0x0f90, // armor
     0x0606, // amulet
@@ -379,9 +404,14 @@ void render_inventory()
         const Item& item = game.inventory[i];
         if(!item.type)
             continue;
+        if(is_potion(item.type)) {
+            avm_draw_text_P(10, y, F("P:"));
+            avm_draw_text_P(21, y, potion_display_name(item.type));
+            avm_draw_textf_P(95, y, F("x%u"), item.amount);
+            continue;
+        }
         switch(item.type) {
         case FOOD: avm_draw_textf_P(10, y, F("FOOD x%u"), item.amount); break;
-        case HEALING: avm_draw_textf_P(10, y, F("HEAL x%u"), item.amount); break;
         case SWORD: avm_draw_textf_P(10, y, F("SWORD +%u"), item.amount); break;
         case ARMOR: avm_draw_textf_P(10, y, F("ARMOR +%u"), item.amount); break;
         default: break;

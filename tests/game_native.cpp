@@ -165,8 +165,92 @@ void check_floor_marks()
     game.marks[game.floor] = old_marks;
 }
 
+void check_potions()
+{
+    start_new(0x1234);
+    bool colors[POTION_COUNT] = {};
+    for(uint8_t type = HEALING; type <= INVISIBILITY; ++type) {
+        uint8_t color = potion_color(type);
+        require(color < POTION_COUNT && !colors[color],
+                "potion appearances are not a permutation");
+        colors[color] = true;
+        require(!potion_identified(type), "new potion starts identified");
+    }
+    uint8_t original[POTION_COUNT];
+    std::memcpy(original, game.potion_appearance, sizeof(original));
+    start_new(0x1234);
+    require(std::memcmp(original, game.potion_appearance, sizeof(original)) == 0,
+            "same run seed changed potion names");
+    start_new(0x4321);
+    require(std::memcmp(original, game.potion_appearance, sizeof(original)) != 0,
+            "different runs share the same potion names");
+
+    auto drink = [](uint8_t type, uint8_t amount = 1) {
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        game.inventory[0] = {type, amount, {0, 0}};
+        require(use_inventory(0), "potion could not be drunk");
+        require(potion_identified(type), "drinking did not identify potion");
+    };
+    game.hp = 2;
+    game.weakened = 2;
+    drink(HEALING, 2);
+    require(game.hp > 2 && game.hp <= game.max_hp && !game.weakened &&
+            game.inventory[0].type == HEALING && game.inventory[0].amount == 1,
+            "healing or potion stack is wrong");
+    uint8_t strength = game.attack;
+    drink(STRENGTH);
+    require(game.attack == strength + 1, "strength potion did not increase attack");
+    uint8_t dexterity = game.dexterity;
+    drink(DEXTERITY);
+    require(game.dexterity == dexterity + 1, "dexterity potion did not increase accuracy");
+    drink(POISON);
+    require(game.weakened, "poison did not weaken the player");
+    strength = game.attack;
+    drink(STRENGTH);
+    require(!game.weakened && game.attack == strength,
+            "strength potion did not restore weakening");
+    drink(CONFUSION);
+    require(game.confused, "confusion potion had no duration");
+    drink(PARALYSIS);
+    require(game.paralyzed && !use_inventory(0),
+            "paralysis does not prevent item use");
+    game.paralyzed = 0;
+    drink(SLOWING);
+    require(game.slowed, "slowing potion had no duration");
+    drink(INVISIBILITY);
+    require(game.invisible, "invisibility potion had no duration");
+    uint8_t old_level = game.level;
+    drink(EXPERIENCE);
+    require(game.level > old_level, "experience potion did not grant levels");
+    game.hp = game.max_hp;
+    drink(HARMING);
+    require(game.hp < game.max_hp && game.max_hp - game.hp <= 10,
+            "harming potion dealt the wrong damage");
+    require(potion_identified(HEALING),
+            "identified potion was forgotten");
+    Game saved = game;
+    std::memset(&game, 0, sizeof(game));
+    game = saved;
+    require(potion_identified(HARMING) &&
+            potion_color(HEALING) == saved.potion_appearance[0],
+            "potion knowledge did not survive save state copy");
+
+    bool spawned[POTION_COUNT] = {};
+    uint8_t kinds = 0;
+    for(uint16_t seed = 1; seed <= 24; ++seed) {
+        start_new(seed);
+        for(const GroundItem& item : game.ground)
+            if(is_potion(item.type) && !spawned[item.type - HEALING]) {
+                spawned[item.type - HEALING] = true;
+                ++kinds;
+            }
+    }
+    require(kinds >= 8, "floor generation lacks potion variety");
+}
+
 int main()
 {
+    check_potions();
     start_new(0x1234);
     require(game.floor == 0 && game.hp == 18 && game.valid &&
             game.version == SAVE_VERSION,

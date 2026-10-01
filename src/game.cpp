@@ -12,6 +12,43 @@ uint8_t roll(uint8_t limit)
     return static_cast<uint8_t>(next_random(game.random_state) % limit);
 }
 
+bool potion_identified(uint8_t type)
+{
+    if(!is_potion(type))
+        return false;
+    uint8_t index = static_cast<uint8_t>(type - HEALING);
+    return (game.identified_potions[index >> 3] & (1u << (index & 7))) != 0;
+}
+
+uint8_t potion_color(uint8_t type)
+{
+    return is_potion(type) ? game.potion_appearance[type - HEALING] : NONE;
+}
+
+static void identify_potion(uint8_t type)
+{
+    uint8_t index = static_cast<uint8_t>(type - HEALING);
+    game.identified_potions[index >> 3] |= static_cast<uint8_t>(1u << (index & 7));
+}
+
+static void gain_xp(uint8_t amount)
+{
+    uint16_t total = static_cast<uint16_t>(game.xp) + amount;
+    while(game.level < 50) {
+        uint16_t threshold = static_cast<uint16_t>(4 + game.level * 3);
+        if(total < threshold)
+            break;
+        total -= threshold;
+        ++game.level;
+        game.max_hp = static_cast<uint8_t>(game.max_hp + 3);
+        game.hp = game.max_hp;
+        if(game.level % 2 == 0)
+            ++game.attack;
+        status(F("You gained a level!"));
+    }
+    game.xp = static_cast<uint8_t>(total);
+}
+
 uint8_t distance(uint8_t ax, uint8_t ay, uint8_t bx, uint8_t by)
 {
     uint8_t dx = ax > bx ? ax - bx : bx - ax;
@@ -32,9 +69,19 @@ void start_new(uint16_t seed)
     game.hp = game.max_hp = 18;
     game.level = 1;
     game.attack = 2;
+    game.dexterity = 4;
     game.defense = 0;
     game.hunger = 220;
     game.weapon_slot = game.armor_slot = NONE;
+    for(uint8_t i = 0; i < POTION_COUNT; ++i)
+        game.potion_appearance[i] = i;
+    // One Fisher-Yates shuffle per run. The mapping lives in the save.
+    for(uint8_t i = POTION_COUNT - 1; i > 0; --i) {
+        uint8_t j = static_cast<uint8_t>(next_random(game.random_state) % (i + 1));
+        uint8_t old = game.potion_appearance[i];
+        game.potion_appearance[i] = game.potion_appearance[j];
+        game.potion_appearance[j] = old;
+    }
     make_floor();
     game.px = game.up_x;
     game.py = game.up_y;
@@ -88,6 +135,8 @@ void enemy_turn()
             --monster.stun;
             continue;
         }
+        if(game.invisible)
+            continue;
         uint8_t range = distance(monster.x, monster.y, game.px, game.py);
         if(range == 1) {
             if(roll(100) < 70) {
@@ -128,6 +177,10 @@ void enemy_turn()
 void end_turn()
 {
     ++game.turns;
+    if(game.confused) --game.confused;
+    if(game.paralyzed) --game.paralyzed;
+    if(game.slowed) --game.slowed;
+    if(game.invisible) --game.invisible;
     if(game.turns % 3 == 0 && game.hunger)
         --game.hunger;
     if(game.hunger == 0 && game.turns % 4 == 0) {
@@ -139,12 +192,16 @@ void end_turn()
         }
     }
     enemy_turn();
+    if(!session.ended && game.slowed && (game.turns & 1))
+        enemy_turn();
 }
 
 void attack_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
-    if(roll(100) >= 80) {
+    uint8_t hit_chance = static_cast<uint8_t>(72 + game.dexterity * 2);
+    if(hit_chance > 95) hit_chance = 95;
+    if(roll(100) >= hit_chance) {
         status(F("You miss the"));
         status(static_cast<MonsterType>(target.type));
         status(F("."));
@@ -153,32 +210,22 @@ void attack_monster(uint8_t index)
     }
     uint8_t bonus = game.weapon_slot != NONE
         ? game.inventory[game.weapon_slot].amount : 0;
-    uint8_t damage = static_cast<uint8_t>(game.attack + bonus + roll(3));
+    uint8_t damage = static_cast<uint8_t>(
+        (game.attack > game.weakened ? game.attack - game.weakened : 1) +
+        bonus + roll(3));
     if(damage >= target.hp) {
         uint8_t killed_type = target.type;
         uint8_t x = target.x, y = target.y;
         mark(game.marks[game.floor], KILLED_MONSTERS, index);
         target.type = 0;
         game.score += static_cast<uint16_t>(5 + killed_type * 3);
-        ++game.xp;
-        bool leveled = false;
-        if(game.xp >= static_cast<uint8_t>(4 + game.level * 3)) {
-            game.xp = 0;
-            ++game.level;
-            game.max_hp = static_cast<uint8_t>(game.max_hp + 3);
-            game.hp = game.max_hp;
-            if(game.level % 2 == 0)
-                ++game.attack;
-            leveled = true;
-        }
         if(killed_type == LORD &&
            !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
             game.ground[15] = {x, y, AMULET, 1};
         status(F("You defeat the"));
         status(static_cast<MonsterType>(killed_type));
         status(F("."));
-        if(leveled)
-            status(F("You gained a level!"));
+        gain_xp(1);
     } else {
         target.hp -= damage;
         status(F("You hit the"));
@@ -190,6 +237,16 @@ void attack_monster(uint8_t index)
 
 void move_player(int8_t dx, int8_t dy)
 {
+    if(game.paralyzed) {
+        status(F("You cannot move!"));
+        end_turn();
+        return;
+    }
+    if(game.confused && roll(2) == 0) {
+        uint8_t direction = roll(4);
+        dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
+        dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+    }
     int16_t x = static_cast<int16_t>(game.px) + dx;
     int16_t y = static_cast<int16_t>(game.py) + dy;
     if(wall_at(x, y)) {
@@ -229,10 +286,10 @@ void move_player(int8_t dx, int8_t dy)
 
 bool add_inventory(uint8_t type, uint8_t amount)
 {
-    if(type == FOOD || type == HEALING) {
+    if(type == FOOD || is_potion(type)) {
         for(Item& item : game.inventory)
-            if(item.type == type && item.amount < 99) {
-                item.amount += amount;
+            if(item.type == type && item.amount <= 99 - amount) {
+                item.amount = static_cast<uint8_t>(item.amount + amount);
                 return true;
             }
     }
@@ -285,6 +342,11 @@ bool use_inventory(uint8_t slot);
 
 void action()
 {
+    if(game.paralyzed) {
+        status(F("You cannot act!"));
+        end_turn();
+        return;
+    }
     uint8_t item = item_at(game.px, game.py);
     if(item != NONE) {
         take_item(item);
@@ -312,6 +374,8 @@ void action()
 
 bool use_inventory(uint8_t slot)
 {
+    if(slot >= INVENTORY || game.paralyzed)
+        return false;
     Item& item = game.inventory[slot];
     if(item.type == NO_ITEM)
         return false;
@@ -325,15 +389,77 @@ bool use_inventory(uint8_t slot)
         if(--item.amount == 0)
             item.type = NO_ITEM;
         break;
-    case HEALING:
-        game.hp = static_cast<uint8_t>(game.hp + 10 > game.max_hp
-            ? game.max_hp : game.hp + 10);
+    case HEALING: case CONFUSION: case POISON: case HARMING:
+    case STRENGTH: case DEXTERITY: case PARALYSIS: case SLOWING:
+    case EXPERIENCE: case INVISIBILITY: {
+        uint8_t type = item.type;
+        bool known = potion_identified(type);
         status(F("You drink"));
         status(Item{item.type, 1, {0, 0}});
         status(F("."));
         if(--item.amount == 0)
             item.type = NO_ITEM;
+        identify_potion(type);
+        if(!known) {
+            status(F("It was"));
+            status(Item{type, 1, {0, 0}});
+            status(F("."));
+        }
+        switch(type) {
+        case HEALING: {
+            uint8_t healed = static_cast<uint8_t>(game.max_hp / 4 +
+                roll(static_cast<uint8_t>(game.max_hp / 2 + 1)));
+            uint16_t hp = static_cast<uint16_t>(game.hp) + healed;
+            game.hp = hp > game.max_hp ? game.max_hp : static_cast<uint8_t>(hp);
+            game.weakened = 0;
+            status(F("You feel better."));
+            break;
+        }
+        case STRENGTH:
+            if(game.weakened) game.weakened = 0;
+            else if(game.attack < 250) ++game.attack;
+            status(F("You feel stronger."));
+            break;
+        case DEXTERITY:
+            if(game.dexterity < 12) ++game.dexterity;
+            status(F("You feel more agile."));
+            break;
+        case EXPERIENCE:
+            gain_xp(50);
+            break;
+        case INVISIBILITY:
+            game.invisible = static_cast<uint8_t>(12 + roll(16));
+            status(F("You turn invisible."));
+            break;
+        case HARMING: {
+            uint8_t base = static_cast<uint8_t>(game.max_hp / 8 + 1);
+            uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
+            if(damage > 10) damage = 10;
+            game.hp = damage >= game.hp ? 0 : game.hp - damage;
+            status(F("The potion harms you!"));
+            if(!game.hp) finish(0);
+            break;
+        }
+        case POISON:
+            if(game.weakened < 3) ++game.weakened;
+            status(F("You feel weaker."));
+            break;
+        case CONFUSION:
+            game.confused = static_cast<uint8_t>(8 + roll(8));
+            status(F("You feel confused."));
+            break;
+        case PARALYSIS:
+            game.paralyzed = static_cast<uint8_t>(3 + roll(4));
+            status(F("You are paralyzed!"));
+            break;
+        case SLOWING:
+            game.slowed = static_cast<uint8_t>(8 + roll(8));
+            status(F("You feel sluggish."));
+            break;
+        default: break;
+        }
         break;
+    }
     case SWORD:
         game.weapon_slot = slot;
         status(F("You equip"));
@@ -350,12 +476,15 @@ bool use_inventory(uint8_t slot)
     default:
         return false;
     }
-    end_turn();
+    if(!session.ended)
+        end_turn();
     return true;
 }
 
 bool drop_inventory(uint8_t slot)
 {
+    if(slot >= INVENTORY || game.paralyzed)
+        return false;
     Item& item = game.inventory[slot];
     if(item.type == NO_ITEM || item_at(game.px, game.py) != NONE)
         return false;
