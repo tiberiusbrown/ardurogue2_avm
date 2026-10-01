@@ -29,17 +29,33 @@ constexpr uint8_t MONSTERS = 12;
 constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
-constexpr uint8_t SAVE_VERSION = 8;
+constexpr uint8_t SAVE_VERSION = 10;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
     STRENGTH, DEXTERITY, PARALYSIS, SLOWING, EXPERIENCE,
-    INVISIBILITY, SWORD, ARMOR, AMULET
+    INVISIBILITY, SWORD, ARMOR, YENDOR_AMULET,
+    RING_SEE_INVISIBLE, RING_STRENGTH, RING_DEXTERITY,
+    RING_PROTECTION, RING_FIRE_IMMUNITY, RING_ATTACK,
+    RING_SUSTENANCE, RING_INVISIBILITY,
+    AMULET_SPEED, AMULET_CLARITY, AMULET_CONSERVATION,
+    AMULET_REGENERATION, AMULET_VAMPIRE, AMULET_IRONBLOOD,
+    AMULET_VITALITY, AMULET_WISDOM
 };
 constexpr uint8_t POTION_COUNT = INVISIBILITY - HEALING + 1;
+constexpr uint8_t RING_COUNT = RING_INVISIBILITY - RING_SEE_INVISIBLE + 1;
+constexpr uint8_t AMULET_COUNT = AMULET_WISDOM - AMULET_SPEED + 1;
 constexpr bool is_potion(uint8_t type)
 {
     return type >= HEALING && type <= INVISIBILITY;
+}
+constexpr bool is_ring(uint8_t type)
+{
+    return type >= RING_SEE_INVISIBLE && type <= RING_INVISIBILITY;
+}
+constexpr bool is_amulet(uint8_t type)
+{
+    return type >= AMULET_SPEED && type <= AMULET_WISDOM;
 }
 
 enum MonsterType : uint8_t {
@@ -54,9 +70,29 @@ struct Monster { uint8_t x, y, type, hp, stun, effects[2]; };
 enum MonsterEffect : uint8_t {
     MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
 };
-struct GroundItem { uint8_t x, y, type, amount; };
-struct Item { uint8_t type, amount, reserved[2]; };
-static_assert(sizeof(Item) == 4, "Item must reserve four bytes");
+struct Item { uint8_t type, info; };
+constexpr uint8_t ITEM_VALUE_MASK = 0x3f;
+constexpr uint8_t ITEM_CURSED = 0x40;
+constexpr uint8_t ITEM_IDENTIFIED = 0x80;
+constexpr uint8_t item_value(const Item& item)
+{
+    return item.info & ITEM_VALUE_MASK;
+}
+constexpr void set_item_value(Item& item, uint8_t value)
+{
+    item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) |
+                                     (value & ITEM_VALUE_MASK));
+}
+constexpr bool item_is_cursed(const Item& item)
+{
+    return (item.info & ITEM_CURSED) != 0;
+}
+constexpr bool item_is_identified(const Item& item)
+{
+    return (item.info & ITEM_IDENTIFIED) != 0;
+}
+static_assert(sizeof(Item) == 2, "Item must use two bytes");
+struct GroundItem { uint8_t x, y; Item item; };
 struct FloorMarks {
     // 16 item, 12 monster, 11 door, and 12 room flags: 51 bits.
     uint8_t bits[7];
@@ -85,6 +121,7 @@ struct Game {
     uint8_t defense, hunger, turns;
     uint8_t weakened, confused, paralyzed, slowed, invisible;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
+    uint8_t amulet_slot, ring_slots[2];
     uint8_t potion_appearance[POTION_COUNT], identified_potions[2];
 };
 
@@ -122,6 +159,9 @@ void start_new(uint16_t seed);
 void finish(uint8_t result);
 uint8_t monster_at(uint8_t x, uint8_t y);
 uint8_t item_at(uint8_t x, uint8_t y);
+Item ground_item_info(uint8_t index);
+uint8_t player_max_hp();
+bool player_can_see_monster(uint8_t index);
 void end_turn();
 void move_player(int8_t dx, int8_t dy);
 void action();

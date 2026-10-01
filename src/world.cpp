@@ -242,20 +242,29 @@ void make_floor()
         const Room& room = game.rooms[(i * 7u + 3u) % ROOMS];
         uint8_t x = static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2));
         uint8_t y = static_cast<uint8_t>(room.y + 1 + floor_roll(seed, room.h - 2));
-        uint8_t chance = floor_roll(seed, 12);
-        uint8_t type = chance < 4 ? FOOD : chance < 8
+        uint8_t chance = floor_roll(seed, 64);
+        uint8_t type = chance < 20 ? FOOD : chance < 40
             ? static_cast<uint8_t>(HEALING + floor_roll(seed, POTION_COUNT)) :
-              chance < 10 ? SWORD : ARMOR;
-        uint8_t amount = type == SWORD || type == ARMOR
+              chance < 50 ? SWORD : chance < 60 ? ARMOR :
+              chance < 62
+                ? static_cast<uint8_t>(RING_SEE_INVISIBLE +
+                                       floor_roll(seed, RING_COUNT))
+                : static_cast<uint8_t>(AMULET_SPEED +
+                                       floor_roll(seed, AMULET_COUNT));
+        uint8_t info = type == SWORD || type == ARMOR
             ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
+        if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
+            info |= ITEM_CURSED;
+        if(is_potion(type) && potion_identified(type))
+            info |= ITEM_IDENTIFIED;
         if(marked(marks, TAKEN_ITEMS, i) || (game.floor == FLOORS - 1 && i == 15))
             continue;
-        game.ground[i] = {x, y, type, amount};
+        game.ground[i] = {x, y, {type, info}};
     }
     if(game.floor == FLOORS - 1 &&
        marked(marks, KILLED_MONSTERS, MONSTERS - 1) &&
        !marked(marks, TAKEN_ITEMS, 15))
-        game.ground[15] = {game.down_x, game.down_y, AMULET, 1};
+        game.ground[15] = {game.down_x, game.down_y, {YENDOR_AMULET, 1}};
 }
 
 bool can_see(uint8_t tx, uint8_t ty)

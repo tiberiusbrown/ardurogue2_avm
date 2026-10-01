@@ -92,6 +92,14 @@ static const char PROGMEM* const PROGMEM potion_color_names[] = {
     F("red"), F("clear"), F("orange"), F("green"), F("blue"),
     F("white"), F("yellow"), F("violet"), F("black"), F("pink")
 };
+static const char PROGMEM* const PROGMEM ring_names[] = {
+    F("see invisible"), F("strength"), F("dexterity"), F("protection"),
+    F("fire immunity"), F("attack"), F("sustenance"), F("invisibility")
+};
+static const char PROGMEM* const PROGMEM amulet_names[] = {
+    F("speed"), F("clarity"), F("conservation"), F("regeneration"),
+    F("the vampire"), F("ironblood"), F("vitality"), F("wisdom")
+};
 
 const char PROGMEM* potion_display_name(uint8_t type)
 {
@@ -100,26 +108,47 @@ const char PROGMEM* potion_display_name(uint8_t type)
         : potion_color_names[potion_color(type)];
 }
 
+const char PROGMEM* ring_name(uint8_t type)
+{
+    return is_ring(type) ? ring_names[type - RING_SEE_INVISIBLE] : F("unknown");
+}
+
+const char PROGMEM* amulet_name(uint8_t type)
+{
+    return is_amulet(type) ? amulet_names[type - AMULET_SPEED] : F("unknown");
+}
+
 void status_item(Item item)
 {
     if(is_potion(item.type)) {
-        if(item.amount > 1)
-            rogue::status_number(item.amount);
+        uint8_t quantity = item_value(item);
+        if(quantity > 1)
+            rogue::status_number(quantity);
         else
             status_words_P(F("a"));
         if(potion_identified(item.type)) {
-            status_words_P(item.amount > 1 ? F("potions of") : F("potion of"));
+            status_words_P(quantity > 1 ? F("potions of") : F("potion of"));
             status_words_P(potion_display_name(item.type));
         } else {
             status_words_P(potion_display_name(item.type));
-            status_words_P(item.amount > 1 ? F("potions") : F("potion"));
+            status_words_P(quantity > 1 ? F("potions") : F("potion"));
         }
+        return;
+    }
+    if(is_ring(item.type)) {
+        status_words_P(F("a ring of"));
+        status_words_P(ring_name(item.type));
+        return;
+    }
+    if(is_amulet(item.type)) {
+        status_words_P(F("an amulet of"));
+        status_words_P(amulet_name(item.type));
         return;
     }
     switch(item.type) {
     case FOOD:
-        if(item.amount > 1) {
-            rogue::status_number(item.amount);
+        if(item_value(item) > 1) {
+            rogue::status_number(item_value(item));
             status_words_P(F("food rations"));
         } else {
             status_words_P(F("some food"));
@@ -127,17 +156,17 @@ void status_item(Item item)
         break;
     case SWORD: status_words_P(F("a sword")); break;
     case ARMOR: status_words_P(F("armor")); break;
-    case AMULET: status_words_P(F("the amulet")); break;
+    case YENDOR_AMULET: status_words_P(F("the amulet")); break;
     default: status_words_P(F("item")); break;
     }
-    if((item.type == SWORD || item.type == ARMOR) && item.amount) {
+    if((item.type == SWORD || item.type == ARMOR) && item_value(item)) {
         char modifier[5] = {'+'};
         uint8_t length = 1;
-        if(item.amount >= 100)
-            modifier[length++] = static_cast<char>('0' + item.amount / 100);
-        if(item.amount >= 10)
-            modifier[length++] = static_cast<char>('0' + (item.amount / 10) % 10);
-        modifier[length++] = static_cast<char>('0' + item.amount % 10);
+        if(item_value(item) >= 100)
+            modifier[length++] = static_cast<char>('0' + item_value(item) / 100);
+        if(item_value(item) >= 10)
+            modifier[length++] = static_cast<char>('0' + (item_value(item) / 10) % 10);
+        modifier[length++] = static_cast<char>('0' + item_value(item) % 10);
         modifier[length] = 0;
         rogue::status_word(modifier);
     }
@@ -161,7 +190,11 @@ static const uint16_t PROGMEM item_icons[] = {
     0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0,
     0x04f4, // sword
     0x0f90, // armor
-    0x0606, // amulet
+    0x0606, // Yendor amulet
+    0x0660, 0x0660, 0x0660, 0x0660,
+    0x0660, 0x0660, 0x0660, 0x0660, // ring variants
+    0x0606, 0x0606, 0x0606, 0x0606,
+    0x0606, 0x0606, 0x0606, 0x0606, // amulet variants
 };
 static constexpr uint16_t PLAYER_ICON = 0x6ff6;
 static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
@@ -349,20 +382,22 @@ void render_play()
        explored(game.down_x, game.down_y))
         icon(DOWN_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
              static_cast<uint8_t>(sy * 5));
-    for(const GroundItem& item : game.ground)
-        if(item.type && in_sight(item.x, item.y, sight, sx, sy))
-            icon(item_icons[item.type], static_cast<uint8_t>(sx * 5),
+    for(const GroundItem& ground : game.ground)
+        if(ground.item.type && in_sight(ground.x, ground.y, sight, sx, sy))
+            icon(item_icons[ground.item.type], static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
-    for(const Monster& monster : game.monsters)
-        if(monster.type && !monster_effect(monster, MON_INVISIBLE) &&
+    for(uint8_t i = 0; i < MONSTERS; ++i) {
+        const Monster& monster = game.monsters[i];
+        if(player_can_see_monster(i) &&
            in_sight(monster.x, monster.y, sight, sx, sy))
             icon(monster_icons[monster.type],
                  static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+    }
     icon(PLAYER_ICON, 30, 30);
     for(uint8_t y = 0; y < 64; ++y)
         pixel(64, y);
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
-    avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, game.max_hp);
+    avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
 }
 
 void render_title()
@@ -404,17 +439,29 @@ void render_inventory()
         if(is_potion(item.type)) {
             avm_draw_text_P(10, y, F("P:"));
             avm_draw_text_P(21, y, potion_display_name(item.type));
-            avm_draw_textf_P(95, y, F("x%u"), item.amount);
+            avm_draw_textf_P(95, y, F("x%u"), item_value(item));
             continue;
         }
         switch(item.type) {
-        case FOOD: avm_draw_textf_P(10, y, F("FOOD x%u"), item.amount); break;
-        case SWORD: avm_draw_textf_P(10, y, F("SWORD +%u"), item.amount); break;
-        case ARMOR: avm_draw_textf_P(10, y, F("ARMOR +%u"), item.amount); break;
-        default: break;
+        case FOOD: avm_draw_textf_P(10, y, F("FOOD x%u"), item_value(item)); break;
+        case SWORD: avm_draw_textf_P(10, y, F("SWORD +%u"), item_value(item)); break;
+        case ARMOR: avm_draw_textf_P(10, y, F("ARMOR +%u"), item_value(item)); break;
+        default:
+            if(is_ring(item.type)) {
+                avm_draw_text_P(10, y, F("RING OF"));
+                avm_draw_text_P(48, y, ring_name(item.type));
+            } else if(is_amulet(item.type)) {
+                avm_draw_text_P(10, y, F("AMULET OF"));
+                avm_draw_text_P(61, y, amulet_name(item.type));
+            }
+            break;
         }
-        if(game.weapon_slot == i || game.armor_slot == i)
-            avm_draw_text_P(75, y, F("*"));
+        if(game.weapon_slot == i || game.armor_slot == i ||
+           game.amulet_slot == i || game.ring_slots[0] == i ||
+           game.ring_slots[1] == i)
+            avm_draw_text_P(116, y, F("*"));
+        if(item_is_identified(item) && item_is_cursed(item))
+            avm_draw_text_P(123, y, F("!"));
     }
 }
 

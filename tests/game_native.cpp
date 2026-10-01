@@ -190,7 +190,7 @@ void check_potions()
 
     auto drink = [](uint8_t type, uint8_t amount = 1) {
         std::memset(game.monsters, 0, sizeof(game.monsters));
-        game.inventory[0] = {type, amount, {0, 0}};
+        game.inventory[0] = {type, amount};
         require(use_inventory(0), "potion could not be drunk");
         require(potion_identified(type), "drinking did not identify potion");
     };
@@ -198,7 +198,8 @@ void check_potions()
     game.weakened = 2;
     drink(HEALING, 2);
     require(game.hp > 2 && game.hp <= game.max_hp && !game.weakened &&
-            game.inventory[0].type == HEALING && game.inventory[0].amount == 1,
+            game.inventory[0].type == HEALING &&
+            item_value(game.inventory[0]) == 1,
             "healing or potion stack is wrong");
     uint8_t strength = game.attack;
     drink(STRENGTH);
@@ -243,8 +244,9 @@ void check_potions()
     for(uint16_t seed = 1; seed <= 24; ++seed) {
         start_new(seed);
         for(const GroundItem& item : game.ground)
-            if(is_potion(item.type) && !spawned[item.type - HEALING]) {
-                spawned[item.type - HEALING] = true;
+            if(is_potion(item.item.type) &&
+               !spawned[item.item.type - HEALING]) {
+                spawned[item.item.type - HEALING] = true;
                 ++kinds;
             }
     }
@@ -263,17 +265,17 @@ void check_thrown_potions()
     game.invisible = 100; // Keep the target in place during assertions.
     game.hunger = 255;
 
-    game.inventory[0] = {HARMING, 2, {0, 0}};
-    require(!throw_potion(0, 1, 1) && game.inventory[0].amount == 2,
+    game.inventory[0] = {HARMING, 2};
+    require(!throw_potion(0, 1, 1) && item_value(game.inventory[0]) == 2,
             "invalid throwing direction consumed a potion");
-    require(throw_potion(0, 1, 0) && game.inventory[0].amount == 1 &&
+    require(throw_potion(0, 1, 0) && item_value(game.inventory[0]) == 1 &&
             !potion_identified(HARMING),
             "a missed throw did not consume one unknown potion");
 
     game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
     uint16_t wall = static_cast<uint16_t>(10 * MAP_W + 11);
     game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
-    game.inventory[0] = {POISON, 3, {0, 0}};
+    game.inventory[0] = {POISON, 3};
     require(throw_potion(0, 1, 0) && !potion_identified(POISON) &&
             !monster_effect(game.monsters[0], MON_WEAKENED),
             "potion passed through a wall");
@@ -291,7 +293,7 @@ void check_thrown_potions()
             "throw did not hit only the first monster or consume its stack");
 
     auto throw_at_target = [](uint8_t type) {
-        game.inventory[0] = {type, 1, {0, 0}};
+        game.inventory[0] = {type, 1};
         require(throw_potion(0, 1, 0) && potion_identified(type),
                 "thrown potion failed to identify on hit");
     };
@@ -351,7 +353,7 @@ void check_effect_messages()
                             const char* began, const char* ended) {
         start_new(0x4567);
         std::memset(game.monsters, 0, sizeof(game.monsters));
-        game.inventory[0] = {type, 1, {0, 0}};
+        game.inventory[0] = {type, 1};
         status_text.clear();
         require(use_inventory(0) && status_text.find(began) != std::string::npos,
                 "player effect start message is missing");
@@ -372,12 +374,12 @@ void check_effect_messages()
 
     start_new(0x4567);
     std::memset(game.monsters, 0, sizeof(game.monsters));
-    game.inventory[0] = {POISON, 1, {0, 0}};
+    game.inventory[0] = {POISON, 1};
     status_text.clear();
     require(use_inventory(0) &&
             status_text.find("You feel weaker.") != std::string::npos,
             "player poison start message is missing");
-    game.inventory[0] = {HEALING, 1, {0, 0}};
+    game.inventory[0] = {HEALING, 1};
     status_text.clear();
     require(use_inventory(0) &&
             status_text.find("Your strength returns.") != std::string::npos,
@@ -393,12 +395,12 @@ void check_effect_messages()
         game.py = 10;
         game.invisible = 100;
         game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
-        game.inventory[0] = {type, 1, {0, 0}};
+        game.inventory[0] = {type, 1};
         status_text.clear();
         require(throw_potion(0, 1, 0) &&
                 status_text.find(began) != std::string::npos,
                 "monster effect start message is missing");
-        game.inventory[0] = {type, 1, {0, 0}};
+        game.inventory[0] = {type, 1};
         status_text.clear();
         require(throw_potion(0, 1, 0) &&
                 status_text.find(began) == std::string::npos,
@@ -426,12 +428,12 @@ void check_effect_messages()
     game.py = 10;
     game.invisible = 100;
     game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
-    game.inventory[0] = {POISON, 1, {0, 0}};
+    game.inventory[0] = {POISON, 1};
     status_text.clear();
     require(throw_potion(0, 1, 0) &&
             status_text.find("grows weaker.") != std::string::npos,
             "monster poison start message is missing");
-    game.inventory[0] = {STRENGTH, 1, {0, 0}};
+    game.inventory[0] = {STRENGTH, 1};
     status_text.clear();
     require(throw_potion(0, 1, 0) &&
             status_text.find("regains its strength.") != std::string::npos,
@@ -474,7 +476,7 @@ int main()
     require(found, "no free floor tile");
     game.px = drop_x;
     game.py = drop_y;
-    game.inventory[0] = {FOOD, 1, {0, 0}};
+    game.inventory[0] = {FOOD, 1};
     require(drop_inventory(0) && game.inventory[0].type == NO_ITEM,
             "inventory drop failed");
     require(item_at(drop_x, drop_y) >= GROUND_ITEMS,

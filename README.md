@@ -18,9 +18,11 @@ The active floor's explored map uses one bit per tile. Floor progress flags
 use 51 bits per floor to remember picked-up generated items, defeated monsters,
 opened doors, and visited rooms; generated item and monster slots are omitted
 when that floor is rebuilt. Door state and monster spawn identity are derived
-from those flags and array positions. Inventory items reserve two bytes for
-future attributes. Save version 8 stores potion appearances, discoveries,
-monster potion effects, and player speed; older saves are not compatible.
+from those flags and array positions. Each inventory item uses two bytes: a
+type byte and an info byte with a six-bit quantity or level, a cursed bit, and
+an identified bit. Ground slots store their coordinates and a complete item.
+Save version 10 stores potion appearances, discoveries, monster potion effects,
+player speed, and accessory slots; older saves are not compatible.
 
 The ten potions from ArduRogue are healing, strength, dexterity, experience,
 invisibility, harming, poison, confusion, paralysis, and slowing. Every new
@@ -29,6 +31,14 @@ color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
 can increase attack. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
+
+Rings and amulets are separate item types, with eight variants of each. Rings
+can be worn two at a time, and one amulet can be worn. Their effects include
+bonuses to combat, visibility, speed, defense, health, and experience, plus
+sustenance, regeneration, life drain, clarity, conservation, ironblood, and
+invisibility. Cursed accessories reverse applicable bonuses and cannot be
+removed once equipped. The ring of fire immunity is included; no current enemy
+attack deals fire damage.
 The player has a base speed of 4, and each monster species has its own speed.
 After each player action, monsters act in proportion to their speed relative
 to the player's. Slowing halves the affected entity's speed, so a slowed
