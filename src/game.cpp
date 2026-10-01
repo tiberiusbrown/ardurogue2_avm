@@ -3,9 +3,9 @@
 
 namespace rogue {
 
-Session session = {WELCOME, NONE, 0, false};
+Session session = {NONE, 0, false};
 
-static const uint8_t ROGUE_ROM_DATA monster_damage[] = {0, 1, 2, 2, 3, 4, 6};
+static const uint8_t PROGMEM monster_damage[] = {0, 1, 2, 2, 3, 4, 6};
 
 uint8_t roll(uint8_t limit)
 {
@@ -39,7 +39,7 @@ void start_new(uint16_t seed)
     game.px = game.up_x;
     game.py = game.up_y;
     visit_room();
-    session = {WELCOME, NONE, 0, false};
+    session = {NONE, 0, false};
 }
 
 void finish(uint8_t result)
@@ -95,7 +95,9 @@ void enemy_turn()
                     game.floor / 5 + roll(3));
                 uint8_t damage = raw > game.defense ? raw - game.defense : 1;
                 game.hp = damage >= game.hp ? 0 : game.hp - damage;
-                session.message = HURT;
+                status(F("The"));
+                status(static_cast<MonsterType>(monster.type));
+                status(F("hits you!"));
                 if(game.hp == 0) {
                     finish(0);
                     return;
@@ -130,7 +132,7 @@ void end_turn()
         --game.hunger;
     if(game.hunger == 0 && game.turns % 4 == 0) {
         --game.hp;
-        session.message = HUNGRY;
+        status(F("You are starving!"));
         if(game.hp == 0) {
             finish(0);
             return;
@@ -143,7 +145,9 @@ void attack_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
     if(roll(100) >= 80) {
-        session.message = MISSED;
+        status(F("You miss the"));
+        status(static_cast<MonsterType>(target.type));
+        status(F("."));
         end_turn();
         return;
     }
@@ -157,6 +161,7 @@ void attack_monster(uint8_t index)
         target.type = 0;
         game.score += static_cast<uint16_t>(5 + killed_type * 3);
         ++game.xp;
+        bool leveled = false;
         if(game.xp >= static_cast<uint8_t>(4 + game.level * 3)) {
             game.xp = 0;
             ++game.level;
@@ -164,13 +169,20 @@ void attack_monster(uint8_t index)
             game.hp = game.max_hp;
             if(game.level % 2 == 0)
                 ++game.attack;
+            leveled = true;
         }
         if(killed_type == LORD && !marked(game.marks[game.floor].taken_items, 15))
             game.ground[15] = {x, y, AMULET, 1};
-        session.message = KILLED;
+        status(F("You defeat the"));
+        status(static_cast<MonsterType>(killed_type));
+        status(F("."));
+        if(leveled)
+            status(F("You gained a level!"));
     } else {
         target.hp -= damage;
-        session.message = HIT;
+        status(F("You hit the"));
+        status(static_cast<MonsterType>(target.type));
+        status(F("."));
     }
     end_turn();
 }
@@ -180,14 +192,14 @@ void move_player(int8_t dx, int8_t dy)
     int16_t x = static_cast<int16_t>(game.px) + dx;
     int16_t y = static_cast<int16_t>(game.py) + dy;
     if(wall_at(x, y)) {
-        session.message = WALL;
+        status(F("A wall blocks your way."));
         return;
     }
     uint8_t door = door_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
     if(door != NONE && !game.doors[door].open) {
         game.doors[door].open = 1;
         mark(game.marks[game.floor].opened_doors, door);
-        session.message = OPENED;
+        status(F("You open the door."));
         end_turn();
         return;
     }
@@ -199,9 +211,19 @@ void move_player(int8_t dx, int8_t dy)
     game.px = static_cast<uint8_t>(x);
     game.py = static_cast<uint8_t>(y);
     visit_room();
-    session.message = item_at(game.px, game.py) != NONE ? FOUND :
-        ((game.px == game.up_x && game.py == game.up_y) ||
-         (game.px == game.down_x && game.py == game.down_y)) ? STAIRS : EMPTY;
+    uint8_t item = item_at(game.px, game.py);
+    if(item != NONE)
+    {
+        status(F("You see"));
+        status(item < GROUND_ITEMS
+            ? Item{game.ground[item].type, game.ground[item].amount}
+            : Item{game.dropped[item - GROUND_ITEMS].type,
+                   game.dropped[item - GROUND_ITEMS].amount});
+        status(F("here. A: pick up."));
+    }
+    else if((game.px == game.up_x && game.py == game.up_y) ||
+            (game.px == game.down_x && game.py == game.down_y))
+        status(F("Stairs here. Press A."));
     end_turn();
 }
 
@@ -231,11 +253,13 @@ void take_item(uint8_t index)
     if(type == AMULET) {
         game.has_amulet = 1;
         game.score += 100;
-        session.message = AMULET_FOUND;
+        status(F("You found the amulet!"));
     } else if(add_inventory(type, amount)) {
-        session.message = PICKED_UP;
+        status(F("You picked up"));
+        status(Item{type, amount});
+        status(F("."));
     } else {
-        session.message = FULL;
+        status(F("Your pack is full."));
         return;
     }
     if(index < GROUND_ITEMS) {
@@ -254,7 +278,7 @@ void change_floor(int8_t delta)
     game.px = delta > 0 ? game.up_x : game.down_x;
     game.py = delta > 0 ? game.up_y : game.down_y;
     visit_room();
-    session.message = STAIRS;
+    status(F("You take the stairs."));
 }
 
 bool use_inventory(uint8_t slot);
@@ -281,7 +305,7 @@ void action()
     if(session.repeat_slot != NONE && game.inventory[session.repeat_slot].type) {
         use_inventory(session.repeat_slot);
     } else {
-        session.message = NO_ITEM_HERE;
+        status(F("There is nothing here."));
         end_turn();
     }
 }
@@ -295,25 +319,33 @@ bool use_inventory(uint8_t slot)
     switch(item.type) {
     case FOOD:
         game.hunger = game.hunger > 145 ? 255 : game.hunger + 110;
-        session.message = FED;
+        status(F("You eat"));
+        status(Item{item.type, 1});
+        status(F("."));
         if(--item.amount == 0)
             item.type = NO_ITEM;
         break;
     case HEALING:
         game.hp = static_cast<uint8_t>(game.hp + 10 > game.max_hp
             ? game.max_hp : game.hp + 10);
-        session.message = HEALED;
+        status(F("You drink"));
+        status(Item{item.type, 1});
+        status(F("."));
         if(--item.amount == 0)
             item.type = NO_ITEM;
         break;
     case SWORD:
         game.weapon_slot = slot;
-        session.message = EQUIPPED;
+        status(F("You equip"));
+        status(item);
+        status(F("."));
         break;
     case ARMOR:
         game.armor_slot = slot;
         game.defense = item.amount;
-        session.message = EQUIPPED;
+        status(F("You equip"));
+        status(item);
+        status(F("."));
         break;
     default:
         return false;
@@ -339,11 +371,13 @@ bool drop_inventory(uint8_t slot)
             if(session.repeat_slot == slot)
                 session.repeat_slot = NONE;
             item.type = NO_ITEM;
-            session.message = DROPPED;
+            status(F("You dropped"));
+            status(Item{dropped.type, dropped.amount});
+            status(F("."));
             end_turn();
             return true;
         }
-    session.message = FULL;
+    status(F("No room to drop that."));
     return false;
 }
 

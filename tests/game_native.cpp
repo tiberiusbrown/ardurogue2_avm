@@ -11,6 +11,14 @@ Game game = {};
 
 using namespace rogue;
 
+namespace rogue {
+void status_word(const char*) {}
+void status(const char*) {}
+void status(Item) {}
+void status(MonsterType) {}
+void status_number(uint8_t) {}
+}
+
 void require(bool condition, const char* reason)
 {
     if(!condition) {

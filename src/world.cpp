@@ -3,7 +3,7 @@
 
 namespace rogue {
 
-static const uint8_t ROGUE_ROM_DATA monster_health[] = {0, 3, 5, 8, 12, 17, 48};
+static const uint8_t PROGMEM monster_health[] = {0, 3, 5, 8, 12, 17, 48};
 
 uint16_t next_random(uint16_t& state)
 {

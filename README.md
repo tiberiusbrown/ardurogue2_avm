@@ -24,6 +24,7 @@ each floor from a seed and compact progress flags to conserve RAM.
 | Dungeon | Direction pad | Move, attack, or open a door |
 | Dungeon | A | Pick up an item, use stairs, repeat the last inventory action, or wait |
 | Dungeon | B | Open the action menu |
+| Status prompt | A | Continue a long message after `[more]` |
 | Action menu | Up/Down, A | Choose wait, inventory, full map, save and exit, or abandon |
 | Inventory | Up/Down, A | Select and use or equip an item |
 | Inventory | Right | Drop the selected item |
@@ -33,6 +34,11 @@ Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
 best score. The inventory has 16 slots; up to eight dropped items can persist
 across floors.
+
+The dungeon screen shows dungeon depth, player level, and health above a
+word-wrapped status area. Messages from one action, including enemy responses,
+accumulate there; the next action clears them. Longer messages pause at
+`[more]` until A is pressed.
 
 ## Build
 

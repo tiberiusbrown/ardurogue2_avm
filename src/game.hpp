@@ -3,9 +3,10 @@
 #include <stdint.h>
 
 #if defined(__AVM__)
-#define ROGUE_ROM_DATA __attribute__((address_space(1)))
+#include <avm/pgmspace.h>
 #else
-#define ROGUE_ROM_DATA
+#define PROGMEM
+#define F(s) s
 #endif
 
 namespace rogue {
@@ -27,12 +28,6 @@ enum ItemType : uint8_t {
 
 enum MonsterType : uint8_t {
     NO_MONSTER, RAT, SNAKE, SKELETON, ORC, TROLL, LORD
-};
-
-enum Message : uint8_t {
-    WELCOME, WALL, OPENED, HIT, MISSED, HURT, KILLED, FOUND,
-    FULL, HEALED, FED, EQUIPPED, EMPTY, STAIRS, AMULET_FOUND,
-    HUNGRY, NO_ITEM_HERE, DROPPED, PICKED_UP
 };
 
 struct Room { uint8_t x, y, w, h; };
@@ -66,13 +61,19 @@ struct Game {
 };
 
 struct Session {
-    Message message;
     uint8_t repeat_slot, result;
     bool ended;
 };
 
 extern Game game;
 extern Session session;
+
+// Status text is drawn immediately. status_word is the wrapping primitive.
+void status_word(const char* word);
+void status(const char PROGMEM* words);
+void status(Item item);
+void status(MonsterType monster);
+void status_number(uint8_t value);
 
 uint16_t next_random(uint16_t& state);
 bool marked(uint16_t bits, uint8_t index);

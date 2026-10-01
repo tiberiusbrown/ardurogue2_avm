@@ -19,6 +19,105 @@ struct Ui {
     bool has_save, dirty;
 };
 static Ui ui = {};
+static uint8_t status_x = 67, status_y = 28;
+
+void status_clear()
+{
+    avm_draw_filled_rect_black(65, 23, 63, 41);
+    status_x = 67;
+    status_y = 28;
+}
+
+void status_next_line()
+{
+    status_x = 67;
+    status_y = static_cast<uint8_t>(status_y + 7);
+    if(status_y <= 56)
+        return;
+    int16_t more_width = avm_draw_text_P(128, 0, F("[more]")).x - 128;
+    avm_draw_text_P(static_cast<int16_t>(128 - more_width), 63, F("[more]"));
+    avm_display(false);
+    // A that initiated this turn must be released before it can advance a page.
+    while(avm_buttons() & AVM_BUTTON_A)
+        avm_idle();
+    while(!(avm_buttons() & AVM_BUTTON_A))
+        avm_idle();
+    ui.previous_buttons = avm_buttons();
+    ui.held_direction = 0;
+    status_clear();
+}
+
+void status_words_P(const char AVM_PROGMEM* words)
+{
+    char word[32];
+    uint8_t length = 0;
+    for(;;) {
+        char c = *words++;
+        if(c != ' ' && c != 0 && length < sizeof(word) - 1) {
+            word[length++] = c;
+            continue;
+        }
+        if(length) {
+            word[length] = 0;
+            rogue::status_word(word);
+            length = 0;
+        }
+        if(!c)
+            return;
+        if(c != ' ')
+            word[length++] = c;
+    }
+}
+
+void status_entity(uint8_t type)
+{
+    switch(type) {
+    case RAT: status_words_P(F("rat")); break;
+    case SNAKE: status_words_P(F("snake")); break;
+    case SKELETON: status_words_P(F("skeleton")); break;
+    case ORC: status_words_P(F("orc")); break;
+    case TROLL: status_words_P(F("troll")); break;
+    case LORD: status_words_P(F("Lord of Darkness")); break;
+    default: status_words_P(F("foe")); break;
+    }
+}
+
+void status_item(Item item)
+{
+    switch(item.type) {
+    case FOOD:
+        if(item.amount > 1) {
+            rogue::status_number(item.amount);
+            status_words_P(F("food rations"));
+        } else {
+            status_words_P(F("some food"));
+        }
+        break;
+    case HEALING:
+        if(item.amount > 1) {
+            rogue::status_number(item.amount);
+            status_words_P(F("healing potions"));
+        } else {
+            status_words_P(F("a healing potion"));
+        }
+        break;
+    case SWORD: status_words_P(F("a sword")); break;
+    case ARMOR: status_words_P(F("armor")); break;
+    case AMULET: status_words_P(F("the amulet")); break;
+    default: status_words_P(F("item")); break;
+    }
+    if((item.type == SWORD || item.type == ARMOR) && item.amount) {
+        char modifier[5] = {'+'};
+        uint8_t length = 1;
+        if(item.amount >= 100)
+            modifier[length++] = static_cast<char>('0' + item.amount / 100);
+        if(item.amount >= 10)
+            modifier[length++] = static_cast<char>('0' + (item.amount / 10) % 10);
+        modifier[length++] = static_cast<char>('0' + item.amount % 10);
+        modifier[length] = 0;
+        rogue::status_word(modifier);
+    }
+}
 
 // Four vertical columns per symbol. The fifth pixel is left blank between tiles.
 static const uint8_t AVM_PROGMEM icons[][4] = {
@@ -72,32 +171,10 @@ bool in_sight(uint8_t x, uint8_t y, const uint16_t sight[13],
     return screen_tile(x, y, sx, sy) && (sight[sy] & (1u << sx));
 }
 
-void render_message()
-{
-    switch(session.message) {
-    case WELCOME: avm_draw_text_P(66, 55, F("WELCOME")); break;
-    case WALL: avm_draw_text_P(66, 55, F("A WALL")); break;
-    case OPENED: avm_draw_text_P(66, 55, F("DOOR OPEN")); break;
-    case HIT: avm_draw_text_P(66, 55, F("YOU HIT")); break;
-    case MISSED: avm_draw_text_P(66, 55, F("YOU MISS")); break;
-    case HURT: avm_draw_text_P(66, 55, F("YOU HURT")); break;
-    case KILLED: avm_draw_text_P(66, 55, F("FOE DOWN")); break;
-    case FOUND: avm_draw_text_P(66, 55, F("A: PICK UP")); break;
-    case PICKED_UP: avm_draw_text_P(66, 55, F("PICKED UP")); break;
-    case FULL: avm_draw_text_P(66, 55, F("PACK FULL")); break;
-    case HEALED: avm_draw_text_P(66, 55, F("HEALED")); break;
-    case FED: avm_draw_text_P(66, 55, F("ATE FOOD")); break;
-    case EQUIPPED: avm_draw_text_P(66, 55, F("EQUIPPED")); break;
-    case STAIRS: avm_draw_text_P(66, 55, F("A: STAIRS")); break;
-    case AMULET_FOUND: avm_draw_text_P(66, 55, F("AMULET!")); break;
-    case HUNGRY: avm_draw_text_P(66, 55, F("STARVING")); break;
-    case DROPPED: avm_draw_text_P(66, 55, F("DROPPED")); break;
-    default: avm_draw_text_P(66, 55, F("A: WAIT")); break;
-    }
-}
-
 void render_play()
 {
+    avm_draw_filled_rect_black(0, 0, 65, 64);
+    avm_draw_filled_rect_black(65, 0, 63, 23);
     uint16_t sight[13] = {};
     uint16_t walls[13] = {};
     uint16_t opaque[13] = {};
@@ -192,14 +269,6 @@ void render_play()
         pixel(64, y);
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
     avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, game.max_hp);
-    avm_draw_textf_P(67, 23, F("AT%u DF%u"), game.attack +
-        (game.weapon_slot != NONE ? game.inventory[game.weapon_slot].amount : 0),
-        game.defense);
-    avm_draw_textf_P(67, 31, F("XP%u"), game.xp);
-    avm_draw_textf_P(67, 39, F("FOOD%u"), game.hunger);
-    avm_draw_textf_P(67, 47, F("SCORE%u"), game.score);
-    render_message();
-    avm_draw_text_P(67, 63, F("B:MENU"));
 }
 
 void render_title()
@@ -281,6 +350,8 @@ void render_end()
 
 void render()
 {
+    if(ui.mode != PLAY)
+        avm_draw_filled_rect_black(0, 0, 128, 64);
     switch(ui.mode) {
     case TITLE: render_title(); break;
     case PLAY: render_play(); break;
@@ -289,7 +360,7 @@ void render()
     case FULL_MAP: render_full_map(); break;
     case END: render_end(); break;
     }
-    avm_display(AVM_CLEAR_BUFFER);
+    avm_display(false);
     ui.dirty = false;
 }
 
@@ -324,6 +395,8 @@ void begin_new_game()
     start_new(avm_generate_random_seed());
     ui.has_save = false;
     ui.mode = PLAY;
+    status_clear();
+    status(F("Welcome to the dungeon."));
 }
 
 void handle_input(uint8_t buttons)
@@ -339,7 +412,8 @@ void handle_input(uint8_t buttons)
                 game.valid = 1;
                 ui.mode = PLAY;
                 ui.has_save = false;
-                session.message = WELCOME;
+                status_clear();
+                status(F("Welcome back to the dungeon."));
             } else {
                 begin_new_game();
             }
@@ -360,6 +434,7 @@ void handle_input(uint8_t buttons)
     if(ui.mode == FULL_MAP) {
         if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) {
             ui.mode = PLAY;
+            status_clear();
             ui.dirty = true;
         }
         return;
@@ -373,10 +448,16 @@ void handle_input(uint8_t buttons)
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
+            status_clear();
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_A) {
             switch(ui.selection) {
-            case 0: ui.mode = PLAY; session.message = EMPTY; end_turn(); break;
+            case 0:
+                ui.mode = PLAY;
+                status_clear();
+                status(F("You wait."));
+                end_turn();
+                break;
             case 1: ui.mode = INVENTORY_MENU; ui.selection = 0; break;
             case 2: ui.mode = FULL_MAP; break;
             case 3:
@@ -399,18 +480,21 @@ void handle_input(uint8_t buttons)
             ++ui.selection;
             ui.dirty = true;
         } else if(direction == AVM_BUTTON_R) {
+            status_clear();
             if(drop_inventory(ui.selection)) {
                 ui.mode = PLAY;
-                ui.dirty = true;
             }
+            ui.dirty = true;
         } else if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
+            status_clear();
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_A) {
+            status_clear();
             if(use_inventory(ui.selection)) {
                 ui.mode = PLAY;
-                ui.dirty = true;
             }
+            ui.dirty = true;
         }
         return;
     }
@@ -418,12 +502,14 @@ void handle_input(uint8_t buttons)
         ui.mode = MENU;
         ui.selection = 0;
     } else if(direction) {
+        status_clear();
         int8_t dx = direction == AVM_BUTTON_L ? -1 :
                     direction == AVM_BUTTON_R ? 1 : 0;
         int8_t dy = direction == AVM_BUTTON_U ? -1 :
                     direction == AVM_BUTTON_D ? 1 : 0;
         move_player(dx, dy);
     } else if(edges & AVM_BUTTON_A) {
+        status_clear();
         action();
     } else {
         return;
@@ -433,9 +519,67 @@ void handle_input(uint8_t buttons)
 
 } // namespace
 
+void rogue::status_word(const char* word)
+{
+    const int16_t space_width = avm_draw_text(128, 0, " ").x - 128;
+    if((*word == '.' || *word == '!' || *word == ',' || *word == ':') &&
+       status_x > 67)
+        status_x = static_cast<uint8_t>(status_x - space_width);
+    while(*word) {
+        char part[32];
+        uint8_t count = 0;
+        int16_t width = 0;
+        while(word[count] && count < sizeof(part) - 1) {
+            part[count] = word[count];
+            part[count + 1] = 0;
+            int16_t candidate = avm_draw_text(128, 0, part).x - 128;
+            if(count && candidate > 60)
+                break;
+            width = candidate;
+            ++count;
+        }
+        if(status_x != 67 && status_x + width > 128)
+            status_next_line();
+        part[count] = 0;
+        status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, part).x);
+        word += count;
+        if(*word)
+            status_next_line();
+    }
+    status_x = static_cast<uint8_t>(status_x + space_width);
+}
+
+void rogue::status(const char PROGMEM* words)
+{
+    status_words_P(words);
+}
+
+void rogue::status(Item item)
+{
+    status_item(item);
+}
+
+void rogue::status(MonsterType monster)
+{
+    status_entity(monster);
+}
+
+void rogue::status_number(uint8_t value)
+{
+    char digits[4];
+    uint8_t length = 0;
+    if(value >= 100)
+        digits[length++] = static_cast<char>('0' + value / 100);
+    if(value >= 10)
+        digits[length++] = static_cast<char>('0' + (value / 10) % 10);
+    digits[length++] = static_cast<char>('0' + value % 10);
+    digits[length] = 0;
+    status_word(digits);
+}
+
 extern "C" int main()
 {
-    avm_set_text_font(AVM_FONT_5X7);
+    avm_set_text_font(AVM_FONT_BR5D);
     if(avm_save_exists() && avm_load() &&
        game.magic == 0xa7 && game.version == 2 && game.valid)
         ui.has_save = true;
