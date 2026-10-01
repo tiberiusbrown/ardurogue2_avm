@@ -850,7 +850,6 @@ __attribute__((noinline)) void render_yesno_prompt(
 bool yesno_modal(const char AVM_PROGMEM* prompt_text, const Item* item)
 {
     status_clear();
-    render_play();
     render_yesno_prompt(prompt_text, item);
     for(;;) {
         avm_idle();
@@ -874,6 +873,7 @@ __attribute__((noinline)) void prompt_stairs()
             game.px == game.down_x && game.py == game.down_y)
         question = F("Go downstairs?");
     if(!question) return;
+    render_play();
     bool confirmed = yesno(question);
     status_clear();
     if(confirmed) take_stairs();
@@ -888,6 +888,7 @@ __attribute__((noinline)) void prompt_ground_items()
         if(slot == NONE) break;
         before = slot;
         Item item = ground_item_info(slot);
+        render_play();
         if(yesno(F("Pick up"), item)) {
             status_clear();
             take_item(slot);
@@ -910,9 +911,10 @@ void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
-// Modal prompts and dungeon rendering must not inherit the main loop's frame.
-__attribute__((noinline)) void handle_input(uint8_t buttons)
+// Return after movement so the main loop can prompt with this frame unwound.
+__attribute__((noinline)) bool handle_input(uint8_t buttons)
 {
+    bool moved = false;
     uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
     ui.previous_buttons = buttons;
     uint8_t direction = directional_press(buttons, edges);
@@ -934,14 +936,14 @@ __attribute__((noinline)) void handle_input(uint8_t buttons)
             begin_new_game();
             ui.dirty = true;
         }
-        return;
+        return false;
     }
     if(ui.mode == END) {
         if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) {
             ui.mode = TITLE;
             ui.dirty = true;
         }
-        return;
+        return false;
     }
     if(ui.mode == FULL_MAP) {
         if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) {
@@ -949,7 +951,7 @@ __attribute__((noinline)) void handle_input(uint8_t buttons)
             status_clear();
             ui.dirty = true;
         }
-        return;
+        return false;
     }
     if(ui.mode == THROW_DIRECTION) {
         if(edges & AVM_BUTTON_B) {
@@ -968,7 +970,7 @@ __attribute__((noinline)) void handle_input(uint8_t buttons)
                 ui.mode = THROW_DIRECTION;
             ui.dirty = true;
         }
-        return;
+        return false;
     }
     if(ui.mode == MENU) {
         if(direction == AVM_BUTTON_U && ui.selection) {
@@ -1039,13 +1041,14 @@ __attribute__((noinline)) void handle_input(uint8_t buttons)
                 ui.mode = TITLE;
                 break;
             case 6:
+                render_play();
                 if(yesno(F("Abandon this game?")))
                     finish(2);
                 break;
             }
             ui.dirty = true;
         }
-        return;
+        return false;
     }
     if(edges & AVM_BUTTON_B) {
         ui.mode = MENU;
@@ -1058,17 +1061,16 @@ __attribute__((noinline)) void handle_input(uint8_t buttons)
         int8_t dy = direction == AVM_BUTTON_U ? -1 :
                     direction == AVM_BUTTON_D ? 1 : 0;
         move_player(dx, dy);
-        if(!session.ended && (game.px != old_x || game.py != old_y)) {
-            prompt_ground_items();
-            prompt_stairs();
-        }
+        moved = !session.ended &&
+            (game.px != old_x || game.py != old_y);
     } else if(edges & AVM_BUTTON_A) {
         status_clear();
         action();
     } else {
-        return;
+        return false;
     }
     ui.dirty = true;
+    return moved;
 }
 
 } // namespace
@@ -1205,7 +1207,10 @@ extern "C" int main()
            (ui.held_direction && !ui.repeat_suppressed &&
             static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0))
-            handle_input(buttons);
+            if(handle_input(buttons)) {
+                prompt_ground_items();
+                prompt_stairs();
+            }
         if(session.ended) {
             avm_save();
             ui.has_save = false;
