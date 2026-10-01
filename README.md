@@ -125,12 +125,15 @@ automatically before building this project.
 
 ## Source layout
 
-`src/world.cpp` generates floors and handles map visibility. `src/game.cpp`
-implements turns, combat, inventory, and the quest. Both use only standard C++
-and the shared declarations in `src/game.hpp`, so they can be compiled into a
-native test program. `src/main.cpp` owns AVM input, display, random seed
-generation, and persistence calls. The AVM has a separate 256-byte stack and
-1024 bytes of global memory.
+`src/model.hpp` defines the saved game layout. `src/game.hpp` exposes gameplay
+actions, and `src/game_internal.hpp` shares helpers between gameplay modules.
+`src/state.cpp`, `src/combat.cpp`, and `src/items.cpp` implement run state,
+combat and turns, and inventory behavior. `src/world.cpp` generates floors and
+handles map visibility. These modules compile into the native test program.
+`src/persistence.cpp` handles save policy, `src/status.cpp` formats messages,
+`src/render.cpp` draws the display, and `src/ui.cpp` handles controls and modes.
+`src/main.cpp` initializes the app and runs the outer event loop. The AVM has
+a separate 256-byte stack and 1024 bytes of global memory.
 
 The native game checks build independently of the AVM SDK:
 

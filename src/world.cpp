@@ -1,4 +1,5 @@
-#include "game.hpp"
+#include "world.hpp"
+#include "game_internal.hpp"
 #include <string.h>
 
 namespace rogue {
@@ -24,17 +25,7 @@ static const uint8_t PROGMEM floor_monsters[FLOORS][6] = {
     {INCUBUS, INCUBUS, ANGEL, ANGEL, ANGEL, ANGEL}
 };
 
-uint16_t next_random(uint16_t& state)
-{
-    uint16_t x = state ? state : 0xace1;
-    x ^= static_cast<uint16_t>(x << 7);
-    x ^= x >> 9;
-    x ^= static_cast<uint16_t>(x << 8);
-    state = x;
-    return x;
-}
-
-uint8_t floor_roll(uint16_t& seed, uint8_t limit)
+static uint8_t floor_roll(uint16_t& seed, uint8_t limit)
 {
     return static_cast<uint8_t>(next_random(seed) % limit);
 }

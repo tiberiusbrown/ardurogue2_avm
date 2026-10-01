@@ -53,7 +53,18 @@ set(ARDUROGUE2_OBJECTS)
 set(ARDUROGUE2_ELF "${CMAKE_CURRENT_BINARY_DIR}/ardurogue2.elf")
 set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/ardurogue2.arduboy")
 
-foreach(ARDUROGUE2_SOURCE IN ITEMS main game world)
+set(ARDUROGUE2_SOURCES
+    main state combat items world persistence status render ui)
+set(ARDUROGUE2_HEADERS
+    model game game_internal world app_state persistence status render ui
+    inventory_view)
+set(ARDUROGUE2_HEADER_FILES)
+foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
+    list(APPEND ARDUROGUE2_HEADER_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_HEADER}.hpp")
+endforeach()
+
+foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
     set(ARDUROGUE2_OBJECT "${CMAKE_CURRENT_BINARY_DIR}/${ARDUROGUE2_SOURCE}.o")
     list(APPEND ARDUROGUE2_OBJECTS "${ARDUROGUE2_OBJECT}")
     add_custom_command(
@@ -68,9 +79,7 @@ foreach(ARDUROGUE2_SOURCE IN ITEMS main game world)
             -c "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
             -o "${ARDUROGUE2_OBJECT}"
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/src/game.hpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/src/inventory_view.hpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/src/ui.hpp"
+            ${ARDUROGUE2_HEADER_FILES}
         COMMENT "Compiling ${ARDUROGUE2_SOURCE}.cpp with the AVM SDK"
         VERBATIM
     )

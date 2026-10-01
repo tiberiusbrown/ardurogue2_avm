@@ -6,8 +6,11 @@ enable_testing()
 
 add_executable(game_native
     game_native.cpp
-    ../src/game.cpp
+    ../src/state.cpp
+    ../src/combat.cpp
+    ../src/items.cpp
     ../src/world.cpp
+    ../src/persistence.cpp
 )
 target_compile_features(game_native PRIVATE cxx_std_17)
 target_include_directories(game_native PRIVATE ../src)

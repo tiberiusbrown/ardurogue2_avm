@@ -1,5 +1,8 @@
 #include "game.hpp"
+#include "game_internal.hpp"
 #include "inventory_view.hpp"
+#include "persistence.hpp"
+#include "world.hpp"
 
 #include <array>
 #include <cstdio>
@@ -60,10 +63,41 @@ void check_startup_save_state()
             "incompatible save was not cleared");
 
     game.magic = SAVE_MAGIC;
+    game.version = SAVE_VERSION - 1;
+    game.valid = 1;
+    game.best_score = 321;
+    require(!restore_startup_save(true) && game.best_score == 0,
+            "old save version was not cleared");
+
+    game.magic = SAVE_MAGIC;
     game.version = SAVE_VERSION;
     game.best_score = 321;
     require(!restore_startup_save(false) && game.best_score == 0,
             "missing save was not cleared");
+}
+
+void check_new_run_state()
+{
+    game.best_score = 321;
+    game.score = 70;
+    game.hp = 1;
+    game.inventory[0] = {SWORD, 3};
+    session = {0, DEATH, true};
+    start_new(0x1234);
+    require(game.best_score == 321 && game.score == 0 &&
+            game.hp == 18 && game.inventory[0].type == NO_ITEM &&
+            !session.ended && session.repeat_slot == NONE,
+            "new run did not preserve best score while resetting run state");
+
+    game.max_hp = 20;
+    game.vamp_drain = 3;
+    game.inventory[0] = {AMULET_VITALITY, 2};
+    game.amulet_slot = 0;
+    require(player_max_hp() == 27, "vitality bonus changed");
+    game.inventory[0].info |= ITEM_CURSED;
+    require(player_max_hp() == 7, "cursed vitality penalty changed");
+    game.vamp_drain = 255;
+    require(player_max_hp() == 1, "minimum player health changed");
 }
 
 void check_inventory_view()
@@ -844,6 +878,7 @@ void check_enemy_abilities()
 int main()
 {
     check_startup_save_state();
+    check_new_run_state();
     check_inventory_view();
     check_stacked_ground_items();
     check_enemy_roster();
