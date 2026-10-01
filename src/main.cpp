@@ -353,11 +353,6 @@ void render_play()
         if(item.type && in_sight(item.x, item.y, sight, sx, sy))
             icon(item_icons[item.type], static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
-    for(const DroppedItem& item : game.dropped)
-        if(item.type && item.floor == game.floor &&
-           in_sight(item.x, item.y, sight, sx, sy))
-            icon(item_icons[item.type], static_cast<uint8_t>(sx * 5),
-                 static_cast<uint8_t>(sy * 5));
     for(const Monster& monster : game.monsters)
         if(monster.type && !monster_effect(monster, MON_INVISIBLE) &&
            in_sight(monster.x, monster.y, sight, sx, sy))

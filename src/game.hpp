@@ -27,10 +27,9 @@ constexpr uint8_t ROOMS = 12;
 constexpr uint8_t DOORS = 11;
 constexpr uint8_t MONSTERS = 12;
 constexpr uint8_t GROUND_ITEMS = 16;
-constexpr uint8_t DROPPED_ITEMS = 8;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
-constexpr uint8_t SAVE_VERSION = 6;
+constexpr uint8_t SAVE_VERSION = 8;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -56,7 +55,6 @@ enum MonsterEffect : uint8_t {
     MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
 };
 struct GroundItem { uint8_t x, y, type, amount; };
-struct DroppedItem { uint8_t floor, x, y, type, amount; };
 struct Item { uint8_t type, amount, reserved[2]; };
 static_assert(sizeof(Item) == 4, "Item must reserve four bytes");
 struct FloorMarks {
@@ -83,11 +81,11 @@ struct Game {
     uint16_t run_seed, random_state, score, best_score;
     uint8_t magic, version, valid, floor;
     uint8_t px, py, up_x, up_y, down_x, down_y;
-    uint8_t hp, max_hp, level, xp, attack, dexterity, defense, hunger, turns;
+    uint8_t hp, max_hp, level, xp, attack, dexterity, speed;
+    uint8_t defense, hunger, turns;
     uint8_t weakened, confused, paralyzed, slowed, invisible;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t potion_appearance[POTION_COUNT], identified_potions[2];
-    DroppedItem dropped[DROPPED_ITEMS];
 };
 
 struct Session {

@@ -7,6 +7,8 @@ Session session = {NONE, 0, false};
 
 static const uint8_t PROGMEM monster_damage[] = {0, 1, 2, 2, 3, 4, 6};
 static const uint8_t PROGMEM monster_health[] = {0, 3, 5, 8, 12, 17, 48};
+// Closest ArduRogue counterparts: bat, snake, zombie, orc, troll, and Lord.
+static const uint8_t PROGMEM monster_speed[] = {0, 8, 3, 2, 4, 3, 8};
 
 uint8_t monster_effect(const Monster& monster, MonsterEffect effect)
 {
@@ -121,6 +123,7 @@ void start_new(uint16_t seed)
     game.level = 1;
     game.attack = 2;
     game.dexterity = 4;
+    game.speed = 4;
     game.defense = 0;
     game.hunger = 220;
     game.weapon_slot = game.armor_slot = NONE;
@@ -164,10 +167,6 @@ uint8_t item_at(uint8_t x, uint8_t y)
         if(game.ground[i].type && game.ground[i].x == x &&
            game.ground[i].y == y)
             return i;
-    for(uint8_t i = 0; i < DROPPED_ITEMS; ++i)
-        if(game.dropped[i].type && game.dropped[i].floor == game.floor &&
-           game.dropped[i].x == x && game.dropped[i].y == y)
-            return static_cast<uint8_t>(GROUND_ITEMS + i);
     return NONE;
 }
 
@@ -177,23 +176,17 @@ bool can_monster_move(uint8_t x, uint8_t y)
            monster_at(x, y) == NONE;
 }
 
-void enemy_turn()
+static void advance_monster(uint8_t index)
 {
-    for(Monster& monster : game.monsters) {
-        if(!monster.type)
-            continue;
-        bool confused = monster_effect(monster, MON_CONFUSED) != 0;
-        bool slowed = monster_effect(monster, MON_SLOWED) != 0;
-        if(monster.stun) {
-            --monster.stun;
-            if(!monster.stun)
-                monster_status(monster, F("can move again."));
-            continue;
-        }
-        if(slowed && (game.turns & 1))
-            continue;
-        if(game.invisible)
-            continue;
+    Monster& monster = game.monsters[index];
+    if(!monster.type)
+        return;
+    bool confused = monster_effect(monster, MON_CONFUSED) != 0;
+    if(monster.stun) {
+        --monster.stun;
+        if(!monster.stun)
+            monster_status(monster, F("can move again."));
+    } else if(!game.invisible) {
         uint8_t range = distance(monster.x, monster.y, game.px, game.py);
         if(range == 1 && !confused) {
             if(roll(100) < 70) {
@@ -206,51 +199,55 @@ void enemy_turn()
                 status(F("The"));
                 status(static_cast<MonsterType>(monster.type));
                 status(F("hits you!"));
-                if(game.hp == 0) {
+                if(game.hp == 0)
                     finish(0);
-                    return;
-                }
             }
-            continue;
+        } else if(confused || range <= 8 || roll(4) == 0) {
+            int8_t dx = 0, dy = 0;
+            if(confused || range > 8) {
+                uint8_t direction = roll(4);
+                dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
+                dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+            } else {
+                dx = monster.x < game.px ? 1 : monster.x > game.px ? -1 : 0;
+                dy = monster.y < game.py ? 1 : monster.y > game.py ? -1 : 0;
+            }
+            uint8_t nx = static_cast<uint8_t>(monster.x + dx);
+            uint8_t ny = static_cast<uint8_t>(monster.y + dy);
+            if(dx && can_monster_move(nx, monster.y))
+                monster.x = nx;
+            else if(dy && can_monster_move(monster.x, ny))
+                monster.y = ny;
         }
-        if(!confused && range > 8 && roll(4) != 0)
+    }
+    age_monster_effects(monster);
+}
+
+static void enemy_turn(uint8_t player_speed)
+{
+    for(uint8_t i = 0; i < MONSTERS && !session.ended; ++i) {
+        Monster& monster = game.monsters[i];
+        if(!monster.type)
             continue;
-        int8_t dx = 0, dy = 0;
-        if(confused) {
-            uint8_t direction = roll(4);
-            dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
-            dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
-        } else if(range <= 8) {
-            dx = monster.x < game.px ? 1 : monster.x > game.px ? -1 : 0;
-            dy = monster.y < game.py ? 1 : monster.y > game.py ? -1 : 0;
-        } else {
-            uint8_t direction = roll(4);
-            dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
-            dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+        uint8_t speed = monster_speed[monster.type];
+        if(monster_effect(monster, MON_SLOWED))
+            speed = static_cast<uint8_t>(speed / 2);
+        if(!speed) speed = 1;
+        while(speed >= player_speed && !session.ended) {
+            advance_monster(i);
+            speed = static_cast<uint8_t>(speed - player_speed);
         }
-        uint8_t nx = static_cast<uint8_t>(monster.x + dx);
-        uint8_t ny = static_cast<uint8_t>(monster.y + dy);
-        if(dx && can_monster_move(nx, monster.y))
-            monster.x = nx;
-        else if(dy && can_monster_move(monster.x, ny))
-            monster.y = ny;
+        if(speed && !session.ended && roll(player_speed) < speed)
+            advance_monster(i);
     }
 }
 
 void end_turn()
 {
+    uint8_t player_speed = game.slowed
+        ? static_cast<uint8_t>(game.speed / 2) : game.speed;
+    if(!player_speed) player_speed = 1;
     ++game.turns;
-    for(Monster& monster : game.monsters)
-        if(monster.type)
-            age_monster_effects(monster);
-    if(game.confused && !--game.confused)
-        status(F("You are no longer confused."));
-    if(game.paralyzed && !--game.paralyzed)
-        status(F("You can move again."));
-    if(game.slowed && !--game.slowed)
-        status(F("You move normally again."));
-    if(game.invisible && !--game.invisible)
-        status(F("You become visible again."));
     if(game.turns % 3 == 0 && game.hunger)
         --game.hunger;
     if(game.hunger == 0 && game.turns % 4 == 0) {
@@ -261,9 +258,15 @@ void end_turn()
             return;
         }
     }
-    enemy_turn();
-    if(!session.ended && game.slowed && (game.turns & 1))
-        enemy_turn();
+    enemy_turn(player_speed);
+    if(game.confused && !--game.confused)
+        status(F("You are no longer confused."));
+    if(game.paralyzed && !--game.paralyzed)
+        status(F("You can move again."));
+    if(game.slowed && !--game.slowed)
+        status(F("You move normally again."));
+    if(game.invisible && !--game.invisible)
+        status(F("You become visible again."));
 }
 
 static void defeat_monster(uint8_t index)
@@ -348,10 +351,7 @@ void move_player(int8_t dx, int8_t dy)
     if(item != NONE)
     {
         status(F("You see"));
-        status(item < GROUND_ITEMS
-            ? Item{game.ground[item].type, game.ground[item].amount, {0, 0}}
-            : Item{game.dropped[item - GROUND_ITEMS].type,
-                   game.dropped[item - GROUND_ITEMS].amount, {0, 0}});
+        status(Item{game.ground[item].type, game.ground[item].amount, {0, 0}});
         status(F("here. A: pick up."));
     }
     else if((game.px == game.up_x && game.py == game.up_y) ||
@@ -379,10 +379,9 @@ bool add_inventory(uint8_t type, uint8_t amount)
 
 void take_item(uint8_t index)
 {
-    uint8_t type = index < GROUND_ITEMS ? game.ground[index].type :
-        game.dropped[index - GROUND_ITEMS].type;
-    uint8_t amount = index < GROUND_ITEMS ? game.ground[index].amount :
-        game.dropped[index - GROUND_ITEMS].amount;
+    GroundItem& item = game.ground[index];
+    uint8_t type = item.type;
+    uint8_t amount = item.amount;
     if(type == AMULET) {
         game.has_amulet = 1;
         game.score += 100;
@@ -395,12 +394,8 @@ void take_item(uint8_t index)
         status(F("Your pack is full."));
         return;
     }
-    if(index < GROUND_ITEMS) {
-        mark(game.marks[game.floor], TAKEN_ITEMS, index);
-        game.ground[index].type = NO_ITEM;
-    } else {
-        game.dropped[index - GROUND_ITEMS].type = NO_ITEM;
-    }
+    mark(game.marks[game.floor], TAKEN_ITEMS, index);
+    item.type = NO_ITEM;
     end_turn();
 }
 
@@ -697,28 +692,41 @@ bool drop_inventory(uint8_t slot)
     if(slot >= INVENTORY || game.paralyzed)
         return false;
     Item& item = game.inventory[slot];
+    if(item.type == AMULET) {
+        status(F("You cannot drop the amulet."));
+        return false;
+    }
     if(item.type == NO_ITEM || item_at(game.px, game.py) != NONE)
         return false;
-    for(DroppedItem& dropped : game.dropped)
-        if(dropped.type == NO_ITEM) {
-            dropped = {game.floor, game.px, game.py, item.type, item.amount};
-            if(game.weapon_slot == slot)
-                game.weapon_slot = NONE;
-            if(game.armor_slot == slot) {
-                game.armor_slot = NONE;
-                game.defense = 0;
-            }
-            if(session.repeat_slot == slot)
-                session.repeat_slot = NONE;
-            item.type = NO_ITEM;
-            status(F("You dropped"));
-            status(Item{dropped.type, dropped.amount, {0, 0}});
-            status(F("."));
-            end_turn();
-            return true;
+    uint8_t ground_slot = NONE;
+    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+        if(game.ground[i].type == NO_ITEM &&
+           marked(game.marks[game.floor], TAKEN_ITEMS, i)) {
+            ground_slot = i;
+            break;
         }
-    status(F("No room to drop that."));
-    return false;
+    uint8_t type = item.type;
+    uint8_t amount = item.amount;
+    if(ground_slot != NONE)
+        game.ground[ground_slot] = {game.px, game.py, type, amount};
+    if(game.weapon_slot == slot)
+        game.weapon_slot = NONE;
+    if(game.armor_slot == slot) {
+        game.armor_slot = NONE;
+        game.defense = 0;
+    }
+    if(session.repeat_slot == slot)
+        session.repeat_slot = NONE;
+    item.type = NO_ITEM;
+    if(ground_slot != NONE) {
+        status(F("You dropped"));
+        status(Item{type, amount, {0, 0}});
+        status(F("."));
+    } else {
+        status(F("It crumbles to dust."));
+    }
+    end_turn();
+    return true;
 }
 
 } // namespace rogue

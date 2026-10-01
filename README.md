@@ -15,11 +15,12 @@ hunger, and gain levels. Explored rooms, opened doors, collected items, and
 defeated monsters remain recorded when you revisit a floor. The game rebuilds
 each floor from a seed and compact progress flags to conserve RAM.
 The active floor's explored map uses one bit per tile. Floor progress flags
-use 51 bits per floor; door open state and monster spawn identity are derived
+use 51 bits per floor to remember picked-up generated items, defeated monsters,
+opened doors, and visited rooms; generated item and monster slots are omitted
+when that floor is rebuilt. Door state and monster spawn identity are derived
 from those flags and array positions. Inventory items reserve two bytes for
-future attributes. Save version 6 stores potion appearances, discoveries, and
-monster potion effects;
-older saves are not compatible.
+future attributes. Save version 8 stores potion appearances, discoveries,
+monster potion effects, and player speed; older saves are not compatible.
 
 The ten potions from ArduRogue are healing, strength, dexterity, experience,
 invisibility, harming, poison, confusion, paralysis, and slowing. Every new
@@ -28,6 +29,10 @@ color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
 can increase attack. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
+The player has a base speed of 4, and each monster species has its own speed.
+After each player action, monsters act in proportion to their speed relative
+to the player's. Slowing halves the affected entity's speed, so a slowed
+player gives monsters more turns while slowed monsters act less often.
 
 Select **Throw Potion** from the action menu, choose a potion, then press a
 direction. It travels up to eight tiles and shatters on the first monster,
@@ -57,8 +62,10 @@ conditions begin, expire, or are cured.
 
 Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
-best score. The inventory has 16 slots; up to eight dropped items can persist
-across floors.
+best score. The inventory has 16 slots. Dropped items occupy a ground slot
+whose generated item was already collected; those slots are not restored when
+revisiting the floor. If no such slot is free, the item crumbles to dust. The
+amulet cannot be dropped.
 
 The dungeon screen shows dungeon depth, player level, and health above a
 word-wrapped status area. Messages from one action, including enemy responses,
