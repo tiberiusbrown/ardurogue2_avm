@@ -5,10 +5,39 @@ namespace rogue {
 
 Session session = {NONE, 0, false};
 
-static const uint8_t PROGMEM monster_damage[] = {0, 1, 2, 2, 3, 4, 6};
-static const uint8_t PROGMEM monster_health[] = {0, 3, 5, 8, 12, 17, 48};
-// Closest ArduRogue counterparts: bat, snake, zombie, orc, troll, and Lord.
-static const uint8_t PROGMEM monster_speed[] = {0, 8, 3, 2, 4, 3, 8};
+// ArduRogue's MONSTER_INFO, excluding its player entry. Speed is a turn cost:
+// smaller values act more often. Flags retain the original two-byte layout.
+static const MonsterInfo PROGMEM monster_table[] = {
+    {0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 6, 8, 0, 1, 1},                         // bat
+    {MON_MEAN, 2, 3, 3, 0, 3, 2},                // snake
+    {MON_MEAN | MON_POISON, 3, 3, 3, 0, 4, 3}, // rattlesnake
+    {MON_MEAN | MON_OPENER, 4, 2, 2, 0, 6, 5}, // zombie
+    {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6}, // goblin
+    {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
+        6, 4, 4, 1, 12, 7},                     // phantom
+    {MON_MEAN | MON_OPENER, 7, 4, 4, 3, 16, 8}, // orc
+    {MON_MEAN | MON_PARALYZE_HIT, 5, 4, 4, 0, 12, 9}, // tarantula
+    {MON_MEAN | MON_OPENER, 8, 4, 4, 2, 20, 11}, // hobgoblin
+    {MON_MEAN | MON_NOMOVE, 7, 4, 4, 3, 20, 11}, // mimic
+    {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
+        9, 4, 4, 3, 24, 14},                    // incubus
+    {MON_MEAN | MON_REGENS | MON_OPENER, 10, 3, 3, 5, 32, 18}, // troll
+    {MON_MEAN, 7, 6, 6, 1, 24, 18},            // griffin
+    {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 8, 48, 25}, // dragon
+    {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
+         MON_OPENER | MON_SEE_INVIS, 10, 6, 6, 3, 24, 35}, // angel
+    {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
+         MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 8, 128, 90} // Lord
+};
+
+MonsterInfo monster_info(uint8_t type)
+{
+    MonsterInfo info = {};
+    if(type <= LORD)
+        memcpy_P(&info, &monster_table[type], sizeof(info));
+    return info;
+}
 
 static int8_t ring_bonus(uint8_t type)
 {
@@ -42,7 +71,8 @@ static int8_t amulet_bonus(uint8_t type)
 uint8_t player_max_hp()
 {
     int16_t maximum = static_cast<int16_t>(game.max_hp) +
-        static_cast<int16_t>(amulet_bonus(AMULET_VITALITY)) * 5;
+        static_cast<int16_t>(amulet_bonus(AMULET_VITALITY)) * 5 -
+        game.vamp_drain;
     if(maximum < 1) maximum = 1;
     if(maximum > 255) maximum = 255;
     return static_cast<uint8_t>(maximum);
@@ -61,7 +91,8 @@ bool player_can_see_monster(uint8_t index)
     if(ring_bonus(RING_SEE_INVISIBLE) < 0 &&
        ((game.turns + index) & 1))
         return false;
-    return !monster_effect(game.monsters[index], MON_INVISIBLE) ||
+    return (!(monster_info(game.monsters[index].type).flags & MON_NATURAL_INVIS) &&
+            !monster_effect(game.monsters[index], MON_INVISIBLE)) ||
            ring_bonus(RING_SEE_INVISIBLE) > 0;
 }
 
@@ -115,7 +146,8 @@ static void age_monster_effects(Monster& monster)
                     monster_status(monster, F("moves normally again."));
                     break;
                 case MON_INVISIBLE:
-                    monster_status(monster, F("becomes visible again."));
+                    if(!(monster_info(monster.type).flags & MON_NATURAL_INVIS))
+                        monster_status(monster, F("becomes visible again."));
                     break;
                 default: break;
                 }
@@ -258,22 +290,96 @@ bool can_monster_move(uint8_t x, uint8_t y)
            monster_at(x, y) == NONE;
 }
 
+static void hurt_player(uint8_t damage)
+{
+    game.hp = damage >= game.hp ? 0 : static_cast<uint8_t>(game.hp - damage);
+    if(!game.hp)
+        finish(0);
+}
+
+static void fire_splash_monsters()
+{
+    for(uint8_t i = 0; i < MONSTERS; ++i) {
+        Monster& target = game.monsters[i];
+        if(!target.type || target.type == DRAGON)
+            continue;
+        uint8_t dx = target.x > game.px ? target.x - game.px :
+            game.px - target.x;
+        uint8_t dy = target.y > game.py ? target.y - game.py :
+            game.py - target.y;
+        if(dx > 1 || dy > 1)
+            continue;
+        uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+        if(damage >= target.hp) {
+            if(target.type == LORD &&
+               !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
+                game.ground[15] = {target.x, target.y, {YENDOR_AMULET, 1}};
+            mark(game.marks[game.floor], KILLED_MONSTERS, i);
+            target.type = NO_MONSTER;
+        } else {
+            target.hp = static_cast<uint8_t>(target.hp - damage);
+        }
+    }
+}
+
+static bool fire_line_clear(const Monster& monster)
+{
+    int8_t dx = monster.x == game.px ? 0 :
+        monster.x < game.px ? 1 : -1;
+    int8_t dy = monster.y == game.py ? 0 :
+        monster.y < game.py ? 1 : -1;
+    if(dx && dy)
+        return false;
+    uint8_t range = distance(monster.x, monster.y, game.px, game.py);
+    if(!range || range > 5)
+        return false;
+    int16_t x = monster.x, y = monster.y;
+    for(uint8_t i = 1; i < range; ++i) {
+        x += dx;
+        y += dy;
+        if(blocked(x, y) || monster_at(static_cast<uint8_t>(x),
+                                       static_cast<uint8_t>(y)) != NONE)
+            return false;
+    }
+    return true;
+}
+
 static void advance_monster(uint8_t index)
 {
     Monster& monster = game.monsters[index];
     if(!monster.type)
         return;
+    MonsterInfo info = monster_info(monster.type);
     bool confused = monster_effect(monster, MON_CONFUSED) != 0;
     if(monster.stun) {
         --monster.stun;
         if(!monster.stun)
             monster_status(monster, F("can move again."));
-    } else if(!player_is_invisible()) {
+    } else if(!(info.flags & MON_NOMOVE) || (monster.state & MON_AGGRO)) {
         uint8_t range = distance(monster.x, monster.y, game.px, game.py);
-        if(range == 1 && !confused) {
-            if(roll(100) < 70) {
-                uint8_t raw = static_cast<uint8_t>(monster_damage[monster.type] +
-                    game.floor / 5 + roll(3));
+        bool pursuing = (info.flags & MON_MEAN) || (monster.state & MON_AGGRO);
+        if(player_is_invisible() && !(info.flags & MON_SEE_INVIS))
+            pursuing = false;
+        if(pursuing && !confused && (info.flags & MON_FIRE_BREATH) &&
+           fire_line_clear(monster) && roll(2)) {
+            status(F("The"));
+            status(static_cast<MonsterType>(monster.type));
+            status(F("breathes fire!"));
+            uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+            int8_t protection = ring_bonus(RING_FIRE_IMMUNITY);
+            if(protection > 0) damage = 0;
+            if(protection < 0) damage = static_cast<uint8_t>(damage * 2);
+            if(!damage)
+                status(F("The flames do not affect you."));
+            else
+                hurt_player(damage);
+            fire_splash_monsters();
+        } else if(range == 1 && pursuing && !confused) {
+            uint8_t attacker_dex = info.dexterity;
+            uint8_t player_dex = game.dexterity;
+            if(roll(static_cast<uint8_t>(attacker_dex * 3 + player_dex + 1)) >=
+               player_dex) {
+                uint8_t raw = static_cast<uint8_t>(info.strength + roll(3));
                 if(monster_effect(monster, MON_WEAKENED))
                     raw = static_cast<uint8_t>((raw + 1) / 2);
                 int16_t defense = static_cast<int16_t>(game.defense) +
@@ -281,16 +387,43 @@ static void advance_monster(uint8_t index)
                 if(defense < 0) defense = 0;
                 uint8_t damage = raw > defense
                     ? static_cast<uint8_t>(raw - defense) : 1;
-                game.hp = damage >= game.hp ? 0 : game.hp - damage;
+                hurt_player(damage);
                 status(F("The"));
                 status(static_cast<MonsterType>(monster.type));
                 status(F("hits you!"));
-                if(game.hp == 0)
-                    finish(0);
+                if(info.flags & MON_VAMPIRE) {
+                    game.vamp_drain = static_cast<uint8_t>(game.vamp_drain + 3);
+                    if(game.vamp_drain >= game.max_hp)
+                        game.vamp_drain = static_cast<uint8_t>(game.max_hp - 1);
+                    if(game.hp > player_max_hp())
+                        game.hp = player_max_hp();
+                    uint8_t maximum = info.health;
+                    uint16_t healed = static_cast<uint16_t>(monster.hp) + 3;
+                    monster.hp = healed > maximum ? maximum :
+                        static_cast<uint8_t>(healed);
+                    status(F("Your life force drains away!"));
+                }
+                if(!session.ended && (info.flags & MON_CONFUSE_HIT) &&
+                   roll(4) == 0 && !game.confused &&
+                   amulet_bonus(AMULET_CLARITY) <= 0) {
+                    game.confused = static_cast<uint8_t>(4 + roll(4));
+                    status(F("You feel confused."));
+                }
+                if(!session.ended && (info.flags & MON_POISON) &&
+                   roll(4) == 0 && !game.weakened) {
+                    game.weakened = 1;
+                    status(F("You feel weaker."));
+                }
+                if(!session.ended && (info.flags & MON_PARALYZE_HIT) &&
+                   roll(4) == 0 && !game.paralyzed &&
+                   amulet_bonus(AMULET_IRONBLOOD) <= 0) {
+                    game.paralyzed = static_cast<uint8_t>(3 + roll(4));
+                    status(F("You are paralyzed!"));
+                }
             }
-        } else if(confused || range <= 8 || roll(4) == 0) {
+        } else if(confused || (pursuing && range <= 8) || roll(4) == 0) {
             int8_t dx = 0, dy = 0;
-            if(confused || range > 8) {
+            if(confused || !pursuing || range > 8) {
                 uint8_t direction = roll(4);
                 dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
                 dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
@@ -300,11 +433,27 @@ static void advance_monster(uint8_t index)
             }
             uint8_t nx = static_cast<uint8_t>(monster.x + dx);
             uint8_t ny = static_cast<uint8_t>(monster.y + dy);
-            if(dx && can_monster_move(nx, monster.y))
+            if(dx && (info.flags & MON_OPENER) &&
+               door_at(nx, monster.y) != NONE &&
+               !door_open(door_at(nx, monster.y)))
+                mark(game.marks[game.floor], OPENED_DOORS,
+                     door_at(nx, monster.y));
+            else if(dy && (info.flags & MON_OPENER) &&
+                    door_at(monster.x, ny) != NONE &&
+                    !door_open(door_at(monster.x, ny)))
+                mark(game.marks[game.floor], OPENED_DOORS,
+                     door_at(monster.x, ny));
+            else if(dx && can_monster_move(nx, monster.y))
                 monster.x = nx;
             else if(dy && can_monster_move(monster.x, ny))
                 monster.y = ny;
         }
+    }
+    if((info.flags & MON_REGENS) && monster.hp < info.health &&
+       roll(8) == 0) {
+        uint16_t healed = static_cast<uint16_t>(monster.hp) + 3;
+        monster.hp = healed > info.health ? info.health :
+            static_cast<uint8_t>(healed);
     }
     age_monster_effects(monster);
 }
@@ -315,15 +464,16 @@ static void enemy_turn(uint8_t player_speed)
         Monster& monster = game.monsters[i];
         if(!monster.type)
             continue;
-        uint8_t speed = monster_speed[monster.type];
+        uint8_t speed = monster_info(monster.type).speed;
         if(monster_effect(monster, MON_SLOWED))
-            speed = static_cast<uint8_t>(speed / 2);
+            speed = static_cast<uint8_t>(speed * 2);
         if(!speed) speed = 1;
-        while(speed >= player_speed && !session.ended) {
+        uint8_t budget = player_speed;
+        while(budget >= speed && !session.ended) {
             advance_monster(i);
-            speed = static_cast<uint8_t>(speed - player_speed);
+            budget = static_cast<uint8_t>(budget - speed);
         }
-        if(speed && !session.ended && roll(player_speed) < speed)
+        if(budget && !session.ended && roll(speed) < budget)
             advance_monster(i);
     }
 }
@@ -383,26 +533,27 @@ static void defeat_monster(uint8_t index)
     uint8_t x = target.x, y = target.y;
     mark(game.marks[game.floor], KILLED_MONSTERS, index);
     target.type = NO_MONSTER;
-    game.score += static_cast<uint16_t>(5 + killed_type * 3);
+    MonsterInfo info = monster_info(killed_type);
+    game.score += static_cast<uint16_t>(5 + info.xp * 3);
     if(killed_type == LORD &&
        !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
         game.ground[15] = {x, y, {YENDOR_AMULET, 1}};
     status(F("You defeat the"));
     status(static_cast<MonsterType>(killed_type));
     status(F("."));
-    gain_xp(1);
+    gain_xp(info.xp);
 }
 
 void attack_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
+    target.state |= MON_AGGRO;
+    MonsterInfo info = monster_info(target.type);
     int16_t dexterity = static_cast<int16_t>(game.dexterity) +
         ring_bonus(RING_DEXTERITY);
     if(dexterity < 0) dexterity = 0;
-    uint16_t chance = static_cast<uint16_t>(72 + dexterity * 2);
-    uint8_t hit_chance = chance > 95 ? 95 : static_cast<uint8_t>(chance);
-    if(hit_chance > 95) hit_chance = 95;
-    if(roll(100) >= hit_chance) {
+    uint8_t hit_range = static_cast<uint8_t>(dexterity * 3 + info.dexterity + 1);
+    if(roll(hit_range) < info.dexterity) {
         status(F("You miss the"));
         status(static_cast<MonsterType>(target.type));
         status(F("."));
@@ -414,7 +565,8 @@ void attack_monster(uint8_t index)
     int16_t strength = static_cast<int16_t>(game.attack) - game.weakened +
         ring_bonus(RING_STRENGTH);
     if(strength < 1) strength = 1;
-    int16_t damage_value = strength + bonus + ring_bonus(RING_ATTACK) + roll(3);
+    int16_t damage_value = strength + bonus + ring_bonus(RING_ATTACK) +
+        roll(3) - info.defense;
     if(damage_value < 1) damage_value = 1;
     if(damage_value > 255) damage_value = 255;
     uint8_t damage = static_cast<uint8_t>(damage_value);
@@ -822,8 +974,8 @@ bool use_inventory(uint8_t slot)
 static void apply_monster_potion(uint8_t type, uint8_t index)
 {
     Monster& target = game.monsters[index];
-    uint8_t maximum = static_cast<uint8_t>(monster_health[target.type] +
-                                            game.floor / 2);
+    target.state |= MON_AGGRO;
+    uint8_t maximum = monster_info(target.type).health;
     switch(type) {
     case HEALING: {
         uint8_t old_hp = target.hp;
@@ -881,7 +1033,8 @@ static void apply_monster_potion(uint8_t type, uint8_t index)
                            static_cast<uint8_t>(8 + roll(8)));
         break;
     case INVISIBILITY:
-        if(!monster_effect(target, MON_INVISIBLE))
+        if(!monster_effect(target, MON_INVISIBLE) &&
+           !(monster_info(target.type).flags & MON_NATURAL_INVIS))
             monster_status(target, F("vanishes."));
         set_monster_effect(target, MON_INVISIBLE,
                            static_cast<uint8_t>(12 + roll(4)));

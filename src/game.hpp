@@ -29,7 +29,7 @@ constexpr uint8_t MONSTERS = 12;
 constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
-constexpr uint8_t SAVE_VERSION = 10;
+constexpr uint8_t SAVE_VERSION = 11;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -59,14 +59,31 @@ constexpr bool is_amulet(uint8_t type)
 }
 
 enum MonsterType : uint8_t {
-    NO_MONSTER, RAT, SNAKE, ZOMBIE, ORC, TROLL, LORD
+    NO_MONSTER, BAT, SNAKE, RATTLESNAKE, ZOMBIE, GOBLIN,
+    PHANTOM, ORC, TARANTULA, HOBGOBLIN, MIMIC, INCUBUS,
+    TROLL, GRIFFIN, DRAGON, ANGEL, LORD
 };
+
+enum MonsterFlag : uint16_t {
+    MON_MEAN = 1u << 0, MON_NOMOVE = 1u << 1,
+    MON_REGENS = 1u << 2, MON_NATURAL_INVIS = 1u << 3,
+    MON_POISON = 1u << 4, MON_VAMPIRE = 1u << 5,
+    MON_CONFUSE_HIT = 1u << 6, MON_PARALYZE_HIT = 1u << 7,
+    MON_FIRE_BREATH = 1u << 8, MON_OPENER = 1u << 9,
+    MON_SEE_INVIS = 1u << 10
+};
+struct MonsterInfo {
+    uint16_t flags;
+    uint8_t strength, dexterity, speed, defense, health, xp;
+};
+MonsterInfo monster_info(uint8_t type);
 
 struct Room { uint8_t x, y, w, h; };
 struct Door { uint8_t x, y; };
 // Four independent four-bit effects: confusion, slowing, invisibility, weakness.
 // Paralysis uses stun. Two bytes per monster keep the image within AVM RAM.
-struct Monster { uint8_t x, y, type, hp, stun, effects[2]; };
+struct Monster { uint8_t x, y, type, hp, stun, effects[2], state; };
+constexpr uint8_t MON_AGGRO = 1;
 enum MonsterEffect : uint8_t {
     MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
 };
@@ -119,7 +136,7 @@ struct Game {
     uint8_t px, py, up_x, up_y, down_x, down_y;
     uint8_t hp, max_hp, level, xp, attack, dexterity, speed;
     uint8_t defense, hunger, turns;
-    uint8_t weakened, confused, paralyzed, slowed, invisible;
+    uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
     uint8_t potion_appearance[POTION_COUNT], identified_potions[2];

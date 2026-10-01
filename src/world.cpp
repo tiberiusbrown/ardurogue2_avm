@@ -3,7 +3,26 @@
 
 namespace rogue {
 
-static const uint8_t PROGMEM monster_health[] = {0, 3, 5, 8, 12, 17, 48};
+// Weighted encounter lists from ArduRogue's MAP_GEN_INFOS. Zero entries are
+// retried, as in the original generator.
+static const uint8_t PROGMEM floor_monsters[FLOORS][6] = {
+    {BAT, SNAKE, SNAKE, 0, 0, 0},
+    {SNAKE, SNAKE, SNAKE, SNAKE, RATTLESNAKE, RATTLESNAKE},
+    {ZOMBIE, ZOMBIE, ZOMBIE, GOBLIN, GOBLIN, PHANTOM},
+    {ZOMBIE, GOBLIN, GOBLIN, PHANTOM, ORC, 0},
+    {PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM},
+    {GOBLIN, GOBLIN, GOBLIN, ORC, HOBGOBLIN, 0},
+    {ORC, ORC, HOBGOBLIN, TARANTULA, MIMIC, 0},
+    {ORC, HOBGOBLIN, TARANTULA, TARANTULA, TARANTULA, MIMIC},
+    {HOBGOBLIN, HOBGOBLIN, HOBGOBLIN, TARANTULA, MIMIC, INCUBUS},
+    {MIMIC, MIMIC, MIMIC, MIMIC, TARANTULA, HOBGOBLIN},
+    {TARANTULA, HOBGOBLIN, MIMIC, INCUBUS, INCUBUS, TROLL},
+    {HOBGOBLIN, MIMIC, INCUBUS, TROLL, TROLL, GRIFFIN},
+    {MIMIC, INCUBUS, TROLL, GRIFFIN, GRIFFIN, DRAGON},
+    {INCUBUS, TROLL, GRIFFIN, DRAGON, DRAGON, DRAGON},
+    {INCUBUS, ANGEL, ANGEL, DRAGON, DRAGON, DRAGON},
+    {INCUBUS, INCUBUS, ANGEL, ANGEL, ANGEL, ANGEL}
+};
 
 uint16_t next_random(uint16_t& state)
 {
@@ -219,11 +238,12 @@ void make_floor()
         const Room& room = game.rooms[i];
         uint8_t x = static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2));
         uint8_t y = static_cast<uint8_t>(room.y + 1 + floor_roll(seed, room.h - 2));
-        uint8_t type = game.floor == FLOORS - 1 && i == MONSTERS - 1
-            ? LORD : static_cast<uint8_t>(1 + floor_roll(seed,
-                static_cast<uint8_t>(1 + (game.floor < 10 ? game.floor / 2 : 5))));
-        if(type > TROLL)
-            type = TROLL;
+        uint8_t type = 0;
+        if(game.floor == FLOORS - 1 && i == MONSTERS - 1)
+            type = LORD;
+        else
+            while(!type)
+                type = floor_monsters[game.floor][floor_roll(seed, 6)];
         if(type == LORD) {
             x = game.down_x;
             y = game.down_y;
@@ -231,11 +251,13 @@ void make_floor()
                   (x == game.down_x && y == game.down_y)) {
             x = static_cast<uint8_t>(room.x + 1);
         }
+        uint8_t disguise = type == MIMIC
+            ? static_cast<uint8_t>((1 + floor_roll(seed, AMULET_WISDOM)) << 1)
+            : 0;
         if(marked(marks, KILLED_MONSTERS, i))
             continue;
-        game.monsters[i] = {x, y, type,
-            static_cast<uint8_t>(monster_health[type] + game.floor / 2),
-            0, {0, 0}};
+        game.monsters[i] = {x, y, type, monster_info(type).health,
+            0, {0, 0}, disguise};
     }
 
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {

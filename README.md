@@ -21,8 +21,9 @@ when that floor is rebuilt. Door state and monster spawn identity are derived
 from those flags and array positions. Each inventory item uses two bytes: a
 type byte and an info byte with a six-bit quantity or level, a cursed bit, and
 an identified bit. Ground slots store their coordinates and a complete item.
-Save version 10 stores potion appearances, discoveries, monster potion effects,
-player speed, and accessory slots; older saves are not compatible.
+Save version 11 stores potion appearances, discoveries, monster potion effects,
+enemy aggression and disguises, player speed, and accessory slots; older saves
+are not compatible.
 
 The ten potions from ArduRogue are healing, strength, dexterity, experience,
 invisibility, harming, poison, confusion, paralysis, and slowing. Every new
@@ -37,12 +38,20 @@ can be worn two at a time, and one amulet can be worn. Their effects include
 bonuses to combat, visibility, speed, defense, health, and experience, plus
 sustenance, regeneration, life drain, clarity, conservation, ironblood, and
 invisibility. Cursed accessories reverse applicable bonuses and cannot be
-removed once equipped. The ring of fire immunity is included; no current enemy
-attack deals fire damage.
-The player has a base speed of 4, and each monster species has its own speed.
-After each player action, monsters act in proportion to their speed relative
-to the player's. Slowing halves the affected entity's speed, so a slowed
-player gives monsters more turns while slowed monsters act less often.
+removed once equipped. Fire immunity protects against dragon breath, while a
+cursed fire ring doubles its damage.
+
+All fifteen regular enemy species and the Lord of Darkness use ArduRogue's strength,
+dexterity, speed, defense, health, XP, flags, and floor encounter weights.
+Bats wander until attacked, mimics appear as items and stay put until attacked,
+phantoms are invisible, and capable enemies open doors. Trolls and the Lord
+regenerate. Rattlesnakes and the Lord can poison; tarantulas, fallen angels,
+and the Lord can paralyze; incubi, fallen angels, and the Lord can confuse.
+Dragon breath travels in a straight line up to five tiles and bursts over a
+three-by-three area. Walls, closed doors, and other monsters block the line.
+The player has a base speed of 4. Enemy speed values are turn costs, as in
+ArduRogue: lower values act more often. Slowing doubles an enemy's turn cost;
+a slowed player gives enemies more turns.
 
 Select **Throw Potion** from the action menu, choose a potion, then press a
 direction. It travels up to eight tiles and shatters on the first monster,

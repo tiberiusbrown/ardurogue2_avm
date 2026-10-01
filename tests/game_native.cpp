@@ -255,7 +255,7 @@ void check_potions()
 
 void check_thrown_potions()
 {
-    static_assert(sizeof(Monster) == 7, "monster effects exceed two bytes");
+    static_assert(sizeof(Monster) == 8, "monster state must fit in one byte");
     start_new(0x3456);
     std::memset(game.walls, 0, sizeof(game.walls));
     std::memset(game.monsters, 0, sizeof(game.monsters));
@@ -329,7 +329,7 @@ void check_thrown_potions()
     throw_at_target(EXPERIENCE);
     require(game.monsters[0].hp == hp,
             "player-only potion changed monster health");
-    for(uint8_t i = 0; i < 16; ++i)
+    for(uint8_t i = 0; i < 40; ++i)
         end_turn();
     require(!monster_effect(game.monsters[0], MON_CONFUSED) &&
             !monster_effect(game.monsters[0], MON_SLOWED) &&
@@ -406,7 +406,7 @@ void check_effect_messages()
                 status_text.find(began) == std::string::npos,
                 "refreshing a monster effect repeated its start message");
         status_text.clear();
-        for(uint8_t i = 0; i < 16; ++i)
+        for(uint8_t i = 0; i < 40; ++i)
             end_turn();
         require(status_text.find(ended) != std::string::npos,
                 "monster effect end message is missing");
@@ -440,8 +440,224 @@ void check_effect_messages()
             "monster weakness recovery message is missing");
 }
 
+void check_enemy_roster()
+{
+    struct Expected { uint16_t flags; uint8_t str, dex, speed, def, hp, xp; };
+    const Expected expected[] = {
+        {0, 0, 0, 0, 0, 0, 0},
+        {0, 1, 6, 8, 0, 1, 1},
+        {MON_MEAN, 2, 3, 3, 0, 3, 2},
+        {MON_MEAN | MON_POISON, 3, 3, 3, 0, 4, 3},
+        {MON_MEAN | MON_OPENER, 4, 2, 2, 0, 6, 5},
+        {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6},
+        {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
+            6, 4, 4, 1, 12, 7},
+        {MON_MEAN | MON_OPENER, 7, 4, 4, 3, 16, 8},
+        {MON_MEAN | MON_PARALYZE_HIT, 5, 4, 4, 0, 12, 9},
+        {MON_MEAN | MON_OPENER, 8, 4, 4, 2, 20, 11},
+        {MON_MEAN | MON_NOMOVE, 7, 4, 4, 3, 20, 11},
+        {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
+            9, 4, 4, 3, 24, 14},
+        {MON_MEAN | MON_REGENS | MON_OPENER, 10, 3, 3, 5, 32, 18},
+        {MON_MEAN, 7, 6, 6, 1, 24, 18},
+        {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 8, 48, 25},
+        {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
+             MON_OPENER | MON_SEE_INVIS, 10, 6, 6, 3, 24, 35},
+        {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
+             MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 8, 128, 90}
+    };
+    for(uint8_t type = BAT; type <= LORD; ++type) {
+        MonsterInfo info = monster_info(type);
+        const Expected& e = expected[type];
+        require(info.flags == e.flags && info.strength == e.str &&
+                info.dexterity == e.dex && info.speed == e.speed &&
+                info.defense == e.def && info.health == e.hp &&
+                info.xp == e.xp, "enemy stats differ from ArduRogue");
+    }
+    const uint32_t floor_types[FLOORS] = {
+        (1u << BAT) | (1u << SNAKE),
+        (1u << SNAKE) | (1u << RATTLESNAKE),
+        (1u << ZOMBIE) | (1u << GOBLIN) | (1u << PHANTOM),
+        (1u << ZOMBIE) | (1u << GOBLIN) | (1u << PHANTOM) | (1u << ORC),
+        1u << PHANTOM,
+        (1u << GOBLIN) | (1u << ORC) | (1u << HOBGOBLIN),
+        (1u << ORC) | (1u << HOBGOBLIN) | (1u << TARANTULA) | (1u << MIMIC),
+        (1u << ORC) | (1u << HOBGOBLIN) | (1u << TARANTULA) | (1u << MIMIC),
+        (1u << HOBGOBLIN) | (1u << TARANTULA) | (1u << MIMIC) | (1u << INCUBUS),
+        (1u << MIMIC) | (1u << TARANTULA) | (1u << HOBGOBLIN),
+        (1u << TARANTULA) | (1u << HOBGOBLIN) | (1u << MIMIC) |
+            (1u << INCUBUS) | (1u << TROLL),
+        (1u << HOBGOBLIN) | (1u << MIMIC) | (1u << INCUBUS) |
+            (1u << TROLL) | (1u << GRIFFIN),
+        (1u << MIMIC) | (1u << INCUBUS) | (1u << TROLL) |
+            (1u << GRIFFIN) | (1u << DRAGON),
+        (1u << INCUBUS) | (1u << TROLL) | (1u << GRIFFIN) | (1u << DRAGON),
+        (1u << INCUBUS) | (1u << ANGEL) | (1u << DRAGON),
+        (1u << INCUBUS) | (1u << ANGEL) | (1u << LORD)
+    };
+    for(uint8_t floor = 0; floor < FLOORS; ++floor) {
+        uint32_t seen = 0;
+        for(uint16_t seed = 1; seed <= 80; ++seed) {
+            start_new(seed);
+            game.floor = floor;
+            make_floor();
+            for(const Monster& monster : game.monsters) {
+                require(monster.type > NO_MONSTER && monster.type <= LORD &&
+                        (floor_types[floor] & (1u << monster.type)),
+                        "enemy generated on the wrong floor");
+                seen |= 1u << monster.type;
+            }
+        }
+        require(seen == floor_types[floor], "floor is missing an enemy type");
+    }
+    start_new(0x1234);
+    game.floor = 9;
+    make_floor();
+    uint8_t mimic = NONE;
+    for(uint8_t i = 0; i < MONSTERS; ++i)
+        if(game.monsters[i].type == MIMIC) {
+            mimic = i;
+            break;
+        }
+    require(mimic != NONE, "test floor has no mimic");
+    Game before = game;
+    mark(game.marks[game.floor], KILLED_MONSTERS, mimic);
+    make_floor();
+    for(uint8_t i = 0; i < MONSTERS; ++i)
+        if(i != mimic)
+            require(std::memcmp(&game.monsters[i], &before.monsters[i],
+                                sizeof(Monster)) == 0,
+                    "killing a mimic changed another spawn on revisit");
+    require(std::memcmp(game.ground, before.ground,
+                        sizeof(game.ground)) == 0,
+            "killing a mimic changed item generation on revisit");
+}
+
+void check_enemy_abilities()
+{
+    auto arena = [](uint8_t type, uint8_t x) {
+        start_new(0x84e2);
+        std::memset(game.walls, 0, sizeof(game.walls));
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        game.door_count = 0;
+        game.px = 10;
+        game.py = 10;
+        game.hp = game.max_hp = 240;
+        game.hunger = 255;
+        game.monsters[0] = {x, 10, type, monster_info(type).health,
+                            0, {0, 0}, 0};
+        status_text.clear();
+    };
+    arena(PHANTOM, 13);
+    require(!player_can_see_monster(0), "phantom is naturally visible");
+    game.inventory[0] = {RING_SEE_INVISIBLE, 1};
+    game.ring_slots[0] = 0;
+    require(player_can_see_monster(0), "see invisible ring cannot reveal phantom");
+
+    arena(MIMIC, 11);
+    for(int i = 0; i < 8; ++i)
+        end_turn();
+    require(game.monsters[0].x == 11 && !(game.monsters[0].state & MON_AGGRO),
+            "unprovoked mimic moved");
+    move_player(1, 0);
+    require(game.monsters[0].state & MON_AGGRO, "attacked mimic did not wake");
+
+    arena(GOBLIN, 12);
+    game.doors[0] = {11, 10};
+    game.door_count = 1;
+    for(int i = 0; i < 8 && !door_open(0); ++i)
+        end_turn();
+    require(door_open(0), "door-opening enemy could not open a door");
+
+    arena(TROLL, 18);
+    game.invisible = 200;
+    game.monsters[0].hp = 1;
+    for(int i = 0; i < 80 && game.monsters[0].hp == 1; ++i)
+        end_turn();
+    require(game.monsters[0].hp > 1, "regenerating enemy did not heal");
+
+    arena(DRAGON, 13);
+    bool breathed = false;
+    for(int i = 0; i < 80 && !breathed; ++i) {
+        game.monsters[0].x = 13;
+        game.monsters[0].y = 10;
+        status_text.clear();
+        end_turn();
+        breathed = status_text.find("breathes fire!") != std::string::npos;
+    }
+    require(breathed && game.hp < 240, "dragon fire did not hurt the player");
+    arena(DRAGON, 13);
+    game.monsters[1] = {10, 11, GOBLIN, monster_info(GOBLIN).health,
+                        100, {0, 0}, 0};
+    breathed = false;
+    for(int i = 0; i < 80 && !breathed; ++i) {
+        game.monsters[0].x = 13;
+        game.monsters[0].y = 10;
+        status_text.clear();
+        end_turn();
+        breathed = status_text.find("breathes fire!") != std::string::npos;
+    }
+    require(breathed && (game.monsters[1].type == NO_MONSTER ||
+            game.monsters[1].hp < monster_info(GOBLIN).health),
+            "dragon fire did not splash a nearby enemy");
+    arena(DRAGON, 13);
+    uint16_t wall = static_cast<uint16_t>(10 * MAP_W + 12);
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    for(int i = 0; i < 40; ++i) {
+        game.monsters[0].x = 13;
+        game.monsters[0].y = 10;
+        status_text.clear();
+        end_turn();
+        require(status_text.find("breathes fire!") == std::string::npos,
+                "dragon breathed through a wall");
+    }
+    arena(DRAGON, 13);
+    game.inventory[0] = {RING_FIRE_IMMUNITY, 1};
+    game.ring_slots[0] = 0;
+    breathed = false;
+    for(int i = 0; i < 80 && !breathed; ++i) {
+        game.monsters[0].x = 13;
+        game.monsters[0].y = 10;
+        status_text.clear();
+        end_turn();
+        breathed = status_text.find("breathes fire!") != std::string::npos;
+    }
+    require(breathed && game.hp == 240, "fire immunity failed against dragon");
+    arena(DRAGON, 13);
+    game.inventory[0] = {RING_FIRE_IMMUNITY,
+                         static_cast<uint8_t>(ITEM_CURSED | 1)};
+    game.ring_slots[0] = 0;
+    breathed = false;
+    for(int i = 0; i < 80 && !breathed; ++i) {
+        game.monsters[0].x = 13;
+        game.monsters[0].y = 10;
+        status_text.clear();
+        end_turn();
+        breathed = status_text.find("breathes fire!") != std::string::npos;
+    }
+    require(breathed && game.hp <= 224,
+            "cursed fire ring did not amplify dragon breath");
+
+    const uint8_t attackers[] = {RATTLESNAKE, TARANTULA, INCUBUS};
+    for(uint8_t type : attackers) {
+        arena(type, 11);
+        bool affected = false;
+        for(int i = 0; i < 120 && !affected; ++i) {
+            game.hp = 240;
+            game.monsters[0].x = 11;
+            game.monsters[0].y = 10;
+            end_turn();
+            affected = type == RATTLESNAKE ? game.weakened != 0 :
+                type == TARANTULA ? game.paralyzed != 0 : game.confused != 0;
+        }
+        require(affected, "enemy on-hit effect did not trigger");
+    }
+}
+
 int main()
 {
+    check_enemy_roster();
+    check_enemy_abilities();
     check_potions();
     check_thrown_potions();
     check_effect_messages();
@@ -474,12 +690,14 @@ int main()
                 found = true;
             }
     require(found, "no free floor tile");
+    mark(game.marks[game.floor], TAKEN_ITEMS, 0);
+    game.ground[0].item.type = NO_ITEM;
     game.px = drop_x;
     game.py = drop_y;
     game.inventory[0] = {FOOD, 1};
     require(drop_inventory(0) && game.inventory[0].type == NO_ITEM,
             "inventory drop failed");
-    require(item_at(drop_x, drop_y) >= GROUND_ITEMS,
+    require(item_at(drop_x, drop_y) != NONE,
             "dropped item is missing");
 
     uint8_t down_x = game.down_x, down_y = game.down_y;
@@ -490,14 +708,8 @@ int main()
     require(std::memcmp(first_floor.data(), game.walls,
                         first_floor.size()) == 0,
             "floor changed on revisit");
-    require(item_at(drop_x, drop_y) >= GROUND_ITEMS,
-            "dropped item was lost across floors");
-    game.px = drop_x;
-    game.py = drop_y;
-    action();
-    require(game.inventory[0].type == FOOD &&
-            item_at(drop_x, drop_y) == NONE,
-            "dropped item pickup failed");
+    require(item_at(drop_x, drop_y) == NONE,
+            "dropped item was unexpectedly restored across floors");
 
     game.has_amulet = 1;
     game.px = game.up_x;

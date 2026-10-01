@@ -73,11 +73,21 @@ void status_words_P(const char AVM_PROGMEM* words)
 void status_entity(uint8_t type)
 {
     switch(type) {
-    case RAT: status_words_P(F("rat")); break;
+    case BAT: status_words_P(F("bat")); break;
     case SNAKE: status_words_P(F("snake")); break;
+    case RATTLESNAKE: status_words_P(F("rattlesnake")); break;
     case ZOMBIE: status_words_P(F("zombie")); break;
+    case GOBLIN: status_words_P(F("goblin")); break;
+    case PHANTOM: status_words_P(F("phantom")); break;
     case ORC: status_words_P(F("orc")); break;
+    case TARANTULA: status_words_P(F("tarantula")); break;
+    case HOBGOBLIN: status_words_P(F("hobgoblin")); break;
+    case MIMIC: status_words_P(F("mimic")); break;
+    case INCUBUS: status_words_P(F("incubus")); break;
     case TROLL: status_words_P(F("troll")); break;
+    case GRIFFIN: status_words_P(F("griffin")); break;
+    case DRAGON: status_words_P(F("dragon")); break;
+    case ANGEL: status_words_P(F("fallen angel")); break;
     case LORD: status_words_P(F("Lord of Darkness")); break;
     default: status_words_P(F("foe")); break;
     }
@@ -175,11 +185,21 @@ void status_item(Item item)
 // ArduRogue's four-column sprites (draw.cpp), with each column in one nibble.
 static const uint16_t PROGMEM monster_icons[] = {
     0x0000, // none
-    0xf211, // rat
+    0x0fa4, // bat
     0x0bd0, // snake
+    0x0f5a, // rattlesnake
     0x9db9, // zombie
+    0x0bf0, // goblin
+    0x0f52, // phantom
     0x0f9f, // orc
+    0x07a0, // tarantula
+    0x0f2c, // hobgoblin
+    0x0f2f, // mimic
+    0x09f9, // incubus
     0x01f1, // troll
+    0x069d, // griffin
+    0xf996, // dragon
+    0x0e5e, // fallen angel
     0x0f88, // Lord of Darkness
 };
 static const uint16_t PROGMEM item_icons[] = {
@@ -390,7 +410,9 @@ void render_play()
         const Monster& monster = game.monsters[i];
         if(player_can_see_monster(i) &&
            in_sight(monster.x, monster.y, sight, sx, sy))
-            icon(monster_icons[monster.type],
+            icon(monster.type == MIMIC && !(monster.state & MON_AGGRO)
+                     ? item_icons[monster.state >> 1]
+                     : monster_icons[monster.type],
                  static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
     }
     icon(PLAYER_ICON, 30, 30);
