@@ -235,4 +235,26 @@ bool can_see(uint8_t tx, uint8_t ty)
     }
 }
 
+// Same Bresenham ray as can_see, using a precomputed local opacity map.
+bool ray_visible(uint8_t tx, uint8_t ty, const uint16_t opaque[13])
+{
+    int8_t x = 6, y = 6;
+    int8_t dx = tx > 6 ? tx - 6 : 6 - tx;
+    int8_t dy = ty > 6 ? ty - 6 : 6 - ty;
+    int8_t sx = tx > 6 ? 1 : -1;
+    int8_t sy = ty > 6 ? 1 : -1;
+    int8_t error = dx - dy;
+    for(;;) {
+        if(x == tx && y == ty)
+            return true;
+        int8_t twice = static_cast<int8_t>(2 * error);
+        if(twice > -dy) { error -= dy; x += sx; }
+        if(twice < dx) { error += dx; y += sy; }
+        if(x == tx && y == ty)
+            return true;
+        if(opaque[y] & (1u << x))
+            return false;
+    }
+}
+
 } // namespace rogue

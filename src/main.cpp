@@ -14,20 +14,21 @@ enum Mode : uint8_t {
 };
 
 struct Ui {
-    uint8_t mode, selection, previous_buttons, held_direction, held_frames;
+    uint8_t mode, selection, previous_buttons, held_direction;
+    uint16_t next_repeat_ms;
     bool has_save, dirty;
 };
 static Ui ui = {};
 
-// Five rows of five pixels for each icon, kept entirely in program memory.
-static const uint8_t AVM_PROGMEM icons[][5] = {
-    {0x0e, 0x11, 0x17, 0x10, 0x0e}, // player
-    {0x00, 0x0e, 0x0a, 0x0e, 0x00}, // ordinary monster
-    {0x15, 0x0e, 0x1f, 0x0e, 0x15}, // Lord of Darkness
-    {0x04, 0x0e, 0x0e, 0x04, 0x00}, // item
-    {0x04, 0x0e, 0x1f, 0x04, 0x04}, // down stairs
-    {0x04, 0x04, 0x1f, 0x0e, 0x04}, // up stairs
-    {0x11, 0x0a, 0x04, 0x0a, 0x11}, // door
+// Four vertical columns per symbol. The fifth pixel is left blank between tiles.
+static const uint8_t AVM_PROGMEM icons[][4] = {
+    {0x06, 0x09, 0x0b, 0x06}, // player
+    {0x06, 0x0f, 0x09, 0x06}, // ordinary monster
+    {0x09, 0x06, 0x0f, 0x09}, // Lord of Darkness
+    {0x04, 0x0e, 0x0e, 0x04}, // item
+    {0x04, 0x04, 0x0f, 0x06}, // down stairs
+    {0x06, 0x0f, 0x04, 0x04}, // up stairs
+    {0x0f, 0x09, 0x09, 0x0f}, // door
 };
 
 void pixel(int16_t x, int16_t y)
@@ -38,50 +39,37 @@ void pixel(int16_t x, int16_t y)
     __avm_framebuffer[offset] |= static_cast<uint8_t>(1u << (y & 7));
 }
 
-void icon(uint8_t kind, int16_t x, int16_t y)
+// All map symbols fit on screen. Write a whole vertical nibble at once.
+void column(uint8_t x, uint8_t y, uint8_t bits)
 {
-    for(uint8_t row = 0; row < 5; ++row) {
-        uint8_t bits = icons[kind][row];
-        for(uint8_t col = 0; col < 5; ++col)
-            if(bits & (1u << col))
-                pixel(x + col, y + row);
-    }
+    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
+    uint8_t shift = y & 7;
+    __avm_framebuffer[offset] |= static_cast<uint8_t>(bits << shift);
+    if(shift > 4 && y < 60)
+        __avm_framebuffer[offset + 128] |= static_cast<uint8_t>(bits >> (8 - shift));
 }
 
-void map_tile(uint8_t x, uint8_t y, uint8_t sx, uint8_t sy)
+void icon(uint8_t kind, uint8_t x, uint8_t y)
 {
-    int16_t px = sx * 5;
-    int16_t py = sy * 5;
-    bool visible = can_see(x, y);
-    if(visible)
-        explore(x, y);
-    if(!visible && !explored(x, y))
-        return;
-    if(wall_at(x, y)) {
-        for(uint8_t k = 0; k < 5; ++k) {
-            pixel(px + k, py);
-            pixel(px, py + k);
-        }
-    } else if(visible) {
-        pixel(px + 2, py + 2);
-    }
-    uint8_t door = door_at(x, y);
-    if(door != NONE && !game.doors[door].open)
-        icon(6, px, py);
-    if(x == game.up_x && y == game.up_y)
-        icon(5, px, py);
-    else if(game.floor < FLOORS - 1 &&
-            x == game.down_x && y == game.down_y)
-        icon(4, px, py);
-    if(!visible)
-        return;
-    if(item_at(x, y) != NONE)
-        icon(3, px, py);
-    uint8_t monster = monster_at(x, y);
-    if(monster != NONE)
-        icon(game.monsters[monster].type == LORD ? 2 : 1, px, py);
-    if(x == game.px && y == game.py)
-        icon(0, px, py);
+    for(uint8_t col = 0; col < 4; ++col)
+        column(static_cast<uint8_t>(x + col), y, icons[kind][col]);
+}
+
+bool screen_tile(uint8_t x, uint8_t y, uint8_t& sx, uint8_t& sy)
+{
+    int16_t dx = static_cast<int16_t>(x) - game.px + 6;
+    int16_t dy = static_cast<int16_t>(y) - game.py + 6;
+    if(dx < 0 || dx >= 13 || dy < 0 || dy >= 13)
+        return false;
+    sx = static_cast<uint8_t>(dx);
+    sy = static_cast<uint8_t>(dy);
+    return true;
+}
+
+bool in_sight(uint8_t x, uint8_t y, const uint16_t sight[13],
+              uint8_t& sx, uint8_t& sy)
+{
+    return screen_tile(x, y, sx, sy) && (sight[sy] & (1u << sx));
 }
 
 void render_message()
@@ -110,13 +98,96 @@ void render_message()
 
 void render_play()
 {
+    uint16_t sight[13] = {};
+    uint16_t walls[13] = {};
+    uint16_t opaque[13] = {};
     for(uint8_t sy = 0; sy < 13; ++sy)
         for(uint8_t sx = 0; sx < 13; ++sx) {
             int16_t x = static_cast<int16_t>(game.px) + sx - 6;
             int16_t y = static_cast<int16_t>(game.py) + sy - 6;
-            if(x >= 0 && x < MAP_W && y >= 0 && y < MAP_H)
-                map_tile(static_cast<uint8_t>(x), static_cast<uint8_t>(y), sx, sy);
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H ||
+               (game.walls[static_cast<uint16_t>(y * (MAP_W / 8) +
+                   (x >> 3))] & (1u << (x & 7))))
+                walls[sy] |= static_cast<uint16_t>(1u << sx);
         }
+    for(uint8_t sy = 0; sy < 13; ++sy)
+        opaque[sy] = walls[sy];
+    for(uint8_t i = 0; i < game.door_count; ++i) {
+        const Door& door = game.doors[i];
+        uint8_t sx, sy;
+        if(!door.open && screen_tile(door.x, door.y, sx, sy))
+            opaque[sy] |= static_cast<uint16_t>(1u << sx);
+    }
+    const Room* player_room = nullptr;
+    for(const Room& room : game.rooms)
+        if(game.px >= room.x && game.px < room.x + room.w &&
+           game.py >= room.y && game.py < room.y + room.h) {
+            player_room = &room;
+            break;
+        }
+    for(uint8_t sy = 0; sy < 13; ++sy)
+        for(uint8_t sx = 0; sx < 13; ++sx) {
+            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
+            int16_t y = static_cast<int16_t>(game.py) + sy - 6;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
+                continue;
+            uint8_t tx = static_cast<uint8_t>(x);
+            uint8_t ty = static_cast<uint8_t>(y);
+            bool visible = (player_room &&
+                tx >= player_room->x && tx < player_room->x + player_room->w &&
+                ty >= player_room->y && ty < player_room->y + player_room->h) ||
+                ray_visible(sx, sy, opaque);
+            if(visible) {
+                sight[sy] |= static_cast<uint16_t>(1u << sx);
+                explore(tx, ty);
+            }
+            if(!visible && !explored(tx, ty))
+                continue;
+            uint8_t px = static_cast<uint8_t>(sx * 5);
+            uint8_t py = static_cast<uint8_t>(sy * 5);
+            if(walls[sy] & (1u << sx)) {
+                for(uint8_t col = 0; col < 4; ++col)
+                    column(static_cast<uint8_t>(px + col), py, 0x0f);
+                if(sx < 12 && tx + 1 < MAP_W &&
+                   (walls[sy] & (1u << (sx + 1))) && explored(tx + 1, ty))
+                    column(static_cast<uint8_t>(px + 4), py, 0x0f);
+                if(sy < 12 && ty + 1 < MAP_H &&
+                   (walls[sy + 1] & (1u << sx)) && explored(tx, ty + 1))
+                    for(uint8_t col = 0; col < 4; ++col)
+                        column(static_cast<uint8_t>(px + col),
+                               static_cast<uint8_t>(py + 4), 1);
+            } else if(visible) {
+                pixel(px + 2, py + 2);
+            }
+        }
+    for(uint8_t i = 0; i < game.door_count; ++i) {
+        const Door& door = game.doors[i];
+        uint8_t sx, sy;
+        if(!door.open && screen_tile(door.x, door.y, sx, sy) &&
+           explored(door.x, door.y))
+            icon(6, static_cast<uint8_t>(sx * 5),
+                    static_cast<uint8_t>(sy * 5));
+    }
+    uint8_t sx, sy;
+    if(screen_tile(game.up_x, game.up_y, sx, sy) &&
+       explored(game.up_x, game.up_y))
+        icon(5, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+    if(game.floor < FLOORS - 1 &&
+       screen_tile(game.down_x, game.down_y, sx, sy) &&
+       explored(game.down_x, game.down_y))
+        icon(4, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+    for(const GroundItem& item : game.ground)
+        if(item.type && in_sight(item.x, item.y, sight, sx, sy))
+            icon(3, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+    for(const DroppedItem& item : game.dropped)
+        if(item.type && item.floor == game.floor &&
+           in_sight(item.x, item.y, sight, sx, sy))
+            icon(3, static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+    for(const Monster& monster : game.monsters)
+        if(monster.type && in_sight(monster.x, monster.y, sight, sx, sy))
+            icon(monster.type == LORD ? 2 : 1,
+                 static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+    icon(0, 30, 30);
     for(uint8_t y = 0; y < 64; ++y)
         pixel(64, y);
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
@@ -189,7 +260,9 @@ void render_full_map()
                 pixel(x * 2 + 1, y * 2);
                 pixel(x * 2, y * 2 + 1);
                 pixel(x * 2 + 1, y * 2 + 1);
-            } else if(can_see(x, y)) {
+            } else if(x + 6 >= game.px && x <= game.px + 6 &&
+                      y + 6 >= game.py && y <= game.py + 6 &&
+                      can_see(x, y)) {
                 pixel(x * 2, y * 2);
             }
         }
@@ -224,19 +297,21 @@ uint8_t directional_press(uint8_t buttons, uint8_t edges)
 {
     uint8_t direction = buttons & static_cast<uint8_t>(
         AVM_BUTTON_U | AVM_BUTTON_D | AVM_BUTTON_L | AVM_BUTTON_R);
+    uint16_t now = avm_millis();
     if(direction != ui.held_direction) {
         ui.held_direction = direction;
-        ui.held_frames = 0;
-    } else if(direction && ui.held_frames < 250) {
-        ++ui.held_frames;
+        ui.next_repeat_ms = static_cast<uint16_t>(now + 300);
+        if(!(edges & direction))
+            return 0;
+    } else {
+        if(!direction || static_cast<int16_t>(now - ui.next_repeat_ms) < 0)
+            return 0;
+        ui.next_repeat_ms = static_cast<uint16_t>(now + 100);
     }
-    if(direction && ((edges & direction) ||
-        (ui.held_frames >= 9 && ui.held_frames % 3 == 0))) {
-        if(direction & AVM_BUTTON_U) return AVM_BUTTON_U;
-        if(direction & AVM_BUTTON_D) return AVM_BUTTON_D;
-        if(direction & AVM_BUTTON_L) return AVM_BUTTON_L;
-        if(direction & AVM_BUTTON_R) return AVM_BUTTON_R;
-    }
+    if(direction & AVM_BUTTON_U) return AVM_BUTTON_U;
+    if(direction & AVM_BUTTON_D) return AVM_BUTTON_D;
+    if(direction & AVM_BUTTON_L) return AVM_BUTTON_L;
+    if(direction & AVM_BUTTON_R) return AVM_BUTTON_R;
     return 0;
 }
 
@@ -290,13 +365,16 @@ void handle_input(uint8_t buttons)
         return;
     }
     if(ui.mode == MENU) {
-        if(direction == AVM_BUTTON_U && ui.selection)
+        if(direction == AVM_BUTTON_U && ui.selection) {
             --ui.selection;
-        else if(direction == AVM_BUTTON_D && ui.selection < 4)
+            ui.dirty = true;
+        } else if(direction == AVM_BUTTON_D && ui.selection < 4) {
             ++ui.selection;
-        else if(edges & AVM_BUTTON_B)
+            ui.dirty = true;
+        } else if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
-        else if(edges & AVM_BUTTON_A) {
+            ui.dirty = true;
+        } else if(edges & AVM_BUTTON_A) {
             switch(ui.selection) {
             case 0: ui.mode = PLAY; session.message = EMPTY; end_turn(); break;
             case 1: ui.mode = INVENTORY_MENU; ui.selection = 0; break;
@@ -309,26 +387,31 @@ void handle_input(uint8_t buttons)
                 break;
             case 4: finish(2); break;
             }
+            ui.dirty = true;
         }
-        ui.dirty = true;
         return;
     }
     if(ui.mode == INVENTORY_MENU) {
-        if(direction == AVM_BUTTON_U && ui.selection)
+        if(direction == AVM_BUTTON_U && ui.selection) {
             --ui.selection;
-        else if(direction == AVM_BUTTON_D && ui.selection < INVENTORY - 1)
+            ui.dirty = true;
+        } else if(direction == AVM_BUTTON_D && ui.selection < INVENTORY - 1) {
             ++ui.selection;
-        else if(direction == AVM_BUTTON_R) {
-            if(drop_inventory(ui.selection))
+            ui.dirty = true;
+        } else if(direction == AVM_BUTTON_R) {
+            if(drop_inventory(ui.selection)) {
                 ui.mode = PLAY;
-        }
-        else if(edges & AVM_BUTTON_B)
+                ui.dirty = true;
+            }
+        } else if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
-        else if(edges & AVM_BUTTON_A) {
-            if(use_inventory(ui.selection))
+            ui.dirty = true;
+        } else if(edges & AVM_BUTTON_A) {
+            if(use_inventory(ui.selection)) {
                 ui.mode = PLAY;
+                ui.dirty = true;
+            }
         }
-        ui.dirty = true;
         return;
     }
     if(edges & AVM_BUTTON_B) {
@@ -352,7 +435,6 @@ void handle_input(uint8_t buttons)
 
 extern "C" int main()
 {
-    avm_set_frame_rate(30);
     avm_set_text_font(AVM_FONT_5X7);
     if(avm_save_exists() && avm_load() &&
        game.magic == 0xa7 && game.version == 2 && game.valid)
@@ -360,11 +442,16 @@ extern "C" int main()
     ui.mode = TITLE;
     session.repeat_slot = NONE;
     ui.dirty = true;
+    render();
 
     for(;;) {
-        if(!avm_next_frame())
-            continue;
-        handle_input(avm_buttons());
+        // Sleep until an interrupt, then process button edges or a held repeat.
+        avm_idle();
+        uint8_t buttons = avm_buttons();
+        if(buttons != ui.previous_buttons ||
+           (ui.held_direction && static_cast<int16_t>(avm_millis() -
+               ui.next_repeat_ms) >= 0))
+            handle_input(buttons);
         if(session.ended) {
             avm_save();
             ui.has_save = false;

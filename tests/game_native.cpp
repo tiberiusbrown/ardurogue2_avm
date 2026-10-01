@@ -28,6 +28,39 @@ void use_stairs(uint8_t floor, uint8_t x, uint8_t y)
     require(game.floor != floor, "stairs did not change floors");
 }
 
+void check_local_visibility()
+{
+    uint8_t old_x = game.px, old_y = game.py;
+    unsigned samples = 0;
+    for(uint8_t y = 0; y < MAP_H && samples < 24; ++y)
+        for(uint8_t x = 0; x < MAP_W && samples < 24; ++x) {
+            if(wall_at(x, y) || (x + y * MAP_W) % 11 != 0)
+                continue;
+            game.px = x;
+            game.py = y;
+            ++samples;
+            uint16_t opaque[13] = {};
+            for(uint8_t sy = 0; sy < 13; ++sy)
+                for(uint8_t sx = 0; sx < 13; ++sx)
+                    if(blocked(static_cast<int16_t>(x) + sx - 6,
+                               static_cast<int16_t>(y) + sy - 6))
+                        opaque[sy] |= static_cast<uint16_t>(1u << sx);
+            for(uint8_t sy = 0; sy < 13; ++sy)
+                for(uint8_t sx = 0; sx < 13; ++sx) {
+                    int16_t tx = static_cast<int16_t>(x) + sx - 6;
+                    int16_t ty = static_cast<int16_t>(y) + sy - 6;
+                    if(tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H)
+                        require(ray_visible(sx, sy, opaque) ==
+                                can_see(static_cast<uint8_t>(tx),
+                                        static_cast<uint8_t>(ty)),
+                                "local visibility differs from world ray");
+                }
+        }
+    require(samples == 24, "too few visibility samples");
+    game.px = old_x;
+    game.py = old_y;
+}
+
 int main()
 {
     start_new(0x1234);
@@ -35,6 +68,7 @@ int main()
             "new game state is wrong");
     require(wall_at(-1, 0) && wall_at(MAP_W, 0),
             "map bounds are not solid");
+    check_local_visibility();
 
     std::array<uint8_t, sizeof(game.walls)> first_floor;
     std::memcpy(first_floor.data(), game.walls, first_floor.size());

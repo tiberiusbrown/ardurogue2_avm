@@ -85,6 +85,7 @@ bool blocked(int16_t x, int16_t y);
 void visit_room();
 void make_floor();
 bool can_see(uint8_t x, uint8_t y);
+bool ray_visible(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);
 
 void start_new(uint16_t seed);
 void finish(uint8_t result);
