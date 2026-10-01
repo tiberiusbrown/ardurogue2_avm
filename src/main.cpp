@@ -17,7 +17,7 @@ enum Mode : uint8_t {
 struct Ui {
     uint8_t mode, selection, previous_buttons, held_direction;
     uint16_t next_repeat_ms;
-    bool has_save, dirty;
+    bool has_save, dirty, repeat_suppressed;
 };
 static Ui ui = {};
 static uint8_t status_x = 67, status_y = 28;
@@ -385,14 +385,21 @@ uint8_t directional_press(uint8_t buttons, uint8_t edges)
 {
     uint8_t direction = buttons & static_cast<uint8_t>(
         AVM_BUTTON_U | AVM_BUTTON_D | AVM_BUTTON_L | AVM_BUTTON_R);
+    if(!direction) {
+        ui.held_direction = 0;
+        ui.repeat_suppressed = false;
+        return 0;
+    }
     uint16_t now = avm_millis();
     if(direction != ui.held_direction) {
         ui.held_direction = direction;
         ui.next_repeat_ms = static_cast<uint16_t>(now + 300);
         if(!(edges & direction))
             return 0;
+        ui.repeat_suppressed = false;
     } else {
-        if(!direction || static_cast<int16_t>(now - ui.next_repeat_ms) < 0)
+        if(ui.repeat_suppressed ||
+           static_cast<int16_t>(now - ui.next_repeat_ms) < 0)
             return 0;
         ui.next_repeat_ms = static_cast<uint16_t>(now + 100);
     }
@@ -538,6 +545,7 @@ void handle_input(uint8_t buttons)
 
 void rogue::status_word(const char* word)
 {
+    ui.repeat_suppressed = true;
     const int16_t space_width = avm_draw_text(128, 0, " ").x - 128;
     if((*word == '.' || *word == '!' || *word == ',' || *word == ':') &&
        status_x > 67)
@@ -612,7 +620,8 @@ extern "C" int main()
         avm_idle();
         uint8_t buttons = avm_buttons();
         if(buttons != ui.previous_buttons ||
-           (ui.held_direction && static_cast<int16_t>(avm_millis() -
+           (ui.held_direction && !ui.repeat_suppressed &&
+            static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0))
             handle_input(buttons);
         if(session.ended) {
