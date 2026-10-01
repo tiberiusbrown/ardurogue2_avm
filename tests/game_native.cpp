@@ -77,7 +77,9 @@ void check_wall_faces()
     const uint16_t floor = 10 + 10 * MAP_W;
     game.walls[floor >> 3] &= static_cast<uint8_t>(~(1u << (floor & 7)));
     require(wall_exposed(11, 10), "wall beside floor has no face");
+    require(wall_exposed(11, 11), "diagonal room corner has no face");
     require(!wall_exposed(12, 10), "solid wall interior has a face");
+    require(!wall_exposed(12, 11), "wall beyond the corner has a face");
     require(!wall_exposed(10, 10), "floor was classified as a wall");
     std::memcpy(game.walls, saved_walls.data(), saved_walls.size());
 }

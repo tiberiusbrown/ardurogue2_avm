@@ -42,11 +42,24 @@ bool wall_at(int16_t x, int16_t y)
 
 bool wall_exposed(uint8_t x, uint8_t y)
 {
-    return wall_at(x, y) &&
-        (!wall_at(static_cast<int16_t>(x) - 1, y) ||
-         !wall_at(static_cast<int16_t>(x) + 1, y) ||
-         !wall_at(x, static_cast<int16_t>(y) - 1) ||
-         !wall_at(x, static_cast<int16_t>(y) + 1));
+    if(x >= MAP_W || y >= MAP_H)
+        return false;
+    const uint16_t index = static_cast<uint16_t>(y * MAP_W + x);
+    auto floor_at = [](uint16_t tile) {
+        return (game.walls[tile >> 3] & (1u << (tile & 7))) == 0;
+    };
+    if(floor_at(index))
+        return false;
+    // A room corner touches its floor diagonally and joins two wall faces.
+    return (x > 0 && floor_at(index - 1)) ||
+           (x + 1 < MAP_W && floor_at(index + 1)) ||
+           (y > 0 && floor_at(index - MAP_W)) ||
+           (y + 1 < MAP_H && floor_at(index + MAP_W)) ||
+           (x > 0 && y > 0 && floor_at(index - MAP_W - 1)) ||
+           (x + 1 < MAP_W && y > 0 && floor_at(index - MAP_W + 1)) ||
+           (x > 0 && y + 1 < MAP_H && floor_at(index + MAP_W - 1)) ||
+           (x + 1 < MAP_W && y + 1 < MAP_H &&
+            floor_at(index + MAP_W + 1));
 }
 
 void carve(uint8_t x, uint8_t y)
