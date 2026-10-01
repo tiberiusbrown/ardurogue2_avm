@@ -250,26 +250,54 @@ bool can_see(uint8_t tx, uint8_t ty)
     }
 }
 
-// Same Bresenham ray as can_see, using a precomputed local opacity map.
+// Each local ray crosses at most five tiles before its target. Encode an
+// intermediate tile as (row << 4) | column, leaving 0xff as the end marker.
+// Generating the paths at compile time preserves can_see's Bresenham tie rules
+// without repeating its coordinate arithmetic for every tile on every frame.
+struct RayPaths { uint8_t steps[13 * 13 * 5]; };
+
+constexpr RayPaths make_ray_paths()
+{
+    RayPaths paths = {};
+    for(int ty = 0; ty < 13; ++ty)
+        for(int tx = 0; tx < 13; ++tx) {
+            uint8_t* steps = &paths.steps[(ty * 13 + tx) * 5];
+            for(int i = 0; i < 5; ++i)
+                steps[i] = 0xff;
+            int x = 6, y = 6;
+            int dx = tx > 6 ? tx - 6 : 6 - tx;
+            int dy = ty > 6 ? ty - 6 : 6 - ty;
+            int sx = tx > 6 ? 1 : -1;
+            int sy = ty > 6 ? 1 : -1;
+            int error = dx - dy;
+            int count = 0;
+            while(x != tx || y != ty) {
+                int twice = 2 * error;
+                if(twice > -dy) { error -= dy; x += sx; }
+                if(twice < dx) { error += dx; y += sy; }
+                if(x != tx || y != ty)
+                    steps[count++] = static_cast<uint8_t>((y << 4) | x);
+            }
+        }
+    return paths;
+}
+
+static constexpr RayPaths PROGMEM ray_paths = make_ray_paths();
+
 bool ray_visible(uint8_t tx, uint8_t ty, const uint16_t opaque[13])
 {
-    int8_t x = 6, y = 6;
-    int8_t dx = tx > 6 ? tx - 6 : 6 - tx;
-    int8_t dy = ty > 6 ? ty - 6 : 6 - ty;
-    int8_t sx = tx > 6 ? 1 : -1;
-    int8_t sy = ty > 6 ? 1 : -1;
-    int8_t error = dx - dy;
-    for(;;) {
-        if(x == tx && y == ty)
+    uint8_t ray = static_cast<uint8_t>((ty << 3) + (ty << 2) + ty + tx);
+    uint16_t offset = static_cast<uint16_t>((static_cast<uint16_t>(ray) << 2) + ray);
+    uint8_t steps[5];
+    memcpy_P(steps, ray_paths.steps + offset, sizeof steps);
+    for(uint8_t i = 0; i < 5; ++i) {
+        uint8_t tile = steps[i];
+        if(tile == 0xff)
             return true;
-        int8_t twice = static_cast<int8_t>(2 * error);
-        if(twice > -dy) { error -= dy; x += sx; }
-        if(twice < dx) { error += dx; y += sy; }
-        if(x == tx && y == ty)
-            return true;
-        if(opaque[y] & (1u << x))
+        if(opaque[tile >> 4] & (1u << (tile & 0x0f)))
             return false;
     }
+    return true;
 }
 
 } // namespace rogue

@@ -219,6 +219,18 @@ void render_play()
                 sight[sy] |= static_cast<uint16_t>(1u << sx);
                 explore(tx, ty);
             }
+        }
+    // Finish exploration before drawing: wall joins inspect the tile to the
+    // right and below, which may be later in screen traversal order.
+    for(uint8_t sy = 0; sy < 13; ++sy)
+        for(uint8_t sx = 0; sx < 13; ++sx) {
+            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
+            int16_t y = static_cast<int16_t>(game.py) + sy - 6;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
+                continue;
+            uint8_t tx = static_cast<uint8_t>(x);
+            uint8_t ty = static_cast<uint8_t>(y);
+            bool visible = (sight[sy] & (1u << sx)) != 0;
             if(!visible && !explored(tx, ty))
                 continue;
             uint8_t px = static_cast<uint8_t>(sx * 5);

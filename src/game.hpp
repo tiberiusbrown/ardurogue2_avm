@@ -5,8 +5,10 @@
 #if defined(__AVM__)
 #include <avm/pgmspace.h>
 #else
+#include <string.h>
 #define PROGMEM
 #define F(s) s
+#define memcpy_P(dst, src, size) memcpy((dst), (src), (size))
 #endif
 
 namespace rogue {
