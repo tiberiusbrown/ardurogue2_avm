@@ -29,6 +29,7 @@ constexpr uint8_t MONSTERS = 12;
 constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
+constexpr uint8_t SAVE_MAGIC = 0xa7;
 constexpr uint8_t SAVE_VERSION = 12;
 
 enum ItemType : uint8_t {
@@ -153,13 +154,26 @@ struct Game {
     uint8_t identified_items[5];
 };
 
+enum RunResult : uint8_t {
+    DEATH = 0,
+    ESCAPED = 1,
+    RETURNED_EMPTY = 2,
+    ABANDONED = 3
+};
+
 struct Session {
-    uint8_t repeat_slot, result;
+    uint8_t repeat_slot;
+    RunResult result;
     bool ended;
 };
 
 extern Game game;
 extern Session session;
+
+// Accept a loaded save only when its format matches this build. A compatible
+// completed or abandoned game remains available for its best score, but does
+// not produce a continue entry.
+bool restore_startup_save(bool loaded);
 
 // Status text is drawn immediately. status_word is the wrapping primitive.
 void status_word(const char* word);
@@ -189,7 +203,7 @@ bool can_see(uint8_t x, uint8_t y);
 bool ray_visible(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);
 
 void start_new(uint16_t seed);
-void finish(uint8_t result);
+void finish(RunResult result);
 uint8_t monster_at(uint8_t x, uint8_t y);
 uint8_t item_at(uint8_t x, uint8_t y);
 uint8_t ground_item_before(uint8_t x, uint8_t y, uint8_t before);

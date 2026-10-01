@@ -40,6 +40,32 @@ void require(bool condition, const char* reason)
     }
 }
 
+void check_startup_save_state()
+{
+    std::memset(&game, 0x5a, sizeof(game));
+    game.magic = SAVE_MAGIC;
+    game.version = SAVE_VERSION;
+    game.valid = 0;
+    game.best_score = 321;
+    require(!restore_startup_save(true) && game.best_score == 321 &&
+            game.magic == SAVE_MAGIC && game.version == SAVE_VERSION,
+            "compatible completed save lost its best score");
+
+    game.valid = 1;
+    require(restore_startup_save(true),
+            "compatible active save was not offered as a continue");
+
+    game.magic = 0;
+    require(!restore_startup_save(true) && game.best_score == 0,
+            "incompatible save was not cleared");
+
+    game.magic = SAVE_MAGIC;
+    game.version = SAVE_VERSION;
+    game.best_score = 321;
+    require(!restore_startup_save(false) && game.best_score == 0,
+            "missing save was not cleared");
+}
+
 void check_inventory_view()
 {
     std::memset(game.inventory, 0, sizeof(game.inventory));
@@ -817,6 +843,7 @@ void check_enemy_abilities()
 
 int main()
 {
+    check_startup_save_state();
     check_inventory_view();
     check_stacked_ground_items();
     check_enemy_roster();
@@ -889,7 +916,7 @@ int main()
     game.py = game.up_y;
     for(int i = 0; i < 4 && !session.ended; ++i)
         if(!take_stairs()) action();
-    require(session.ended && session.result == 1 && !game.valid,
+    require(session.ended && session.result == ESCAPED && !game.valid,
             "amulet victory failed");
 
     start_new(0x4321);
@@ -897,7 +924,7 @@ int main()
     game.hunger = 0;
     game.turns = 3;
     end_turn();
-    require(session.ended && session.result == 0 && !game.valid,
+    require(session.ended && session.result == DEATH && !game.valid,
             "starvation death failed");
 
     std::puts("native game checks passed");

@@ -722,8 +722,9 @@ __attribute__((noinline)) void render_full_map()
 
 __attribute__((noinline)) void render_end()
 {
-    avm_draw_text_P(16, 15, session.result == 1 ? F("YOU ESCAPED!") :
-        session.result == 2 ? F("RETURNED EMPTY") : F("YOU DIED"));
+    avm_draw_text_P(16, 15, session.result == ESCAPED ? F("YOU ESCAPED!") :
+        session.result == RETURNED_EMPTY ? F("RETURNED EMPTY") :
+        session.result == ABANDONED ? F("ABANDONED") : F("YOU DIED"));
     avm_draw_textf_P(16, 31, F("SCORE %u"), game.score);
     avm_draw_textf_P(16, 41, F("BEST %u"), game.best_score);
     avm_draw_text_P(16, 57, F("A: TITLE"));
@@ -1043,7 +1044,7 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
             case 6:
                 render_play();
                 if(yesno(F("Abandon this game?")))
-                    finish(2);
+                    finish(ABANDONED);
                 break;
             }
             ui.dirty = true;
@@ -1189,11 +1190,7 @@ void rogue::status_number(uint8_t value, char punctuation)
 extern "C" int main()
 {
     avm_set_text_font(AVM_FONT_BR5D);
-    if(avm_save_exists() && avm_load() &&
-       game.magic == 0xa7 && game.version == SAVE_VERSION && game.valid)
-        ui.has_save = true;
-    else
-        memset(&game, 0, sizeof(game));
+    ui.has_save = restore_startup_save(avm_save_exists() && avm_load());
     ui.mode = TITLE;
     session.repeat_slot = NONE;
     ui.dirty = true;

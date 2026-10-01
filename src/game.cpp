@@ -3,7 +3,16 @@
 
 namespace rogue {
 
-Session session = {NONE, 0, false};
+Session session = {NONE, DEATH, false};
+
+bool restore_startup_save(bool loaded)
+{
+    if(loaded && game.magic == SAVE_MAGIC &&
+       game.version == SAVE_VERSION)
+        return game.valid != 0;
+    memset(&game, 0, sizeof(game));
+    return false;
+}
 
 // ArduRogue's MONSTER_INFO, excluding its player entry. Speed is a turn cost:
 // smaller values act more often. Flags retain the original two-byte layout.
@@ -263,7 +272,7 @@ void start_new(uint16_t seed)
 {
     uint16_t best = game.best_score;
     memset(&game, 0, sizeof(game));
-    game.magic = 0xa7;
+    game.magic = SAVE_MAGIC;
     game.version = SAVE_VERSION;
     game.valid = 1;
     game.best_score = best;
@@ -288,10 +297,10 @@ void start_new(uint16_t seed)
     game.px = game.up_x;
     game.py = game.up_y;
     visit_room();
-    session = {NONE, 0, false};
+    session = {NONE, DEATH, false};
 }
 
-void finish(uint8_t result)
+void finish(RunResult result)
 {
     if(game.score > game.best_score)
         game.best_score = game.score;
@@ -345,7 +354,7 @@ static void hurt_player(uint8_t damage)
 {
     game.hp = damage >= game.hp ? 0 : static_cast<uint8_t>(game.hp - damage);
     if(!game.hp)
-        finish(0);
+        finish(DEATH);
 }
 
 static void fire_splash_monsters()
@@ -538,13 +547,12 @@ static void enemy_turn(uint8_t player_speed)
 
 void end_turn()
 {
-    int16_t effective_speed = static_cast<int16_t>(game.speed) +
+    int16_t effective_speed = static_cast<int16_t>(game.speed) -
         amulet_bonus(AMULET_SPEED);
+    if(game.slowed)
+        effective_speed = static_cast<int16_t>(effective_speed * 2);
     if(effective_speed < 1) effective_speed = 1;
     uint8_t player_speed = static_cast<uint8_t>(effective_speed);
-    if(game.slowed)
-        player_speed = static_cast<uint8_t>(player_speed / 2);
-    if(!player_speed) player_speed = 1;
     ++game.turns;
     int8_t sustenance = ring_bonus(RING_SUSTENANCE);
     bool hunger_tick = sustenance > 0 ? game.turns % 6 == 0 :
@@ -555,7 +563,7 @@ void end_turn()
         --game.hp;
         status(F("You are starving!"));
         if(game.hp == 0) {
-            finish(0);
+            finish(DEATH);
             return;
         }
     }
@@ -609,8 +617,10 @@ void attack_monster(uint8_t index)
     int16_t dexterity = static_cast<int16_t>(game.dexterity) +
         ring_bonus(RING_DEXTERITY);
     if(dexterity < 0) dexterity = 0;
-    uint8_t hit_range = static_cast<uint8_t>(dexterity * 3 + info.dexterity + 1);
-    if(roll(hit_range) < info.dexterity) {
+    int16_t hit_range = dexterity * 3 + info.dexterity + 1;
+    if(hit_range > 255) hit_range = 255;
+    uint8_t hit_range8 = static_cast<uint8_t>(hit_range);
+    if(roll(hit_range8) < info.dexterity) {
         status(F("You miss the"));
         status(static_cast<MonsterType>(target.type), '.');
         end_turn();
@@ -852,7 +862,7 @@ bool take_stairs()
         if(game.floor)
             change_floor(-1);
         else
-            finish(game.has_amulet ? 1 : 2);
+            finish(game.has_amulet ? ESCAPED : RETURNED_EMPTY);
         return true;
     }
     if(game.floor < FLOORS - 1 &&
@@ -1058,7 +1068,7 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
             if(damage > 10) damage = 10;
             game.hp = damage >= game.hp ? 0 : game.hp - damage;
             status(F("The potion harms you!"));
-            if(!game.hp) finish(0);
+            if(!game.hp) finish(DEATH);
             break;
         }
         case POISON:
