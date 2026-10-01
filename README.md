@@ -42,9 +42,9 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 cmake --build build --config RelWithDebInfo --target ardurogue2
 ```
 
-The image is written to `build/ardurogue2.bin`. When built from the parent
-`avm` repository, CMake builds and installs the SDK automatically before
-building this project.
+The Arduboy FX package is written to `projects/ardurogue2/ardurogue2.arduboy`.
+When built from the parent `avm` repository, CMake builds and installs the SDK
+automatically before building this project.
 
 ## Source layout
 

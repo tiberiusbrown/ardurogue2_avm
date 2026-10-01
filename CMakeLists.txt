@@ -20,6 +20,7 @@ set(AVM_SYSROOT "${AVM_SDK_ROOT}/sysroot")
 set(AVM_CLANG "${AVM_SDK_BIN}/avm-clang${AVM_HOST_EXE_SUFFIX}")
 set(AVM_LD "${AVM_SDK_BIN}/avm-ld${AVM_HOST_EXE_SUFFIX}")
 set(AVM_IMAGE "${AVM_SDK_BIN}/avm-image${AVM_HOST_EXE_SUFFIX}")
+set(AVM_INTERPRETER "${AVM_SDK_BIN}/avm/interp.hex")
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
         AND NOT EXISTS "${AVM_CLANG}")
@@ -28,7 +29,7 @@ endif()
 
 set(ARDUROGUE2_OBJECTS)
 set(ARDUROGUE2_ELF "${CMAKE_CURRENT_BINARY_DIR}/ardurogue2.elf")
-set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_BINARY_DIR}/ardurogue2.bin")
+set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/ardurogue2.arduboy")
 
 foreach(ARDUROGUE2_SOURCE IN ITEMS main game world)
     set(ARDUROGUE2_OBJECT "${CMAKE_CURRENT_BINARY_DIR}/${ARDUROGUE2_SOURCE}.o")
@@ -37,7 +38,7 @@ foreach(ARDUROGUE2_SOURCE IN ITEMS main game world)
         OUTPUT "${ARDUROGUE2_OBJECT}"
         COMMAND "${AVM_CLANG}"
             --target=avm-unknown-arduboyfx
-            -std=c++17 -O2 -ffreestanding -fomit-frame-pointer
+            -g -std=c++17 -O2 -ffreestanding -fomit-frame-pointer
             -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables
             -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit
             -ffunction-sections -fdata-sections -Wall -Wextra -Werror
@@ -59,9 +60,17 @@ add_custom_command(
         ${ARDUROGUE2_OBJECTS}
         "${AVM_SYSROOT}/lib/libavm.a"
         "${AVM_SYSROOT}/lib/libavm-builtins.a"
-    COMMAND "${AVM_IMAGE}" --development "${ARDUROGUE2_ELF}"
+    COMMAND "${AVM_IMAGE}" "${ARDUROGUE2_ELF}"
+        --title "ArduRogue 2"
+        --description "Turn-based dungeon crawl for Arduboy FX"
         -o "${ARDUROGUE2_IMAGE}"
     DEPENDS ${ARDUROGUE2_OBJECTS}
+        "${AVM_LD}"
+        "${AVM_IMAGE}"
+        "${AVM_INTERPRETER}"
+        "${AVM_SYSROOT}/lib/crt0.o"
+        "${AVM_SYSROOT}/lib/libavm.a"
+        "${AVM_SYSROOT}/lib/libavm-builtins.a"
     COMMENT "Linking and packaging ardurogue2"
     VERBATIM
 )
