@@ -194,17 +194,29 @@ void render_play()
     avm_draw_filled_rect_black(0, 0, 65, 64);
     avm_draw_filled_rect_black(65, 0, 63, 23);
     uint16_t sight[13] = {};
-    uint16_t walls[13] = {};
-    uint16_t opaque[13] = {};
+    uint16_t walls[13];
+    uint16_t opaque[13];
+    const int16_t left = static_cast<int16_t>(game.px) - 6;
+    const int16_t top = static_cast<int16_t>(game.py) - 6;
+    const uint8_t first_sx = left < 0 ? static_cast<uint8_t>(-left) : 0;
+    const uint8_t end_sx = left + 13 > MAP_W
+        ? static_cast<uint8_t>(MAP_W - left) : 13;
+    const uint8_t first_sy = top < 0 ? static_cast<uint8_t>(-top) : 0;
+    const uint8_t end_sy = top + 13 > MAP_H
+        ? static_cast<uint8_t>(MAP_H - top) : 13;
+    const uint16_t valid_x = static_cast<uint16_t>(
+        ((1u << end_sx) - 1) & ~((1u << first_sx) - 1));
     for(uint8_t sy = 0; sy < 13; ++sy)
-        for(uint8_t sx = 0; sx < 13; ++sx) {
-            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
-            int16_t y = static_cast<int16_t>(game.py) + sy - 6;
-            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H ||
-               (game.walls[static_cast<uint16_t>(y * (MAP_W / 8) +
-                   (x >> 3))] & (1u << (x & 7))))
+        walls[sy] = 0x1fff;
+    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
+        walls[sy] = static_cast<uint16_t>(0x1fff & ~valid_x);
+        uint16_t row = static_cast<uint16_t>((top + sy) * (MAP_W / 8));
+        uint8_t tx = static_cast<uint8_t>(left + first_sx);
+        for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
+            if(game.walls[row + (tx >> 3)] & (1u << (tx & 7)))
                 walls[sy] |= static_cast<uint16_t>(1u << sx);
         }
+    }
     for(uint8_t sy = 0; sy < 13; ++sy)
         opaque[sy] = walls[sy];
     for(uint8_t i = 0; i < game.door_count; ++i) {
@@ -220,17 +232,13 @@ void render_play()
             player_room = &room;
             break;
         }
-    for(uint8_t sy = 0; sy < 13; ++sy)
-        for(uint8_t sx = 0; sx < 13; ++sx) {
+    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
+        uint8_t ty = static_cast<uint8_t>(top + sy);
+        uint8_t tx = static_cast<uint8_t>(left + first_sx);
+        for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
             if(!in_light_radius(static_cast<int16_t>(sx) - LIGHT_RADIUS,
                                 static_cast<int16_t>(sy) - LIGHT_RADIUS))
                 continue;
-            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
-            int16_t y = static_cast<int16_t>(game.py) + sy - 6;
-            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
-                continue;
-            uint8_t tx = static_cast<uint8_t>(x);
-            uint8_t ty = static_cast<uint8_t>(y);
             bool visible = (player_room &&
                 tx >= player_room->x && tx < player_room->x + player_room->w &&
                 ty >= player_room->y && ty < player_room->y + player_room->h) ||
@@ -240,13 +248,12 @@ void render_play()
                 explore(tx, ty);
             }
         }
+    }
     // A ray to the center of a corridor wall can cross an earlier wall.
     // Reveal walls touching visible, non-opaque floor within the circular
     // light radius, without extending visibility through closed doors.
-    for(uint8_t sy = 0; sy < 13; ++sy) {
-        int16_t y = static_cast<int16_t>(game.py) + sy - 6;
-        if(y < 0 || y >= MAP_H)
-            continue;
+    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
+        uint8_t ty = static_cast<uint8_t>(top + sy);
         int16_t dy = static_cast<int16_t>(sy) - LIGHT_RADIUS;
         uint16_t floor_sight = sight[sy] & ~opaque[sy];
         uint16_t adjacent = static_cast<uint16_t>((floor_sight << 1) |
@@ -256,35 +263,28 @@ void render_play()
         if(sy < 12)
             adjacent |= sight[sy + 1] & ~opaque[sy + 1];
         uint16_t nearby_walls = adjacent & walls[sy];
-        for(uint8_t sx = 0; sx < 13; ++sx) {
+        for(uint8_t sx = first_sx; sx < end_sx; ++sx) {
             uint16_t bit = static_cast<uint16_t>(1u << sx);
             if(!(nearby_walls & bit))
                 continue;
             int16_t dx = static_cast<int16_t>(sx) - LIGHT_RADIUS;
             if(!in_light_radius(dx, dy))
                 continue;
-            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
-            if(x < 0 || x >= MAP_W)
-                continue;
             sight[sy] |= bit;
-            explore(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
+            explore(static_cast<uint8_t>(left + sx), ty);
         }
     }
     // Finish exploration before drawing: wall joins inspect the tile to the
     // right and below, which may be later in screen traversal order.
-    for(uint8_t sy = 0; sy < 13; ++sy)
-        for(uint8_t sx = 0; sx < 13; ++sx) {
-            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
-            int16_t y = static_cast<int16_t>(game.py) + sy - 6;
-            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
-                continue;
-            uint8_t tx = static_cast<uint8_t>(x);
-            uint8_t ty = static_cast<uint8_t>(y);
+    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
+        uint8_t ty = static_cast<uint8_t>(top + sy);
+        uint8_t py = static_cast<uint8_t>(sy * 5);
+        uint8_t tx = static_cast<uint8_t>(left + first_sx);
+        for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
             bool visible = (sight[sy] & (1u << sx)) != 0;
             if(!visible && !explored(tx, ty))
                 continue;
             uint8_t px = static_cast<uint8_t>(sx * 5);
-            uint8_t py = static_cast<uint8_t>(sy * 5);
             if(walls[sy] & (1u << sx)) {
                 if(!wall_exposed(tx, ty))
                     continue;
@@ -304,6 +304,7 @@ void render_play()
                 pixel(px + 2, py + 2);
             }
         }
+    }
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
