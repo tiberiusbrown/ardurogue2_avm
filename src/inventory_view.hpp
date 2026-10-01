@@ -5,7 +5,7 @@
 namespace rogue {
 
 enum InventoryGroup : uint8_t {
-    WEAPONS, ARMORS, RINGS, AMULETS, POTIONS, FOODS, QUEST_ITEMS,
+    WEAPONS, ARMORS, RINGS, AMULETS, POTIONS, SCROLLS, FOODS, QUEST_ITEMS,
     INVENTORY_GROUPS
 };
 
@@ -19,6 +19,7 @@ inline InventoryGroup inventory_group(uint8_t type)
     if(is_ring(type)) return RINGS;
     if(is_amulet(type)) return AMULETS;
     if(is_potion(type)) return POTIONS;
+    if(is_scroll(type)) return SCROLLS;
     if(type == FOOD) return FOODS;
     return QUEST_ITEMS;
 }

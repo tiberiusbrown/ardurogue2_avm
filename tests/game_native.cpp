@@ -17,10 +17,19 @@ using namespace rogue;
 
 namespace rogue {
 void status_word(const char*) {}
+void status_word(const char*, char) {}
 void status(const char* words) { status_text += words; status_text += ' '; }
+void status(const char* words, char punctuation) {
+    status_text += words;
+    if(punctuation) status_text += punctuation;
+    status_text += ' ';
+}
 void status(Item) {}
+void status(Item, char) {}
 void status(MonsterType) {}
+void status(MonsterType, char) {}
 void status_number(uint8_t) {}
+void status_number(uint8_t, char) {}
 }
 
 void require(bool condition, const char* reason)
@@ -320,6 +329,86 @@ void check_potions()
     require(kinds >= 8, "floor generation lacks potion variety");
 }
 
+void check_scrolls_and_identification()
+{
+    start_new(0x2468);
+    auto permutation = [](uint8_t first, uint8_t count) {
+        bool seen[SCROLL_COUNT] = {};
+        for(uint8_t i = 0; i < count; ++i) {
+            uint8_t type = static_cast<uint8_t>(first + i);
+            uint8_t appearance = item_appearance(type);
+            require(appearance < count && !seen[appearance] &&
+                    !item_type_identified(type),
+                    "new appearance table is not an unknown permutation");
+            seen[appearance] = true;
+        }
+    };
+    permutation(SCROLL_IDENTIFY, SCROLL_COUNT);
+    permutation(RING_SEE_INVISIBLE, RING_COUNT);
+    permutation(AMULET_SPEED, AMULET_COUNT);
+    uint8_t first_scroll[SCROLL_COUNT];
+    std::memcpy(first_scroll, game.scroll_appearance, sizeof(first_scroll));
+    start_new(0x2468);
+    require(std::memcmp(first_scroll, game.scroll_appearance,
+                        sizeof(first_scroll)) == 0,
+            "scroll appearances change for the same run seed");
+    start_new(0x2469);
+    require(std::memcmp(first_scroll, game.scroll_appearance,
+                        sizeof(first_scroll)) != 0,
+            "scroll appearances do not change between runs");
+    for(const GroundItem& ground : game.ground)
+        if(ground.item.type)
+            require(!item_is_identified(ground.item),
+                    "generated item starts identified");
+
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    std::memset(game.inventory, 0, sizeof(game.inventory));
+    game.hunger = 255;
+    game.invisible = 100;
+    game.inventory[0] = {SCROLL_IDENTIFY, 2};
+    game.inventory[1] = {SWORD, 3};
+    require(use_inventory(0, 1) && item_type_identified(SCROLL_IDENTIFY) &&
+            item_is_identified(game.inventory[1]) &&
+            item_value(game.inventory[0]) == 1,
+            "identify scroll did not reveal target or consume one scroll");
+    game.inventory[0] = {SCROLL_ENCHANT, 1};
+    require(use_inventory(0, 1) && item_value(game.inventory[1]) == 4 &&
+            game.inventory[0].type == NO_ITEM,
+            "enchant scroll did not improve target or get consumed");
+    game.inventory[0] = {SCROLL_REMOVE_CURSE, 1};
+    game.inventory[1].info |= ITEM_CURSED;
+    require(use_inventory(0, 1) && !item_is_cursed(game.inventory[1]),
+            "remove curse scroll left target cursed");
+    game.inventory[0] = {SCROLL_MAPPING, 1};
+    require(use_inventory(0) && game.explored[0] == 0xff &&
+            game.explored[sizeof(game.explored) - 1] == 0xff,
+            "mapping scroll did not reveal the floor");
+
+    std::memset(game.walls, 0, sizeof(game.walls));
+    game.door_count = 0;
+    game.monsters[0] = {static_cast<uint8_t>(game.px + 1), game.py,
+                        ORC, 12, 0, {0, 0}, MON_AGGRO};
+    game.inventory[0] = {SCROLL_MASS_CONFUSE, 1};
+    require(use_inventory(0) &&
+            monster_effect(game.monsters[0], MON_CONFUSED),
+            "mass confusion scroll did not affect a visible monster");
+    game.inventory[0] = {SCROLL_MASS_POISON, 1};
+    require(use_inventory(0) &&
+            monster_effect(game.monsters[0], MON_WEAKENED),
+            "mass poison scroll did not affect a visible monster");
+    game.inventory[0] = {SCROLL_FEAR, 1};
+    require(use_inventory(0) && (game.monsters[0].state & MON_AFRAID),
+            "fear scroll did not scare a visible monster");
+    game.inventory[0] = {SCROLL_TORMENT, 1};
+    uint8_t hp = game.monsters[0].hp;
+    require(use_inventory(0) && game.monsters[0].hp <= hp / 2 + 1,
+            "torment scroll did not damage a visible monster");
+    game.inventory[0] = {SCROLL_TELEPORT, 1};
+    require(use_inventory(0) && !wall_at(game.px, game.py) &&
+            monster_at(game.px, game.py) == NONE,
+            "teleport scroll placed player on an invalid tile");
+}
+
 void check_thrown_potions()
 {
     static_assert(sizeof(Monster) == 8, "monster state must fit in one byte");
@@ -352,6 +441,8 @@ void check_thrown_potions()
     require(throw_potion(0, 1, 0) && !potion_identified(POISON),
             "potion passed through a closed door");
     mark(game.marks[game.floor], OPENED_DOORS, 0);
+    game.monsters[0].x = 13;
+    game.monsters[0].y = 10;
     game.monsters[1] = {14, 10, ORC, 5, 0, {0, 0}};
     require(throw_potion(0, 1, 0) && potion_identified(POISON) &&
             monster_effect(game.monsters[0], MON_WEAKENED) &&
@@ -360,6 +451,9 @@ void check_thrown_potions()
             "throw did not hit only the first monster or consume its stack");
 
     auto throw_at_target = [](uint8_t type) {
+        game.monsters[0].x = 13;
+        game.monsters[0].y = 10;
+        game.monsters[1].type = NO_MONSTER;
         game.inventory[0] = {type, 1};
         require(throw_potion(0, 1, 0) && potion_identified(type),
                 "thrown potion failed to identify on hit");
@@ -728,6 +822,7 @@ int main()
     check_enemy_roster();
     check_enemy_abilities();
     check_potions();
+    check_scrolls_and_identification();
     check_thrown_potions();
     check_effect_messages();
     start_new(0x1234);

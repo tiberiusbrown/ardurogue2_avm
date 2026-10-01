@@ -10,7 +10,7 @@ floor, pick up the amulet, then climb back to the surface. Returning without
 the amulet ends the run. Death also ends the run.
 
 Each floor has connected rooms, corridors, doors, monsters, food, potions,
-weapons, and armor. Explore the dungeon, fight by walking into enemies, manage
+scrolls, weapons, armor, rings, and amulets. Explore the dungeon, fight by walking into enemies, manage
 hunger, and gain levels. Explored rooms, opened doors, collected items, and
 defeated monsters remain recorded when you revisit a floor. The game rebuilds
 each floor from a seed and compact progress flags to conserve RAM.
@@ -21,7 +21,8 @@ when that floor is rebuilt. Door state and monster spawn identity are derived
 from those flags and array positions. Each inventory item uses two bytes: a
 type byte and an info byte with a six-bit quantity or level, a cursed bit, and
 an identified bit. Ground slots store their coordinates and a complete item.
-Save version 11 stores potion appearances, discoveries, monster potion effects,
+Save version 12 stores randomized potion, scroll, ring, and amulet appearances,
+their discoveries, monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots; older saves
 are not compatible.
 
@@ -33,6 +34,12 @@ also removes poison's weakening, while strength removes weakening before it
 can increase attack. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
 
+The nine scrolls from ArduRogue identify or enchant an item, remove a curse,
+teleport the player, map the floor, or affect visible monsters with fear,
+torment, confusion, or poison. Reading a scroll reveals its type. Each run
+randomly assigns unknown scroll descriptions, and scrolls of the same type
+stack in inventory.
+
 Rings and amulets are separate item types, with eight variants of each. Rings
 can be worn two at a time, and one amulet can be worn. Their effects include
 bonuses to combat, visibility, speed, defense, health, and experience, plus
@@ -40,6 +47,9 @@ sustenance, regeneration, life drain, clarity, conservation, ironblood, and
 invisibility. Cursed accessories reverse applicable bonuses and cannot be
 removed once equipped. Fire immunity protects against dragon breath, while a
 cursed fire ring doubles its damage.
+Their unknown descriptions are independently shuffled each run. Equipping
+weapons, armor, rings, or amulets identifies them; until then, item text hides
+equipment bonuses and the true types of jewelry.
 
 All fifteen regular enemy species and the Lord of Darkness use ArduRogue's strength,
 dexterity, speed, defense, health, XP, flags, and floor encounter weights.
@@ -61,6 +71,8 @@ monster, while healing and strength cure poison. Confusion, paralysis,
 slowing, and invisibility affect monsters temporarily. Dexterity and
 experience have no effect on monsters. Status messages announce when these
 conditions begin, expire, or are cured.
+Identify, enchant, and remove curse scrolls open a second item selection.
+Canceling that selection still consumes the scroll, as in ArduRogue.
 
 ### Controls
 

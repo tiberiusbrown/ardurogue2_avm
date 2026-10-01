@@ -29,7 +29,7 @@ constexpr uint8_t MONSTERS = 12;
 constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
-constexpr uint8_t SAVE_VERSION = 11;
+constexpr uint8_t SAVE_VERSION = 12;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -40,11 +40,15 @@ enum ItemType : uint8_t {
     RING_SUSTENANCE, RING_INVISIBILITY,
     AMULET_SPEED, AMULET_CLARITY, AMULET_CONSERVATION,
     AMULET_REGENERATION, AMULET_VAMPIRE, AMULET_IRONBLOOD,
-    AMULET_VITALITY, AMULET_WISDOM
+    AMULET_VITALITY, AMULET_WISDOM,
+    SCROLL_IDENTIFY, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE,
+    SCROLL_TELEPORT, SCROLL_MAPPING, SCROLL_FEAR,
+    SCROLL_TORMENT, SCROLL_MASS_CONFUSE, SCROLL_MASS_POISON
 };
 constexpr uint8_t POTION_COUNT = INVISIBILITY - HEALING + 1;
 constexpr uint8_t RING_COUNT = RING_INVISIBILITY - RING_SEE_INVISIBLE + 1;
 constexpr uint8_t AMULET_COUNT = AMULET_WISDOM - AMULET_SPEED + 1;
+constexpr uint8_t SCROLL_COUNT = SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1;
 constexpr bool is_potion(uint8_t type)
 {
     return type >= HEALING && type <= INVISIBILITY;
@@ -56,6 +60,10 @@ constexpr bool is_ring(uint8_t type)
 constexpr bool is_amulet(uint8_t type)
 {
     return type >= AMULET_SPEED && type <= AMULET_WISDOM;
+}
+constexpr bool is_scroll(uint8_t type)
+{
+    return type >= SCROLL_IDENTIFY && type <= SCROLL_MASS_POISON;
 }
 
 enum MonsterType : uint8_t {
@@ -84,6 +92,7 @@ struct Door { uint8_t x, y; };
 // Paralysis uses stun. Two bytes per monster keep the image within AVM RAM.
 struct Monster { uint8_t x, y, type, hp, stun, effects[2], state; };
 constexpr uint8_t MON_AGGRO = 1;
+constexpr uint8_t MON_AFRAID = 0x40;
 enum MonsterEffect : uint8_t {
     MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
 };
@@ -139,7 +148,9 @@ struct Game {
     uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
-    uint8_t potion_appearance[POTION_COUNT], identified_potions[2];
+    uint8_t potion_appearance[POTION_COUNT], scroll_appearance[SCROLL_COUNT];
+    uint8_t ring_appearance[RING_COUNT], amulet_appearance[AMULET_COUNT];
+    uint8_t identified_items[5];
 };
 
 struct Session {
@@ -152,10 +163,15 @@ extern Session session;
 
 // Status text is drawn immediately. status_word is the wrapping primitive.
 void status_word(const char* word);
+void status_word(const char* word, char punctuation);
 void status(const char PROGMEM* words);
+void status(const char PROGMEM* words, char punctuation);
 void status(Item item);
+void status(Item item, char punctuation);
 void status(MonsterType monster);
+void status(MonsterType monster, char punctuation);
 void status_number(uint8_t value);
+void status_number(uint8_t value, char punctuation);
 
 uint16_t next_random(uint16_t& state);
 bool marked(const FloorMarks& marks, FloorMark group, uint8_t index);
@@ -185,11 +201,14 @@ void move_player(int8_t dx, int8_t dy);
 void take_item(uint8_t index);
 bool take_stairs();
 void action();
-bool use_inventory(uint8_t slot);
+bool use_inventory(uint8_t slot, uint8_t target_slot = NONE);
 bool drop_inventory(uint8_t slot);
 bool throw_potion(uint8_t slot, int8_t dx, int8_t dy);
 uint8_t monster_effect(const Monster& monster, MonsterEffect effect);
 bool potion_identified(uint8_t type);
 uint8_t potion_color(uint8_t type);
+bool item_type_identified(uint8_t type);
+void identify_item(uint8_t slot);
+uint8_t item_appearance(uint8_t type);
 
 } // namespace rogue

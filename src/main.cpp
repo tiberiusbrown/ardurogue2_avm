@@ -1,6 +1,7 @@
 #include <avm.h>
 #include "game.hpp"
 #include "ui.hpp"
+#include <stdio.h>
 #include <string.h>
 
 namespace rogue {
@@ -23,6 +24,16 @@ struct Ui {
 static Ui ui = {};
 static uint8_t status_x = 67, status_y = 28;
 
+int16_t text_width(const char* words)
+{
+    return avm_draw_text(128, 0, words).x - 128;
+}
+
+int16_t text_width(const char AVM_PROGMEM* words)
+{
+    return avm_draw_text_P(128, 0, words).x - 128;
+}
+
 void status_clear()
 {
     avm_draw_filled_rect_black(65, 23, 63, 41);
@@ -36,7 +47,7 @@ void status_next_line()
     status_y = static_cast<uint8_t>(status_y + 7);
     if(status_y <= 56)
         return;
-    int16_t more_width = avm_draw_text_P(128, 0, F("[more]")).x - 128;
+    int16_t more_width = text_width(F("[more]"));
     avm_draw_text_P(static_cast<int16_t>(128 - more_width), 63, F("[more]"));
     avm_display(false);
     // A that initiated this turn must be released before it can advance a page.
@@ -49,9 +60,29 @@ void status_next_line()
     status_clear();
 }
 
+void status_formatted_number(uint8_t value, bool bonus, char punctuation)
+{
+    int16_t width = bonus
+        ? avm_draw_textf_P(128, 0, F("+%u"), value).x - 128
+        : avm_draw_textf_P(128, 0, F("%u"), value).x - 128;
+    char mark[2] = {punctuation, 0};
+    if(punctuation) width += text_width(mark);
+    ui.repeat_suppressed = true;
+    if(status_x != 67 && status_x + width > 128)
+        status_next_line();
+    status_x = static_cast<uint8_t>(bonus
+        ? avm_draw_textf_P(status_x, status_y, F("+%u"), value).x
+        : avm_draw_textf_P(status_x, status_y, F("%u"), value).x);
+    if(punctuation)
+        status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y,
+                                                      mark).x);
+    status_x = static_cast<uint8_t>(status_x + text_width(" "));
+}
+
 // Keep text scratch in its own frame on the 256-byte VM stack.
+
 template<typename Pointer>
-__attribute__((noinline)) void status_words(Pointer words)
+__attribute__((noinline)) void status_words(Pointer words, char suffix = 0)
 {
     char word[32];
     uint8_t length = 0;
@@ -63,7 +94,10 @@ __attribute__((noinline)) void status_words(Pointer words)
         }
         if(length) {
             word[length] = 0;
-            rogue::status_word(word);
+            if(!c && suffix)
+                rogue::status_word(word, suffix);
+            else
+                rogue::status_word(word);
             length = 0;
         }
         if(!c)
@@ -73,32 +107,38 @@ __attribute__((noinline)) void status_words(Pointer words)
     }
 }
 
-__attribute__((noinline)) void status_words_P(const char AVM_PROGMEM* words)
+__attribute__((noinline)) void status_words_P(
+    const char AVM_PROGMEM* words, char suffix = 0)
 {
-    status_words(words);
+    status_words(words, suffix);
 }
 
-void status_entity(uint8_t type)
+const char AVM_PROGMEM* monster_name(uint8_t type)
 {
     switch(type) {
-    case BAT: status_words_P(F("bat")); break;
-    case SNAKE: status_words_P(F("snake")); break;
-    case RATTLESNAKE: status_words_P(F("rattlesnake")); break;
-    case ZOMBIE: status_words_P(F("zombie")); break;
-    case GOBLIN: status_words_P(F("goblin")); break;
-    case PHANTOM: status_words_P(F("phantom")); break;
-    case ORC: status_words_P(F("orc")); break;
-    case TARANTULA: status_words_P(F("tarantula")); break;
-    case HOBGOBLIN: status_words_P(F("hobgoblin")); break;
-    case MIMIC: status_words_P(F("mimic")); break;
-    case INCUBUS: status_words_P(F("incubus")); break;
-    case TROLL: status_words_P(F("troll")); break;
-    case GRIFFIN: status_words_P(F("griffin")); break;
-    case DRAGON: status_words_P(F("dragon")); break;
-    case ANGEL: status_words_P(F("fallen angel")); break;
-    case LORD: status_words_P(F("Lord of Darkness")); break;
-    default: status_words_P(F("foe")); break;
+    case BAT: return F("bat");
+    case SNAKE: return F("snake");
+    case RATTLESNAKE: return F("rattlesnake");
+    case ZOMBIE: return F("zombie");
+    case GOBLIN: return F("goblin");
+    case PHANTOM: return F("phantom");
+    case ORC: return F("orc");
+    case TARANTULA: return F("tarantula");
+    case HOBGOBLIN: return F("hobgoblin");
+    case MIMIC: return F("mimic");
+    case INCUBUS: return F("incubus");
+    case TROLL: return F("troll");
+    case GRIFFIN: return F("griffin");
+    case DRAGON: return F("dragon");
+    case ANGEL: return F("fallen angel");
+    case LORD: return F("Lord of Darkness");
+    default: return F("foe");
     }
+}
+
+void status_entity(uint8_t type, char punctuation = 0)
+{
+    status_words_P(monster_name(type), punctuation);
 }
 
 static const char PROGMEM* const PROGMEM potion_effect_names[] = {
@@ -118,13 +158,20 @@ static const char PROGMEM* const PROGMEM amulet_names[] = {
     F("speed"), F("clarity"), F("conservation"), F("regeneration"),
     F("the vampire"), F("ironblood"), F("vitality"), F("wisdom")
 };
-
-const char PROGMEM* potion_display_name(uint8_t type)
-{
-    return potion_identified(type)
-        ? potion_effect_names[type - HEALING]
-        : potion_color_names[potion_color(type)];
-}
+static const char PROGMEM* const PROGMEM scroll_names[] = {
+    F("identify"), F("enchanting"), F("remove curse"),
+    F("teleportation"), F("magic mapping"), F("fear"),
+    F("torment"), F("mass confusion"), F("mass poison")
+};
+static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
+    F("faded"), F("yellowed"), F("tattered"), F("glowing"),
+    F("shimmering"), F("humming"), F("dark"), F("bright"),
+    F("brilliant")
+};
+static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
+    F("diamond"), F("ruby"), F("emerald"), F("topaz"),
+    F("gold"), F("silver"), F("platinum"), F("iron")
+};
 
 const char PROGMEM* ring_name(uint8_t type)
 {
@@ -138,7 +185,7 @@ const char PROGMEM* amulet_name(uint8_t type)
 
 constexpr uint8_t ITEM_TEXT_CAPACITY = 36;
 
-struct ItemText {
+struct BufferedItemText {
     char* out;
     uint8_t length = 0;
 
@@ -149,70 +196,173 @@ struct ItemText {
         out[length] = 0;
     }
 
+    void word(const char AVM_PROGMEM* words)
+    {
+        if(length) append(F(" "));
+        append(words);
+    }
+
     void number(uint8_t value)
     {
-        char digits[4];
-        uint8_t count = 0;
-        if(value >= 100)
-            digits[count++] = static_cast<char>('0' + value / 100);
-        if(value >= 10)
-            digits[count++] = static_cast<char>('0' + (value / 10) % 10);
-        digits[count++] = static_cast<char>('0' + value % 10);
-        for(uint8_t i = 0;
-            i < count && length < ITEM_TEXT_CAPACITY - 1; ++i)
-            out[length++] = digits[i];
-        out[length] = 0;
+        if(length) append(F(" "));
+        snprintf_P(out + length, ITEM_TEXT_CAPACITY - length, F("%u"), value);
+        length = static_cast<uint8_t>(strlen(out));
     }
+
+    void bonus(uint8_t value)
+    {
+        if(length) append(F(" "));
+        snprintf_P(out + length, ITEM_TEXT_CAPACITY - length,
+                   F("+%u"), value);
+        length = static_cast<uint8_t>(strlen(out));
+    }
+
+    void finish(char = 0) {}
 };
 
-void format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY])
+enum ItemTextStyle : uint8_t { STATUS_ITEM, INVENTORY_ITEM, PROMPT_ITEM };
+
+struct StatusItemText {
+    const char AVM_PROGMEM* pending_word = nullptr;
+    uint8_t pending_value = 0;
+    uint8_t kind = 0; // Text, quantity, or bonus.
+
+    void flush(char suffix = 0)
+    {
+        if(kind == 1) status(pending_word, suffix);
+        else if(kind == 2) status_number(pending_value, suffix);
+        else if(kind) status_formatted_number(pending_value, true, suffix);
+        kind = 0;
+    }
+
+    void word(const char AVM_PROGMEM* words)
+    {
+        flush();
+        pending_word = words;
+        kind = 1;
+    }
+
+    void number(uint8_t value)
+    {
+        flush();
+        pending_value = value;
+        kind = 2;
+    }
+
+    void bonus(uint8_t value)
+    {
+        flush();
+        pending_value = value;
+        kind = 3;
+    }
+
+    void finish(char suffix = 0) { flush(suffix); }
+};
+
+template<typename Output>
+void emit_item(Item item, ItemTextStyle style, Output& text)
 {
-    ItemText text{buffer};
-    buffer[0] = 0;
-    if(is_potion(item.type)) {
+    bool known = item_type_identified(item.type);
+    if(is_potion(item.type) || is_scroll(item.type)) {
         uint8_t quantity = item_value(item);
-        if(quantity > 1)
-            text.number(quantity);
-        else
-            text.append(F("a"));
-        if(potion_identified(item.type)) {
-            text.append(quantity > 1 ? F(" potions of ") : F(" potion of "));
-            text.append(potion_display_name(item.type));
+        bool plural = quantity > 1 && style != PROMPT_ITEM;
+        if(plural) text.number(quantity);
+        else if(style == PROMPT_ITEM) text.word(F("the"));
+        else if(style == STATUS_ITEM)
+            text.word(!known && is_potion(item.type) &&
+                item_appearance(item.type) == 2 ? F("an") : F("a"));
+        if(known) {
+            text.word(is_scroll(item.type)
+                ? (plural ? F("scrolls") : F("scroll"))
+                : (plural ? F("potions") : F("potion")));
+            text.word(F("of"));
+            text.word(is_scroll(item.type)
+                ? scroll_names[item.type - SCROLL_IDENTIFY]
+                : potion_effect_names[item.type - HEALING]);
         } else {
-            text.append(F(" "));
-            text.append(potion_display_name(item.type));
-            text.append(quantity > 1 ? F(" potions") : F(" potion"));
+            text.word(is_scroll(item.type)
+                ? scroll_descriptors[item_appearance(item.type)]
+                : potion_color_names[item_appearance(item.type)]);
+            text.word(is_scroll(item.type)
+                ? (plural ? F("scrolls") : F("scroll"))
+                : (plural ? F("potions") : F("potion")));
         }
         return;
     }
     if(is_ring(item.type)) {
-        text.append(F("a ring of "));
-        text.append(ring_name(item.type));
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        else if(style == STATUS_ITEM) {
+            uint8_t descriptor = item_appearance(item.type);
+            text.word(!known && (descriptor == 2 || descriptor == 7)
+                ? F("an") : F("a"));
+        }
+        if(known) {
+            text.word(F("ring"));
+            text.word(F("of"));
+            text.word(ring_name(item.type));
+        } else {
+            text.word(jewel_descriptors[item_appearance(item.type)]);
+            text.word(F("ring"));
+        }
         return;
     }
     if(is_amulet(item.type)) {
-        text.append(F("an amulet of "));
-        text.append(amulet_name(item.type));
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        else if(style == STATUS_ITEM) {
+            uint8_t descriptor = item_appearance(item.type);
+            text.word(known || descriptor == 2 || descriptor == 7
+                ? F("an") : F("a"));
+        }
+        if(known) {
+            text.word(F("amulet"));
+            text.word(F("of"));
+            text.word(amulet_name(item.type));
+        } else {
+            text.word(jewel_descriptors[item_appearance(item.type)]);
+            text.word(F("amulet"));
+        }
         return;
     }
     switch(item.type) {
     case FOOD:
         if(item_value(item) > 1) {
+            if(style == PROMPT_ITEM) text.word(F("the"));
             text.number(item_value(item));
-            text.append(F(" food rations"));
+            text.word(F("food rations"));
         } else {
-            text.append(F("some food"));
+            if(style == PROMPT_ITEM) text.word(F("the"));
+            else if(style == STATUS_ITEM) text.word(F("some"));
+            text.word(F("food"));
         }
         break;
-    case SWORD: text.append(F("a sword")); break;
-    case ARMOR: text.append(F("armor")); break;
-    case YENDOR_AMULET: text.append(F("the amulet")); break;
-    default: text.append(F("item")); break;
+    case SWORD:
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        else if(style == STATUS_ITEM) text.word(F("a"));
+        text.word(F("sword"));
+        break;
+    case ARMOR:
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        text.word(F("armor"));
+        break;
+    case YENDOR_AMULET:
+        if(style != INVENTORY_ITEM) text.word(F("the"));
+        text.word(F("amulet"));
+        break;
+    default:
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        text.word(F("item"));
+        break;
     }
-    if((item.type == SWORD || item.type == ARMOR) && item_value(item)) {
-        text.append(F(" +"));
-        text.number(item_value(item));
-    }
+    if((item.type == SWORD || item.type == ARMOR) &&
+       item_is_identified(item) && item_value(item))
+        text.bonus(item_value(item));
+}
+
+void format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY])
+{
+    buffer[0] = 0;
+    BufferedItemText text{buffer};
+    emit_item(item, INVENTORY_ITEM, text);
 }
 
 // ArduRogue's four-column sprites (draw.cpp), with each column in one nibble.
@@ -244,10 +394,12 @@ static const uint16_t PROGMEM item_icons[] = {
     0x04f4, // sword
     0x0f90, // armor
     0x0606, // Yendor amulet
-    0x0660, 0x0660, 0x0660, 0x0660,
-    0x0660, 0x0660, 0x0660, 0x0660, // ring variants
+    0x0aaa, 0x0aaa, 0x0aaa, 0x0aaa,
+    0x0aaa, 0x0aaa, 0x0aaa, 0x0aaa, // ring variants
     0x0606, 0x0606, 0x0606, 0x0606,
     0x0606, 0x0606, 0x0606, 0x0606, // amulet variants
+    0x01b3, 0x01b3, 0x01b3, 0x01b3, 0x01b3,
+    0x01b3, 0x01b3, 0x01b3, 0x01b3, // scroll variants
 };
 static constexpr uint16_t PLAYER_ICON = 0x6ff6;
 static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
@@ -311,8 +463,9 @@ void render_play()
     avm_draw_filled_rect_black(0, 0, 65, 64);
     avm_draw_filled_rect_black(65, 0, 63, 23);
     uint16_t sight[13] = {};
+    // Reuse this array for ray blockers, then restore door tiles before drawing.
+    // Keeping a third 26-byte row array here crowds the nested modal stack.
     uint16_t walls[13];
-    uint16_t opaque[13];
     const int16_t left = static_cast<int16_t>(game.px) - 6;
     const int16_t top = static_cast<int16_t>(game.py) - 6;
     const uint8_t first_sx = left < 0 ? static_cast<uint8_t>(-left) : 0;
@@ -334,13 +487,11 @@ void render_play()
                 walls[sy] |= static_cast<uint16_t>(1u << sx);
         }
     }
-    for(uint8_t sy = 0; sy < 13; ++sy)
-        opaque[sy] = walls[sy];
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
         if(!door_open(i) && screen_tile(door.x, door.y, sx, sy))
-            opaque[sy] |= static_cast<uint16_t>(1u << sx);
+            walls[sy] |= static_cast<uint16_t>(1u << sx);
     }
     const Room* player_room = nullptr;
     for(const Room& room : game.rooms)
@@ -359,7 +510,7 @@ void render_play()
             bool visible = (player_room &&
                 tx >= player_room->x && tx < player_room->x + player_room->w &&
                 ty >= player_room->y && ty < player_room->y + player_room->h) ||
-                ray_visible(sx, sy, opaque);
+                ray_visible(sx, sy, walls);
             if(visible) {
                 sight[sy] |= static_cast<uint16_t>(1u << sx);
                 explore(tx, ty);
@@ -372,13 +523,13 @@ void render_play()
     for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
         uint8_t ty = static_cast<uint8_t>(top + sy);
         int16_t dy = static_cast<int16_t>(sy) - LIGHT_RADIUS;
-        uint16_t floor_sight = sight[sy] & ~opaque[sy];
+        uint16_t floor_sight = sight[sy] & ~walls[sy];
         uint16_t adjacent = static_cast<uint16_t>((floor_sight << 1) |
                                                    (floor_sight >> 1));
         if(sy > 0)
-            adjacent |= sight[sy - 1] & ~opaque[sy - 1];
+            adjacent |= sight[sy - 1] & ~walls[sy - 1];
         if(sy < 12)
-            adjacent |= sight[sy + 1] & ~opaque[sy + 1];
+            adjacent |= sight[sy + 1] & ~walls[sy + 1];
         uint16_t nearby_walls = adjacent & walls[sy];
         for(uint8_t sx = first_sx; sx < end_sx; ++sx) {
             uint16_t bit = static_cast<uint16_t>(1u << sx);
@@ -390,6 +541,13 @@ void render_play()
             sight[sy] |= bit;
             explore(static_cast<uint8_t>(left + sx), ty);
         }
+    }
+    // Closed doors blocked the rays above, but their tiles are floor when drawn.
+    for(uint8_t i = 0; i < game.door_count; ++i) {
+        const Door& door = game.doors[i];
+        uint8_t sx, sy;
+        if(!door_open(i) && screen_tile(door.x, door.y, sx, sy))
+            walls[sy] &= static_cast<uint16_t>(~(1u << sx));
     }
     // Finish exploration before drawing: wall joins inspect the tile to the
     // right and below, which may be later in screen traversal order.
@@ -507,6 +665,7 @@ void render_inventory(const char AVM_PROGMEM* prompt,
             case RINGS: avm_draw_text_P(1, y, F("Rings")); break;
             case AMULETS: avm_draw_text_P(1, y, F("Amulets")); break;
             case POTIONS: avm_draw_text_P(1, y, F("Potions")); break;
+            case SCROLLS: avm_draw_text_P(1, y, F("Scrolls")); break;
             case FOODS: avm_draw_text_P(1, y, F("Food")); break;
             default: avm_draw_text_P(1, y, F("Quest")); break;
             }
@@ -678,10 +837,7 @@ __attribute__((noinline)) void render_yesno_prompt(
     const char AVM_PROGMEM* prompt_text, const Item* item)
 {
     status(prompt_text);
-    if(item) {
-        status(*item);
-        status(F("?"));
-    }
+    if(item) status(*item, '?');
     uint8_t buttons_y = static_cast<uint8_t>(status_y + 3);
     if(buttons_y > 56) buttons_y = 56;
     yesno_button(72, buttons_y, true);
@@ -839,7 +995,17 @@ __attribute__((noinline)) void handle_input(uint8_t buttons)
                    slot != NONE) {
                     status_clear();
                     render();
-                    use_inventory(slot);
+                    uint8_t type = game.inventory[slot].type;
+                    uint8_t target = NONE;
+                    if(type == SCROLL_IDENTIFY)
+                        target = choose_item(F("Identify which item?"), nullptr);
+                    else if(type == SCROLL_ENCHANT)
+                        target = choose_item(F("Enchant which item?"), nullptr);
+                    else if(type == SCROLL_REMOVE_CURSE)
+                        target = choose_item(F("Uncurse which item?"), nullptr);
+                    status_clear();
+                    render();
+                    use_inventory(slot, target);
                 } else status_clear();
                 break;
             case 2:
@@ -926,7 +1092,7 @@ bool rogue::yesno(const char AVM_PROGMEM* prompt_text, Item item)
 void rogue::status_word(const char* word)
 {
     ui.repeat_suppressed = true;
-    const int16_t space_width = avm_draw_text(128, 0, " ").x - 128;
+    const int16_t space_width = text_width(" ");
     if((*word == '.' || *word == '!' || *word == '?' ||
         *word == ',' || *word == ':') &&
        status_x > 67)
@@ -938,7 +1104,7 @@ void rogue::status_word(const char* word)
         while(word[count] && count < sizeof(part) - 1) {
             part[count] = word[count];
             part[count + 1] = 0;
-            int16_t candidate = avm_draw_text(128, 0, part).x - 128;
+            int16_t candidate = text_width(part);
             if(count && candidate > 60)
                 break;
             width = candidate;
@@ -955,16 +1121,47 @@ void rogue::status_word(const char* word)
     status_x = static_cast<uint8_t>(status_x + space_width);
 }
 
+void rogue::status_word(const char* word, char punctuation)
+{
+    if(!punctuation) {
+        status_word(word);
+        return;
+    }
+    char mark[2] = {punctuation, 0};
+    int16_t width = text_width(word) + text_width(mark);
+    if(width > 60) {
+        status_word(word);
+        status_word(mark);
+        return;
+    }
+    ui.repeat_suppressed = true;
+    if(status_x != 67 && status_x + width > 128)
+        status_next_line();
+    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, word).x);
+    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, mark).x +
+                                    text_width(" "));
+}
+
 void rogue::status(const char PROGMEM* words)
 {
     status_words_P(words);
 }
 
+void rogue::status(const char PROGMEM* words, char punctuation)
+{
+    status_words_P(words, punctuation);
+}
+
 void rogue::status(Item item)
 {
-    char label[ITEM_TEXT_CAPACITY];
-    format_item(item, label);
-    status_words(label);
+    status(item, 0);
+}
+
+void rogue::status(Item item, char punctuation)
+{
+    StatusItemText text;
+    emit_item(item, punctuation == '?' ? PROMPT_ITEM : STATUS_ITEM, text);
+    text.finish(punctuation);
 }
 
 void rogue::status(MonsterType monster)
@@ -972,17 +1169,19 @@ void rogue::status(MonsterType monster)
     status_entity(monster);
 }
 
+void rogue::status(MonsterType monster, char punctuation)
+{
+    status_entity(monster, punctuation);
+}
+
 void rogue::status_number(uint8_t value)
 {
-    char digits[4];
-    uint8_t length = 0;
-    if(value >= 100)
-        digits[length++] = static_cast<char>('0' + value / 100);
-    if(value >= 10)
-        digits[length++] = static_cast<char>('0' + (value / 10) % 10);
-    digits[length++] = static_cast<char>('0' + value % 10);
-    digits[length] = 0;
-    status_word(digits);
+    status_number(value, 0);
+}
+
+void rogue::status_number(uint8_t value, char punctuation)
+{
+    status_formatted_number(value, false, punctuation);
 }
 
 extern "C" int main()

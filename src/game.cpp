@@ -163,27 +163,70 @@ uint8_t roll(uint8_t limit)
 
 bool potion_identified(uint8_t type)
 {
-    if(!is_potion(type))
-        return false;
-    uint8_t index = static_cast<uint8_t>(type - HEALING);
-    return (game.identified_potions[index >> 3] & (1u << (index & 7))) != 0;
+    return is_potion(type) && item_type_identified(type);
+}
+
+static uint8_t knowledge_index(uint8_t type)
+{
+    if(is_potion(type)) return static_cast<uint8_t>(type - HEALING);
+    if(is_scroll(type)) return static_cast<uint8_t>(POTION_COUNT + type - SCROLL_IDENTIFY);
+    if(is_ring(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + type - RING_SEE_INVISIBLE);
+    if(is_amulet(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + RING_COUNT + type - AMULET_SPEED);
+    return NONE;
+}
+
+bool item_type_identified(uint8_t type)
+{
+    uint8_t index = knowledge_index(type);
+    return index != NONE && (game.identified_items[index >> 3] &
+        (1u << (index & 7))) != 0;
+}
+
+uint8_t item_appearance(uint8_t type)
+{
+    if(is_potion(type)) return game.potion_appearance[type - HEALING];
+    if(is_scroll(type)) return game.scroll_appearance[type - SCROLL_IDENTIFY];
+    if(is_ring(type)) return game.ring_appearance[type - RING_SEE_INVISIBLE];
+    if(is_amulet(type)) return game.amulet_appearance[type - AMULET_SPEED];
+    return NONE;
 }
 
 uint8_t potion_color(uint8_t type)
 {
-    return is_potion(type) ? game.potion_appearance[type - HEALING] : NONE;
+    return is_potion(type) ? item_appearance(type) : NONE;
 }
 
-static void identify_potion(uint8_t type)
+static void identify_type(uint8_t type)
 {
-    uint8_t index = static_cast<uint8_t>(type - HEALING);
-    game.identified_potions[index >> 3] |= static_cast<uint8_t>(1u << (index & 7));
+    uint8_t index = knowledge_index(type);
+    if(index == NONE) return;
+    game.identified_items[index >> 3] |= static_cast<uint8_t>(1u << (index & 7));
+    if(!is_potion(type) && !is_scroll(type)) return;
     for(Item& item : game.inventory)
         if(item.type == type)
             item.info |= ITEM_IDENTIFIED;
     for(GroundItem& ground : game.ground)
         if(ground.item.type == type)
             ground.item.info |= ITEM_IDENTIFIED;
+}
+
+void identify_item(uint8_t slot)
+{
+    if(slot >= INVENTORY || !game.inventory[slot].type) return;
+    Item& item = game.inventory[slot];
+    item.info |= ITEM_IDENTIFIED;
+    identify_type(item.type);
+}
+
+static void shuffle_appearances(uint8_t* values, uint8_t count)
+{
+    for(uint8_t i = 0; i < count; ++i) values[i] = i;
+    for(uint8_t i = static_cast<uint8_t>(count - 1); i > 0; --i) {
+        uint8_t j = static_cast<uint8_t>(next_random(game.random_state) % (i + 1));
+        uint8_t old = values[i];
+        values[i] = values[j];
+        values[j] = old;
+    }
 }
 
 static void gain_xp(uint8_t amount)
@@ -236,15 +279,11 @@ void start_new(uint16_t seed)
     game.weapon_slot = game.armor_slot = NONE;
     game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
-    for(uint8_t i = 0; i < POTION_COUNT; ++i)
-        game.potion_appearance[i] = i;
-    // One Fisher-Yates shuffle per run. The mapping lives in the save.
-    for(uint8_t i = POTION_COUNT - 1; i > 0; --i) {
-        uint8_t j = static_cast<uint8_t>(next_random(game.random_state) % (i + 1));
-        uint8_t old = game.potion_appearance[i];
-        game.potion_appearance[i] = game.potion_appearance[j];
-        game.potion_appearance[j] = old;
-    }
+    // Independent Fisher-Yates permutations are saved with the run.
+    shuffle_appearances(game.potion_appearance, POTION_COUNT);
+    shuffle_appearances(game.scroll_appearance, SCROLL_COUNT);
+    shuffle_appearances(game.ring_appearance, RING_COUNT);
+    shuffle_appearances(game.amulet_appearance, AMULET_COUNT);
     make_floor();
     game.px = game.up_x;
     game.py = game.up_y;
@@ -363,6 +402,9 @@ static void advance_monster(uint8_t index)
         return;
     MonsterInfo info = monster_info(monster.type);
     bool confused = monster_effect(monster, MON_CONFUSED) != 0;
+    bool afraid = (monster.state & MON_AFRAID) != 0;
+    if(afraid && roll(32) == 0)
+        monster.state &= static_cast<uint8_t>(~MON_AFRAID);
     if(monster.stun) {
         --monster.stun;
         if(!monster.stun)
@@ -372,7 +414,7 @@ static void advance_monster(uint8_t index)
         bool pursuing = (info.flags & MON_MEAN) || (monster.state & MON_AGGRO);
         if(player_is_invisible() && !(info.flags & MON_SEE_INVIS))
             pursuing = false;
-        if(pursuing && !confused && (info.flags & MON_FIRE_BREATH) &&
+        if(!afraid && pursuing && !confused && (info.flags & MON_FIRE_BREATH) &&
            fire_line_clear(monster) && roll(2)) {
             status(F("The"));
             status(static_cast<MonsterType>(monster.type));
@@ -386,7 +428,7 @@ static void advance_monster(uint8_t index)
             else
                 hurt_player(damage);
             fire_splash_monsters();
-        } else if(range == 1 && pursuing && !confused) {
+        } else if(range == 1 && pursuing && !confused && !afraid) {
             uint8_t attacker_dex = info.dexterity;
             uint8_t player_dex = game.dexterity;
             if(roll(static_cast<uint8_t>(attacker_dex * 3 + player_dex + 1)) >=
@@ -433,9 +475,13 @@ static void advance_monster(uint8_t index)
                     status(F("You are paralyzed!"));
                 }
             }
-        } else if(confused || (pursuing && range <= 8) || roll(4) == 0) {
+        } else if(afraid || confused || (pursuing && range <= 8) || roll(4) == 0) {
             int8_t dx = 0, dy = 0;
-            if(confused || !pursuing || range > 8) {
+            if(afraid) {
+                dx = monster.x < game.px ? -1 : monster.x > game.px ? 1 : 0;
+                dy = monster.y < game.py ? -1 : monster.y > game.py ? 1 : 0;
+                if(!dx && !dy) dx = roll(2) ? 1 : -1;
+            } else if(confused || !pursuing || range > 8) {
                 uint8_t direction = roll(4);
                 dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
                 dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
@@ -551,8 +597,7 @@ static void defeat_monster(uint8_t index)
        !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
         game.ground[15] = {x, y, {YENDOR_AMULET, 1}};
     status(F("You defeat the"));
-    status(static_cast<MonsterType>(killed_type));
-    status(F("."));
+    status(static_cast<MonsterType>(killed_type), '.');
     gain_xp(info.xp);
 }
 
@@ -567,8 +612,7 @@ void attack_monster(uint8_t index)
     uint8_t hit_range = static_cast<uint8_t>(dexterity * 3 + info.dexterity + 1);
     if(roll(hit_range) < info.dexterity) {
         status(F("You miss the"));
-        status(static_cast<MonsterType>(target.type));
-        status(F("."));
+        status(static_cast<MonsterType>(target.type), '.');
         end_turn();
         return;
     }
@@ -587,8 +631,7 @@ void attack_monster(uint8_t index)
     } else {
         target.hp -= damage;
         status(F("You hit the"));
-        status(static_cast<MonsterType>(target.type));
-        status(F("."));
+        status(static_cast<MonsterType>(target.type), '.');
     }
     if(amulet_bonus(AMULET_VAMPIRE) > 0 && game.hp < player_max_hp()) {
         heal_player(1);
@@ -635,7 +678,8 @@ void move_player(int8_t dx, int8_t dy)
 
 static bool add_inventory(Item incoming)
 {
-    if(incoming.type == FOOD || is_potion(incoming.type)) {
+    if(incoming.type == FOOD || is_potion(incoming.type) ||
+       is_scroll(incoming.type)) {
         for(Item& item : game.inventory)
             if(item.type == incoming.type &&
                item_value(item) <= ITEM_VALUE_MASK - item_value(incoming)) {
@@ -663,8 +707,7 @@ void take_item(uint8_t index)
         status(F("You found the amulet!"));
     } else if(add_inventory(item)) {
         status(F("You picked up"));
-        status(item);
-        status(F("."));
+        status(item, '.');
     } else {
         status(F("Your pack is full."));
         return;
@@ -684,7 +727,7 @@ void change_floor(int8_t delta)
     status(F("You take the stairs."));
 }
 
-bool use_inventory(uint8_t slot);
+bool use_inventory(uint8_t slot, uint8_t target_slot);
 
 static bool item_is_equipped(uint8_t slot)
 {
@@ -737,8 +780,7 @@ static bool toggle_accessory(uint8_t slot)
         bool was_invisible = player_is_invisible();
         clear_equipment_slot(slot);
         status(F("You take off"));
-        status(item);
-        status(F("."));
+        status(item, '.');
         if(was_invisible && !player_is_invisible())
             status(F("You become visible again."));
         return true;
@@ -754,6 +796,7 @@ static bool toggle_accessory(uint8_t slot)
     }
     bool was_invisible = player_is_invisible();
     *target = slot;
+    identify_item(slot);
     if(item.type == AMULET_CLARITY &&
        !item_is_cursed(item) && game.confused) {
         game.confused = 0;
@@ -768,8 +811,7 @@ static bool toggle_accessory(uint8_t slot)
     if(game.hp > maximum)
         game.hp = maximum;
     status(F("You put on"));
-    status(item);
-    status(F("."));
+    status(item, '.');
     if(item_is_cursed(item)) {
         item.info |= ITEM_IDENTIFIED;
         status(F("It is cursed and cannot be removed."));
@@ -836,7 +878,94 @@ void action()
     }
 }
 
-bool use_inventory(uint8_t slot)
+static void scroll_effect(uint8_t type, uint8_t target_slot)
+{
+    if(type == SCROLL_IDENTIFY || type == SCROLL_ENCHANT ||
+       type == SCROLL_REMOVE_CURSE) {
+        if(target_slot >= INVENTORY ||
+           !game.inventory[target_slot].type) {
+            status(F("Nothing happens."));
+            return;
+        }
+        Item& target = game.inventory[target_slot];
+        if(type == SCROLL_IDENTIFY) {
+            identify_item(target_slot);
+            status(F("You identify")); status(target, '.');
+        } else if(type == SCROLL_ENCHANT) {
+            if(target.type != SWORD && target.type != ARMOR &&
+               !is_ring(target.type) && !is_amulet(target.type)) {
+                status(F("Nothing happens."));
+            } else {
+                uint8_t value = item_value(target);
+                if(item_is_cursed(target) &&
+                   (is_ring(target.type) || is_amulet(target.type))) {
+                    if(value) set_item_value(target, value - 1);
+                } else if(value < ITEM_VALUE_MASK) {
+                    set_item_value(target, value + 1);
+                }
+                if(target.type == ARMOR && game.armor_slot == target_slot)
+                    game.defense = item_value(target);
+                status(F("The")); status(target); status(F("glows blue."));
+            }
+        } else if(item_is_cursed(target)) {
+            target.info &= static_cast<uint8_t>(~ITEM_CURSED);
+            status(F("The")); status(target); status(F("glows white."));
+        } else {
+            status(F("Nothing happens."));
+        }
+        return;
+    }
+    if(type == SCROLL_TELEPORT) {
+        for(uint8_t attempt = 0; attempt < 100; ++attempt) {
+            uint8_t x = static_cast<uint8_t>(next_random(game.random_state) % MAP_W);
+            uint8_t y = static_cast<uint8_t>(next_random(game.random_state) % MAP_H);
+            if(!blocked(x, y) && monster_at(x, y) == NONE) {
+                game.px = x; game.py = y;
+                visit_room();
+                status(F("You teleport!"));
+                return;
+            }
+        }
+        status(F("Nothing happens."));
+        return;
+    }
+    if(type == SCROLL_MAPPING) {
+        memset(game.explored, 0xff, sizeof(game.explored));
+        status(F("You become aware of your surroundings."));
+        return;
+    }
+    bool found = false;
+    for(uint8_t i = 0; i < MONSTERS; ++i) {
+        Monster& target = game.monsters[i];
+        if(!target.type || !player_can_see_monster(i) ||
+           !can_see(target.x, target.y)) continue;
+        found = true;
+        target.state |= MON_AGGRO;
+        switch(type) {
+        case SCROLL_FEAR:
+            target.state |= MON_AFRAID;
+            monster_status(target, F("flees!"));
+            break;
+        case SCROLL_TORMENT:
+            target.hp = static_cast<uint8_t>(target.hp / 2);
+            if(!target.hp) target.hp = 1;
+            monster_status(target, F("is stricken!"));
+            break;
+        case SCROLL_MASS_CONFUSE:
+            set_monster_effect(target, MON_CONFUSED, 15);
+            monster_status(target, F("becomes confused."));
+            break;
+        case SCROLL_MASS_POISON:
+            set_monster_effect(target, MON_WEAKENED, 15);
+            monster_status(target, F("grows weaker."));
+            break;
+        default: break;
+        }
+    }
+    if(!found) status(F("Nothing happens."));
+}
+
+bool use_inventory(uint8_t slot, uint8_t target_slot)
 {
     if(slot >= INVENTORY || game.paralyzed)
         return false;
@@ -845,11 +974,29 @@ bool use_inventory(uint8_t slot)
         return false;
     session.repeat_slot = slot;
     switch(item.type) {
+    case SCROLL_IDENTIFY: case SCROLL_ENCHANT: case SCROLL_REMOVE_CURSE:
+    case SCROLL_TELEPORT: case SCROLL_MAPPING: case SCROLL_FEAR:
+    case SCROLL_TORMENT: case SCROLL_MASS_CONFUSE: case SCROLL_MASS_POISON: {
+        session.repeat_slot = NONE;
+        uint8_t type = item.type;
+        bool known = item_type_identified(type);
+        status(F("You read"));
+        status(Item{type, 1}, '.');
+        identify_type(type);
+        if(!known) {
+            status(F("It was"));
+            status(Item{type, 1}, '.');
+        }
+        uint8_t count = item_value(item);
+        if(count > 1) set_item_value(item, count - 1);
+        else item.type = NO_ITEM;
+        scroll_effect(type, target_slot);
+        break;
+    }
     case FOOD:
         game.hunger = game.hunger > 145 ? 255 : game.hunger + 110;
         status(F("You eat"));
-        status(Item{item.type, 1});
-        status(F("."));
+        status(Item{item.type, 1}, '.');
         set_item_value(item, static_cast<uint8_t>(item_value(item) - 1));
         if(!item_value(item)) item.type = NO_ITEM;
         break;
@@ -860,15 +1007,13 @@ bool use_inventory(uint8_t slot)
         bool known = potion_identified(type);
         status(F("You drink"));
         status(Item{item.type, static_cast<uint8_t>(1 |
-            (item.info & ITEM_IDENTIFIED))});
-        status(F("."));
+            (item.info & ITEM_IDENTIFIED))}, '.');
         consume_potion(item);
-        identify_potion(type);
+        identify_type(type);
         item.info |= ITEM_IDENTIFIED;
         if(!known) {
             status(F("It was"));
-            status(Item{type, 1});
-            status(F("."));
+            status(Item{type, 1}, '.');
         }
         switch(type) {
         case HEALING: {
@@ -950,16 +1095,16 @@ bool use_inventory(uint8_t slot)
     }
     case SWORD:
         game.weapon_slot = slot;
+        identify_item(slot);
         status(F("You equip"));
-        status(item);
-        status(F("."));
+        status(item, '.');
         break;
     case ARMOR:
         game.armor_slot = slot;
         game.defense = item_value(item);
+        identify_item(slot);
         status(F("You equip"));
-        status(item);
-        status(F("."));
+        status(item, '.');
         break;
     default:
         if(is_ring(item.type) || is_amulet(item.type)) {
@@ -1061,8 +1206,7 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
     Item& item = game.inventory[slot];
     uint8_t type = item.type;
     status(F("You throw"));
-    status(Item{type, 1});
-    status(F("."));
+    status(Item{type, 1}, '.');
     set_item_value(item, static_cast<uint8_t>(item_value(item) - 1));
     if(!item_value(item)) item.type = NO_ITEM;
 
@@ -1082,14 +1226,12 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
     }
     if(hit != NONE) {
         status(F("It hits the"));
-        status(static_cast<MonsterType>(game.monsters[hit].type));
-        status(F("."));
+        status(static_cast<MonsterType>(game.monsters[hit].type), '.');
         bool known = potion_identified(type);
-        identify_potion(type);
+        identify_type(type);
         if(!known) {
             status(F("It was"));
-            status(Item{type, 1});
-            status(F("."));
+            status(Item{type, 1}, '.');
         }
         apply_monster_potion(type, hit);
     }
@@ -1131,8 +1273,7 @@ bool drop_inventory(uint8_t slot)
     item.type = NO_ITEM;
     if(ground_slot != NONE) {
         status(F("You dropped"));
-        status(dropped);
-        status(F("."));
+        status(dropped, '.');
     } else {
         status(F("It crumbles to dust."));
     }
