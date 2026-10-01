@@ -45,3 +45,20 @@ cmake --build build --config RelWithDebInfo --target ardurogue2
 The image is written to `build/ardurogue2.bin`. When built from the parent
 `avm` repository, CMake builds and installs the SDK automatically before
 building this project.
+
+## Source layout
+
+`src/world.cpp` generates floors and handles map visibility. `src/game.cpp`
+implements turns, combat, inventory, and the quest. Both use only standard C++
+and the shared declarations in `src/game.hpp`, so they can be compiled into a
+native test program. `src/main.cpp` owns AVM input, display, random seed
+generation, and persistence calls. The AVM stack is separate from its 1024
+bytes of global memory.
+
+The native game checks build independently of the AVM SDK:
+
+```sh
+cmake -S tests -B build/native -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/native --config RelWithDebInfo
+ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
+```
