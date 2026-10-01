@@ -44,22 +44,38 @@ bool wall_exposed(uint8_t x, uint8_t y)
 {
     if(x >= MAP_W || y >= MAP_H)
         return false;
-    const uint16_t index = static_cast<uint16_t>(y * MAP_W + x);
-    auto floor_at = [](uint16_t tile) {
-        return (game.walls[tile >> 3] & (1u << (tile & 7))) == 0;
-    };
-    if(floor_at(index))
+    const uint16_t index = static_cast<uint16_t>(y * (MAP_W / 8) + (x >> 3));
+    const uint8_t bit = static_cast<uint8_t>(x & 7);
+    const uint8_t center = static_cast<uint8_t>(1u << bit);
+    if(!(game.walls[index] & center))
         return false;
-    // A room corner touches its floor diagonally and joins two wall faces.
-    return (x > 0 && floor_at(index - 1)) ||
-           (x + 1 < MAP_W && floor_at(index + 1)) ||
-           (y > 0 && floor_at(index - MAP_W)) ||
-           (y + 1 < MAP_H && floor_at(index + MAP_W)) ||
-           (x > 0 && y > 0 && floor_at(index - MAP_W - 1)) ||
-           (x + 1 < MAP_W && y > 0 && floor_at(index - MAP_W + 1)) ||
-           (x > 0 && y + 1 < MAP_H && floor_at(index + MAP_W - 1)) ||
-           (x + 1 < MAP_W && y + 1 < MAP_H &&
-            floor_at(index + MAP_W + 1));
+    // A zero bit in any of the three rows means an adjacent floor tile.
+    uint8_t solid = game.walls[index];
+    if(y > 0)
+        solid &= game.walls[index - MAP_W / 8];
+    if(y + 1 < MAP_H)
+        solid &= game.walls[index + MAP_W / 8];
+    uint8_t neighbors = static_cast<uint8_t>(center | (center << 1) |
+                                             (center >> 1));
+    if((solid & neighbors) != neighbors)
+        return true;
+    if(bit == 0 && x > 0) {
+        solid = game.walls[index - 1];
+        if(y > 0)
+            solid &= game.walls[index - MAP_W / 8 - 1];
+        if(y + 1 < MAP_H)
+            solid &= game.walls[index + MAP_W / 8 - 1];
+        return !(solid & 0x80);
+    }
+    if(bit == 7 && x + 1 < MAP_W) {
+        solid = game.walls[index + 1];
+        if(y > 0)
+            solid &= game.walls[index - MAP_W / 8 + 1];
+        if(y + 1 < MAP_H)
+            solid &= game.walls[index + MAP_W / 8 + 1];
+        return !(solid & 1);
+    }
+    return false;
 }
 
 void carve(uint8_t x, uint8_t y)
@@ -245,7 +261,7 @@ bool can_see(uint8_t tx, uint8_t ty)
     int16_t x = game.px, y = game.py;
     int16_t dx = tx > x ? tx - x : x - tx;
     int16_t dy = ty > y ? ty - y : y - ty;
-    if(dx > 6 || dy > 6)
+    if(!in_light_radius(dx, dy))
         return false;
     int16_t sx = x < tx ? 1 : -1;
     int16_t sy = y < ty ? 1 : -1;
@@ -299,6 +315,9 @@ static constexpr RayPaths PROGMEM ray_paths = make_ray_paths();
 
 bool ray_visible(uint8_t tx, uint8_t ty, const uint16_t opaque[13])
 {
+    if(!in_light_radius(static_cast<int16_t>(tx) - LIGHT_RADIUS,
+                        static_cast<int16_t>(ty) - LIGHT_RADIUS))
+        return false;
     uint8_t ray = static_cast<uint8_t>((ty << 3) + (ty << 2) + ty + tx);
     uint16_t offset = static_cast<uint16_t>((static_cast<uint16_t>(ray) << 2) + ray);
     uint8_t steps[5];

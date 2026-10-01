@@ -69,8 +69,47 @@ void check_local_visibility()
     game.py = old_y;
 }
 
+void check_circular_light_radius()
+{
+    std::array<uint8_t, sizeof(game.walls)> saved_walls;
+    std::memcpy(saved_walls.data(), game.walls, saved_walls.size());
+    uint8_t old_x = game.px, old_y = game.py;
+    uint8_t old_door_count = game.door_count;
+    std::memset(game.walls, 0, sizeof(game.walls));
+    game.door_count = 0;
+    game.px = 20;
+    game.py = 15;
+    uint16_t opaque[13] = {};
+    require(ray_visible(12, 6, opaque) && can_see(26, 15),
+            "cardinal tile at the light radius is hidden");
+    require(ray_visible(11, 9, opaque) && can_see(25, 18),
+            "diagonal tile inside the light radius is hidden");
+    require(!ray_visible(12, 7, opaque) && !can_see(26, 16),
+            "tile outside the light radius is visible");
+    require(!ray_visible(11, 11, opaque) && !can_see(25, 20),
+            "diagonal tile outside the light radius is visible");
+    std::memcpy(game.walls, saved_walls.data(), saved_walls.size());
+    game.door_count = old_door_count;
+    game.px = old_x;
+    game.py = old_y;
+}
+
 void check_wall_faces()
 {
+    auto check_neighbors = [] {
+        for(uint8_t y = 0; y < MAP_H; ++y)
+            for(uint8_t x = 0; x < MAP_W; ++x) {
+                bool expected = false;
+                if(wall_at(x, y))
+                    for(int8_t dy = -1; dy <= 1; ++dy)
+                        for(int8_t dx = -1; dx <= 1; ++dx)
+                            if((dx || dy) && !wall_at(x + dx, y + dy))
+                                expected = true;
+                require(wall_exposed(x, y) == expected,
+                        "wall exposure differs from its neighboring tiles");
+            }
+    };
+    check_neighbors();
     std::array<uint8_t, sizeof(game.walls)> saved_walls;
     std::memcpy(saved_walls.data(), game.walls, saved_walls.size());
     std::memset(game.walls, 0xff, sizeof(game.walls));
@@ -81,6 +120,7 @@ void check_wall_faces()
     require(!wall_exposed(12, 10), "solid wall interior has a face");
     require(!wall_exposed(12, 11), "wall beyond the corner has a face");
     require(!wall_exposed(10, 10), "floor was classified as a wall");
+    check_neighbors();
     std::memcpy(game.walls, saved_walls.data(), saved_walls.size());
 }
 
@@ -134,6 +174,7 @@ int main()
     require(wall_at(-1, 0) && wall_at(MAP_W, 0),
             "map bounds are not solid");
     check_local_visibility();
+    check_circular_light_radius();
     check_wall_faces();
     check_exploration_resolution();
     check_floor_marks();

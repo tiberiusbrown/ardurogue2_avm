@@ -222,6 +222,9 @@ void render_play()
         }
     for(uint8_t sy = 0; sy < 13; ++sy)
         for(uint8_t sx = 0; sx < 13; ++sx) {
+            if(!in_light_radius(static_cast<int16_t>(sx) - LIGHT_RADIUS,
+                                static_cast<int16_t>(sy) - LIGHT_RADIUS))
+                continue;
             int16_t x = static_cast<int16_t>(game.px) + sx - 6;
             int16_t y = static_cast<int16_t>(game.py) + sy - 6;
             if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
@@ -237,6 +240,36 @@ void render_play()
                 explore(tx, ty);
             }
         }
+    // A ray to the center of a corridor wall can cross an earlier wall.
+    // Reveal walls touching visible, non-opaque floor within the circular
+    // light radius, without extending visibility through closed doors.
+    for(uint8_t sy = 0; sy < 13; ++sy) {
+        int16_t y = static_cast<int16_t>(game.py) + sy - 6;
+        if(y < 0 || y >= MAP_H)
+            continue;
+        int16_t dy = static_cast<int16_t>(sy) - LIGHT_RADIUS;
+        uint16_t floor_sight = sight[sy] & ~opaque[sy];
+        uint16_t adjacent = static_cast<uint16_t>((floor_sight << 1) |
+                                                   (floor_sight >> 1));
+        if(sy > 0)
+            adjacent |= sight[sy - 1] & ~opaque[sy - 1];
+        if(sy < 12)
+            adjacent |= sight[sy + 1] & ~opaque[sy + 1];
+        uint16_t nearby_walls = adjacent & walls[sy];
+        for(uint8_t sx = 0; sx < 13; ++sx) {
+            uint16_t bit = static_cast<uint16_t>(1u << sx);
+            if(!(nearby_walls & bit))
+                continue;
+            int16_t dx = static_cast<int16_t>(sx) - LIGHT_RADIUS;
+            if(!in_light_radius(dx, dy))
+                continue;
+            int16_t x = static_cast<int16_t>(game.px) + sx - 6;
+            if(x < 0 || x >= MAP_W)
+                continue;
+            sight[sy] |= bit;
+            explore(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
+        }
+    }
     // Finish exploration before drawing: wall joins inspect the tile to the
     // right and below, which may be later in screen traversal order.
     for(uint8_t sy = 0; sy < 13; ++sy)

@@ -15,6 +15,13 @@ namespace rogue {
 
 constexpr uint8_t MAP_W = 64;
 constexpr uint8_t MAP_H = 32;
+constexpr int16_t LIGHT_RADIUS = 6;
+constexpr bool in_light_radius(int16_t dx, int16_t dy)
+{
+    return dx >= -LIGHT_RADIUS && dx <= LIGHT_RADIUS &&
+           dy >= -LIGHT_RADIUS && dy <= LIGHT_RADIUS &&
+           dx * dx + dy * dy <= LIGHT_RADIUS * LIGHT_RADIUS;
+}
 constexpr uint8_t FLOORS = 16;
 constexpr uint8_t ROOMS = 12;
 constexpr uint8_t DOORS = 11;
