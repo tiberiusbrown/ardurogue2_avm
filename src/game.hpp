@@ -21,6 +21,7 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t DROPPED_ITEMS = 8;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
+constexpr uint8_t SAVE_VERSION = 4;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, SWORD, ARMOR, AMULET
@@ -31,21 +32,27 @@ enum MonsterType : uint8_t {
 };
 
 struct Room { uint8_t x, y, w, h; };
-struct Door { uint8_t x, y, open; };
-struct Monster { uint8_t x, y, type, hp, stun, spawn; };
+struct Door { uint8_t x, y; };
+struct Monster { uint8_t x, y, type, hp, stun; };
 struct GroundItem { uint8_t x, y, type, amount; };
 struct DroppedItem { uint8_t floor, x, y, type, amount; };
-struct Item { uint8_t type, amount; };
+struct Item { uint8_t type, amount, reserved[2]; };
+static_assert(sizeof(Item) == 4, "Item must reserve four bytes");
 struct FloorMarks {
-    uint16_t taken_items;
-    uint16_t killed_monsters;
-    uint16_t opened_doors;
-    uint16_t visited_rooms;
+    // 16 item, 12 monster, 11 door, and 12 room flags: 51 bits.
+    uint8_t bits[7];
+};
+
+enum FloorMark : uint8_t {
+    TAKEN_ITEMS = 0,
+    KILLED_MONSTERS = TAKEN_ITEMS + GROUND_ITEMS,
+    OPENED_DOORS = KILLED_MONSTERS + MONSTERS,
+    VISITED_ROOMS = OPENED_DOORS + DOORS
 };
 
 struct Game {
     uint8_t walls[MAP_W * MAP_H / 8];
-    uint8_t explored[MAP_W * MAP_H / 32]; // One bit per 2x2 tiles.
+    uint8_t explored[MAP_W * MAP_H / 8]; // One bit per tile.
     FloorMarks marks[FLOORS];
     Room rooms[ROOMS];
     Door doors[DOORS];
@@ -76,12 +83,14 @@ void status(MonsterType monster);
 void status_number(uint8_t value);
 
 uint16_t next_random(uint16_t& state);
-bool marked(uint16_t bits, uint8_t index);
-void mark(uint16_t& bits, uint8_t index);
+bool marked(const FloorMarks& marks, FloorMark group, uint8_t index);
+void mark(FloorMarks& marks, FloorMark group, uint8_t index);
 bool wall_at(int16_t x, int16_t y);
+bool wall_exposed(uint8_t x, uint8_t y);
 void explore(uint8_t x, uint8_t y);
 bool explored(uint8_t x, uint8_t y);
 uint8_t door_at(uint8_t x, uint8_t y);
+bool door_open(uint8_t index);
 bool blocked(int16_t x, int16_t y);
 void visit_room();
 void make_floor();

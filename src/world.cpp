@@ -20,14 +20,16 @@ uint8_t floor_roll(uint16_t& seed, uint8_t limit)
     return static_cast<uint8_t>(next_random(seed) % limit);
 }
 
-bool marked(uint16_t bits, uint8_t index)
+bool marked(const FloorMarks& marks, FloorMark group, uint8_t index)
 {
-    return (bits & static_cast<uint16_t>(1u << index)) != 0;
+    uint8_t bit = static_cast<uint8_t>(group + index);
+    return (marks.bits[bit >> 3] & (1u << (bit & 7))) != 0;
 }
 
-void mark(uint16_t& bits, uint8_t index)
+void mark(FloorMarks& marks, FloorMark group, uint8_t index)
 {
-    bits |= static_cast<uint16_t>(1u << index);
+    uint8_t bit = static_cast<uint8_t>(group + index);
+    marks.bits[bit >> 3] |= static_cast<uint8_t>(1u << (bit & 7));
 }
 
 bool wall_at(int16_t x, int16_t y)
@@ -38,6 +40,15 @@ bool wall_at(int16_t x, int16_t y)
     return (game.walls[index >> 3] & (1u << (index & 7))) != 0;
 }
 
+bool wall_exposed(uint8_t x, uint8_t y)
+{
+    return wall_at(x, y) &&
+        (!wall_at(static_cast<int16_t>(x) - 1, y) ||
+         !wall_at(static_cast<int16_t>(x) + 1, y) ||
+         !wall_at(x, static_cast<int16_t>(y) - 1) ||
+         !wall_at(x, static_cast<int16_t>(y) + 1));
+}
+
 void carve(uint8_t x, uint8_t y)
 {
     uint16_t index = static_cast<uint16_t>(y * MAP_W + x);
@@ -46,13 +57,13 @@ void carve(uint8_t x, uint8_t y)
 
 void explore(uint8_t x, uint8_t y)
 {
-    uint16_t index = static_cast<uint16_t>((y >> 1) * (MAP_W / 2) + (x >> 1));
+    uint16_t index = static_cast<uint16_t>(y * MAP_W + x);
     game.explored[index >> 3] |= static_cast<uint8_t>(1u << (index & 7));
 }
 
 bool explored(uint8_t x, uint8_t y)
 {
-    uint16_t index = static_cast<uint16_t>((y >> 1) * (MAP_W / 2) + (x >> 1));
+    uint16_t index = static_cast<uint16_t>(y * MAP_W + x);
     return (game.explored[index >> 3] & (1u << (index & 7))) != 0;
 }
 
@@ -64,12 +75,17 @@ uint8_t door_at(uint8_t x, uint8_t y)
     return NONE;
 }
 
+bool door_open(uint8_t index)
+{
+    return marked(game.marks[game.floor], OPENED_DOORS, index);
+}
+
 bool blocked(int16_t x, int16_t y)
 {
     if(wall_at(x, y))
         return true;
     uint8_t door = door_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
-    return door != NONE && !game.doors[door].open;
+    return door != NONE && !door_open(door);
 }
 
 bool in_room(uint8_t x, uint8_t y, const Room& room)
@@ -90,7 +106,7 @@ void visit_room()
 {
     for(uint8_t i = 0; i < ROOMS; ++i)
         if(in_room(game.px, game.py, game.rooms[i])) {
-            mark(game.marks[game.floor].visited_rooms, i);
+            mark(game.marks[game.floor], VISITED_ROOMS, i);
             break;
         }
 }
@@ -150,8 +166,7 @@ void make_floor()
         if(game.door_count < DOORS && !in_any_room(dx, ay) &&
            door_at(dx, ay) == NONE && floor_roll(seed, 3) != 0) {
             uint8_t id = game.door_count++;
-            game.doors[id] = {dx, ay,
-                static_cast<uint8_t>(marked(marks.opened_doors, id))};
+            game.doors[id] = {dx, ay};
         }
     }
 
@@ -163,7 +178,7 @@ void make_floor()
     game.down_y = static_cast<uint8_t>(last.y + last.h / 2);
 
     for(uint8_t i = 0; i < ROOMS; ++i) {
-        if(!marked(marks.visited_rooms, i))
+        if(!marked(marks, VISITED_ROOMS, i))
             continue;
         const Room& room = game.rooms[i];
         for(uint8_t y = room.y; y < room.y + room.h; ++y)
@@ -187,10 +202,10 @@ void make_floor()
                   (x == game.down_x && y == game.down_y)) {
             x = static_cast<uint8_t>(room.x + 1);
         }
-        if(marked(marks.killed_monsters, i))
+        if(marked(marks, KILLED_MONSTERS, i))
             continue;
         game.monsters[i] = {x, y, type,
-            static_cast<uint8_t>(monster_health[type] + game.floor / 2), 0, i};
+            static_cast<uint8_t>(monster_health[type] + game.floor / 2), 0};
     }
 
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
@@ -202,13 +217,13 @@ void make_floor()
                        chance < 10 ? SWORD : ARMOR;
         uint8_t amount = type == SWORD || type == ARMOR
             ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
-        if(marked(marks.taken_items, i) || (game.floor == FLOORS - 1 && i == 15))
+        if(marked(marks, TAKEN_ITEMS, i) || (game.floor == FLOORS - 1 && i == 15))
             continue;
         game.ground[i] = {x, y, type, amount};
     }
     if(game.floor == FLOORS - 1 &&
-       marked(marks.killed_monsters, MONSTERS - 1) &&
-       !marked(marks.taken_items, 15))
+       marked(marks, KILLED_MONSTERS, MONSTERS - 1) &&
+       !marked(marks, TAKEN_ITEMS, 15))
         game.ground[15] = {game.down_x, game.down_y, AMULET, 1};
 }
 

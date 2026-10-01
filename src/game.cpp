@@ -24,7 +24,7 @@ void start_new(uint16_t seed)
     uint16_t best = game.best_score;
     memset(&game, 0, sizeof(game));
     game.magic = 0xa7;
-    game.version = 2;
+    game.version = SAVE_VERSION;
     game.valid = 1;
     game.best_score = best;
     game.run_seed = seed ? seed : 0xace1;
@@ -157,7 +157,7 @@ void attack_monster(uint8_t index)
     if(damage >= target.hp) {
         uint8_t killed_type = target.type;
         uint8_t x = target.x, y = target.y;
-        mark(game.marks[game.floor].killed_monsters, target.spawn);
+        mark(game.marks[game.floor], KILLED_MONSTERS, index);
         target.type = 0;
         game.score += static_cast<uint16_t>(5 + killed_type * 3);
         ++game.xp;
@@ -171,7 +171,8 @@ void attack_monster(uint8_t index)
                 ++game.attack;
             leveled = true;
         }
-        if(killed_type == LORD && !marked(game.marks[game.floor].taken_items, 15))
+        if(killed_type == LORD &&
+           !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
             game.ground[15] = {x, y, AMULET, 1};
         status(F("You defeat the"));
         status(static_cast<MonsterType>(killed_type));
@@ -196,9 +197,8 @@ void move_player(int8_t dx, int8_t dy)
         return;
     }
     uint8_t door = door_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
-    if(door != NONE && !game.doors[door].open) {
-        game.doors[door].open = 1;
-        mark(game.marks[game.floor].opened_doors, door);
+    if(door != NONE && !door_open(door)) {
+        mark(game.marks[game.floor], OPENED_DOORS, door);
         status(F("You open the door."));
         end_turn();
         return;
@@ -216,9 +216,9 @@ void move_player(int8_t dx, int8_t dy)
     {
         status(F("You see"));
         status(item < GROUND_ITEMS
-            ? Item{game.ground[item].type, game.ground[item].amount}
+            ? Item{game.ground[item].type, game.ground[item].amount, {0, 0}}
             : Item{game.dropped[item - GROUND_ITEMS].type,
-                   game.dropped[item - GROUND_ITEMS].amount});
+                   game.dropped[item - GROUND_ITEMS].amount, {0, 0}});
         status(F("here. A: pick up."));
     }
     else if((game.px == game.up_x && game.py == game.up_y) ||
@@ -238,7 +238,7 @@ bool add_inventory(uint8_t type, uint8_t amount)
     }
     for(Item& item : game.inventory)
         if(item.type == NO_ITEM) {
-            item = {type, amount};
+            item = {type, amount, {0, 0}};
             return true;
         }
     return false;
@@ -256,14 +256,14 @@ void take_item(uint8_t index)
         status(F("You found the amulet!"));
     } else if(add_inventory(type, amount)) {
         status(F("You picked up"));
-        status(Item{type, amount});
+        status(Item{type, amount, {0, 0}});
         status(F("."));
     } else {
         status(F("Your pack is full."));
         return;
     }
     if(index < GROUND_ITEMS) {
-        mark(game.marks[game.floor].taken_items, index);
+        mark(game.marks[game.floor], TAKEN_ITEMS, index);
         game.ground[index].type = NO_ITEM;
     } else {
         game.dropped[index - GROUND_ITEMS].type = NO_ITEM;
@@ -320,7 +320,7 @@ bool use_inventory(uint8_t slot)
     case FOOD:
         game.hunger = game.hunger > 145 ? 255 : game.hunger + 110;
         status(F("You eat"));
-        status(Item{item.type, 1});
+        status(Item{item.type, 1, {0, 0}});
         status(F("."));
         if(--item.amount == 0)
             item.type = NO_ITEM;
@@ -329,7 +329,7 @@ bool use_inventory(uint8_t slot)
         game.hp = static_cast<uint8_t>(game.hp + 10 > game.max_hp
             ? game.max_hp : game.hp + 10);
         status(F("You drink"));
-        status(Item{item.type, 1});
+        status(Item{item.type, 1, {0, 0}});
         status(F("."));
         if(--item.amount == 0)
             item.type = NO_ITEM;
@@ -372,7 +372,7 @@ bool drop_inventory(uint8_t slot)
                 session.repeat_slot = NONE;
             item.type = NO_ITEM;
             status(F("You dropped"));
-            status(Item{dropped.type, dropped.amount});
+            status(Item{dropped.type, dropped.amount, {0, 0}});
             status(F("."));
             end_turn();
             return true;

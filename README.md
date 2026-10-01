@@ -14,6 +14,11 @@ weapons, and armor. Explore the dungeon, fight by walking into enemies, manage
 hunger, and gain levels. Explored rooms, opened doors, collected items, and
 defeated monsters remain recorded when you revisit a floor. The game rebuilds
 each floor from a seed and compact progress flags to conserve RAM.
+The active floor's explored map uses one bit per tile. Floor progress flags
+use 51 bits per floor; door open state and monster spawn identity are derived
+from those flags and array positions. Inventory items reserve two bytes for
+future attributes. Saves from the previous layout are not compatible with
+version 4.
 
 ### Controls
 

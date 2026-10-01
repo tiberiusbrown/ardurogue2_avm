@@ -1,5 +1,6 @@
 #include <avm.h>
 #include "game.hpp"
+#include <string.h>
 
 namespace rogue {
 Game game __attribute__((section(".saved"))) = {};
@@ -192,7 +193,7 @@ void render_play()
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
-        if(!door.open && screen_tile(door.x, door.y, sx, sy))
+        if(!door_open(i) && screen_tile(door.x, door.y, sx, sy))
             opaque[sy] |= static_cast<uint16_t>(1u << sx);
     }
     const Room* player_room = nullptr;
@@ -223,13 +224,17 @@ void render_play()
             uint8_t px = static_cast<uint8_t>(sx * 5);
             uint8_t py = static_cast<uint8_t>(sy * 5);
             if(walls[sy] & (1u << sx)) {
+                if(!wall_exposed(tx, ty))
+                    continue;
                 for(uint8_t col = 0; col < 4; ++col)
                     column(static_cast<uint8_t>(px + col), py, 0x0f);
                 if(sx < 12 && tx + 1 < MAP_W &&
-                   (walls[sy] & (1u << (sx + 1))) && explored(tx + 1, ty))
+                   (walls[sy] & (1u << (sx + 1))) &&
+                   wall_exposed(tx + 1, ty) && explored(tx + 1, ty))
                     column(static_cast<uint8_t>(px + 4), py, 0x0f);
                 if(sy < 12 && ty + 1 < MAP_H &&
-                   (walls[sy + 1] & (1u << sx)) && explored(tx, ty + 1))
+                   (walls[sy + 1] & (1u << sx)) &&
+                   wall_exposed(tx, ty + 1) && explored(tx, ty + 1))
                     for(uint8_t col = 0; col < 4; ++col)
                         column(static_cast<uint8_t>(px + col),
                                static_cast<uint8_t>(py + 4), 1);
@@ -240,7 +245,7 @@ void render_play()
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
-        if(!door.open && screen_tile(door.x, door.y, sx, sy) &&
+        if(!door_open(i) && screen_tile(door.x, door.y, sx, sy) &&
            explored(door.x, door.y))
             icon(6, static_cast<uint8_t>(sx * 5),
                     static_cast<uint8_t>(sy * 5));
@@ -324,7 +329,7 @@ void render_full_map()
         for(uint8_t x = 0; x < MAP_W; ++x) {
             if(!explored(x, y))
                 continue;
-            if(wall_at(x, y)) {
+            if(wall_exposed(x, y)) {
                 pixel(x * 2, y * 2);
                 pixel(x * 2 + 1, y * 2);
                 pixel(x * 2, y * 2 + 1);
@@ -581,8 +586,10 @@ extern "C" int main()
 {
     avm_set_text_font(AVM_FONT_BR5D);
     if(avm_save_exists() && avm_load() &&
-       game.magic == 0xa7 && game.version == 2 && game.valid)
+       game.magic == 0xa7 && game.version == SAVE_VERSION && game.valid)
         ui.has_save = true;
+    else
+        memset(&game, 0, sizeof(game));
     ui.mode = TITLE;
     session.repeat_slot = NONE;
     ui.dirty = true;
