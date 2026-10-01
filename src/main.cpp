@@ -141,7 +141,8 @@ static const uint16_t PROGMEM item_icons[] = {
 static constexpr uint16_t PLAYER_ICON = 0x6ff6;
 static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
 static constexpr uint16_t UP_STAIRS_ICON = 0x8cef;
-static constexpr uint16_t DOOR_ICON = 0xf99f;
+static constexpr uint16_t CLOSED_DOOR_ICON = 0xefbe;
+static constexpr uint16_t OPEN_DOOR_ICON = 0xe11e;
 
 void pixel(int16_t x, int16_t y)
 {
@@ -273,10 +274,11 @@ void render_play()
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
-        if(!door_open(i) && screen_tile(door.x, door.y, sx, sy) &&
+        if(screen_tile(door.x, door.y, sx, sy) &&
            explored(door.x, door.y))
-            icon(DOOR_ICON, static_cast<uint8_t>(sx * 5),
-                    static_cast<uint8_t>(sy * 5));
+            icon(door_open(i) ? OPEN_DOOR_ICON : CLOSED_DOOR_ICON,
+                 static_cast<uint8_t>(sx * 5),
+                 static_cast<uint8_t>(sy * 5));
     }
     uint8_t sx, sy;
     if(screen_tile(game.up_x, game.up_y, sx, sy) &&
