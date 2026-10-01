@@ -1,6 +1,6 @@
 #include <avm.h>
 #include "game.hpp"
-#include "inventory_view.hpp"
+#include "ui.hpp"
 #include <string.h>
 
 namespace rogue {
@@ -12,13 +12,13 @@ using namespace rogue;
 namespace {
 
 enum Mode : uint8_t {
-    TITLE, PLAY, MENU, INVENTORY_MENU, THROW_DIRECTION, FULL_MAP, END
+    TITLE, PLAY, MENU, THROW_DIRECTION, FULL_MAP, END
 };
 
 struct Ui {
-    uint8_t mode, selection, inventory_top, previous_buttons, held_direction;
+    uint8_t mode, selection, previous_buttons, held_direction;
     uint16_t next_repeat_ms;
-    bool has_save, dirty, repeat_suppressed, throwing;
+    bool has_save, dirty, repeat_suppressed;
 };
 static Ui ui = {};
 static uint8_t status_x = 67, status_y = 28;
@@ -49,7 +49,9 @@ void status_next_line()
     status_clear();
 }
 
-void status_words_P(const char AVM_PROGMEM* words)
+// Keep text scratch in its own frame on the 256-byte VM stack.
+template<typename Pointer>
+__attribute__((noinline)) void status_words(Pointer words)
 {
     char word[32];
     uint8_t length = 0;
@@ -69,6 +71,11 @@ void status_words_P(const char AVM_PROGMEM* words)
         if(c != ' ')
             word[length++] = c;
     }
+}
+
+__attribute__((noinline)) void status_words_P(const char AVM_PROGMEM* words)
+{
+    status_words(words);
 }
 
 void status_entity(uint8_t type)
@@ -129,57 +136,82 @@ const char PROGMEM* amulet_name(uint8_t type)
     return is_amulet(type) ? amulet_names[type - AMULET_SPEED] : F("unknown");
 }
 
-void status_item(Item item)
+constexpr uint8_t ITEM_TEXT_CAPACITY = 36;
+
+struct ItemText {
+    char* out;
+    uint8_t length = 0;
+
+    void append(const char AVM_PROGMEM* words)
+    {
+        while(*words && length < ITEM_TEXT_CAPACITY - 1)
+            out[length++] = *words++;
+        out[length] = 0;
+    }
+
+    void number(uint8_t value)
+    {
+        char digits[4];
+        uint8_t count = 0;
+        if(value >= 100)
+            digits[count++] = static_cast<char>('0' + value / 100);
+        if(value >= 10)
+            digits[count++] = static_cast<char>('0' + (value / 10) % 10);
+        digits[count++] = static_cast<char>('0' + value % 10);
+        for(uint8_t i = 0;
+            i < count && length < ITEM_TEXT_CAPACITY - 1; ++i)
+            out[length++] = digits[i];
+        out[length] = 0;
+    }
+};
+
+void format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY])
 {
+    ItemText text{buffer};
+    buffer[0] = 0;
     if(is_potion(item.type)) {
         uint8_t quantity = item_value(item);
         if(quantity > 1)
-            rogue::status_number(quantity);
+            text.number(quantity);
         else
-            status_words_P(F("a"));
+            text.append(F("a"));
         if(potion_identified(item.type)) {
-            status_words_P(quantity > 1 ? F("potions of") : F("potion of"));
-            status_words_P(potion_display_name(item.type));
+            text.append(quantity > 1 ? F(" potions of ") : F(" potion of "));
+            text.append(potion_display_name(item.type));
         } else {
-            status_words_P(potion_display_name(item.type));
-            status_words_P(quantity > 1 ? F("potions") : F("potion"));
+            text.append(F(" "));
+            text.append(potion_display_name(item.type));
+            text.append(quantity > 1 ? F(" potions") : F(" potion"));
         }
         return;
     }
     if(is_ring(item.type)) {
-        status_words_P(F("a ring of"));
-        status_words_P(ring_name(item.type));
+        text.append(F("a ring of "));
+        text.append(ring_name(item.type));
         return;
     }
     if(is_amulet(item.type)) {
-        status_words_P(F("an amulet of"));
-        status_words_P(amulet_name(item.type));
+        text.append(F("an amulet of "));
+        text.append(amulet_name(item.type));
         return;
     }
     switch(item.type) {
     case FOOD:
         if(item_value(item) > 1) {
-            rogue::status_number(item_value(item));
-            status_words_P(F("food rations"));
+            text.number(item_value(item));
+            text.append(F(" food rations"));
         } else {
-            status_words_P(F("some food"));
+            text.append(F("some food"));
         }
         break;
-    case SWORD: status_words_P(F("a sword")); break;
-    case ARMOR: status_words_P(F("armor")); break;
-    case YENDOR_AMULET: status_words_P(F("the amulet")); break;
-    default: status_words_P(F("item")); break;
+    case SWORD: text.append(F("a sword")); break;
+    case ARMOR: text.append(F("armor")); break;
+    case YENDOR_AMULET: text.append(F("the amulet")); break;
+    default: text.append(F("item")); break;
     }
     if((item.type == SWORD || item.type == ARMOR) && item_value(item)) {
-        char modifier[5] = {'+'};
-        uint8_t length = 1;
-        if(item_value(item) >= 100)
-            modifier[length++] = static_cast<char>('0' + item_value(item) / 100);
-        if(item_value(item) >= 10)
-            modifier[length++] = static_cast<char>('0' + (item_value(item) / 10) % 10);
-        modifier[length++] = static_cast<char>('0' + item_value(item) % 10);
-        modifier[length] = 0;
-        rogue::status_word(modifier);
+        text.append(F(" +"));
+        text.number(item_value(item));
     }
 }
 
@@ -229,6 +261,12 @@ void pixel(int16_t x, int16_t y)
         return;
     uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
     __avm_framebuffer[offset] |= static_cast<uint8_t>(1u << (y & 7));
+}
+
+void clear_pixel(uint8_t x, uint8_t y)
+{
+    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
+    __avm_framebuffer[offset] &= static_cast<uint8_t>(~(1u << (y & 7)));
 }
 
 // All map symbols fit on screen. Write a whole vertical nibble at once.
@@ -423,7 +461,8 @@ void render_play()
     avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
 }
 
-void render_title()
+// Avoid carrying all screen renderers' locals into render_play's frame.
+__attribute__((noinline)) void render_title()
 {
     avm_draw_text_P(22, 14, F("ARDUROGUE 2"));
     avm_draw_text_P(14, 30, ui.has_save ? F("A: CONTINUE") : F("A: NEW GAME"));
@@ -432,31 +471,32 @@ void render_title()
     avm_draw_textf_P(14, 56, F("BEST %u"), game.best_score);
 }
 
-void render_menu()
+__attribute__((noinline)) void render_menu()
 {
     static const char AVM_PROGMEM* const AVM_PROGMEM names[] = {
-        F("WAIT"), F("INVENTORY"), F("THROW POTION"), F("FULL MAP"),
-        F("SAVE & EXIT"), F("ABANDON")
+        F("WAIT"), F("USE ITEM"), F("DROP ITEM"), F("THROW POTION"),
+        F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON")
     };
     avm_draw_text_P(10, 8, F("ACTION MENU"));
-    for(uint8_t i = 0; i < 6; ++i) {
+    for(uint8_t i = 0; i < 7; ++i) {
         if(i == ui.selection)
-            avm_draw_text_P(4, static_cast<int16_t>(17 + 8 * i), F(">"));
-        avm_draw_text_P(12, static_cast<int16_t>(17 + 8 * i), names[i]);
+            avm_draw_text_P(4, static_cast<int16_t>(17 + 7 * i), F(">"));
+        avm_draw_text_P(12, static_cast<int16_t>(17 + 7 * i), names[i]);
     }
 }
 
-void render_inventory()
+void render_inventory(const char AVM_PROGMEM* prompt,
+                      const InventoryView& view, uint8_t selection, uint8_t top)
 {
-    avm_draw_text_P(1, 7, ui.throwing ? F("Throw potion") : F("Inventory"));
+    avm_draw_filled_rect_black(0, 0, 128, 64);
+    avm_draw_text_P(1, 7, prompt);
     avm_draw_filled_rect_white(1, 9, 127, 1);
-    InventoryView view(game, ui.throwing);
     if(!view.count) {
         avm_draw_text_P(8, 18, F("Empty"));
         return;
     }
     for(uint8_t row = 0; row < INVENTORY_VISIBLE_ROWS; ++row) {
-        uint8_t index = static_cast<uint8_t>(ui.inventory_top + row);
+        uint8_t index = static_cast<uint8_t>(top + row);
         if(index >= view.count) break;
         int16_t y = static_cast<int16_t>(18 + row * 7);
         uint8_t entry = view.rows[index];
@@ -473,27 +513,13 @@ void render_inventory()
             continue;
         }
         const Item& item = game.inventory[entry];
-        if(entry == ui.selection) {
+        if(entry == selection) {
             avm_draw_filled_rect_white(7, y - 6, 121, 7);
             avm_set_text_mode(AVM_TEXT_BLACK_TRANSPARENT);
         }
-        if(is_potion(item.type)) {
-            int16_t x = avm_draw_text_P(8, y, potion_display_name(item.type)).x;
-            avm_draw_text_P(x, y, F(" potion"));
-            if(item_value(item) > 1)
-                avm_draw_textf_P(113, y, F("x%u"), item_value(item));
-        } else if(is_ring(item.type)) {
-            avm_draw_text_P(8, y, ring_name(item.type));
-        } else if(is_amulet(item.type)) {
-            avm_draw_text_P(8, y, amulet_name(item.type));
-        } else {
-            switch(item.type) {
-            case FOOD: avm_draw_textf_P(8, y, F("ration x%u"), item_value(item)); break;
-            case SWORD: avm_draw_textf_P(8, y, F("sword +%u"), item_value(item)); break;
-            case ARMOR: avm_draw_textf_P(8, y, F("armor +%u"), item_value(item)); break;
-            default: avm_draw_text_P(8, y, F("amulet of Yendor")); break;
-            }
-        }
+        char label[ITEM_TEXT_CAPACITY];
+        format_item(item, label);
+        avm_draw_text(8, y, label);
         if(game.weapon_slot == entry || game.armor_slot == entry ||
            game.amulet_slot == entry || game.ring_slots[0] == entry ||
            game.ring_slots[1] == entry)
@@ -504,16 +530,17 @@ void render_inventory()
     }
 }
 
-void render_throw_direction()
+__attribute__((noinline)) void render_throw_direction()
 {
     avm_draw_text_P(8, 12, F("THROW POTION"));
-    avm_draw_text_P(8, 27,
-        potion_display_name(game.inventory[ui.selection].type));
+    char label[ITEM_TEXT_CAPACITY];
+    format_item(game.inventory[ui.selection], label);
+    avm_draw_text(8, 27, label);
     avm_draw_text_P(8, 43, F("D-PAD: DIRECTION"));
     avm_draw_text_P(8, 56, F("B: BACK"));
 }
 
-void render_full_map()
+__attribute__((noinline)) void render_full_map()
 {
     for(uint8_t y = 0; y < MAP_H; ++y)
         for(uint8_t x = 0; x < MAP_W; ++x) {
@@ -534,7 +561,7 @@ void render_full_map()
     pixel(game.px * 2 + 1, game.py * 2 + 1);
 }
 
-void render_end()
+__attribute__((noinline)) void render_end()
 {
     avm_draw_text_P(16, 15, session.result == 1 ? F("YOU ESCAPED!") :
         session.result == 2 ? F("RETURNED EMPTY") : F("YOU DIED"));
@@ -551,7 +578,6 @@ void render()
     case TITLE: render_title(); break;
     case PLAY: render_play(); break;
     case MENU: render_menu(); break;
-    case INVENTORY_MENU: render_inventory(); break;
     case THROW_DIRECTION: render_throw_direction(); break;
     case FULL_MAP: render_full_map(); break;
     case END: render_end(); break;
@@ -589,6 +615,132 @@ uint8_t directional_press(uint8_t buttons, uint8_t edges)
     return 0;
 }
 
+// Modal choice: owns its rendering and button loop, returning a real slot only.
+uint8_t choose_item_modal(const char AVM_PROGMEM* prompt_text,
+                          ItemTypeFilter item_type_filter)
+{
+    InventoryView view(game, item_type_filter);
+    if(!view.count) {
+        render_inventory(prompt_text, view, NONE, 0);
+        avm_display(false);
+        for(;;) {
+            avm_idle();
+            uint8_t buttons = avm_buttons();
+            uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
+            ui.previous_buttons = buttons;
+            directional_press(buttons, edges);
+            if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) return NONE;
+        }
+    }
+    uint8_t selection = view.first_slot();
+    uint8_t top = 0;
+    for(;;) {
+        render_inventory(prompt_text, view, selection, top);
+        avm_display(false);
+        for(;;) {
+            avm_idle();
+            uint8_t buttons = avm_buttons();
+            uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
+            ui.previous_buttons = buttons;
+            uint8_t direction = directional_press(buttons, edges);
+            if(edges & AVM_BUTTON_B) return NONE;
+            if(edges & AVM_BUTTON_A) return selection;
+            if(direction == AVM_BUTTON_U || direction == AVM_BUTTON_D) {
+                selection = view.move(selection,
+                    direction == AVM_BUTTON_U ? -1 : 1);
+                view.keep_visible(selection, top);
+                break;
+            }
+        }
+    }
+}
+
+void yesno_button(uint8_t x, uint8_t y, bool affirmative)
+{
+    // ArduRogue's seven-pixel circular button sprite and three-pixel letter.
+    static constexpr uint8_t circle[7] = {
+        0x1c, 0x3e, 0x7f, 0x7f, 0x7f, 0x3e, 0x1c
+    };
+    static constexpr uint8_t letter_a[3] = {0x1e, 0x05, 0x1e};
+    static constexpr uint8_t letter_b[3] = {0x1f, 0x15, 0x0a};
+    for(uint8_t col = 0; col < 7; ++col)
+        for(uint8_t row = 0; row < 7; ++row)
+            if(circle[col] & (1u << row)) pixel(x + col, y + row);
+    const uint8_t* letter = affirmative ? letter_a : letter_b;
+    for(uint8_t col = 0; col < 3; ++col)
+        for(uint8_t row = 0; row < 5; ++row)
+            if(letter[col] & (1u << row))
+                clear_pixel(static_cast<uint8_t>(x + 2 + col),
+                            static_cast<uint8_t>(y + 1 + row));
+}
+
+__attribute__((noinline)) void render_yesno_prompt(
+    const char AVM_PROGMEM* prompt_text, const Item* item)
+{
+    status(prompt_text);
+    if(item) {
+        status(*item);
+        status(F("?"));
+    }
+    uint8_t buttons_y = static_cast<uint8_t>(status_y + 3);
+    if(buttons_y > 56) buttons_y = 56;
+    yesno_button(72, buttons_y, true);
+    yesno_button(104, buttons_y, false);
+    avm_draw_text_P(83, buttons_y + 6, F("Yes"));
+    avm_draw_text_P(115, buttons_y + 6, F("No"));
+    avm_display(false);
+}
+
+bool yesno_modal(const char AVM_PROGMEM* prompt_text, const Item* item)
+{
+    status_clear();
+    render_play();
+    render_yesno_prompt(prompt_text, item);
+    for(;;) {
+        avm_idle();
+        uint8_t buttons = avm_buttons();
+        uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
+        ui.previous_buttons = buttons;
+        directional_press(buttons, edges);
+        if(edges & AVM_BUTTON_A) return true;
+        if(edges & AVM_BUTTON_B) return false;
+    }
+}
+
+__attribute__((noinline)) void prompt_stairs()
+{
+    if(game.paralyzed || session.ended) return;
+    const char AVM_PROGMEM* question = nullptr;
+    if(game.px == game.up_x && game.py == game.up_y)
+        question = game.floor ? F("Go upstairs?") :
+                                F("Leave the dungeon?");
+    else if(game.floor < FLOORS - 1 &&
+            game.px == game.down_x && game.py == game.down_y)
+        question = F("Go downstairs?");
+    if(!question) return;
+    bool confirmed = yesno(question);
+    status_clear();
+    if(confirmed) take_stairs();
+}
+
+// The last drawn ground slot is on top, as in ArduRogue.
+__attribute__((noinline)) void prompt_ground_items()
+{
+    uint8_t before = GROUND_ITEMS;
+    while(!session.ended) {
+        uint8_t slot = ground_item_before(game.px, game.py, before);
+        if(slot == NONE) break;
+        before = slot;
+        Item item = ground_item_info(slot);
+        if(yesno(F("Pick up"), item)) {
+            status_clear();
+            take_item(slot);
+        } else {
+            status_clear();
+        }
+    }
+}
+
 void begin_new_game()
 {
     if(ui.has_save) {
@@ -602,7 +754,8 @@ void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
-void handle_input(uint8_t buttons)
+// Modal prompts and dungeon rendering must not inherit the main loop's frame.
+__attribute__((noinline)) void handle_input(uint8_t buttons)
 {
     uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
     ui.previous_buttons = buttons;
@@ -644,18 +797,19 @@ void handle_input(uint8_t buttons)
     }
     if(ui.mode == THROW_DIRECTION) {
         if(edges & AVM_BUTTON_B) {
-            ui.mode = INVENTORY_MENU;
+            ui.mode = PLAY;
+            status_clear();
             ui.dirty = true;
         } else if(direction) {
             int8_t dx = direction == AVM_BUTTON_L ? -1 :
                         direction == AVM_BUTTON_R ? 1 : 0;
             int8_t dy = direction == AVM_BUTTON_U ? -1 :
                         direction == AVM_BUTTON_D ? 1 : 0;
+            ui.mode = PLAY;
             status_clear();
-            if(throw_potion(ui.selection, dx, dy)) {
-                ui.throwing = false;
-                ui.mode = PLAY;
-            }
+            render();
+            if(!throw_potion(ui.selection, dx, dy))
+                ui.mode = THROW_DIRECTION;
             ui.dirty = true;
         }
         return;
@@ -664,7 +818,7 @@ void handle_input(uint8_t buttons)
         if(direction == AVM_BUTTON_U && ui.selection) {
             --ui.selection;
             ui.dirty = true;
-        } else if(direction == AVM_BUTTON_D && ui.selection < 5) {
+        } else if(direction == AVM_BUTTON_D && ui.selection < 6) {
             ++ui.selection;
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_B) {
@@ -680,62 +834,48 @@ void handle_input(uint8_t buttons)
                 end_turn();
                 break;
             case 1:
-                ui.throwing = false;
-                ui.mode = INVENTORY_MENU;
-                ui.inventory_top = 0;
-                ui.selection = InventoryView(game, false).first_slot();
+                ui.mode = PLAY;
+                if(uint8_t slot = choose_item(F("Use which item?"), nullptr);
+                   slot != NONE) {
+                    status_clear();
+                    render();
+                    use_inventory(slot);
+                } else status_clear();
                 break;
             case 2:
-                ui.throwing = true;
-                ui.inventory_top = 0;
-                ui.selection = InventoryView(game, true).first_slot();
-                if(ui.selection != NONE)
-                    ui.mode = INVENTORY_MENU;
-                else {
-                    ui.throwing = false;
-                    ui.mode = PLAY;
+                ui.mode = PLAY;
+                if(uint8_t slot = choose_item(F("Drop which item?"), nullptr);
+                   slot != NONE) {
                     status_clear();
-                    status(F("You have no potions."));
+                    render();
+                    drop_inventory(slot);
+                } else status_clear();
+                break;
+            case 3:
+                ui.mode = PLAY;
+                if(uint8_t slot = choose_item(F("Throw what?"), is_potion);
+                   slot != NONE) {
+                    ui.selection = slot;
+                    ui.mode = THROW_DIRECTION;
+                } else {
+                    status_clear();
+                    InventoryView potions(game, is_potion);
+                    if(!potions.count) {
+                        status(F("You have no potions."));
+                    }
                 }
                 break;
-            case 3: ui.mode = FULL_MAP; break;
-            case 4:
+            case 4: ui.mode = FULL_MAP; break;
+            case 5:
                 game.valid = 1;
                 avm_save();
                 ui.has_save = true;
                 ui.mode = TITLE;
                 break;
-            case 5: finish(2); break;
-            }
-            ui.dirty = true;
-        }
-        return;
-    }
-    if(ui.mode == INVENTORY_MENU) {
-        if(direction == AVM_BUTTON_U || direction == AVM_BUTTON_D) {
-            int8_t step = direction == AVM_BUTTON_U ? -1 : 1;
-            InventoryView view(game, ui.throwing);
-            ui.selection = view.move(ui.selection, step);
-            view.keep_visible(ui.selection, ui.inventory_top);
-            ui.dirty = true;
-        } else if(direction == AVM_BUTTON_R && !ui.throwing &&
-                  ui.selection != NONE) {
-            status_clear();
-            if(drop_inventory(ui.selection)) {
-                ui.mode = PLAY;
-            }
-            ui.dirty = true;
-        } else if(edges & AVM_BUTTON_B) {
-            ui.mode = PLAY;
-            status_clear();
-            ui.dirty = true;
-        } else if((edges & AVM_BUTTON_A) && ui.selection != NONE) {
-            status_clear();
-            if(ui.throwing) {
-                if(is_potion(game.inventory[ui.selection].type))
-                    ui.mode = THROW_DIRECTION;
-            } else if(use_inventory(ui.selection)) {
-                ui.mode = PLAY;
+            case 6:
+                if(yesno(F("Abandon this game?")))
+                    finish(2);
+                break;
             }
             ui.dirty = true;
         }
@@ -746,11 +886,16 @@ void handle_input(uint8_t buttons)
         ui.selection = 0;
     } else if(direction) {
         status_clear();
+        uint8_t old_x = game.px, old_y = game.py;
         int8_t dx = direction == AVM_BUTTON_L ? -1 :
                     direction == AVM_BUTTON_R ? 1 : 0;
         int8_t dy = direction == AVM_BUTTON_U ? -1 :
                     direction == AVM_BUTTON_D ? 1 : 0;
         move_player(dx, dy);
+        if(!session.ended && (game.px != old_x || game.py != old_y)) {
+            prompt_ground_items();
+            prompt_stairs();
+        }
     } else if(edges & AVM_BUTTON_A) {
         status_clear();
         action();
@@ -762,15 +907,32 @@ void handle_input(uint8_t buttons)
 
 } // namespace
 
+uint8_t rogue::choose_item(const char AVM_PROGMEM* prompt_text,
+                           ItemTypeFilter item_type_filter)
+{
+    return choose_item_modal(prompt_text, item_type_filter);
+}
+
+bool rogue::yesno(const char AVM_PROGMEM* prompt_text)
+{
+    return yesno_modal(prompt_text, nullptr);
+}
+
+bool rogue::yesno(const char AVM_PROGMEM* prompt_text, Item item)
+{
+    return yesno_modal(prompt_text, &item);
+}
+
 void rogue::status_word(const char* word)
 {
     ui.repeat_suppressed = true;
     const int16_t space_width = avm_draw_text(128, 0, " ").x - 128;
-    if((*word == '.' || *word == '!' || *word == ',' || *word == ':') &&
+    if((*word == '.' || *word == '!' || *word == '?' ||
+        *word == ',' || *word == ':') &&
        status_x > 67)
         status_x = static_cast<uint8_t>(status_x - space_width);
     while(*word) {
-        char part[32];
+        char part[16];
         uint8_t count = 0;
         int16_t width = 0;
         while(word[count] && count < sizeof(part) - 1) {
@@ -800,7 +962,9 @@ void rogue::status(const char PROGMEM* words)
 
 void rogue::status(Item item)
 {
-    status_item(item);
+    char label[ITEM_TEXT_CAPACITY];
+    format_item(item, label);
+    status_words(label);
 }
 
 void rogue::status(MonsterType monster)

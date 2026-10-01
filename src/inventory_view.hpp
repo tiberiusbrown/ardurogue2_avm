@@ -10,6 +10,7 @@ enum InventoryGroup : uint8_t {
 };
 
 constexpr uint8_t INVENTORY_VISIBLE_ROWS = 7;
+using ItemTypeFilter = bool (*)(uint8_t type);
 
 inline InventoryGroup inventory_group(uint8_t type)
 {
@@ -27,15 +28,14 @@ struct InventoryView {
     uint8_t rows[INVENTORY + INVENTORY_GROUPS];
     uint8_t count = 0;
 
-    explicit InventoryView(const Game& source, bool potions_only)
+    explicit InventoryView(const Game& source, ItemTypeFilter filter)
     {
         for(uint8_t group = 0; group < INVENTORY_GROUPS; ++group) {
-            if(potions_only && group != POTIONS)
-                continue;
             bool has_header = false;
             for(uint8_t slot = 0; slot < INVENTORY; ++slot) {
                 uint8_t type = source.inventory[slot].type;
-                if(type == NO_ITEM || inventory_group(type) != group)
+                if(type == NO_ITEM || inventory_group(type) != group ||
+                   (filter && !filter(type)))
                     continue;
                 if(!has_header) {
                     rows[count++] = static_cast<uint8_t>(INVENTORY + group);

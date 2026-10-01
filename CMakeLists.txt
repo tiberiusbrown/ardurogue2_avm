@@ -70,6 +70,7 @@ foreach(ARDUROGUE2_SOURCE IN ITEMS main game world)
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/game.hpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/inventory_view.hpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/ui.hpp"
         COMMENT "Compiling ${ARDUROGUE2_SOURCE}.cpp with the AVM SDK"
         VERBATIM
     )

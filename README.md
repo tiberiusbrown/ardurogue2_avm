@@ -69,15 +69,19 @@ conditions begin, expire, or are cured.
 | Title | A | Start a run or continue a saved run |
 | Title with a save | B | Start a new run |
 | Dungeon | Direction pad | Move, attack, or open a door |
-| Dungeon | A | Pick up an item, use stairs, repeat the last inventory action, or wait |
+| Dungeon | Move onto an item | Prompt to pick up each item on the tile, topmost first |
+| Dungeon | Move onto stairs | Prompt to take the stairs |
+| Dungeon | A | Repeat the last inventory action or wait |
+| Pickup or stairs prompt | A/B | Confirm or cancel the action |
 | Dungeon | B | Open the action menu |
 | Status prompt | A | Continue a long message after `[more]` |
-| Action menu | Up/Down, A | Choose wait, inventory, throw potion, full map, save and exit, or abandon |
-| Inventory | Up/Down, A | Select and use or equip an item |
-| Inventory | Right | Drop the selected item |
+| Action menu | Up/Down, A | Choose wait, use item, drop item, throw potion, full map, save and exit, or abandon |
+| Item selection | Up/Down, A | Select an item for the chosen action |
+| Item selection | B | Cancel selection |
 | Throw selection | Up/Down, A | Choose a potion from inventory |
 | Throw direction | Direction pad | Throw the selected potion |
-| Inventory, full map | B | Return to the dungeon |
+| Confirmation | A/B | Confirm or cancel abandoning the game |
+| Throw direction, full map | B | Return to the dungeon |
 
 Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
@@ -113,8 +117,8 @@ automatically before building this project.
 implements turns, combat, inventory, and the quest. Both use only standard C++
 and the shared declarations in `src/game.hpp`, so they can be compiled into a
 native test program. `src/main.cpp` owns AVM input, display, random seed
-generation, and persistence calls. The AVM stack is separate from its 1024
-bytes of global memory.
+generation, and persistence calls. The AVM has a separate 256-byte stack and
+1024 bytes of global memory.
 
 The native game checks build independently of the AVM SDK:
 

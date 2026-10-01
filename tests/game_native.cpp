@@ -34,7 +34,7 @@ void require(bool condition, const char* reason)
 void check_inventory_view()
 {
     std::memset(game.inventory, 0, sizeof(game.inventory));
-    InventoryView empty(game, false);
+    InventoryView empty(game, nullptr);
     require(empty.count == 0 && empty.first_slot() == NONE,
             "empty inventory has selectable rows");
 
@@ -46,7 +46,7 @@ void check_inventory_view()
     game.inventory[5] = {FOOD, 1};
     game.inventory[6] = {SWORD, 2};
     game.inventory[7] = {AMULET_SPEED, 1};
-    InventoryView view(game, false);
+    InventoryView view(game, nullptr);
     const uint8_t expected[] = {
         INVENTORY + WEAPONS, 2, 6,
         INVENTORY + ARMORS, 1,
@@ -69,11 +69,32 @@ void check_inventory_view()
     view.keep_visible(2, top);
     require(top == 1, "inventory did not scroll back to the first item");
 
-    InventoryView potions(game, true);
+    InventoryView potions(game, is_potion);
     require(potions.count == 3 && potions.first_slot() == 0 &&
             potions.move(0, 1) == 3 && potions.move(3, 1) == 3,
             "throw selection includes non-potions or headers");
     std::memset(game.inventory, 0, sizeof(game.inventory));
+}
+
+void check_stacked_ground_items()
+{
+    std::memset(game.ground, 0, sizeof(game.ground));
+    game.ground[1] = {4, 5, {FOOD, 1}};
+    game.ground[5] = {4, 5, {SWORD, 1}};
+    game.ground[9] = {4, 5, {ARMOR, 1}};
+    game.ground[12] = {6, 5, {HEALING, 1}};
+    uint8_t top = ground_item_before(4, 5, GROUND_ITEMS);
+    uint8_t middle = ground_item_before(4, 5, top);
+    uint8_t bottom = ground_item_before(4, 5, middle);
+    require(top == 9 && middle == 5 && bottom == 1 &&
+            ground_item_before(4, 5, bottom) == NONE,
+            "stacked items are not visited topmost first, once each");
+    require(ground_item_before(6, 5, GROUND_ITEMS) == 12,
+            "ground item scan includes a different tile");
+    game.ground[5].item.type = NO_ITEM;
+    require(ground_item_before(4, 5, top) == bottom,
+            "ground item scan did not skip a picked-up item");
+    std::memset(game.ground, 0, sizeof(game.ground));
 }
 
 void use_stairs(uint8_t floor, uint8_t x, uint8_t y)
@@ -81,7 +102,7 @@ void use_stairs(uint8_t floor, uint8_t x, uint8_t y)
     game.px = x;
     game.py = y;
     for(int i = 0; i < 4 && game.floor == floor; ++i)
-        action();
+        if(!take_stairs()) action();
     require(game.floor != floor, "stairs did not change floors");
 }
 
@@ -703,6 +724,7 @@ void check_enemy_abilities()
 int main()
 {
     check_inventory_view();
+    check_stacked_ground_items();
     check_enemy_roster();
     check_enemy_abilities();
     check_potions();
@@ -746,10 +768,19 @@ int main()
             "inventory drop failed");
     require(item_at(drop_x, drop_y) != NONE,
             "dropped item is missing");
+    game.hp = player_max_hp();
+    action();
+    require(item_at(drop_x, drop_y) != NONE,
+            "A action still picks up a ground item");
 
     uint8_t down_x = game.down_x, down_y = game.down_y;
     use_stairs(0, down_x, down_y);
     require(game.floor == 1, "descent failed");
+    game.px = game.up_x;
+    game.py = game.up_y;
+    game.hp = player_max_hp();
+    action();
+    require(game.floor == 1, "A action still takes the stairs");
     use_stairs(1, game.up_x, game.up_y);
     require(game.floor == 0, "ascent failed");
     require(std::memcmp(first_floor.data(), game.walls,
@@ -762,7 +793,7 @@ int main()
     game.px = game.up_x;
     game.py = game.up_y;
     for(int i = 0; i < 4 && !session.ended; ++i)
-        action();
+        if(!take_stairs()) action();
     require(session.ended && session.result == 1 && !game.valid,
             "amulet victory failed");
 

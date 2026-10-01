@@ -279,6 +279,18 @@ uint8_t item_at(uint8_t x, uint8_t y)
     return NONE;
 }
 
+uint8_t ground_item_before(uint8_t x, uint8_t y, uint8_t before)
+{
+    if(before > GROUND_ITEMS) before = GROUND_ITEMS;
+    while(before) {
+        --before;
+        if(game.ground[before].item.type && game.ground[before].x == x &&
+           game.ground[before].y == y)
+            return before;
+    }
+    return NONE;
+}
+
 Item ground_item_info(uint8_t index)
 {
     return game.ground[index].item;
@@ -618,16 +630,6 @@ void move_player(int8_t dx, int8_t dy)
     game.px = static_cast<uint8_t>(x);
     game.py = static_cast<uint8_t>(y);
     visit_room();
-    uint8_t item = item_at(game.px, game.py);
-    if(item != NONE)
-    {
-        status(F("You see"));
-        status(ground_item_info(item));
-        status(F("here. A: pick up."));
-    }
-    else if((game.px == game.up_x && game.py == game.up_y) ||
-            (game.px == game.down_x && game.py == game.down_y))
-        status(F("Stairs here. Press A."));
     end_turn();
 }
 
@@ -801,28 +803,29 @@ static void consume_potion(Item& item)
     }
 }
 
-void action()
+bool take_stairs()
 {
-    if(game.paralyzed) {
-        status(F("You cannot act!"));
-        end_turn();
-        return;
-    }
-    uint8_t item = item_at(game.px, game.py);
-    if(item != NONE) {
-        take_item(item);
-        return;
-    }
+    if(game.paralyzed) return false;
     if(game.px == game.up_x && game.py == game.up_y) {
         if(game.floor)
             change_floor(-1);
         else
             finish(game.has_amulet ? 1 : 2);
-        return;
+        return true;
     }
     if(game.floor < FLOORS - 1 &&
        game.px == game.down_x && game.py == game.down_y) {
         change_floor(1);
+        return true;
+    }
+    return false;
+}
+
+void action()
+{
+    if(game.paralyzed) {
+        status(F("You cannot act!"));
+        end_turn();
         return;
     }
     if(session.repeat_slot != NONE && game.inventory[session.repeat_slot].type) {
