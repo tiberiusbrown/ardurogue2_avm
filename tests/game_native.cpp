@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include "inventory_view.hpp"
 
 #include <array>
 #include <cstdio>
@@ -28,6 +29,51 @@ void require(bool condition, const char* reason)
         std::fprintf(stderr, "%s\n", reason);
         std::exit(1);
     }
+}
+
+void check_inventory_view()
+{
+    std::memset(game.inventory, 0, sizeof(game.inventory));
+    InventoryView empty(game, false);
+    require(empty.count == 0 && empty.first_slot() == NONE,
+            "empty inventory has selectable rows");
+
+    game.inventory[0] = {HEALING, 2};
+    game.inventory[1] = {ARMOR, 1};
+    game.inventory[2] = {SWORD, 1};
+    game.inventory[3] = {POISON, 1};
+    game.inventory[4] = {RING_ATTACK, 1};
+    game.inventory[5] = {FOOD, 1};
+    game.inventory[6] = {SWORD, 2};
+    game.inventory[7] = {AMULET_SPEED, 1};
+    InventoryView view(game, false);
+    const uint8_t expected[] = {
+        INVENTORY + WEAPONS, 2, 6,
+        INVENTORY + ARMORS, 1,
+        INVENTORY + RINGS, 4,
+        INVENTORY + AMULETS, 7,
+        INVENTORY + POTIONS, 0, 3,
+        INVENTORY + FOODS, 5
+    };
+    require(view.count == sizeof(expected) &&
+            std::memcmp(view.rows, expected, sizeof(expected)) == 0,
+            "inventory rows are not grouped by type");
+    require(view.first_slot() == 2 && view.move(6, 1) == 1 &&
+            view.move(1, -1) == 6 && view.move(5, 1) == 5 &&
+            view.move(2, -1) == 2,
+            "inventory selection entered a header or passed the end");
+    uint8_t top = 0;
+    view.keep_visible(5, top);
+    require(top == view.count - INVENTORY_VISIBLE_ROWS,
+            "inventory scrolled beyond the last item");
+    view.keep_visible(2, top);
+    require(top == 1, "inventory did not scroll back to the first item");
+
+    InventoryView potions(game, true);
+    require(potions.count == 3 && potions.first_slot() == 0 &&
+            potions.move(0, 1) == 3 && potions.move(3, 1) == 3,
+            "throw selection includes non-potions or headers");
+    std::memset(game.inventory, 0, sizeof(game.inventory));
 }
 
 void use_stairs(uint8_t floor, uint8_t x, uint8_t y)
@@ -656,6 +702,7 @@ void check_enemy_abilities()
 
 int main()
 {
+    check_inventory_view();
     check_enemy_roster();
     check_enemy_abilities();
     check_potions();

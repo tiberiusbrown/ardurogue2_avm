@@ -1,5 +1,6 @@
 #include <avm.h>
 #include "game.hpp"
+#include "inventory_view.hpp"
 #include <string.h>
 
 namespace rogue {
@@ -15,7 +16,7 @@ enum Mode : uint8_t {
 };
 
 struct Ui {
-    uint8_t mode, selection, previous_buttons, held_direction;
+    uint8_t mode, selection, inventory_top, previous_buttons, held_direction;
     uint16_t next_repeat_ms;
     bool has_save, dirty, repeat_suppressed, throwing;
 };
@@ -447,43 +448,59 @@ void render_menu()
 
 void render_inventory()
 {
-    avm_draw_text_P(2, 7, ui.throwing ? F("A PICK POTION B BACK") :
-                                   F("A USE > DROP B BACK"));
-    uint8_t start = ui.selection < 8 ? 0 : 8;
-    for(uint8_t row = 0; row < 8; ++row) {
-        uint8_t i = start + row;
-        int16_t y = static_cast<int16_t>(14 + row * 7);
-        if(i == ui.selection)
-            avm_draw_text_P(1, y, F(">"));
-        const Item& item = game.inventory[i];
-        if(!item.type)
-            continue;
-        if(is_potion(item.type)) {
-            avm_draw_text_P(10, y, F("P:"));
-            avm_draw_text_P(21, y, potion_display_name(item.type));
-            avm_draw_textf_P(95, y, F("x%u"), item_value(item));
-            continue;
-        }
-        switch(item.type) {
-        case FOOD: avm_draw_textf_P(10, y, F("FOOD x%u"), item_value(item)); break;
-        case SWORD: avm_draw_textf_P(10, y, F("SWORD +%u"), item_value(item)); break;
-        case ARMOR: avm_draw_textf_P(10, y, F("ARMOR +%u"), item_value(item)); break;
-        default:
-            if(is_ring(item.type)) {
-                avm_draw_text_P(10, y, F("RING OF"));
-                avm_draw_text_P(48, y, ring_name(item.type));
-            } else if(is_amulet(item.type)) {
-                avm_draw_text_P(10, y, F("AMULET OF"));
-                avm_draw_text_P(61, y, amulet_name(item.type));
+    avm_draw_text_P(1, 7, ui.throwing ? F("Throw potion") : F("Inventory"));
+    avm_draw_filled_rect_white(1, 9, 127, 1);
+    InventoryView view(game, ui.throwing);
+    if(!view.count) {
+        avm_draw_text_P(8, 18, F("Empty"));
+        return;
+    }
+    for(uint8_t row = 0; row < INVENTORY_VISIBLE_ROWS; ++row) {
+        uint8_t index = static_cast<uint8_t>(ui.inventory_top + row);
+        if(index >= view.count) break;
+        int16_t y = static_cast<int16_t>(18 + row * 7);
+        uint8_t entry = view.rows[index];
+        if(entry >= INVENTORY) {
+            switch(entry - INVENTORY) {
+            case WEAPONS: avm_draw_text_P(1, y, F("Weapons")); break;
+            case ARMORS: avm_draw_text_P(1, y, F("Armor")); break;
+            case RINGS: avm_draw_text_P(1, y, F("Rings")); break;
+            case AMULETS: avm_draw_text_P(1, y, F("Amulets")); break;
+            case POTIONS: avm_draw_text_P(1, y, F("Potions")); break;
+            case FOODS: avm_draw_text_P(1, y, F("Food")); break;
+            default: avm_draw_text_P(1, y, F("Quest")); break;
             }
-            break;
+            continue;
         }
-        if(game.weapon_slot == i || game.armor_slot == i ||
-           game.amulet_slot == i || game.ring_slots[0] == i ||
-           game.ring_slots[1] == i)
+        const Item& item = game.inventory[entry];
+        if(entry == ui.selection) {
+            avm_draw_filled_rect_white(7, y - 6, 121, 7);
+            avm_set_text_mode(AVM_TEXT_BLACK_TRANSPARENT);
+        }
+        if(is_potion(item.type)) {
+            int16_t x = avm_draw_text_P(8, y, potion_display_name(item.type)).x;
+            avm_draw_text_P(x, y, F(" potion"));
+            if(item_value(item) > 1)
+                avm_draw_textf_P(113, y, F("x%u"), item_value(item));
+        } else if(is_ring(item.type)) {
+            avm_draw_text_P(8, y, ring_name(item.type));
+        } else if(is_amulet(item.type)) {
+            avm_draw_text_P(8, y, amulet_name(item.type));
+        } else {
+            switch(item.type) {
+            case FOOD: avm_draw_textf_P(8, y, F("ration x%u"), item_value(item)); break;
+            case SWORD: avm_draw_textf_P(8, y, F("sword +%u"), item_value(item)); break;
+            case ARMOR: avm_draw_textf_P(8, y, F("armor +%u"), item_value(item)); break;
+            default: avm_draw_text_P(8, y, F("amulet of Yendor")); break;
+            }
+        }
+        if(game.weapon_slot == entry || game.armor_slot == entry ||
+           game.amulet_slot == entry || game.ring_slots[0] == entry ||
+           game.ring_slots[1] == entry)
             avm_draw_text_P(116, y, F("*"));
         if(item_is_identified(item) && item_is_cursed(item))
             avm_draw_text_P(123, y, F("!"));
+        avm_set_text_mode(AVM_TEXT_OVERWRITE);
     }
 }
 
@@ -585,15 +602,6 @@ void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
-uint8_t next_potion_slot(int16_t start, int8_t step)
-{
-    for(int16_t slot = start + step;
-        slot >= 0 && slot < INVENTORY; slot += step)
-        if(is_potion(game.inventory[slot].type))
-            return static_cast<uint8_t>(slot);
-    return NONE;
-}
-
 void handle_input(uint8_t buttons)
 {
     uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
@@ -674,11 +682,13 @@ void handle_input(uint8_t buttons)
             case 1:
                 ui.throwing = false;
                 ui.mode = INVENTORY_MENU;
-                ui.selection = 0;
+                ui.inventory_top = 0;
+                ui.selection = InventoryView(game, false).first_slot();
                 break;
             case 2:
                 ui.throwing = true;
-                ui.selection = next_potion_slot(-1, 1);
+                ui.inventory_top = 0;
+                ui.selection = InventoryView(game, true).first_slot();
                 if(ui.selection != NONE)
                     ui.mode = INVENTORY_MENU;
                 else {
@@ -704,15 +714,12 @@ void handle_input(uint8_t buttons)
     if(ui.mode == INVENTORY_MENU) {
         if(direction == AVM_BUTTON_U || direction == AVM_BUTTON_D) {
             int8_t step = direction == AVM_BUTTON_U ? -1 : 1;
-            if(ui.throwing) {
-                uint8_t next = next_potion_slot(ui.selection, step);
-                if(next != NONE) ui.selection = next;
-            } else if((step < 0 && ui.selection > 0) ||
-                      (step > 0 && ui.selection < INVENTORY - 1)) {
-                ui.selection = static_cast<uint8_t>(ui.selection + step);
-            }
+            InventoryView view(game, ui.throwing);
+            ui.selection = view.move(ui.selection, step);
+            view.keep_visible(ui.selection, ui.inventory_top);
             ui.dirty = true;
-        } else if(direction == AVM_BUTTON_R && !ui.throwing) {
+        } else if(direction == AVM_BUTTON_R && !ui.throwing &&
+                  ui.selection != NONE) {
             status_clear();
             if(drop_inventory(ui.selection)) {
                 ui.mode = PLAY;
@@ -722,7 +729,7 @@ void handle_input(uint8_t buttons)
             ui.mode = PLAY;
             status_clear();
             ui.dirty = true;
-        } else if(edges & AVM_BUTTON_A) {
+        } else if((edges & AVM_BUTTON_A) && ui.selection != NONE) {
             status_clear();
             if(ui.throwing) {
                 if(is_potion(game.inventory[ui.selection].type))
