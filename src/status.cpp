@@ -211,6 +211,17 @@ struct BufferedItemText {
 
 enum ItemTextStyle : uint8_t { STATUS_ITEM, INVENTORY_ITEM, PROMPT_ITEM };
 
+const char AVM_PROGMEM* article_for(const char AVM_PROGMEM* word)
+{
+    switch(*word) {
+    case 'a': case 'e': case 'i': case 'o': case 'u':
+    case 'A': case 'E': case 'I': case 'O': case 'U':
+        return F("an");
+    default:
+        return F("a");
+    }
+}
+
 struct StatusItemText {
     const char AVM_PROGMEM* pending_word = nullptr;
     uint8_t pending_value = 0;
@@ -253,13 +264,16 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
 {
     bool known = item_type_identified(item.type);
     if(is_potion(item.type) || is_scroll(item.type)) {
+        const char AVM_PROGMEM* first_word = known
+            ? (is_scroll(item.type) ? F("scroll") : F("potion"))
+            : (is_scroll(item.type)
+                ? scroll_descriptors[item_appearance(item.type)]
+                : potion_color_names[item_appearance(item.type)]);
         uint8_t quantity = item_value(item);
         bool plural = quantity > 1 && style != PROMPT_ITEM;
         if(plural) text.number(quantity);
         else if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM)
-            text.word(!known && is_potion(item.type) &&
-                item_appearance(item.type) == 2 ? F("an") : F("a"));
+        else if(style == STATUS_ITEM) text.word(article_for(first_word));
         if(known) {
             text.word(is_scroll(item.type)
                 ? (plural ? F("scrolls") : F("scroll"))
@@ -269,9 +283,7 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
                 ? scroll_names[item.type - SCROLL_IDENTIFY]
                 : potion_effect_names[item.type - HEALING]);
         } else {
-            text.word(is_scroll(item.type)
-                ? scroll_descriptors[item_appearance(item.type)]
-                : potion_color_names[item_appearance(item.type)]);
+            text.word(first_word);
             text.word(is_scroll(item.type)
                 ? (plural ? F("scrolls") : F("scroll"))
                 : (plural ? F("potions") : F("potion")));
@@ -279,49 +291,47 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
         return;
     }
     if(is_ring(item.type)) {
+        const char AVM_PROGMEM* first_word = known
+            ? F("ring") : jewel_descriptors[item_appearance(item.type)];
         if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) {
-            uint8_t descriptor = item_appearance(item.type);
-            text.word(!known && (descriptor == 2 || descriptor == 7)
-                ? F("an") : F("a"));
-        }
+        else if(style == STATUS_ITEM) text.word(article_for(first_word));
         if(known) {
-            text.word(F("ring"));
+            text.word(first_word);
             text.word(F("of"));
             text.word(ring_name(item.type));
         } else {
-            text.word(jewel_descriptors[item_appearance(item.type)]);
+            text.word(first_word);
             text.word(F("ring"));
         }
         return;
     }
     if(is_amulet(item.type)) {
+        const char AVM_PROGMEM* first_word = known
+            ? F("amulet") : jewel_descriptors[item_appearance(item.type)];
         if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) {
-            uint8_t descriptor = item_appearance(item.type);
-            text.word(known || descriptor == 2 || descriptor == 7
-                ? F("an") : F("a"));
-        }
+        else if(style == STATUS_ITEM) text.word(article_for(first_word));
         if(known) {
-            text.word(F("amulet"));
+            text.word(first_word);
             text.word(F("of"));
             text.word(amulet_name(item.type));
         } else {
-            text.word(jewel_descriptors[item_appearance(item.type)]);
+            text.word(first_word);
             text.word(F("amulet"));
         }
         return;
     }
     if(is_wand(item.type)) {
+        const char AVM_PROGMEM* first_word = known
+            ? F("wand") : wand_descriptors[item_appearance(item.type)];
         if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) text.word(F("a"));
+        else if(style == STATUS_ITEM) text.word(article_for(first_word));
         if(known) {
-            text.word(F("wand"));
+            text.word(first_word);
             text.word(F("of"));
             text.word(wand_names[item.type - WAND_FORCE]);
             if(style == INVENTORY_ITEM) text.number(item_value(item));
         } else {
-            text.word(wand_descriptors[item_appearance(item.type)]);
+            text.word(first_word);
             text.word(F("wand"));
         }
         return;

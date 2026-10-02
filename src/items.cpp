@@ -618,7 +618,8 @@ static void force_monster(uint8_t index, int8_t dx, int8_t dy)
     RayResult path = scan_ray(target.pos, dx, dy, 8);
     target.pos = path.monster != NONE ? path.before : path.end;
     if(path.monster != NONE) {
-        monster_status(target, F("crashes into another monster!"));
+        monster_status(target, F("crashes into the"));
+        status(static_cast<MonsterType>(game.monsters[path.monster].type), '!');
         target.stun = 4;
         game.monsters[path.monster].stun = 4;
     } else if(path.blocker) {
