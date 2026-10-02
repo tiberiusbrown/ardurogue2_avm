@@ -6,22 +6,20 @@
 
 namespace rogue {
 
-uint8_t item_at(uint8_t x, uint8_t y)
+uint8_t item_at(Position pos)
 {
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
-        if(game.ground[i].item.type && game.ground[i].x == x &&
-           game.ground[i].y == y)
+        if(game.ground[i].item.type && game.ground[i].pos == pos)
             return i;
     return NONE;
 }
 
-uint8_t ground_item_before(uint8_t x, uint8_t y, uint8_t before)
+uint8_t ground_item_before(Position pos, uint8_t before)
 {
     if(before > GROUND_ITEMS) before = GROUND_ITEMS;
     while(before) {
         --before;
-        if(game.ground[before].item.type && game.ground[before].x == x &&
-           game.ground[before].y == y)
+        if(game.ground[before].item.type && game.ground[before].pos == pos)
             return before;
     }
     return NONE;
@@ -75,7 +73,7 @@ static uint16_t ground_capacity(Item item)
     uint16_t capacity = 0;
     if(!stackable(item.type)) return 0;
     for(const GroundItem& ground : game.ground)
-        if(ground.x == game.px && ground.y == game.py &&
+        if(ground.pos == game.player &&
            compatible(ground.item, item))
             capacity += stack_space(ground.item);
     return capacity;
@@ -85,7 +83,7 @@ static uint8_t merge_ground(Item item, uint8_t amount)
 {
     for(GroundItem& ground : game.ground) {
         if(!amount) break;
-        if(ground.x != game.px || ground.y != game.py ||
+        if(ground.pos != game.player ||
            !compatible(ground.item, item)) continue;
         uint8_t moved = amount < stack_space(ground.item)
             ? amount : stack_space(ground.item);
@@ -346,13 +344,12 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
     }
     if(type == SCROLL_TELEPORT) {
         for(uint8_t attempt = 0; attempt < 100; ++attempt) {
-            uint8_t x = static_cast<uint8_t>(next_random(game.random_state) % MAP_W);
-            uint8_t y = static_cast<uint8_t>(next_random(game.random_state) % MAP_H);
-            if(!blocked(x, y) && monster_at(x, y) == NONE &&
-               item_at(x, y) == NONE &&
-               !(x == game.up_x && y == game.up_y) &&
-               !(x == game.down_x && y == game.down_y)) {
-                game.px = x; game.py = y;
+            Position pos = {
+                static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
+                static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
+            if(!blocked(pos.x, pos.y) && monster_at(pos) == NONE &&
+               item_at(pos) == NONE && pos != game.up && pos != game.down) {
+                game.player = pos;
                 visit_room();
                 status(F("You teleport!"));
                 return;
@@ -372,7 +369,7 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         Monster& target = game.monsters[i];
         if(!target.type || !player_can_see_monster(i) ||
-           !can_see(target.x, target.y)) continue;
+           !can_see(target.pos)) continue;
         found = true;
         target.state |= MON_AGGRO;
         switch(type) {
@@ -571,16 +568,17 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
     if(!item_value(item)) item.type = NO_ITEM;
 
     uint8_t hit = NONE;
-    int16_t x = game.px, y = game.py;
+    int16_t x = game.player.x, y = game.player.y;
     for(uint8_t step = 0; step < 8; ++step) {
         x += dx;
         y += dy;
         if(wall_at(x, y))
             break;
-        uint8_t door = door_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
+        Position pos = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
+        uint8_t door = door_at(pos);
         if(door != NONE && !door_open(door))
             break;
-        hit = monster_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));
+        hit = monster_at(pos);
         if(hit != NONE)
             break;
     }
@@ -640,7 +638,7 @@ bool drop_inventory(uint8_t slot, bool discard)
     if(remaining && ground_slot != NONE) {
         Item ground_item = stackable(item.type) ? clean_stack(item) : item;
         if(stackable(item.type)) set_item_value(ground_item, remaining);
-        game.ground[ground_slot] = {game.px, game.py, ground_item};
+        game.ground[ground_slot] = {game.player, ground_item};
     }
     bool became_visible = remove_equipment_slot(slot);
     if(session.repeat_slot == slot)

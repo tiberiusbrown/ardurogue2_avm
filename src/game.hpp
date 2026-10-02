@@ -6,9 +6,9 @@ namespace rogue {
 
 void start_new(uint16_t seed);
 void finish(RunResult result);
-uint8_t monster_at(uint8_t x, uint8_t y);
-uint8_t item_at(uint8_t x, uint8_t y);
-uint8_t ground_item_before(uint8_t x, uint8_t y, uint8_t before);
+uint8_t monster_at(Position pos);
+uint8_t item_at(Position pos);
+uint8_t ground_item_before(Position pos, uint8_t before);
 Item ground_item_info(uint8_t index);
 uint8_t player_max_hp();
 bool player_can_see_monster(uint8_t index);

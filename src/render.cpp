@@ -88,10 +88,10 @@ static void icon(uint16_t shape, uint8_t x, uint8_t y)
     }
 }
 
-static bool screen_tile(uint8_t x, uint8_t y, uint8_t& sx, uint8_t& sy)
+static bool screen_tile(Position pos, uint8_t& sx, uint8_t& sy)
 {
-    int16_t dx = static_cast<int16_t>(x) - game.px + 6;
-    int16_t dy = static_cast<int16_t>(y) - game.py + 6;
+    int16_t dx = static_cast<int16_t>(pos.x) - game.player.x + 6;
+    int16_t dy = static_cast<int16_t>(pos.y) - game.player.y + 6;
     if(dx < 0 || dx >= 13 || dy < 0 || dy >= 13)
         return false;
     sx = static_cast<uint8_t>(dx);
@@ -99,10 +99,10 @@ static bool screen_tile(uint8_t x, uint8_t y, uint8_t& sx, uint8_t& sy)
     return true;
 }
 
-static bool in_sight(uint8_t x, uint8_t y, const uint16_t sight[13],
+static bool in_sight(Position pos, const uint16_t sight[13],
               uint8_t& sx, uint8_t& sy)
 {
-    return screen_tile(x, y, sx, sy) && (sight[sy] & (1u << sx));
+    return screen_tile(pos, sx, sy) && (sight[sy] & (1u << sx));
 }
 
 void render_play()
@@ -113,8 +113,8 @@ void render_play()
     // Reuse this array for ray blockers, then restore door tiles before drawing.
     // Keeping a third 26-byte row array here crowds the nested modal stack.
     uint16_t walls[13];
-    const int16_t left = static_cast<int16_t>(game.px) - 6;
-    const int16_t top = static_cast<int16_t>(game.py) - 6;
+    const int16_t left = static_cast<int16_t>(game.player.x) - 6;
+    const int16_t top = static_cast<int16_t>(game.player.y) - 6;
     const uint8_t first_sx = left < 0 ? static_cast<uint8_t>(-left) : 0;
     const uint8_t end_sx = left + 13 > MAP_W
         ? static_cast<uint8_t>(MAP_W - left) : 13;
@@ -137,13 +137,13 @@ void render_play()
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
-        if(!door_open(i) && screen_tile(door.x, door.y, sx, sy))
+        if(!door_open(i) && screen_tile(door.pos, sx, sy))
             walls[sy] |= static_cast<uint16_t>(1u << sx);
     }
     const Room* player_room = nullptr;
     for(const Room& room : game.rooms)
-        if(game.px >= room.x && game.px < room.x + room.w &&
-           game.py >= room.y && game.py < room.y + room.h) {
+        if(game.player.x >= room.x && game.player.x < room.x + room.w &&
+           game.player.y >= room.y && game.player.y < room.y + room.h) {
             player_room = &room;
             break;
         }
@@ -160,7 +160,7 @@ void render_play()
                 ray_visible(sx, sy, walls);
             if(visible) {
                 sight[sy] |= static_cast<uint16_t>(1u << sx);
-                explore(tx, ty);
+                explore({tx, ty});
             }
         }
     }
@@ -186,14 +186,14 @@ void render_play()
             if(!in_light_radius(dx, dy))
                 continue;
             sight[sy] |= bit;
-            explore(static_cast<uint8_t>(left + sx), ty);
+            explore({static_cast<uint8_t>(left + sx), ty});
         }
     }
     // Closed doors blocked the rays above, but their tiles are floor when drawn.
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
-        if(!door_open(i) && screen_tile(door.x, door.y, sx, sy))
+        if(!door_open(i) && screen_tile(door.pos, sx, sy))
             walls[sy] &= static_cast<uint16_t>(~(1u << sx));
     }
     // Finish exploration before drawing: wall joins inspect the tile to the
@@ -204,7 +204,7 @@ void render_play()
         uint8_t tx = static_cast<uint8_t>(left + first_sx);
         for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
             bool visible = (sight[sy] & (1u << sx)) != 0;
-            if(!visible && !explored(tx, ty))
+            if(!visible && !explored({tx, ty}))
                 continue;
             uint8_t px = static_cast<uint8_t>(sx * 5);
             if(walls[sy] & (1u << sx)) {
@@ -214,11 +214,13 @@ void render_play()
                     column(static_cast<uint8_t>(px + col), py, 0x0f);
                 if(sx < 12 && tx + 1 < MAP_W &&
                    (walls[sy] & (1u << (sx + 1))) &&
-                   wall_exposed(tx + 1, ty) && explored(tx + 1, ty))
+                   wall_exposed(tx + 1, ty) &&
+                   explored({static_cast<uint8_t>(tx + 1), ty}))
                     column(static_cast<uint8_t>(px + 4), py, 0x0f);
                 if(sy < 12 && ty + 1 < MAP_H &&
                    (walls[sy + 1] & (1u << sx)) &&
-                   wall_exposed(tx, ty + 1) && explored(tx, ty + 1))
+                   wall_exposed(tx, ty + 1) &&
+                   explored({tx, static_cast<uint8_t>(ty + 1)}))
                     for(uint8_t col = 0; col < 4; ++col)
                         column(static_cast<uint8_t>(px + col),
                                static_cast<uint8_t>(py + 4), 1);
@@ -230,30 +232,27 @@ void render_play()
     for(uint8_t i = 0; i < game.door_count; ++i) {
         const Door& door = game.doors[i];
         uint8_t sx, sy;
-        if(screen_tile(door.x, door.y, sx, sy) &&
-           explored(door.x, door.y))
+        if(screen_tile(door.pos, sx, sy) && explored(door.pos))
             icon(door_open(i) ? OPEN_DOOR_ICON : CLOSED_DOOR_ICON,
                  static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
     }
     uint8_t sx, sy;
-    if(screen_tile(game.up_x, game.up_y, sx, sy) &&
-       explored(game.up_x, game.up_y))
+    if(screen_tile(game.up, sx, sy) && explored(game.up))
         icon(UP_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
              static_cast<uint8_t>(sy * 5));
     if(game.floor < FLOORS - 1 &&
-       screen_tile(game.down_x, game.down_y, sx, sy) &&
-       explored(game.down_x, game.down_y))
+       screen_tile(game.down, sx, sy) && explored(game.down))
         icon(DOWN_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
              static_cast<uint8_t>(sy * 5));
     for(const GroundItem& ground : game.ground)
-        if(ground.item.type && in_sight(ground.x, ground.y, sight, sx, sy))
+        if(ground.item.type && in_sight(ground.pos, sight, sx, sy))
             icon(item_icons[ground.item.type], static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         const Monster& monster = game.monsters[i];
         if(player_can_see_monster(i) &&
-           in_sight(monster.x, monster.y, sight, sx, sy))
+           in_sight(monster.pos, sight, sx, sy))
             icon(monster.type == MIMIC && !(monster.state & MON_AGGRO)
                      ? item_icons[monster.state >> 1]
                      : monster_icons[monster.type],
@@ -350,21 +349,21 @@ __attribute__((noinline)) static void render_full_map()
 {
     for(uint8_t y = 0; y < MAP_H; ++y)
         for(uint8_t x = 0; x < MAP_W; ++x) {
-            if(!explored(x, y))
+            if(!explored({x, y}))
                 continue;
             if(wall_exposed(x, y)) {
                 pixel(x * 2, y * 2);
                 pixel(x * 2 + 1, y * 2);
                 pixel(x * 2, y * 2 + 1);
                 pixel(x * 2 + 1, y * 2 + 1);
-            } else if(x + 6 >= game.px && x <= game.px + 6 &&
-                      y + 6 >= game.py && y <= game.py + 6 &&
-                      can_see(x, y)) {
+            } else if(x + 6 >= game.player.x && x <= game.player.x + 6 &&
+                      y + 6 >= game.player.y && y <= game.player.y + 6 &&
+                      can_see({x, y})) {
                 pixel(x * 2, y * 2);
             }
         }
-    pixel(game.px * 2, game.py * 2);
-    pixel(game.px * 2 + 1, game.py * 2 + 1);
+    pixel(game.player.x * 2, game.player.y * 2);
+    pixel(game.player.x * 2 + 1, game.player.y * 2 + 1);
 }
 
 __attribute__((noinline)) static void render_end()

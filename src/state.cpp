@@ -247,8 +247,7 @@ void start_new(uint16_t seed)
     game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
     make_floor();
-    game.px = game.up_x;
-    game.py = game.up_y;
+    game.player = game.up;
     visit_room();
     session = {NONE, DEATH, false};
 }
@@ -266,8 +265,7 @@ void change_floor(int8_t delta)
 {
     game.floor = static_cast<uint8_t>(game.floor + delta);
     make_floor();
-    game.px = delta > 0 ? game.up_x : game.down_x;
-    game.py = delta > 0 ? game.up_y : game.down_y;
+    game.player = delta > 0 ? game.up : game.down;
     visit_room();
     status(F("You take the stairs."));
 }
@@ -275,7 +273,7 @@ void change_floor(int8_t delta)
 bool take_stairs()
 {
     if(game.paralyzed) return false;
-    if(game.px == game.up_x && game.py == game.up_y) {
+    if(game.player == game.up) {
         if(game.floor)
             change_floor(-1);
         else
@@ -283,7 +281,7 @@ bool take_stairs()
         return true;
     }
     if(game.floor < FLOORS - 1 &&
-       game.px == game.down_x && game.py == game.down_y) {
+       game.player == game.down) {
         change_floor(1);
         return true;
     }

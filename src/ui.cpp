@@ -139,11 +139,11 @@ __attribute__((noinline)) void prompt_stairs()
 {
     if(game.paralyzed || session.ended) return;
     const char AVM_PROGMEM* question = nullptr;
-    if(game.px == game.up_x && game.py == game.up_y)
+    if(game.player == game.up)
         question = game.floor ? F("Go upstairs?") :
                                 F("Leave the dungeon?");
     else if(game.floor < FLOORS - 1 &&
-            game.px == game.down_x && game.py == game.down_y)
+            game.player == game.down)
         question = F("Go downstairs?");
     if(!question) return;
     render_play();
@@ -157,7 +157,7 @@ __attribute__((noinline)) void prompt_ground_items()
 {
     uint8_t before = GROUND_ITEMS;
     while(!session.ended && !game.paralyzed) {
-        uint8_t slot = ground_item_before(game.px, game.py, before);
+        uint8_t slot = ground_item_before(game.player, before);
         if(slot == NONE) break;
         before = slot;
         Item item = ground_item_info(slot);
@@ -339,14 +339,13 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
         ui.selection = 0;
     } else if(direction) {
         status_clear();
-        uint8_t old_x = game.px, old_y = game.py;
+        Position old = game.player;
         int8_t dx = direction == AVM_BUTTON_L ? -1 :
                     direction == AVM_BUTTON_R ? 1 : 0;
         int8_t dy = direction == AVM_BUTTON_U ? -1 :
                     direction == AVM_BUTTON_D ? 1 : 0;
         move_player(dx, dy);
-        moved = !session.ended &&
-            (game.px != old_x || game.py != old_y);
+        moved = !session.ended && game.player != old;
     } else if(edges & AVM_BUTTON_A) {
         status_clear();
         action();

@@ -43,6 +43,63 @@ void require(bool condition, const char* reason)
     }
 }
 
+void check_position_value_and_boundaries()
+{
+    constexpr Position origin{1, 2};
+    static_assert(origin.x == 1 && origin.y == 2, "position axes changed");
+    static_assert(origin == Position{1, 2} && origin != Position{2, 1},
+                  "position equality changed");
+    static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
+                  sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
+                  sizeof(Game) == 932,
+                  "saved entity layout changed");
+    const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
+                                {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
+    const uint8_t bytes[] = {1, 2};
+    require(std::memcmp(&origin, bytes, sizeof bytes) == 0 &&
+            Position{1, 2} != Position{2, 2} &&
+            Position{1, 2} != Position{1, 3},
+            "position byte order or equality changed");
+
+    Game saved = game;
+    Session saved_session = session;
+    std::memset(game.walls, 0, sizeof game.walls);
+    std::memset(game.explored, 0, sizeof game.explored);
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    std::memset(game.doors, 0, sizeof game.doors);
+    std::memset(game.ground, 0, sizeof game.ground);
+    game.door_count = 0;
+    game.paralyzed = game.confused = 0;
+    session.ended = false;
+    for(Position pos : corners) {
+        game.player = pos;
+        explore(pos);
+        require(explored(pos) && can_see(pos),
+                "boundary tile exploration or visibility changed");
+    }
+    game.monsters[0] = {corners[0], BAT, 1, 0, {0, 0}, 0};
+    game.doors[0] = {corners[1]};
+    game.door_count = 1;
+    game.ground[0] = {corners[2], {FOOD, 1}};
+    require(monster_at(corners[0]) == 0 &&
+            monster_at(corners[1]) == NONE &&
+            door_at(corners[1]) == 0 && door_at(corners[0]) == NONE &&
+            item_at(corners[2]) == 0 && item_at(corners[3]) == NONE &&
+            ground_item_before(corners[2], GROUND_ITEMS) == 0,
+            "boundary occupancy lookup changed");
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    game.door_count = 0;
+    for(Position pos : corners) {
+        game.player = pos;
+        move_player(pos.x == 0 ? -1 : 1, 0);
+        require(game.player == pos, "horizontal map edge changed");
+        move_player(0, pos.y == 0 ? -1 : 1);
+        require(game.player == pos, "vertical map edge changed");
+    }
+    game = saved;
+    session = saved_session;
+}
+
 void check_startup_save_state()
 {
     std::memset(&game, 0x5a, sizeof(game));
@@ -148,28 +205,27 @@ void check_inventory_view()
 void check_stacked_ground_items()
 {
     std::memset(game.ground, 0, sizeof(game.ground));
-    game.ground[1] = {4, 5, {FOOD, 1}};
-    game.ground[5] = {4, 5, {SWORD, 1}};
-    game.ground[9] = {4, 5, {ARMOR, 1}};
-    game.ground[12] = {6, 5, {HEALING, 1}};
-    uint8_t top = ground_item_before(4, 5, GROUND_ITEMS);
-    uint8_t middle = ground_item_before(4, 5, top);
-    uint8_t bottom = ground_item_before(4, 5, middle);
+    game.ground[1] = {{4, 5}, {FOOD, 1}};
+    game.ground[5] = {{4, 5}, {SWORD, 1}};
+    game.ground[9] = {{4, 5}, {ARMOR, 1}};
+    game.ground[12] = {{6, 5}, {HEALING, 1}};
+    uint8_t top = ground_item_before({4, 5}, GROUND_ITEMS);
+    uint8_t middle = ground_item_before({4, 5}, top);
+    uint8_t bottom = ground_item_before({4, 5}, middle);
     require(top == 9 && middle == 5 && bottom == 1 &&
-            ground_item_before(4, 5, bottom) == NONE,
+            ground_item_before({4, 5}, bottom) == NONE,
             "stacked items are not visited topmost first, once each");
-    require(ground_item_before(6, 5, GROUND_ITEMS) == 12,
+    require(ground_item_before({6, 5}, GROUND_ITEMS) == 12,
             "ground item scan includes a different tile");
     game.ground[5].item.type = NO_ITEM;
-    require(ground_item_before(4, 5, top) == bottom,
+    require(ground_item_before({4, 5}, top) == bottom,
             "ground item scan did not skip a picked-up item");
     std::memset(game.ground, 0, sizeof(game.ground));
 }
 
-void use_stairs(uint8_t floor, uint8_t x, uint8_t y)
+void use_stairs(uint8_t floor, Position pos)
 {
-    game.px = x;
-    game.py = y;
+    game.player = pos;
     for(int i = 0; i < 4 && game.floor == floor; ++i)
         if(!take_stairs()) action();
     require(game.floor != floor, "stairs did not change floors");
@@ -177,14 +233,13 @@ void use_stairs(uint8_t floor, uint8_t x, uint8_t y)
 
 void check_local_visibility()
 {
-    uint8_t old_x = game.px, old_y = game.py;
+    uint8_t old_x = game.player.x, old_y = game.player.y;
     unsigned samples = 0;
     for(uint8_t y = 0; y < MAP_H && samples < 24; ++y)
         for(uint8_t x = 0; x < MAP_W && samples < 24; ++x) {
             if(wall_at(x, y) || (x + y * MAP_W) % 11 != 0)
                 continue;
-            game.px = x;
-            game.py = y;
+            game.player = {x, y};
             ++samples;
             uint16_t opaque[13] = {};
             for(uint8_t sy = 0; sy < 13; ++sy)
@@ -198,39 +253,35 @@ void check_local_visibility()
                     int16_t ty = static_cast<int16_t>(y) + sy - 6;
                     if(tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H)
                         require(ray_visible(sx, sy, opaque) ==
-                                can_see(static_cast<uint8_t>(tx),
-                                        static_cast<uint8_t>(ty)),
+                                can_see({static_cast<uint8_t>(tx), static_cast<uint8_t>(ty)}),
                                 "local visibility differs from world ray");
                 }
         }
     require(samples == 24, "too few visibility samples");
-    game.px = old_x;
-    game.py = old_y;
+    game.player = {old_x, old_y};
 }
 
 void check_circular_light_radius()
 {
     std::array<uint8_t, sizeof(game.walls)> saved_walls;
     std::memcpy(saved_walls.data(), game.walls, saved_walls.size());
-    uint8_t old_x = game.px, old_y = game.py;
+    uint8_t old_x = game.player.x, old_y = game.player.y;
     uint8_t old_door_count = game.door_count;
     std::memset(game.walls, 0, sizeof(game.walls));
     game.door_count = 0;
-    game.px = 20;
-    game.py = 15;
+    game.player = {20, 15};
     uint16_t opaque[13] = {};
-    require(ray_visible(12, 6, opaque) && can_see(26, 15),
+    require(ray_visible(12, 6, opaque) && can_see({26, 15}),
             "cardinal tile at the light radius is hidden");
-    require(ray_visible(11, 9, opaque) && can_see(25, 18),
+    require(ray_visible(11, 9, opaque) && can_see({25, 18}),
             "diagonal tile inside the light radius is hidden");
-    require(!ray_visible(12, 7, opaque) && !can_see(26, 16),
+    require(!ray_visible(12, 7, opaque) && !can_see({26, 16}),
             "tile outside the light radius is visible");
-    require(!ray_visible(11, 11, opaque) && !can_see(25, 20),
+    require(!ray_visible(11, 11, opaque) && !can_see({25, 20}),
             "diagonal tile outside the light radius is visible");
     std::memcpy(game.walls, saved_walls.data(), saved_walls.size());
     game.door_count = old_door_count;
-    game.px = old_x;
-    game.py = old_y;
+    game.player = {old_x, old_y};
 }
 
 void check_wall_faces()
@@ -268,13 +319,13 @@ void check_exploration_resolution()
     std::array<uint8_t, sizeof(game.explored)> saved_explored;
     std::memcpy(saved_explored.data(), game.explored, saved_explored.size());
     std::memset(game.explored, 0, sizeof(game.explored));
-    explore(10, 10);
-    require(explored(10, 10), "explored tile was not recorded");
-    require(!explored(11, 10) && !explored(10, 11) && !explored(11, 11),
+    explore({10, 10});
+    require(explored({10, 10}), "explored tile was not recorded");
+    require(!explored({11, 10}) && !explored({10, 11}) && !explored({11, 11}),
             "exploration leaked into adjacent tiles");
-    explore(MAP_W - 1, MAP_H - 1);
-    require(explored(MAP_W - 1, MAP_H - 1), "last tile was not recorded");
-    require(!explored(MAP_W - 2, MAP_H - 1),
+    explore({MAP_W - 1, MAP_H - 1});
+    require(explored({MAP_W - 1, MAP_H - 1}), "last tile was not recorded");
+    require(!explored({MAP_W - 2, MAP_H - 1}),
             "last tile leaked into its neighbor");
     std::memcpy(game.explored, saved_explored.data(), saved_explored.size());
 }
@@ -310,8 +361,7 @@ void check_confused_wall_bump()
     std::memset(game.walls, 0, sizeof(game.walls));
     std::memset(game.monsters, 0, sizeof(game.monsters));
     game.door_count = 0;
-    game.px = 10;
-    game.py = 10;
+    game.player = {10, 10};
     uint16_t wall = static_cast<uint16_t>(9 * MAP_W + 10);
     game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
 
@@ -341,7 +391,7 @@ void check_confused_wall_bump()
     game.random_state = redirected_seed;
     move_player(1, 0);
     require(game.turns == static_cast<uint8_t>(turns + 1) &&
-            game.confused == 2 && game.px == 10 && game.py == 10,
+            game.confused == 2 && game.player == Position{10, 10},
             "confusion-generated wall bump did not consume a turn");
 }
 
@@ -455,7 +505,7 @@ void check_repeat_inventory_action()
             session.repeat_slot == 1,
             "eating the last food changed the previous repeat action");
 
-    game.ground[0] = {game.px, game.py, {HEALING, 2}};
+    game.ground[0] = {{game.player.x, game.player.y}, {HEALING, 2}};
     take_item(0);
     require(game.inventory[0].type == HEALING && session.repeat_slot == 1,
             "pickup did not reuse the consumed food slot");
@@ -497,8 +547,7 @@ void reset_item_fixture()
     std::memset(game.ground, 0, sizeof(game.ground));
     std::memset(game.inventory, 0, sizeof(game.inventory));
     std::memset(&game.marks[game.floor], 0, sizeof(FloorMarks));
-    game.px = 3;
-    game.py = 4;
+    game.player = {3, 4};
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
     game.defense = 0;
@@ -515,7 +564,7 @@ void fill_item_inventory()
 void check_ground_item_exchange()
 {
     reset_item_fixture();
-    game.ground[5] = {3, 4, {ARMOR, 2}};
+    game.ground[5] = {{3, 4}, {ARMOR, 2}};
     uint8_t old_turn = game.turns;
     require(take_item(5) == PICKUP_TAKEN &&
             game.inventory[0].type == ARMOR &&
@@ -526,7 +575,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     game.inventory[0] = {HEALING, 60};
-    game.ground[5] = {3, 4, {HEALING, static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
+    game.ground[5] = {{3, 4}, {HEALING, static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
     require(take_item(5) == PICKUP_TAKEN &&
             item_value(game.inventory[0]) == 63 &&
             item_is_identified(game.inventory[0]),
@@ -534,7 +583,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     game.inventory[0] = {HEALING, static_cast<uint8_t>(60 | ITEM_CURSED)};
-    game.ground[5] = {3, 4, {HEALING,
+    game.ground[5] = {{3, 4}, {HEALING,
                             static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
     require(take_item(5) == PICKUP_TAKEN &&
             game.inventory[0].info ==
@@ -545,7 +594,7 @@ void check_ground_item_exchange()
     fill_item_inventory();
     game.inventory[0] = {FOOD, 60};
     game.inventory[1] = {FOOD, 59};
-    game.ground[5] = {3, 4, {FOOD, 7}};
+    game.ground[5] = {{3, 4}, {FOOD, 7}};
     require(take_item(5) == PICKUP_TAKEN &&
             item_value(game.inventory[0]) == 63 &&
             item_value(game.inventory[1]) == 63,
@@ -553,7 +602,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     game.inventory[0] = {SCROLL_MAPPING, 60};
-    game.ground[5] = {3, 4, {SCROLL_MAPPING, 8}};
+    game.ground[5] = {{3, 4}, {SCROLL_MAPPING, 8}};
     require(take_item(5) == PICKUP_TAKEN &&
             item_value(game.inventory[0]) == 63 &&
             game.inventory[1].type == SCROLL_MAPPING &&
@@ -563,7 +612,7 @@ void check_ground_item_exchange()
     reset_item_fixture();
     fill_item_inventory();
     game.inventory[0] = {FOOD, 62};
-    game.ground[5] = {3, 4, {FOOD, 2}};
+    game.ground[5] = {{3, 4}, {FOOD, 2}};
     Game unchanged = game;
     Session unchanged_session = session;
     require(take_item(5) == PICKUP_NEEDS_SWAP &&
@@ -574,7 +623,7 @@ void check_ground_item_exchange()
     reset_item_fixture();
     fill_item_inventory();
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
-        game.ground[i] = {3, 4, {ARMOR, 1}};
+        game.ground[i] = {{3, 4}, {ARMOR, 1}};
     game.ground[5].item = {FOOD, 3};
     game.inventory[2] = {SWORD, 4};
     game.weapon_slot = 2;
@@ -585,12 +634,12 @@ void check_ground_item_exchange()
             swap_ground_item(5, 2) &&
             game.inventory[2].type == FOOD &&
             game.ground[5].item.type == SWORD &&
-            game.ground[5].x == 3 && game.ground[5].y == 4 &&
+            game.ground[5].pos == Position{3, 4} &&
             game.weapon_slot == NONE && session.repeat_slot == NONE &&
             game.turns == static_cast<uint8_t>(old_turn + 1) &&
             marked(game.marks[0], TAKEN_ITEMS, 5) &&
-            ground_item_before(3, 4, 6) == 5 &&
-            ground_item_before(3, 4, 5) == 4,
+            ground_item_before({3, 4}, 6) == 5 &&
+            ground_item_before({3, 4}, 5) == 4,
             "full-table swap did not preserve the exact ground slot");
 
     reset_item_fixture();
@@ -608,7 +657,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {SWORD, 1}};
     game.inventory[3] = {ARMOR, 5};
     game.armor_slot = 3;
     game.defense = 5;
@@ -617,7 +666,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {SWORD, 1}};
     game.inventory[3] = {RING_ATTACK, 2};
     game.ring_slots[1] = 3;
     require(swap_ground_item(7, 3) && game.ring_slots[1] == NONE,
@@ -625,7 +674,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {SWORD, 1}};
     game.inventory[3] = {AMULET_VITALITY, 2};
     game.amulet_slot = 3;
     game.hp = player_max_hp();
@@ -635,7 +684,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {SWORD, 1}};
     game.inventory[3] = {RING_INVISIBILITY,
                          static_cast<uint8_t>(1 | ITEM_CURSED)};
     game.ring_slots[0] = 3;
@@ -646,7 +695,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[15] = {3, 4, {YENDOR_AMULET, 1}};
+    game.ground[15] = {{3, 4}, {YENDOR_AMULET, 1}};
     require(take_item(15) == PICKUP_TAKEN && game.has_amulet &&
             game.ground[15].item.type == NO_ITEM &&
             marked(game.marks[0], TAKEN_ITEMS, 15),
@@ -664,7 +713,7 @@ void check_ground_item_drop()
     reset_item_fixture();
     game.inventory[0] = {SWORD, 2};
     game.ground[0].item.type = NO_ITEM;
-    game.ground[1] = {3, 4, {ARMOR, 1}};
+    game.ground[1] = {{3, 4}, {ARMOR, 1}};
     require(drop_disposition(0) == DROP_DISCARD_ALL &&
             !drop_inventory(0) && game.inventory[0].type == SWORD,
             "unmarked empty ground slot was reused");
@@ -682,8 +731,8 @@ void check_ground_item_drop()
 
     reset_item_fixture();
     game.inventory[0] = {FOOD, 7};
-    game.ground[2] = {3, 4, {FOOD, 60}};
-    game.ground[3] = {3, 4, {FOOD, 60}};
+    game.ground[2] = {{3, 4}, {FOOD, 60}};
+    game.ground[3] = {{3, 4}, {FOOD, 60}};
     require(drop_disposition(0) == DROP_DISCARD_REST &&
             !drop_inventory(0) && item_value(game.ground[2].item) == 60 &&
             item_value(game.inventory[0]) == 7,
@@ -697,7 +746,7 @@ void check_ground_item_drop()
 
     reset_item_fixture();
     game.inventory[0] = {HEALING, 7};
-    game.ground[2] = {3, 4, {HEALING, 60}};
+    game.ground[2] = {{3, 4}, {HEALING, 60}};
     mark(game.marks[0], TAKEN_ITEMS, 4);
     require(drop_inventory(0) && item_value(game.ground[2].item) == 63 &&
             game.ground[4].item.type == HEALING &&
@@ -706,7 +755,7 @@ void check_ground_item_drop()
 
     reset_item_fixture();
     game.inventory[0] = {FOOD, 3};
-    game.ground[2] = {3, 4, {FOOD, 60}};
+    game.ground[2] = {{3, 4}, {FOOD, 60}};
     require(drop_inventory(0) && item_value(game.ground[2].item) == 63 &&
             game.inventory[0].type == NO_ITEM,
             "drop did not fully merge into a ground stack");
@@ -840,7 +889,7 @@ void check_scrolls_and_identification()
 
     std::memset(game.walls, 0, sizeof(game.walls));
     game.door_count = 0;
-    game.monsters[0] = {static_cast<uint8_t>(game.px + 1), game.py,
+    game.monsters[0] = {{static_cast<uint8_t>(game.player.x + 1), game.player.y},
                         ORC, 12, 0, {0, 0}, MON_AGGRO};
     game.inventory[0] = {SCROLL_MASS_CONFUSE, 1};
     require(use_inventory(0) &&
@@ -858,8 +907,8 @@ void check_scrolls_and_identification()
     require(use_inventory(0) && game.monsters[0].hp <= hp / 2 + 1,
             "torment scroll did not damage a visible monster");
     game.inventory[0] = {SCROLL_TELEPORT, 1};
-    require(use_inventory(0) && !wall_at(game.px, game.py) &&
-            monster_at(game.px, game.py) == NONE,
+    require(use_inventory(0) && !wall_at(game.player.x, game.player.y) &&
+            monster_at({game.player.x, game.player.y}) == NONE,
             "teleport scroll placed player on an invalid tile");
 }
 
@@ -875,8 +924,7 @@ void check_mapping_persists_rooms()
 
     make_floor();
     for(const Room& room : game.rooms)
-        require(explored(static_cast<uint8_t>(room.x + 1),
-                         static_cast<uint8_t>(room.y + 1)),
+        require(explored({static_cast<uint8_t>(room.x + 1), static_cast<uint8_t>(room.y + 1)}),
                 "mapped room was forgotten after rebuilding the floor");
 }
 
@@ -903,30 +951,24 @@ void check_teleport_avoids_prompts()
         std::memset(game.monsters, 0, sizeof(game.monsters));
         std::memset(game.ground, 0, sizeof(game.ground));
         game.door_count = 0;
-        game.px = 2;
-        game.py = 2;
-        game.up_x = 0;
-        game.up_y = 0;
-        game.down_x = 1;
-        game.down_y = 0;
+        game.player = {2, 2};
+        game.up = {0, 0};
+        game.down = {1, 0};
         if(excluded == 0)
-            game.ground[0] = {candidate_x, candidate_y, {FOOD, 1}};
+            game.ground[0] = {{candidate_x, candidate_y}, {FOOD, 1}};
         else if(excluded == 1) {
-            game.up_x = candidate_x;
-            game.up_y = candidate_y;
+            game.up = {candidate_x, candidate_y};
         } else {
-            game.down_x = candidate_x;
-            game.down_y = candidate_y;
+            game.down = {candidate_x, candidate_y};
         }
         game.random_state = seed_for_destination;
         game.inventory[0] = {SCROLL_TELEPORT, 1};
         status_text.clear();
         require(use_inventory(0) &&
                 status_text.find("You teleport!") != std::string::npos &&
-                (game.px != candidate_x || game.py != candidate_y) &&
-                item_at(game.px, game.py) == NONE &&
-                !(game.px == game.up_x && game.py == game.up_y) &&
-                !(game.px == game.down_x && game.py == game.down_y),
+                game.player != Position{candidate_x, candidate_y} &&
+                item_at({game.player.x, game.player.y}) == NONE &&
+                game.player != game.up && game.player != game.down,
                 "teleport landed on an item or stair");
     }
 }
@@ -938,8 +980,7 @@ void check_thrown_potions()
     std::memset(game.walls, 0, sizeof(game.walls));
     std::memset(game.monsters, 0, sizeof(game.monsters));
     game.door_count = 0;
-    game.px = 10;
-    game.py = 10;
+    game.player = {10, 10};
     game.invisible = 100; // Keep the target in place during assertions.
     game.hunger = 255;
 
@@ -950,7 +991,7 @@ void check_thrown_potions()
             !potion_identified(HARMING),
             "a missed throw did not consume one unknown potion");
 
-    game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
+    game.monsters[0] = {{13, 10}, ORC, 5, 0, {0, 0}};
     uint16_t wall = static_cast<uint16_t>(10 * MAP_W + 11);
     game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
     game.inventory[0] = {POISON, 3};
@@ -959,13 +1000,12 @@ void check_thrown_potions()
             "potion passed through a wall");
     game.walls[wall >> 3] = 0;
     game.door_count = 1;
-    game.doors[0] = {11, 10};
+    game.doors[0] = {{11, 10}};
     require(throw_potion(0, 1, 0) && !potion_identified(POISON),
             "potion passed through a closed door");
     mark(game.marks[game.floor], OPENED_DOORS, 0);
-    game.monsters[0].x = 13;
-    game.monsters[0].y = 10;
-    game.monsters[1] = {14, 10, ORC, 5, 0, {0, 0}};
+    game.monsters[0].pos = {13, 10};
+    game.monsters[1] = {{14, 10}, ORC, 5, 0, {0, 0}};
     require(throw_potion(0, 1, 0) && potion_identified(POISON) &&
             monster_effect(game.monsters[0], MON_WEAKENED) &&
             !monster_effect(game.monsters[1], MON_WEAKENED) &&
@@ -973,8 +1013,7 @@ void check_thrown_potions()
             "throw did not hit only the first monster or consume its stack");
 
     auto throw_at_target = [](uint8_t type) {
-        game.monsters[0].x = 13;
-        game.monsters[0].y = 10;
+        game.monsters[0].pos = {13, 10};
         game.monsters[1].type = NO_MONSTER;
         game.inventory[0] = {type, 1};
         require(throw_potion(0, 1, 0) && potion_identified(type),
@@ -1020,8 +1059,7 @@ void check_thrown_potions()
             "monster potion effects did not expire");
 
     game.monsters[0].hp = 1;
-    game.monsters[0].x = 13;
-    game.monsters[0].y = 10;
+    game.monsters[0].pos = {13, 10};
     uint16_t old_score = game.score;
     throw_at_target(HARMING);
     require(game.monsters[0].type == NO_MONSTER &&
@@ -1074,10 +1112,9 @@ void check_effect_messages()
         std::memset(game.walls, 0, sizeof(game.walls));
         std::memset(game.monsters, 0, sizeof(game.monsters));
         game.door_count = 0;
-        game.px = 10;
-        game.py = 10;
+        game.player = {10, 10};
         game.invisible = 100;
-        game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
+        game.monsters[0] = {{13, 10}, ORC, 5, 0, {0, 0}};
         game.inventory[0] = {type, 1};
         status_text.clear();
         require(throw_potion(0, 1, 0) &&
@@ -1107,10 +1144,9 @@ void check_effect_messages()
     std::memset(game.walls, 0, sizeof(game.walls));
     std::memset(game.monsters, 0, sizeof(game.monsters));
     game.door_count = 0;
-    game.px = 10;
-    game.py = 10;
+    game.player = {10, 10};
     game.invisible = 100;
-    game.monsters[0] = {13, 10, ORC, 5, 0, {0, 0}};
+    game.monsters[0] = {{13, 10}, ORC, 5, 0, {0, 0}};
     game.inventory[0] = {POISON, 1};
     status_text.clear();
     require(throw_potion(0, 1, 0) &&
@@ -1223,11 +1259,10 @@ void check_enemy_abilities()
         std::memset(game.walls, 0, sizeof(game.walls));
         std::memset(game.monsters, 0, sizeof(game.monsters));
         game.door_count = 0;
-        game.px = 10;
-        game.py = 10;
+        game.player = {10, 10};
         game.hp = game.max_hp = 240;
         game.hunger = 255;
-        game.monsters[0] = {x, 10, type, monster_info(type).health,
+        game.monsters[0] = {{x, 10}, type, monster_info(type).health,
                             0, {0, 0}, 0};
         status_text.clear();
     };
@@ -1240,13 +1275,13 @@ void check_enemy_abilities()
     arena(MIMIC, 11);
     for(int i = 0; i < 8; ++i)
         end_turn();
-    require(game.monsters[0].x == 11 && !(game.monsters[0].state & MON_AGGRO),
+    require(game.monsters[0].pos.x == 11 && !(game.monsters[0].state & MON_AGGRO),
             "unprovoked mimic moved");
     move_player(1, 0);
     require(game.monsters[0].state & MON_AGGRO, "attacked mimic did not wake");
 
     arena(GOBLIN, 12);
-    game.doors[0] = {11, 10};
+    game.doors[0] = {{11, 10}};
     game.door_count = 1;
     for(int i = 0; i < 8 && !door_open(0); ++i)
         end_turn();
@@ -1262,20 +1297,18 @@ void check_enemy_abilities()
     arena(DRAGON, 13);
     bool breathed = false;
     for(int i = 0; i < 80 && !breathed; ++i) {
-        game.monsters[0].x = 13;
-        game.monsters[0].y = 10;
+        game.monsters[0].pos = {13, 10};
         status_text.clear();
         end_turn();
         breathed = status_text.find("breathes fire!") != std::string::npos;
     }
     require(breathed && game.hp < 240, "dragon fire did not hurt the player");
     arena(DRAGON, 13);
-    game.monsters[1] = {10, 11, GOBLIN, monster_info(GOBLIN).health,
+    game.monsters[1] = {{10, 11}, GOBLIN, monster_info(GOBLIN).health,
                         100, {0, 0}, 0};
     breathed = false;
     for(int i = 0; i < 80 && !breathed; ++i) {
-        game.monsters[0].x = 13;
-        game.monsters[0].y = 10;
+        game.monsters[0].pos = {13, 10};
         status_text.clear();
         end_turn();
         breathed = status_text.find("breathes fire!") != std::string::npos;
@@ -1287,8 +1320,7 @@ void check_enemy_abilities()
     uint16_t wall = static_cast<uint16_t>(10 * MAP_W + 12);
     game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
     for(int i = 0; i < 40; ++i) {
-        game.monsters[0].x = 13;
-        game.monsters[0].y = 10;
+        game.monsters[0].pos = {13, 10};
         status_text.clear();
         end_turn();
         require(status_text.find("breathes fire!") == std::string::npos,
@@ -1299,8 +1331,7 @@ void check_enemy_abilities()
     game.ring_slots[0] = 0;
     breathed = false;
     for(int i = 0; i < 80 && !breathed; ++i) {
-        game.monsters[0].x = 13;
-        game.monsters[0].y = 10;
+        game.monsters[0].pos = {13, 10};
         status_text.clear();
         end_turn();
         breathed = status_text.find("breathes fire!") != std::string::npos;
@@ -1312,8 +1343,7 @@ void check_enemy_abilities()
     game.ring_slots[0] = 0;
     breathed = false;
     for(int i = 0; i < 80 && !breathed; ++i) {
-        game.monsters[0].x = 13;
-        game.monsters[0].y = 10;
+        game.monsters[0].pos = {13, 10};
         status_text.clear();
         end_turn();
         breathed = status_text.find("breathes fire!") != std::string::npos;
@@ -1327,8 +1357,7 @@ void check_enemy_abilities()
         bool affected = false;
         for(int i = 0; i < 120 && !affected; ++i) {
             game.hp = 240;
-            game.monsters[0].x = 11;
-            game.monsters[0].y = 10;
+            game.monsters[0].pos = {11, 10};
             end_turn();
             affected = type == RATTLESNAKE ? game.weakened != 0 :
                 type == TARANTULA ? game.paralyzed != 0 : game.confused != 0;
@@ -1344,13 +1373,12 @@ void check_vampire_amulet()
         std::memset(game.walls, 0, sizeof(game.walls));
         std::memset(game.monsters, 0, sizeof(game.monsters));
         game.door_count = 0;
-        game.px = 10;
-        game.py = 10;
+        game.player = {10, 10};
         game.hp = 10;
         game.hunger = 255;
         game.invisible = 100;
         game.dexterity = 12;
-        game.monsters[0] = {11, 10, GOBLIN, 10, 0, {0, 0}, 0};
+        game.monsters[0] = {{11, 10}, GOBLIN, 10, 0, {0, 0}, 0};
         game.inventory[0] = {AMULET_VAMPIRE,
                              static_cast<uint8_t>(ITEM_CURSED | 1)};
         game.amulet_slot = 0;
@@ -1402,6 +1430,7 @@ int main()
 {
     check_startup_save_state();
     check_new_run_state();
+    check_position_value_and_boundaries();
     check_inventory_view();
     check_stacked_ground_items();
     check_enemy_roster();
@@ -1437,10 +1466,10 @@ int main()
     uint8_t drop_x = 0, drop_y = 0;
     for(uint8_t y = 0; y < MAP_H && !found; ++y)
         for(uint8_t x = 0; x < MAP_W && !found; ++x)
-            if(!wall_at(x, y) && item_at(x, y) == NONE &&
-               monster_at(x, y) == NONE &&
-               !(x == game.up_x && y == game.up_y) &&
-               !(x == game.down_x && y == game.down_y)) {
+            if(!wall_at(x, y) && item_at({x, y}) == NONE &&
+               monster_at({x, y}) == NONE &&
+               !(x == game.up.x && y == game.up.y) &&
+               !(x == game.down.x && y == game.down.y)) {
                 drop_x = x;
                 drop_y = y;
                 found = true;
@@ -1448,37 +1477,34 @@ int main()
     require(found, "no free floor tile");
     mark(game.marks[game.floor], TAKEN_ITEMS, 0);
     game.ground[0].item.type = NO_ITEM;
-    game.px = drop_x;
-    game.py = drop_y;
+    game.player = {drop_x, drop_y};
     game.inventory[0] = {FOOD, 1};
     require(drop_inventory(0) && game.inventory[0].type == NO_ITEM,
             "inventory drop failed");
-    require(item_at(drop_x, drop_y) != NONE,
+    require(item_at({drop_x, drop_y}) != NONE,
             "dropped item is missing");
     game.hp = player_max_hp();
     action();
-    require(item_at(drop_x, drop_y) != NONE,
+    require(item_at({drop_x, drop_y}) != NONE,
             "A action still picks up a ground item");
 
-    uint8_t down_x = game.down_x, down_y = game.down_y;
-    use_stairs(0, down_x, down_y);
+    Position down = game.down;
+    use_stairs(0, down);
     require(game.floor == 1, "descent failed");
-    game.px = game.up_x;
-    game.py = game.up_y;
+    game.player = game.up;
     game.hp = player_max_hp();
     action();
     require(game.floor == 1, "A action still takes the stairs");
-    use_stairs(1, game.up_x, game.up_y);
+    use_stairs(1, game.up);
     require(game.floor == 0, "ascent failed");
     require(std::memcmp(first_floor.data(), game.walls,
                         first_floor.size()) == 0,
             "floor changed on revisit");
-    require(item_at(drop_x, drop_y) == NONE,
+    require(item_at({drop_x, drop_y}) == NONE,
             "dropped item was unexpectedly restored across floors");
 
     game.has_amulet = 1;
-    game.px = game.up_x;
-    game.py = game.up_y;
+    game.player = game.up;
     for(int i = 0; i < 4 && !session.ended; ++i)
         if(!take_stairs()) action();
     require(session.ended && session.result == ESCAPED && !game.valid,
