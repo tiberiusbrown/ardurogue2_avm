@@ -139,12 +139,21 @@ __attribute__((noinline)) void prompt_stairs()
 {
     if(game.paralyzed || session.ended) return;
     const char AVM_PROGMEM* question = nullptr;
-    if(game.player == game.up)
+    if(game.player == game.up) {
+        if(!game.has_amulet) {
+            status(F("The way up is closed until you find the Yendor Amulet."));
+            return;
+        }
         question = game.floor ? F("Go upstairs?") :
                                 F("Leave the dungeon?");
-    else if(game.floor < FLOORS - 1 &&
-            game.player == game.down)
+    } else if(game.floor < FLOORS - 1 &&
+              game.player == game.down) {
+        if(game.has_amulet) {
+            status(F("The Yendor Amulet calls you toward the surface."));
+            return;
+        }
         question = F("Go downstairs?");
+    }
     if(!question) return;
     render_play();
     bool confirmed = yesno(question);

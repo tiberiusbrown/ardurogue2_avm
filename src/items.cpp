@@ -60,10 +60,11 @@ static void merge_stack(Item& target, Item incoming, uint8_t amount)
 
 static uint8_t reusable_ground_slot()
 {
-    // Unmarked empty entries still belong to deterministic floor generation.
+    // The last slot must remain available for the Lord's Yendor drop.
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
         if(game.ground[i].item.type == NO_ITEM &&
-           marked(game.marks[game.floor], TAKEN_ITEMS, i))
+           !(i == 15 && game.floor == FLOORS - 1 && !game.has_amulet &&
+             game.monsters[MONSTERS - 1].type == LORD))
             return i;
     return NONE;
 }
@@ -144,7 +145,6 @@ PickupResult take_item(uint8_t index)
         status(F("Your pack is full."));
         return PICKUP_NEEDS_SWAP;
     }
-    mark(game.marks[game.floor], TAKEN_ITEMS, index);
     ground.item.type = NO_ITEM;
     end_turn();
     return PICKUP_TAKEN;
@@ -201,9 +201,8 @@ bool swap_ground_item(uint8_t index, uint8_t slot)
     Item outgoing = game.inventory[slot];
     bool became_visible = remove_equipment_slot(slot);
     game.inventory[slot] = incoming;
-    // Keep the player's item in the exact generated slot being collected.
+    // Keep the player's item in the slot being collected.
     game.ground[index].item = outgoing;
-    mark(game.marks[game.floor], TAKEN_ITEMS, index);
     session.repeat_slot = NONE;
     status(F("You picked up"));
     status(incoming, '.');
@@ -350,7 +349,6 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
             if(!blocked(pos.x, pos.y) && monster_at(pos) == NONE &&
                item_at(pos) == NONE && pos != game.up && pos != game.down) {
                 game.player = pos;
-                visit_room();
                 status(F("You teleport!"));
                 return;
             }
@@ -360,8 +358,6 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
     }
     if(type == SCROLL_MAPPING) {
         memset(game.explored, 0xff, sizeof(game.explored));
-        for(uint8_t i = 0; i < ROOMS; ++i)
-            mark(game.marks[game.floor], VISITED_ROOMS, i);
         status(F("You become aware of your surroundings."));
         return;
     }

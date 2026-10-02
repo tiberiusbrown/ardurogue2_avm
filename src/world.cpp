@@ -30,18 +30,6 @@ static uint8_t floor_roll(uint16_t& seed, uint8_t limit)
     return static_cast<uint8_t>(next_random(seed) % limit);
 }
 
-bool marked(const FloorMarks& marks, FloorMark group, uint8_t index)
-{
-    uint8_t bit = static_cast<uint8_t>(group + index);
-    return (marks.bits[bit >> 3] & (1u << (bit & 7))) != 0;
-}
-
-void mark(FloorMarks& marks, FloorMark group, uint8_t index)
-{
-    uint8_t bit = static_cast<uint8_t>(group + index);
-    marks.bits[bit >> 3] |= static_cast<uint8_t>(1u << (bit & 7));
-}
-
 bool wall_at(int16_t x, int16_t y)
 {
     if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
@@ -109,14 +97,26 @@ bool explored(Position pos)
 uint8_t door_at(Position pos)
 {
     for(uint8_t i = 0; i < game.door_count; ++i)
-        if(game.doors[i].pos == pos)
+        if(door_position(i) == pos)
             return i;
     return NONE;
 }
 
 bool door_open(uint8_t index)
 {
-    return marked(game.marks[game.floor], OPENED_DOORS, index);
+    return (game.doors[index].pos.y & 0x80) != 0;
+}
+
+void open_door(uint8_t index)
+{
+    game.doors[index].pos.y |= 0x80;
+}
+
+Position door_position(uint8_t index)
+{
+    Position pos = game.doors[index].pos;
+    pos.y &= 0x7f;
+    return pos;
 }
 
 bool blocked(int16_t x, int16_t y)
@@ -141,15 +141,6 @@ bool in_any_room(uint8_t x, uint8_t y)
     return false;
 }
 
-void visit_room()
-{
-    for(uint8_t i = 0; i < ROOMS; ++i)
-        if(in_room(game.player.x, game.player.y, game.rooms[i])) {
-            mark(game.marks[game.floor], VISITED_ROOMS, i);
-            break;
-        }
-}
-
 void tunnel(uint8_t ax, uint8_t ay, uint8_t bx, uint8_t by)
 {
     int16_t x = ax;
@@ -169,14 +160,15 @@ void make_floor()
 {
     memset(game.walls, 0xff, sizeof(game.walls));
     memset(game.explored, 0, sizeof(game.explored));
+    memset(game.rooms, 0, sizeof(game.rooms));
     memset(game.doors, 0, sizeof(game.doors));
     memset(game.monsters, 0, sizeof(game.monsters));
     memset(game.ground, 0, sizeof(game.ground));
     game.door_count = 0;
 
     uint16_t seed = static_cast<uint16_t>(game.run_seed ^
-        static_cast<uint16_t>((game.floor + 1u) * 0x9e37u));
-    FloorMarks& marks = game.marks[game.floor];
+        static_cast<uint16_t>((game.floor + 1u) * 0x9e37u) ^
+        (game.has_amulet ? 0xa5c3u : 0u));
 
     for(uint8_t i = 0; i < ROOMS; ++i) {
         Room& room = game.rooms[i];
@@ -215,15 +207,7 @@ void make_floor()
                static_cast<uint8_t>(first.y + first.h / 2)};
     game.down = {static_cast<uint8_t>(last.x + last.w / 2),
                  static_cast<uint8_t>(last.y + last.h / 2)};
-
-    for(uint8_t i = 0; i < ROOMS; ++i) {
-        if(!marked(marks, VISITED_ROOMS, i))
-            continue;
-        const Room& room = game.rooms[i];
-        for(uint8_t y = room.y; y < room.y + room.h; ++y)
-            for(uint8_t x = room.x; x < room.x + room.w; ++x)
-                explore({x, y});
-    }
+    game.player = game.has_amulet ? game.down : game.up;
 
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         const Room& room = game.rooms[i];
@@ -231,7 +215,7 @@ void make_floor()
             static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2)),
             static_cast<uint8_t>(room.y + 1 + floor_roll(seed, room.h - 2))};
         uint8_t type = 0;
-        if(game.floor == FLOORS - 1 && i == MONSTERS - 1)
+        if(!game.has_amulet && game.floor == FLOORS - 1 && i == MONSTERS - 1)
             type = LORD;
         else
             while(!type)
@@ -244,12 +228,12 @@ void make_floor()
         uint8_t disguise = type == MIMIC
             ? static_cast<uint8_t>((1 + floor_roll(seed, AMULET_WISDOM)) << 1)
             : 0;
-        if(marked(marks, KILLED_MONSTERS, i))
-            continue;
         game.monsters[i] = {pos, type, monster_info(type).health,
             0, {0, 0}, disguise};
     }
 
+    // The ascent has fresh threats but no replenishing ordinary supplies.
+    if(game.has_amulet) return;
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
         const Room& room = game.rooms[(i * 7u + 3u) % ROOMS];
         uint8_t x = static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2));
@@ -269,14 +253,10 @@ void make_floor()
             ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
         if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
             info |= ITEM_CURSED;
-        if(marked(marks, TAKEN_ITEMS, i) || (game.floor == FLOORS - 1 && i == 15))
+        if(game.floor == FLOORS - 1 && i == 15)
             continue;
         game.ground[i] = {{x, y}, {type, info}};
     }
-    if(game.floor == FLOORS - 1 &&
-       marked(marks, KILLED_MONSTERS, MONSTERS - 1) &&
-       !marked(marks, TAKEN_ITEMS, 15))
-        game.ground[15] = {game.down, {YENDOR_AMULET, 1}};
 }
 
 bool can_see(Position pos)

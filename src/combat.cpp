@@ -117,6 +117,12 @@ static void hurt_player(uint8_t damage)
         finish(DEATH);
 }
 
+static void leave_yendor(const Monster& monster)
+{
+    if(monster.type == LORD)
+        game.ground[15] = {monster.pos, {YENDOR_AMULET, 1}};
+}
+
 static void fire_splash_monsters()
 {
     for(uint8_t i = 0; i < MONSTERS; ++i) {
@@ -131,10 +137,7 @@ static void fire_splash_monsters()
             continue;
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
         if(damage >= target.hp) {
-            if(target.type == LORD &&
-               !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
-                game.ground[15] = {target.pos, {YENDOR_AMULET, 1}};
-            mark(game.marks[game.floor], KILLED_MONSTERS, i);
+            leave_yendor(target);
             target.type = NO_MONSTER;
         } else {
             target.hp = static_cast<uint8_t>(target.hp - damage);
@@ -263,13 +266,11 @@ static void advance_monster(uint8_t index)
             if(dx && nx < MAP_W && (info.flags & MON_OPENER) &&
                door_at({nx, monster.pos.y}) != NONE &&
                !door_open(door_at({nx, monster.pos.y})))
-                mark(game.marks[game.floor], OPENED_DOORS,
-                     door_at({nx, monster.pos.y}));
+                open_door(door_at({nx, monster.pos.y}));
             else if(dy && ny < MAP_H && (info.flags & MON_OPENER) &&
                     door_at({monster.pos.x, ny}) != NONE &&
                     !door_open(door_at({monster.pos.x, ny})))
-                mark(game.marks[game.floor], OPENED_DOORS,
-                     door_at({monster.pos.x, ny}));
+                open_door(door_at({monster.pos.x, ny}));
             else if(dx && can_monster_move(nx, monster.pos.y))
                 monster.pos.x = nx;
             else if(dy && can_monster_move(monster.pos.x, ny))
@@ -356,14 +357,10 @@ void defeat_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
     uint8_t killed_type = target.type;
-    Position pos = target.pos;
-    mark(game.marks[game.floor], KILLED_MONSTERS, index);
+    leave_yendor(target);
     target.type = NO_MONSTER;
     MonsterInfo info = monster_info(killed_type);
     game.score += static_cast<uint16_t>(5 + info.xp * 3);
-    if(killed_type == LORD &&
-       !marked(game.marks[game.floor], TAKEN_ITEMS, 15))
-        game.ground[15] = {pos, {YENDOR_AMULET, 1}};
     status(F("You defeat the"));
     status(static_cast<MonsterType>(killed_type), '.');
     gain_xp(info.xp);
@@ -437,7 +434,7 @@ void move_player(int8_t dx, int8_t dy)
     Position destination = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
     uint8_t door = door_at(destination);
     if(door != NONE && !door_open(door)) {
-        mark(game.marks[game.floor], OPENED_DOORS, door);
+        open_door(door);
         status(F("You open the door."));
         end_turn();
         return;
@@ -448,7 +445,6 @@ void move_player(int8_t dx, int8_t dy)
         return;
     }
     game.player = destination;
-    visit_room();
     end_turn();
 }
 

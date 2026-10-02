@@ -247,8 +247,6 @@ void start_new(uint16_t seed)
     game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
     make_floor();
-    game.player = game.up;
-    visit_room();
     session = {NONE, DEATH, false};
 }
 
@@ -265,8 +263,6 @@ void change_floor(int8_t delta)
 {
     game.floor = static_cast<uint8_t>(game.floor + delta);
     make_floor();
-    game.player = delta > 0 ? game.up : game.down;
-    visit_room();
     status(F("You take the stairs."));
 }
 
@@ -274,17 +270,21 @@ bool take_stairs()
 {
     if(game.paralyzed) return false;
     if(game.player == game.up) {
-        if(game.floor)
-            change_floor(-1);
-        else
-            finish(game.has_amulet ? ESCAPED : RETURNED_EMPTY);
+        if(!game.has_amulet) {
+            status(F("The way up is closed until you find the Yendor Amulet."));
+            return false;
+        }
+        if(game.floor) change_floor(-1);
+        else finish(ESCAPED);
         return true;
     }
-    if(game.floor < FLOORS - 1 &&
+    if(!game.has_amulet && game.floor < FLOORS - 1 &&
        game.player == game.down) {
         change_floor(1);
         return true;
     }
+    if(game.has_amulet && game.player == game.down)
+        status(F("The Yendor Amulet calls you toward the surface."));
     return false;
 }
 

@@ -135,9 +135,9 @@ void render_play()
         }
     }
     for(uint8_t i = 0; i < game.door_count; ++i) {
-        const Door& door = game.doors[i];
+        Position door = door_position(i);
         uint8_t sx, sy;
-        if(!door_open(i) && screen_tile(door.pos, sx, sy))
+        if(!door_open(i) && screen_tile(door, sx, sy))
             walls[sy] |= static_cast<uint16_t>(1u << sx);
     }
     const Room* player_room = nullptr;
@@ -191,9 +191,9 @@ void render_play()
     }
     // Closed doors blocked the rays above, but their tiles are floor when drawn.
     for(uint8_t i = 0; i < game.door_count; ++i) {
-        const Door& door = game.doors[i];
+        Position door = door_position(i);
         uint8_t sx, sy;
-        if(!door_open(i) && screen_tile(door.pos, sx, sy))
+        if(!door_open(i) && screen_tile(door, sx, sy))
             walls[sy] &= static_cast<uint16_t>(~(1u << sx));
     }
     // Finish exploration before drawing: wall joins inspect the tile to the
@@ -230,9 +230,9 @@ void render_play()
         }
     }
     for(uint8_t i = 0; i < game.door_count; ++i) {
-        const Door& door = game.doors[i];
+        Position door = door_position(i);
         uint8_t sx, sy;
-        if(screen_tile(door.pos, sx, sy) && explored(door.pos))
+        if(screen_tile(door, sx, sy) && explored(door))
             icon(door_open(i) ? OPEN_DOOR_ICON : CLOSED_DOOR_ICON,
                  static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
@@ -369,7 +369,6 @@ __attribute__((noinline)) static void render_full_map()
 __attribute__((noinline)) static void render_end()
 {
     avm_draw_text_P(16, 15, session.result == ESCAPED ? F("YOU ESCAPED!") :
-        session.result == RETURNED_EMPTY ? F("RETURNED EMPTY") :
         session.result == ABANDONED ? F("ABANDONED") : F("YOU DIED"));
     avm_draw_textf_P(16, 31, F("SCORE %u"), game.score);
     avm_draw_textf_P(16, 41, F("BEST %u"), game.best_score);

@@ -51,7 +51,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  sizeof(Game) == 932,
+                  sizeof(Game) == 820,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -330,29 +330,174 @@ void check_exploration_resolution()
     std::memcpy(game.explored, saved_explored.data(), saved_explored.size());
 }
 
-void check_floor_marks()
+void check_active_doors()
 {
-    static_assert(sizeof(FloorMarks) == 7, "floor flags should occupy 51 bits");
-    FloorMarks marks = {};
-    mark(marks, TAKEN_ITEMS, GROUND_ITEMS - 1);
-    mark(marks, KILLED_MONSTERS, MONSTERS - 1);
-    mark(marks, OPENED_DOORS, DOORS - 1);
-    mark(marks, VISITED_ROOMS, ROOMS - 1);
-    require(marked(marks, TAKEN_ITEMS, GROUND_ITEMS - 1) &&
-            marked(marks, KILLED_MONSTERS, MONSTERS - 1) &&
-            marked(marks, OPENED_DOORS, DOORS - 1) &&
-            marked(marks, VISITED_ROOMS, ROOMS - 1),
-            "packed floor flags lost a high bit");
-    require(!marked(marks, KILLED_MONSTERS, 0) &&
-            !marked(marks, OPENED_DOORS, 0) &&
-            !marked(marks, VISITED_ROOMS, 0),
-            "packed floor flags overlap across groups");
-    FloorMarks old_marks = game.marks[game.floor];
-    game.marks[game.floor] = {};
-    require(!door_open(0), "unmarked door appears open");
-    mark(game.marks[game.floor], OPENED_DOORS, 0);
-    require(door_open(0), "door did not use its floor flag");
-    game.marks[game.floor] = old_marks;
+    start_new(0x1234);
+    game.doors[0] = {{12, 10}};
+    game.door_count = 1;
+    uint16_t tile = 10 * MAP_W + 12;
+    game.walls[tile >> 3] &= static_cast<uint8_t>(~(1u << (tile & 7)));
+    require(!door_open(0) && blocked(12, 10) &&
+            door_at({12, 10}) == 0, "closed door lookup failed");
+    open_door(0);
+    require(door_open(0) && !blocked(12, 10) &&
+            door_at({12, 10}) == 0 &&
+            door_position(0) == Position{12, 10},
+            "open door lost its position or blocked passage");
+    game.doors[0].pos.y &= 0x7f;
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.player = {11, 10};
+    move_player(1, 0);
+    require(door_open(0) && game.player == Position{11, 10},
+            "player did not open the door in place");
+    move_player(1, 0);
+    require(game.player == Position{12, 10} && door_open(0),
+            "player could not pass through the open door");
+    make_floor();
+    for(uint8_t i = 0; i < game.door_count; ++i)
+        require(!door_open(i), "door state survived floor generation");
+}
+
+void check_rogue_progression()
+{
+    constexpr uint16_t seed = 0x4c29;
+    start_new(seed);
+    require(game.floor == 0 && game.player == game.up && !game.has_amulet,
+            "new run did not begin on the first descending floor");
+    status_text.clear();
+    require(!take_stairs() && game.floor == 0 && !session.ended &&
+            status_text.find("Yendor Amulet") != std::string::npos,
+            "upward stairs were available before Yendor");
+
+    game.hp = 12;
+    game.hunger = 193;
+    game.weakened = 1;
+    game.inventory[0] = {FOOD, 2};
+    game.random_state = 0x7788;
+    game.player = game.down;
+    require(take_stairs() && game.floor == 1 && game.player == game.up,
+            "descent did not generate the next floor");
+    require(game.hp == 12 && game.hunger == 193 && game.weakened == 1 &&
+            game.inventory[0].type == FOOD && game.random_state == 0x7788,
+            "run state changed on descent");
+    std::array<uint8_t, sizeof(game.walls)> descent_walls;
+    std::memcpy(descent_walls.data(), game.walls, descent_walls.size());
+    Game descending = game;
+    game.monsters[0].type = NO_MONSTER;
+    game.ground[0].item.type = NO_ITEM;
+    explore({0, 0});
+    if(game.door_count) open_door(0);
+
+    game.player = game.down;
+    require(take_stairs() && game.floor == 2 && game.player == game.up,
+            "second descent failed");
+    require(!explored({0, 0}) && game.monsters[0].type != NO_MONSTER &&
+            game.ground[0].item.type != NO_ITEM,
+            "previous floor state survived descent");
+    for(uint8_t i = 0; i < game.door_count; ++i)
+        require(!door_open(i), "opened door survived descent");
+    Game continuing = game;
+    std::array<uint8_t, sizeof(Game)> saved_bytes;
+    std::memcpy(saved_bytes.data(), &game, saved_bytes.size());
+    std::memset(&game, 0, sizeof(Game));
+    std::memcpy(&game, saved_bytes.data(), saved_bytes.size());
+    require(restore_startup_save(true) &&
+            std::memcmp(&game, &continuing, sizeof(Game)) == 0,
+            "descending save could not continue");
+
+    game.has_amulet = 1;
+    game.player = game.up;
+    require(take_stairs() && game.floor == 1 && game.player == game.down,
+            "ascent did not generate the shallower floor");
+    require(std::memcmp(game.walls, descent_walls.data(),
+                        descent_walls.size()) != 0,
+            "ascent repeated the descending layout");
+    for(const GroundItem& item : game.ground)
+        require(item.item.type == NO_ITEM, "ordinary loot spawned on ascent");
+    for(const Monster& monster : game.monsters)
+        require(monster.type != NO_MONSTER,
+                "ascent floor did not contain monsters");
+    for(uint8_t i = 0; i < game.door_count; ++i)
+        require(!door_open(i), "opened door survived onto ascent floor");
+    require(game.hp == 12 && game.hunger == 193 && game.weakened == 1 &&
+            game.inventory[0].type == FOOD && game.random_state == 0x7788,
+            "run state changed on ascent");
+    Game ascending = game;
+    std::memcpy(saved_bytes.data(), &game, saved_bytes.size());
+    std::memset(&game, 0, sizeof(Game));
+    std::memcpy(&game, saved_bytes.data(), saved_bytes.size());
+    require(restore_startup_save(true) &&
+            std::memcmp(&game, &ascending, sizeof(Game)) == 0,
+            "ascending save could not continue");
+    game.player = game.down;
+    require(!take_stairs() && game.floor == 1,
+            "descent remained available after Yendor");
+
+    start_new(seed);
+    game.floor = 1;
+    make_floor();
+    require(std::memcmp(game.walls, descending.walls,
+                        sizeof(game.walls)) == 0 &&
+            std::memcmp(game.monsters, descending.monsters,
+                        sizeof(game.monsters)) == 0,
+            "descent generation changed with the same seed");
+    game.has_amulet = 1;
+    make_floor();
+    require(std::memcmp(game.walls, ascending.walls,
+                        sizeof(game.walls)) == 0 &&
+            std::memcmp(game.monsters, ascending.monsters,
+                        sizeof(game.monsters)) == 0,
+            "ascent generation changed with the same seed");
+
+    start_new(seed);
+    game.floor = FLOORS - 1;
+    make_floor();
+    require(game.monsters[MONSTERS - 1].type == LORD,
+            "Lord did not spawn at final descending depth");
+    game.player = game.down;
+    require(!take_stairs() && game.floor == FLOORS - 1,
+            "final descending floor allowed deeper stairs");
+    game.inventory[0] = {SWORD, 1};
+    require(drop_disposition(0) == DROP_DISCARD_ALL,
+            "Yendor spawn slot was reused before the Lord died");
+    defeat_monster(MONSTERS - 1);
+    require(game.monsters[MONSTERS - 1].type == NO_MONSTER &&
+            game.ground[15].item.type == YENDOR_AMULET,
+            "Lord death did not leave Yendor");
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    require(take_item(15) == PICKUP_TAKEN && game.has_amulet &&
+            game.ground[15].item.type == NO_ITEM,
+            "Yendor pickup did not begin ascent");
+    while(game.floor) {
+        game.player = game.up;
+        require(take_stairs(), "ascent stairs failed");
+    }
+    game.player = game.up;
+    require(take_stairs() && session.ended && session.result == ESCAPED &&
+            !game.valid, "returning with Yendor did not win");
+}
+
+void check_indirect_lord_death()
+{
+    start_new(0x7931);
+    game.floor = FLOORS - 1;
+    make_floor();
+    std::memset(game.walls, 0, sizeof(game.walls));
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    std::memset(game.ground, 0, sizeof(game.ground));
+    game.door_count = 0;
+    game.player = {10, 10};
+    game.hp = game.max_hp = 240;
+    game.hunger = 255;
+    game.inventory[0] = {RING_FIRE_IMMUNITY, 1};
+    game.ring_slots[0] = 0;
+    game.monsters[0] = {{10, 14}, DRAGON, 48, 0, {0, 0}, 0};
+    game.monsters[1] = {{11, 10}, LORD, 1, 0, {0, 0}, 0};
+    for(int i = 0; i < 30 && game.monsters[1].type; ++i)
+        end_turn();
+    require(game.monsters[1].type == NO_MONSTER &&
+            game.ground[15].item.type == YENDOR_AMULET,
+            "dragon fire did not leave Yendor when it killed the Lord");
 }
 
 void check_confused_wall_bump()
@@ -546,7 +691,6 @@ void reset_item_fixture()
     std::memset(game.monsters, 0, sizeof(game.monsters));
     std::memset(game.ground, 0, sizeof(game.ground));
     std::memset(game.inventory, 0, sizeof(game.inventory));
-    std::memset(&game.marks[game.floor], 0, sizeof(FloorMarks));
     game.player = {3, 4};
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
@@ -569,8 +713,7 @@ void check_ground_item_exchange()
     require(take_item(5) == PICKUP_TAKEN &&
             game.inventory[0].type == ARMOR &&
             game.ground[5].item.type == NO_ITEM &&
-            game.turns == static_cast<uint8_t>(old_turn + 1) &&
-            marked(game.marks[0], TAKEN_ITEMS, 5),
+            game.turns == static_cast<uint8_t>(old_turn + 1),
             "ordinary pickup failed");
 
     reset_item_fixture();
@@ -637,7 +780,6 @@ void check_ground_item_exchange()
             game.ground[5].pos == Position{3, 4} &&
             game.weapon_slot == NONE && session.repeat_slot == NONE &&
             game.turns == static_cast<uint8_t>(old_turn + 1) &&
-            marked(game.marks[0], TAKEN_ITEMS, 5) &&
             ground_item_before({3, 4}, 6) == 5 &&
             ground_item_before({3, 4}, 5) == 4,
             "full-table swap did not preserve the exact ground slot");
@@ -651,9 +793,8 @@ void check_ground_item_exchange()
     require(generated != NONE, "floor had no generated item to test");
     require(swap_ground_item(generated, 0), "generated item swap failed");
     make_floor();
-    require(game.ground[generated].item.type == NO_ITEM &&
-            marked(game.marks[0], TAKEN_ITEMS, generated),
-            "swapped generated item respawned on floor reconstruction");
+    require(game.ground[generated].item.type != NO_ITEM,
+            "explicit floor generation did not create fresh loot");
 
     reset_item_fixture();
     fill_item_inventory();
@@ -697,8 +838,7 @@ void check_ground_item_exchange()
     fill_item_inventory();
     game.ground[15] = {{3, 4}, {YENDOR_AMULET, 1}};
     require(take_item(15) == PICKUP_TAKEN && game.has_amulet &&
-            game.ground[15].item.type == NO_ITEM &&
-            marked(game.marks[0], TAKEN_ITEMS, 15),
+            game.ground[15].item.type == NO_ITEM,
             "Yendor pickup required inventory space");
 
     reset_item_fixture();
@@ -714,12 +854,8 @@ void check_ground_item_drop()
     game.inventory[0] = {SWORD, 2};
     game.ground[0].item.type = NO_ITEM;
     game.ground[1] = {{3, 4}, {ARMOR, 1}};
-    require(drop_disposition(0) == DROP_DISCARD_ALL &&
-            !drop_inventory(0) && game.inventory[0].type == SWORD,
-            "unmarked empty ground slot was reused");
-    require(!marked(game.marks[0], TAKEN_ITEMS, 15),
-            "reserved ground slot was unexpectedly marked reusable");
-    mark(game.marks[0], TAKEN_ITEMS, 0);
+    require(drop_disposition(0) == DROP_GROUND,
+            "empty ground slot was unavailable");
     session.repeat_slot = 0;
     uint8_t old_turn = game.turns;
     require(drop_inventory(0) && game.ground[0].item.type == SWORD &&
@@ -727,12 +863,14 @@ void check_ground_item_drop()
             game.inventory[0].type == NO_ITEM &&
             session.repeat_slot == NONE &&
             game.turns == static_cast<uint8_t>(old_turn + 1),
-            "drop onto occupied tile did not use marked slot");
+            "drop onto occupied tile did not use an empty slot");
 
     reset_item_fixture();
     game.inventory[0] = {FOOD, 7};
     game.ground[2] = {{3, 4}, {FOOD, 60}};
     game.ground[3] = {{3, 4}, {FOOD, 60}};
+    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+        if(i != 2 && i != 3) game.ground[i] = {{3, 4}, {ARMOR, 1}};
     require(drop_disposition(0) == DROP_DISCARD_REST &&
             !drop_inventory(0) && item_value(game.ground[2].item) == 60 &&
             item_value(game.inventory[0]) == 7,
@@ -747,10 +885,9 @@ void check_ground_item_drop()
     reset_item_fixture();
     game.inventory[0] = {HEALING, 7};
     game.ground[2] = {{3, 4}, {HEALING, 60}};
-    mark(game.marks[0], TAKEN_ITEMS, 4);
     require(drop_inventory(0) && item_value(game.ground[2].item) == 63 &&
-            game.ground[4].item.type == HEALING &&
-            item_value(game.ground[4].item) == 4,
+            game.ground[0].item.type == HEALING &&
+            item_value(game.ground[0].item) == 4,
             "drop remainder did not use a reusable slot");
 
     reset_item_fixture();
@@ -762,6 +899,8 @@ void check_ground_item_drop()
 
     reset_item_fixture();
     game.inventory[0] = {SWORD, 1};
+    for(GroundItem& ground : game.ground)
+        ground = {{3, 4}, {ARMOR, 1}};
     session.repeat_slot = 0;
     Game unchanged = game;
     require(drop_disposition(0) == DROP_DISCARD_ALL &&
@@ -778,7 +917,6 @@ void check_ground_item_drop()
     game.inventory[0] = {ARMOR, static_cast<uint8_t>(3 | ITEM_CURSED)};
     game.armor_slot = 0;
     game.defense = 3;
-    mark(game.marks[0], TAKEN_ITEMS, 4);
     unchanged = game;
     require(drop_disposition(0) == DROP_INVALID &&
             !drop_inventory(0) && !drop_inventory(0, true) &&
@@ -789,9 +927,8 @@ void check_ground_item_drop()
     game.inventory[0] = {ARMOR, 3};
     game.armor_slot = 0;
     game.defense = 3;
-    mark(game.marks[0], TAKEN_ITEMS, 4);
     require(drop_inventory(0) && game.armor_slot == NONE &&
-            game.defense == 0 && game.ground[4].item.type == ARMOR,
+            game.defense == 0 && game.ground[0].item.type == ARMOR,
             "uncursed equipped armor did not drop cleanly");
 
     reset_item_fixture();
@@ -912,20 +1049,19 @@ void check_scrolls_and_identification()
             "teleport scroll placed player on an invalid tile");
 }
 
-void check_mapping_persists_rooms()
+void check_mapping_active_floor()
 {
     start_new(0x2468);
     std::memset(game.monsters, 0, sizeof(game.monsters));
     game.inventory[0] = {SCROLL_MAPPING, 1};
     require(use_inventory(0), "mapping scroll could not be read");
-    for(uint8_t i = 0; i < ROOMS; ++i)
-        require(marked(game.marks[0], VISITED_ROOMS, i),
-                "mapping scroll did not mark every room visited");
-
-    make_floor();
     for(const Room& room : game.rooms)
-        require(explored({static_cast<uint8_t>(room.x + 1), static_cast<uint8_t>(room.y + 1)}),
-                "mapped room was forgotten after rebuilding the floor");
+        require(explored({static_cast<uint8_t>(room.x + 1),
+                          static_cast<uint8_t>(room.y + 1)}),
+                "mapping scroll did not reveal every room");
+    make_floor();
+    for(uint8_t byte : game.explored)
+        require(byte == 0, "exploration survived floor generation");
 }
 
 void check_teleport_avoids_prompts()
@@ -1003,7 +1139,7 @@ void check_thrown_potions()
     game.doors[0] = {{11, 10}};
     require(throw_potion(0, 1, 0) && !potion_identified(POISON),
             "potion passed through a closed door");
-    mark(game.marks[game.floor], OPENED_DOORS, 0);
+    open_door(0);
     game.monsters[0].pos = {13, 10};
     game.monsters[1] = {{14, 10}, ORC, 5, 0, {0, 0}};
     require(throw_potion(0, 1, 0) && potion_identified(POISON) &&
@@ -1063,7 +1199,6 @@ void check_thrown_potions()
     uint16_t old_score = game.score;
     throw_at_target(HARMING);
     require(game.monsters[0].type == NO_MONSTER &&
-            marked(game.marks[game.floor], KILLED_MONSTERS, 0) &&
             game.score > old_score,
             "harming did not defeat and credit the monster");
 }
@@ -1240,16 +1375,16 @@ void check_enemy_roster()
         }
     require(mimic != NONE, "test floor has no mimic");
     Game before = game;
-    mark(game.marks[game.floor], KILLED_MONSTERS, mimic);
+    defeat_monster(mimic);
+    require(game.monsters[mimic].type == NO_MONSTER,
+            "defeated monster remained on active floor");
     make_floor();
-    for(uint8_t i = 0; i < MONSTERS; ++i)
-        if(i != mimic)
-            require(std::memcmp(&game.monsters[i], &before.monsters[i],
-                                sizeof(Monster)) == 0,
-                    "killing a mimic changed another spawn on revisit");
+    require(std::memcmp(game.monsters, before.monsters,
+                        sizeof(game.monsters)) == 0,
+            "fresh generation was affected by the prior kill");
     require(std::memcmp(game.ground, before.ground,
                         sizeof(game.ground)) == 0,
-            "killing a mimic changed item generation on revisit");
+            "fresh generation was affected by the prior kill");
 }
 
 void check_enemy_abilities()
@@ -1442,7 +1577,7 @@ int main()
     check_ground_item_exchange();
     check_ground_item_drop();
     check_scrolls_and_identification();
-    check_mapping_persists_rooms();
+    check_mapping_active_floor();
     check_teleport_avoids_prompts();
     check_thrown_potions();
     check_effect_messages();
@@ -1456,10 +1591,7 @@ int main()
     check_circular_light_radius();
     check_wall_faces();
     check_exploration_resolution();
-    check_floor_marks();
-
-    std::array<uint8_t, sizeof(game.walls)> first_floor;
-    std::memcpy(first_floor.data(), game.walls, first_floor.size());
+    check_active_doors();
 
     // Find an unoccupied floor tile and leave an item on it.
     bool found = false;
@@ -1475,7 +1607,6 @@ int main()
                 found = true;
             }
     require(found, "no free floor tile");
-    mark(game.marks[game.floor], TAKEN_ITEMS, 0);
     game.ground[0].item.type = NO_ITEM;
     game.player = {drop_x, drop_y};
     game.inventory[0] = {FOOD, 1};
@@ -1495,20 +1626,11 @@ int main()
     game.hp = player_max_hp();
     action();
     require(game.floor == 1, "A action still takes the stairs");
-    use_stairs(1, game.up);
-    require(game.floor == 0, "ascent failed");
-    require(std::memcmp(first_floor.data(), game.walls,
-                        first_floor.size()) == 0,
-            "floor changed on revisit");
-    require(item_at({drop_x, drop_y}) == NONE,
-            "dropped item was unexpectedly restored across floors");
+    require(!take_stairs() && game.floor == 1,
+            "upward stairs worked before Yendor");
 
-    game.has_amulet = 1;
-    game.player = game.up;
-    for(int i = 0; i < 4 && !session.ended; ++i)
-        if(!take_stairs()) action();
-    require(session.ended && session.result == ESCAPED && !game.valid,
-            "amulet victory failed");
+    check_rogue_progression();
+    check_indirect_lord_death();
 
     start_new(0x4321);
     game.hp = 1;

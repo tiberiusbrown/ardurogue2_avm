@@ -31,7 +31,7 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-constexpr uint8_t SAVE_VERSION = 13;
+constexpr uint8_t SAVE_VERSION = 14;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -105,6 +105,7 @@ static_assert(offsetof(Position, x) == 0 && offsetof(Position, y) == 1,
               "position byte order changed");
 
 struct Room { uint8_t x, y, w, h; };
+// Map y uses only five bits; its high bit records an open door.
 struct Door { Position pos; };
 // Four independent four-bit effects: confusion, slowing, invisibility, weakness.
 // Paralysis uses stun. Two bytes per monster keep the image within AVM RAM.
@@ -137,22 +138,9 @@ constexpr bool item_is_identified(const Item& item)
 }
 static_assert(sizeof(Item) == 2, "Item must use two bytes");
 struct GroundItem { Position pos; Item item; };
-struct FloorMarks {
-    // 16 item, 12 monster, 11 door, and 12 room flags: 51 bits.
-    uint8_t bits[7];
-};
-
-enum FloorMark : uint8_t {
-    TAKEN_ITEMS = 0,
-    KILLED_MONSTERS = TAKEN_ITEMS + GROUND_ITEMS,
-    OPENED_DOORS = KILLED_MONSTERS + MONSTERS,
-    VISITED_ROOMS = OPENED_DOORS + DOORS
-};
-
 struct Game {
     uint8_t walls[MAP_W * MAP_H / 8];
     uint8_t explored[MAP_W * MAP_H / 8]; // One bit per tile.
-    FloorMarks marks[FLOORS];
     Room rooms[ROOMS];
     Door doors[DOORS];
     Monster monsters[MONSTERS];
@@ -172,8 +160,7 @@ struct Game {
 enum RunResult : uint8_t {
     DEATH = 0,
     ESCAPED = 1,
-    RETURNED_EMPTY = 2,
-    ABANDONED = 3
+    ABANDONED = 2
 };
 
 struct Session {
@@ -186,9 +173,8 @@ extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 932, "Game saved layout changed");
+static_assert(sizeof(Game) == 820, "Game saved layout changed");
 #endif
-static_assert(sizeof(FloorMarks) == 7, "floor flags changed");
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
 static_assert(sizeof(Door) == 2, "door layout changed");
@@ -197,13 +183,13 @@ static_assert(offsetof(Monster, pos) == 0 && offsetof(Monster, type) == 2 &&
               offsetof(Monster, state) == 7, "monster save offsets changed");
 static_assert(offsetof(GroundItem, pos) == 0 &&
               offsetof(GroundItem, item) == 2, "ground save offsets changed");
-static_assert(offsetof(Game, doors) == 672 &&
-              offsetof(Game, monsters) == 694 &&
-              offsetof(Game, ground) == 790 &&
-              offsetof(Game, inventory) == 854 &&
-              offsetof(Game, player) == 898 &&
-              offsetof(Game, up) == 900 && offsetof(Game, down) == 902 &&
-              offsetof(Game, hp) == 904, "game save offsets changed");
+static_assert(offsetof(Game, doors) == 560 &&
+              offsetof(Game, monsters) == 582 &&
+              offsetof(Game, ground) == 678 &&
+              offsetof(Game, inventory) == 742 &&
+              offsetof(Game, player) == 786 &&
+              offsetof(Game, up) == 788 && offsetof(Game, down) == 790 &&
+              offsetof(Game, hp) == 792, "game save offsets changed");
 static_assert(POTION_COUNT == 10 && SCROLL_COUNT == 9 &&
               RING_COUNT == 8 && AMULET_COUNT == 8, "item table counts changed");
 

@@ -5,25 +5,27 @@ turn-based dungeon crawl for a 128x64 monochrome screen.
 
 ## Game
 
-Descend through 16 dungeon floors, defeat the Lord of Darkness on the last
-floor, pick up the amulet, then climb back to the surface. Returning without
-the amulet ends the run. Death also ends the run.
+Descend through 16 dungeon depths, defeat the Lord of Darkness on the last
+depth, pick up the Yendor Amulet, then climb back to the surface to win.
+Upward travel is blocked until the Amulet is acquired. After that, downward
+travel is blocked. Death also ends the run.
 
 Each floor has connected rooms, corridors, doors, monsters, food, potions,
-scrolls, weapons, armor, rings, and amulets. Explore the dungeon, fight by walking into enemies, manage
-hunger, and gain levels. Explored rooms, opened doors, collected items, and
-defeated monsters remain recorded when you revisit a floor. The game rebuilds
-each floor from a seed and compact progress flags to conserve RAM.
-The active floor's explored map uses one bit per tile. Floor progress flags
-use 51 bits per floor to remember picked-up generated items, defeated monsters,
-opened doors, and visited rooms; generated item and monster slots are omitted
-when that floor is rebuilt. Door state and monster spawn identity are derived
-from those flags and array positions. Each inventory item uses two bytes: a
-type byte and an info byte with a six-bit quantity or level, a cursed bit, and
-an identified bit. Ground slots store their coordinates and a complete item.
-Save version 13 derives potion, scroll, ring, and amulet appearances from the
-run seed instead of storing 35 mapping bytes. It stores their discoveries,
-monster potion effects,
+scrolls, weapons, armor, rings, and amulets. Explore the dungeon, fight by
+walking into enemies, manage hunger, and gain levels. Only the active floor
+exists. Descending permanently discards it. On the return journey, each depth
+is a newly generated floor,
+distinct from the floor at that depth during descent. Ascent floors have fresh
+terrain, doors, and monsters, but no ordinary random loot. This follows the
+classic Rogue nonpersistent-floor model and saves 112 bytes of AVM RAM.
+The active floor's explored map uses one bit per tile, and a spare bit in each
+door coordinate records whether that door is open. Each inventory item uses two
+bytes: a type byte and an info byte with a six-bit quantity or level, a cursed
+bit, and an identified bit. Ground slots store their coordinates and a complete
+item.
+Save version 14 stores one active floor in an 820-byte `Game`. It derives
+potion, scroll, ring, and amulet appearances from the run seed instead of
+storing 35 mapping bytes. It stores their discoveries, monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots; older saves
 are not compatible.
 
@@ -98,10 +100,10 @@ Canceling that selection still consumes the scroll, as in ArduRogue.
 
 Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
-best score. The inventory has 16 slots. Dropped items occupy a ground slot
-whose generated item was already collected; those slots are not restored when
-revisiting the floor. Compatible food, potions, and scrolls merge into ground
-stacks when possible. If the ground cannot hold an item, the game asks for an
+best score. The inventory has 16 slots. Dropped items occupy an available empty
+ground slot on the active floor; one slot remains reserved for the Lord's
+Amulet drop until it dies. Compatible food, potions, and scrolls merge into
+ground stacks when possible. If the ground cannot hold an item, the game asks for an
 explicit discard confirmation. The amulet cannot be dropped.
 
 The dungeon screen shows dungeon depth, player level, and health above a
