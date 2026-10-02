@@ -30,7 +30,7 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-constexpr uint8_t SAVE_VERSION = 12;
+constexpr uint8_t SAVE_VERSION = 13;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -148,8 +148,6 @@ struct Game {
     uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
-    uint8_t potion_appearance[POTION_COUNT], scroll_appearance[SCROLL_COUNT];
-    uint8_t ring_appearance[RING_COUNT], amulet_appearance[AMULET_COUNT];
     uint8_t identified_items[5];
 };
 
@@ -170,7 +168,7 @@ extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 967, "Game saved layout changed");
+static_assert(sizeof(Game) == 932, "Game saved layout changed");
 #endif
 static_assert(sizeof(FloorMarks) == 7, "floor flags changed");
 static_assert(sizeof(Monster) == 8, "monster layout changed");

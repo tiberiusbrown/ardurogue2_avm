@@ -21,8 +21,9 @@ when that floor is rebuilt. Door state and monster spawn identity are derived
 from those flags and array positions. Each inventory item uses two bytes: a
 type byte and an info byte with a six-bit quantity or level, a cursed bit, and
 an identified bit. Ground slots store their coordinates and a complete item.
-Save version 12 stores randomized potion, scroll, ring, and amulet appearances,
-their discoveries, monster potion effects,
+Save version 13 derives potion, scroll, ring, and amulet appearances from the
+run seed instead of storing 35 mapping bytes. It stores their discoveries,
+monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots; older saves
 are not compatible.
 
@@ -47,7 +48,7 @@ sustenance, regeneration, life drain, clarity, conservation, ironblood, and
 invisibility. Cursed accessories reverse applicable bonuses and cannot be
 removed once equipped. Fire immunity protects against dragon breath, while a
 cursed fire ring doubles its damage.
-Their unknown descriptions are independently shuffled each run. Equipping
+Their unknown descriptions are independently permuted each run. Equipping
 weapons, armor, rings, or amulets identifies them; until then, item text hides
 equipment bonuses and the true types of jewelry.
 

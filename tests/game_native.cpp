@@ -357,13 +357,18 @@ void check_potions()
         require(!potion_identified(type), "new potion starts identified");
     }
     uint8_t original[POTION_COUNT];
-    std::memcpy(original, game.potion_appearance, sizeof(original));
+    for(uint8_t i = 0; i < POTION_COUNT; ++i)
+        original[i] = potion_color(static_cast<uint8_t>(HEALING + i));
     start_new(0x1234);
-    require(std::memcmp(original, game.potion_appearance, sizeof(original)) == 0,
-            "same run seed changed potion names");
+    for(uint8_t i = 0; i < POTION_COUNT; ++i)
+        require(original[i] == potion_color(static_cast<uint8_t>(HEALING + i)),
+                "same run seed changed potion names");
     start_new(0x4321);
-    require(std::memcmp(original, game.potion_appearance, sizeof(original)) != 0,
-            "different runs share the same potion names");
+    bool different = false;
+    for(uint8_t i = 0; i < POTION_COUNT; ++i)
+        if(original[i] != potion_color(static_cast<uint8_t>(HEALING + i)))
+            different = true;
+    require(different, "different runs share the same potion names");
 
     auto drink = [](uint8_t type, uint8_t amount = 1) {
         std::memset(game.monsters, 0, sizeof(game.monsters));
@@ -409,11 +414,12 @@ void check_potions()
             "harming potion dealt the wrong damage");
     require(potion_identified(HEALING),
             "identified potion was forgotten");
+    uint8_t healing_appearance = potion_color(HEALING);
     Game saved = game;
     std::memset(&game, 0, sizeof(game));
     game = saved;
     require(potion_identified(HARMING) &&
-            potion_color(HEALING) == saved.potion_appearance[0],
+            potion_color(HEALING) == healing_appearance,
             "potion knowledge did not survive save state copy");
 
     bool spawned[POTION_COUNT] = {};
@@ -488,7 +494,7 @@ void check_scrolls_and_identification()
 {
     start_new(0x2468);
     auto permutation = [](uint8_t first, uint8_t count) {
-        bool seen[SCROLL_COUNT] = {};
+        bool seen[POTION_COUNT] = {};
         for(uint8_t i = 0; i < count; ++i) {
             uint8_t type = static_cast<uint8_t>(first + i);
             uint8_t appearance = item_appearance(type);
@@ -498,19 +504,32 @@ void check_scrolls_and_identification()
             seen[appearance] = true;
         }
     };
-    permutation(SCROLL_IDENTIFY, SCROLL_COUNT);
-    permutation(RING_SEE_INVISIBLE, RING_COUNT);
-    permutation(AMULET_SPEED, AMULET_COUNT);
+    uint16_t random_state = game.random_state;
+    for(uint16_t seed = 1; seed <= 64; ++seed) {
+        game.run_seed = seed;
+        permutation(HEALING, POTION_COUNT);
+        permutation(SCROLL_IDENTIFY, SCROLL_COUNT);
+        permutation(RING_SEE_INVISIBLE, RING_COUNT);
+        permutation(AMULET_SPEED, AMULET_COUNT);
+        require(game.random_state == random_state,
+                "appearance lookup advanced gameplay randomness");
+    }
+    game.run_seed = 0x2468;
     uint8_t first_scroll[SCROLL_COUNT];
-    std::memcpy(first_scroll, game.scroll_appearance, sizeof(first_scroll));
+    for(uint8_t i = 0; i < SCROLL_COUNT; ++i)
+        first_scroll[i] = item_appearance(static_cast<uint8_t>(SCROLL_IDENTIFY + i));
     start_new(0x2468);
-    require(std::memcmp(first_scroll, game.scroll_appearance,
-                        sizeof(first_scroll)) == 0,
-            "scroll appearances change for the same run seed");
+    for(uint8_t i = 0; i < SCROLL_COUNT; ++i)
+        require(first_scroll[i] ==
+                    item_appearance(static_cast<uint8_t>(SCROLL_IDENTIFY + i)),
+                "scroll appearances change for the same run seed");
     start_new(0x2469);
-    require(std::memcmp(first_scroll, game.scroll_appearance,
-                        sizeof(first_scroll)) != 0,
-            "scroll appearances do not change between runs");
+    bool different = false;
+    for(uint8_t i = 0; i < SCROLL_COUNT; ++i)
+        if(first_scroll[i] !=
+           item_appearance(static_cast<uint8_t>(SCROLL_IDENTIFY + i)))
+            different = true;
+    require(different, "scroll appearances do not change between runs");
     for(const GroundItem& ground : game.ground)
         if(ground.item.type)
             require(!item_is_identified(ground.item),

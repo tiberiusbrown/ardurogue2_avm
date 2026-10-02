@@ -113,12 +113,66 @@ bool item_type_identified(uint8_t type)
         (1u << (index & 7))) != 0;
 }
 
+constexpr uint8_t coprime_multiplier(uint8_t count, uint8_t candidate)
+{
+    for(;;) {
+        uint8_t x = candidate, y = count;
+        while(y) {
+            uint8_t remainder = static_cast<uint8_t>(x % y);
+            x = y;
+            y = remainder;
+        }
+        if(x == 1) return candidate;
+        candidate = static_cast<uint8_t>(candidate + 1);
+        if(candidate == count) candidate = 1;
+    }
+}
+
+template<uint8_t Count>
+struct CoprimeMultipliers { uint8_t values[Count]; };
+
+template<uint8_t Count>
+constexpr CoprimeMultipliers<Count> make_coprime_multipliers()
+{
+    CoprimeMultipliers<Count> multipliers = {};
+    for(uint8_t candidate = 0; candidate < Count; ++candidate)
+        multipliers.values[candidate] = coprime_multiplier(Count, candidate);
+    return multipliers;
+}
+
+static constexpr CoprimeMultipliers<POTION_COUNT> PROGMEM potion_multipliers =
+    make_coprime_multipliers<POTION_COUNT>();
+static constexpr CoprimeMultipliers<SCROLL_COUNT> PROGMEM scroll_multipliers =
+    make_coprime_multipliers<SCROLL_COUNT>();
+static constexpr CoprimeMultipliers<RING_COUNT> PROGMEM jewel_multipliers =
+    make_coprime_multipliers<RING_COUNT>();
+
+static uint8_t permuted_appearance(uint8_t index, uint8_t count,
+                                   uint8_t category,
+                                   const uint8_t PROGMEM* multipliers)
+{
+    uint16_t state = static_cast<uint16_t>(game.run_seed ^
+        static_cast<uint16_t>(category * 0x9e37u));
+    uint8_t candidate = static_cast<uint8_t>(next_random(state) % count);
+    uint8_t a = multipliers[candidate];
+    uint8_t b = static_cast<uint8_t>(next_random(state) % count);
+    return static_cast<uint8_t>((a * index + b) % count);
+}
+
 uint8_t item_appearance(uint8_t type)
 {
-    if(is_potion(type)) return game.potion_appearance[type - HEALING];
-    if(is_scroll(type)) return game.scroll_appearance[type - SCROLL_IDENTIFY];
-    if(is_ring(type)) return game.ring_appearance[type - RING_SEE_INVISIBLE];
-    if(is_amulet(type)) return game.amulet_appearance[type - AMULET_SPEED];
+    if(is_potion(type))
+        return permuted_appearance(static_cast<uint8_t>(type - HEALING),
+                                   POTION_COUNT, 1, potion_multipliers.values);
+    if(is_scroll(type))
+        return permuted_appearance(static_cast<uint8_t>(type - SCROLL_IDENTIFY),
+                                   SCROLL_COUNT, 2, scroll_multipliers.values);
+    if(is_ring(type))
+        return permuted_appearance(static_cast<uint8_t>(type - RING_SEE_INVISIBLE),
+                                   RING_COUNT, 3, jewel_multipliers.values);
+    if(is_amulet(type))
+        return permuted_appearance(static_cast<uint8_t>(type - AMULET_SPEED),
+                                   AMULET_COUNT, 4, jewel_multipliers.values);
     return NONE;
 }
 
@@ -147,17 +201,6 @@ void identify_item(uint8_t slot)
     Item& item = game.inventory[slot];
     item.info |= ITEM_IDENTIFIED;
     identify_type(item.type);
-}
-
-static void shuffle_appearances(uint8_t* values, uint8_t count)
-{
-    for(uint8_t i = 0; i < count; ++i) values[i] = i;
-    for(uint8_t i = static_cast<uint8_t>(count - 1); i > 0; --i) {
-        uint8_t j = static_cast<uint8_t>(next_random(game.random_state) % (i + 1));
-        uint8_t old = values[i];
-        values[i] = values[j];
-        values[j] = old;
-    }
 }
 
 void gain_xp(uint8_t amount)
@@ -203,11 +246,6 @@ void start_new(uint16_t seed)
     game.weapon_slot = game.armor_slot = NONE;
     game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
-    // Independent Fisher-Yates permutations are saved with the run.
-    shuffle_appearances(game.potion_appearance, POTION_COUNT);
-    shuffle_appearances(game.scroll_appearance, SCROLL_COUNT);
-    shuffle_appearances(game.ring_appearance, RING_COUNT);
-    shuffle_appearances(game.amulet_appearance, AMULET_COUNT);
     make_floor();
     game.px = game.up_x;
     game.py = game.up_y;
