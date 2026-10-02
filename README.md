@@ -100,8 +100,9 @@ Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
 best score. The inventory has 16 slots. Dropped items occupy a ground slot
 whose generated item was already collected; those slots are not restored when
-revisiting the floor. If no such slot is free, the item crumbles to dust. The
-amulet cannot be dropped.
+revisiting the floor. Compatible food, potions, and scrolls merge into ground
+stacks when possible. If the ground cannot hold an item, the game asks for an
+explicit discard confirmation. The amulet cannot be dropped.
 
 The dungeon screen shows dungeon depth, player level, and health above a
 word-wrapped status area. Messages from one action, including enemy responses,

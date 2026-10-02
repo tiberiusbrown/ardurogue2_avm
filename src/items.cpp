@@ -32,31 +32,109 @@ Item ground_item_info(uint8_t index)
     return game.ground[index].item;
 }
 
-static bool add_inventory(Item incoming)
+static bool stackable(uint8_t type)
 {
-    if(incoming.type == FOOD || is_potion(incoming.type) ||
-       is_scroll(incoming.type)) {
-        for(Item& item : game.inventory)
-            if(item.type == incoming.type &&
-               item_value(item) <= ITEM_VALUE_MASK - item_value(incoming)) {
-                set_item_value(item, static_cast<uint8_t>(
-                    item_value(item) + item_value(incoming)));
-                item.info |= incoming.info & ITEM_IDENTIFIED;
-                return true;
-            }
-    }
-    for(Item& item : game.inventory)
-        if(item.type == NO_ITEM) {
-            item = incoming;
-            return true;
-        }
-    return false;
+    return type == FOOD || is_potion(type) || is_scroll(type);
 }
 
-void take_item(uint8_t index)
+static bool compatible(Item a, Item b)
 {
+    return stackable(a.type) && a.type == b.type;
+}
+
+static uint8_t stack_space(Item item)
+{
+    return static_cast<uint8_t>(ITEM_VALUE_MASK - item_value(item));
+}
+
+static Item clean_stack(Item item)
+{
+    item.info &= static_cast<uint8_t>(ITEM_VALUE_MASK | ITEM_IDENTIFIED);
+    return item;
+}
+
+static void merge_stack(Item& target, Item incoming, uint8_t amount)
+{
+    set_item_value(target, static_cast<uint8_t>(item_value(target) + amount));
+    target.info = static_cast<uint8_t>(target.info & ~ITEM_CURSED);
+    target.info |= incoming.info & ITEM_IDENTIFIED;
+}
+
+static uint8_t reusable_ground_slot()
+{
+    // Unmarked empty entries still belong to deterministic floor generation.
+    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+        if(game.ground[i].item.type == NO_ITEM &&
+           marked(game.marks[game.floor], TAKEN_ITEMS, i))
+            return i;
+    return NONE;
+}
+
+static uint16_t ground_capacity(Item item)
+{
+    uint16_t capacity = 0;
+    if(!stackable(item.type)) return 0;
+    for(const GroundItem& ground : game.ground)
+        if(ground.x == game.px && ground.y == game.py &&
+           compatible(ground.item, item))
+            capacity += stack_space(ground.item);
+    return capacity;
+}
+
+static uint8_t merge_ground(Item item, uint8_t amount)
+{
+    for(GroundItem& ground : game.ground) {
+        if(!amount) break;
+        if(ground.x != game.px || ground.y != game.py ||
+           !compatible(ground.item, item)) continue;
+        uint8_t moved = amount < stack_space(ground.item)
+            ? amount : stack_space(ground.item);
+        if(moved) merge_stack(ground.item, item, moved);
+        amount = static_cast<uint8_t>(amount - moved);
+    }
+    return amount;
+}
+
+static bool add_inventory(Item incoming)
+{
+    // Decide whether the complete pickup fits before touching any stack.
+    uint16_t capacity = 0;
+    uint8_t empty = NONE;
+    for(uint8_t i = 0; i < INVENTORY; ++i) {
+        const Item& item = game.inventory[i];
+        if(item.type == NO_ITEM && empty == NONE) empty = i;
+        if(compatible(item, incoming)) capacity += stack_space(item);
+    }
+    if(stackable(incoming.type)) {
+        if(capacity + (empty == NONE ? 0 : ITEM_VALUE_MASK) <
+           item_value(incoming)) return false;
+        uint8_t remaining = item_value(incoming);
+        for(Item& item : game.inventory) {
+            if(!remaining) break;
+            if(!compatible(item, incoming)) continue;
+            uint8_t moved = remaining < stack_space(item)
+                ? remaining : stack_space(item);
+            if(moved) merge_stack(item, incoming, moved);
+            remaining = static_cast<uint8_t>(remaining - moved);
+        }
+        if(remaining) {
+            Item& target = game.inventory[empty];
+            target = clean_stack(incoming);
+            set_item_value(target, remaining);
+        }
+        return true;
+    }
+    if(empty == NONE) return false;
+    game.inventory[empty] = incoming;
+    return true;
+}
+
+PickupResult take_item(uint8_t index)
+{
+    if(index >= GROUND_ITEMS || game.ground[index].item.type == NO_ITEM)
+        return PICKUP_INVALID;
     GroundItem& ground = game.ground[index];
-    Item item = ground_item_info(index);
+    Item item = ground.item;
     if(item.type == YENDOR_AMULET) {
         game.has_amulet = 1;
         game.score += 100;
@@ -66,11 +144,12 @@ void take_item(uint8_t index)
         status(item, '.');
     } else {
         status(F("Your pack is full."));
-        return;
+        return PICKUP_NEEDS_SWAP;
     }
     mark(game.marks[game.floor], TAKEN_ITEMS, index);
     ground.item.type = NO_ITEM;
     end_turn();
+    return PICKUP_TAKEN;
 }
 
 static bool item_is_equipped(uint8_t slot)
@@ -97,6 +176,45 @@ static void clear_equipment_slot(uint8_t slot)
     uint8_t maximum = player_max_hp();
     if(game.hp > maximum)
         game.hp = maximum;
+}
+
+static bool remove_equipment_slot(uint8_t slot)
+{
+    if(!item_is_equipped(slot)) return false;
+    bool was_invisible = player_is_invisible();
+    clear_equipment_slot(slot);
+    return was_invisible && !player_is_invisible();
+}
+
+bool inventory_item_removable(uint8_t slot)
+{
+    if(slot >= INVENTORY || game.inventory[slot].type == NO_ITEM ||
+       game.inventory[slot].type == YENDOR_AMULET) return false;
+    return !item_is_equipped(slot) || !item_is_cursed(game.inventory[slot]);
+}
+
+bool swap_ground_item(uint8_t index, uint8_t slot)
+{
+    if(index >= GROUND_ITEMS || slot >= INVENTORY ||
+       game.ground[index].item.type == NO_ITEM ||
+       game.ground[index].item.type == YENDOR_AMULET ||
+       !inventory_item_removable(slot)) return false;
+    Item incoming = game.ground[index].item;
+    Item outgoing = game.inventory[slot];
+    bool became_visible = remove_equipment_slot(slot);
+    game.inventory[slot] = incoming;
+    // Keep the player's item in the exact generated slot being collected.
+    game.ground[index].item = outgoing;
+    mark(game.marks[game.floor], TAKEN_ITEMS, index);
+    session.repeat_slot = NONE;
+    status(F("You picked up"));
+    status(incoming, '.');
+    status(F("You leave"));
+    status(outgoing);
+    status(F("behind."));
+    if(became_visible) status(F("You become visible again."));
+    end_turn();
+    return true;
 }
 
 static bool toggle_accessory(uint8_t slot)
@@ -433,6 +551,8 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
     }
     if(!session.ended)
         end_turn();
+    if(item.type == NO_ITEM && session.repeat_slot == slot)
+        session.repeat_slot = NONE;
     return true;
 }
 
@@ -478,10 +598,24 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
     status(F("The potion shatters."));
     if(!session.ended)
         end_turn();
+    if(item.type == NO_ITEM && session.repeat_slot == slot)
+        session.repeat_slot = NONE;
     return true;
 }
 
-bool drop_inventory(uint8_t slot)
+DropDisposition drop_disposition(uint8_t slot)
+{
+    if(slot >= INVENTORY || game.paralyzed ||
+       !inventory_item_removable(slot)) return DROP_INVALID;
+    Item item = game.inventory[slot];
+    uint16_t capacity = ground_capacity(item);
+    if(capacity >= item_value(item) && stackable(item.type))
+        return DROP_GROUND;
+    if(reusable_ground_slot() != NONE) return DROP_GROUND;
+    return capacity ? DROP_DISCARD_REST : DROP_DISCARD_ALL;
+}
+
+bool drop_inventory(uint8_t slot, bool discard)
 {
     if(slot >= INVENTORY || game.paralyzed)
         return false;
@@ -490,33 +624,38 @@ bool drop_inventory(uint8_t slot)
         status(F("You cannot drop the amulet of Yendor."));
         return false;
     }
-    if(item.type == NO_ITEM || item_at(game.px, game.py) != NONE)
+    if(item.type == NO_ITEM)
         return false;
     if(item_is_equipped(slot) && item_is_cursed(item)) {
         status(F("The cursed item cannot be removed."));
         return false;
     }
-    uint8_t ground_slot = NONE;
-    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
-        if(game.ground[i].item.type == NO_ITEM &&
-           marked(game.marks[game.floor], TAKEN_ITEMS, i)) {
-            ground_slot = i;
-            break;
-        }
+    DropDisposition disposition = drop_disposition(slot);
+    if(disposition == DROP_INVALID ||
+       (disposition != DROP_GROUND && !discard)) return false;
+    uint8_t ground_slot = reusable_ground_slot();
     Item dropped = item;
-    if(ground_slot != NONE)
-        game.ground[ground_slot] = {game.px, game.py, dropped};
-    if(item_is_equipped(slot))
-        clear_equipment_slot(slot);
+    uint8_t remaining = stackable(item.type)
+        ? merge_ground(item, item_value(item)) : item_value(item);
+    if(remaining && ground_slot != NONE) {
+        Item ground_item = stackable(item.type) ? clean_stack(item) : item;
+        if(stackable(item.type)) set_item_value(ground_item, remaining);
+        game.ground[ground_slot] = {game.px, game.py, ground_item};
+    }
+    bool became_visible = remove_equipment_slot(slot);
     if(session.repeat_slot == slot)
         session.repeat_slot = NONE;
     item.type = NO_ITEM;
-    if(ground_slot != NONE) {
+    if(disposition == DROP_GROUND || disposition == DROP_DISCARD_REST) {
         status(F("You dropped"));
         status(dropped, '.');
+        if(disposition == DROP_DISCARD_REST)
+            status(F("The rest is discarded."));
     } else {
-        status(F("It crumbles to dust."));
+        status(F("You discard"));
+        status(dropped, '.');
     }
+    if(became_visible) status(F("You become visible again."));
     end_turn();
     return true;
 }

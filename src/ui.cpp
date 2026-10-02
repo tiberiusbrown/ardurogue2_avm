@@ -95,6 +95,46 @@ static bool yesno_modal(const char AVM_PROGMEM* prompt_text, const Item* item)
     }
 }
 
+static void show_pickup_rejection(const char AVM_PROGMEM* message)
+{
+    render_play();
+    status_clear();
+    status(message);
+    avm_display(false);
+    for(;;) {
+        avm_idle();
+        uint8_t buttons = avm_buttons();
+        uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
+        ui.previous_buttons = buttons;
+        directional_press(buttons, edges);
+        if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) break;
+    }
+    status_clear();
+}
+
+static void resolve_full_pack_pickup(uint8_t ground_slot)
+{
+    show_pickup_rejection(F("Your pack is full."));
+    for(;;) {
+        uint8_t slot = choose_item(F("Leave which item?"), nullptr);
+        if(slot == NONE) { status_clear(); return; }
+        Item item = game.inventory[slot];
+        if(item.type == YENDOR_AMULET) {
+            show_pickup_rejection(F("You cannot leave the amulet of Yendor."));
+            continue;
+        }
+        if(!inventory_item_removable(slot)) {
+            show_pickup_rejection(F("The cursed item cannot be removed."));
+            continue;
+        }
+        render_play();
+        if(!yesno(F("Leave"), item)) { status_clear(); continue; }
+        status_clear();
+        swap_ground_item(ground_slot, slot);
+        return;
+    }
+}
+
 __attribute__((noinline)) void prompt_stairs()
 {
     if(game.paralyzed || session.ended) return;
@@ -124,7 +164,8 @@ __attribute__((noinline)) void prompt_ground_items()
         render_play();
         if(yesno(F("Pick up"), item)) {
             status_clear();
-            take_item(slot);
+            if(take_item(slot) == PICKUP_NEEDS_SWAP)
+                resolve_full_pack_pickup(slot);
         } else {
             status_clear();
         }
@@ -246,7 +287,21 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
                    slot != NONE) {
                     status_clear();
                     render();
-                    drop_inventory(slot);
+                    DropDisposition disposition = drop_disposition(slot);
+                    if(disposition == DROP_DISCARD_ALL ||
+                       disposition == DROP_DISCARD_REST) {
+                        bool confirmed = disposition == DROP_DISCARD_REST
+                            ? yesno(F("Discard the rest?"))
+                            : ((game.inventory[slot].type == FOOD ||
+                                is_potion(game.inventory[slot].type) ||
+                                is_scroll(game.inventory[slot].type))
+                                ? yesno(F("Discard this item?"))
+                                : yesno(F("Discard"), game.inventory[slot]));
+                        status_clear();
+                        if(confirmed) drop_inventory(slot, true);
+                    } else {
+                        drop_inventory(slot);
+                    }
                 } else status_clear();
                 break;
             case 3:

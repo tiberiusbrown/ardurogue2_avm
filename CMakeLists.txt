@@ -71,7 +71,7 @@ foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
         OUTPUT "${ARDUROGUE2_OBJECT}"
         COMMAND "${AVM_CLANG}"
             --target=avm-unknown-arduboyfx
-            -g -std=c++17 -O2 -ffreestanding -fomit-frame-pointer
+            -g -std=c++17 -O2 -flto -ffreestanding -fomit-frame-pointer
             -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables
             -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit
             -ffunction-sections -fdata-sections -Wall -Wextra -Werror
@@ -87,7 +87,7 @@ endforeach()
 
 add_custom_command(
     OUTPUT "${ARDUROGUE2_ELF}" "${ARDUROGUE2_IMAGE}"
-    COMMAND "${AVM_LD}" -flavor gnu --entry=_start --gc-sections
+    COMMAND "${AVM_LD}" -flavor gnu --entry=_start --gc-sections --lto-O2
         -o "${ARDUROGUE2_ELF}"
         "${AVM_SYSROOT}/lib/crt0.o"
         ${ARDUROGUE2_OBJECTS}

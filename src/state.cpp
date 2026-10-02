@@ -297,9 +297,14 @@ void action()
         end_turn();
         return;
     }
-    if(session.repeat_slot != NONE && game.inventory[session.repeat_slot].type) {
+    if(session.repeat_slot < INVENTORY &&
+       (game.inventory[session.repeat_slot].type == SWORD ||
+        game.inventory[session.repeat_slot].type == ARMOR ||
+        is_ring(game.inventory[session.repeat_slot].type) ||
+        is_amulet(game.inventory[session.repeat_slot].type))) {
         use_inventory(session.repeat_slot);
     } else {
+        session.repeat_slot = NONE;
         status(F("There is nothing here."));
         end_turn();
     }

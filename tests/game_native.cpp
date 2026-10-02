@@ -490,6 +490,286 @@ void check_repeat_inventory_action()
             "scroll recorded a repeat action when none existed");
 }
 
+void reset_item_fixture()
+{
+    start_new(0x2468);
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    std::memset(game.ground, 0, sizeof(game.ground));
+    std::memset(game.inventory, 0, sizeof(game.inventory));
+    std::memset(&game.marks[game.floor], 0, sizeof(FloorMarks));
+    game.px = 3;
+    game.py = 4;
+    game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
+    game.ring_slots[0] = game.ring_slots[1] = NONE;
+    game.defense = 0;
+    game.hp = game.max_hp;
+    game.hunger = 255;
+    status_text.clear();
+}
+
+void fill_item_inventory()
+{
+    for(Item& item : game.inventory) item = {SWORD, 1};
+}
+
+void check_ground_item_exchange()
+{
+    reset_item_fixture();
+    game.ground[5] = {3, 4, {ARMOR, 2}};
+    uint8_t old_turn = game.turns;
+    require(take_item(5) == PICKUP_TAKEN &&
+            game.inventory[0].type == ARMOR &&
+            game.ground[5].item.type == NO_ITEM &&
+            game.turns == static_cast<uint8_t>(old_turn + 1) &&
+            marked(game.marks[0], TAKEN_ITEMS, 5),
+            "ordinary pickup failed");
+
+    reset_item_fixture();
+    game.inventory[0] = {HEALING, 60};
+    game.ground[5] = {3, 4, {HEALING, static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
+    require(take_item(5) == PICKUP_TAKEN &&
+            item_value(game.inventory[0]) == 63 &&
+            item_is_identified(game.inventory[0]),
+            "inventory stack did not fully merge");
+
+    reset_item_fixture();
+    game.inventory[0] = {HEALING, static_cast<uint8_t>(60 | ITEM_CURSED)};
+    game.ground[5] = {3, 4, {HEALING,
+                            static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
+    require(take_item(5) == PICKUP_TAKEN &&
+            game.inventory[0].info ==
+                static_cast<uint8_t>(63 | ITEM_IDENTIFIED),
+            "stack merge leaked a curse bit");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.inventory[0] = {FOOD, 60};
+    game.inventory[1] = {FOOD, 59};
+    game.ground[5] = {3, 4, {FOOD, 7}};
+    require(take_item(5) == PICKUP_TAKEN &&
+            item_value(game.inventory[0]) == 63 &&
+            item_value(game.inventory[1]) == 63,
+            "pickup did not span compatible stacks");
+
+    reset_item_fixture();
+    game.inventory[0] = {SCROLL_MAPPING, 60};
+    game.ground[5] = {3, 4, {SCROLL_MAPPING, 8}};
+    require(take_item(5) == PICKUP_TAKEN &&
+            item_value(game.inventory[0]) == 63 &&
+            game.inventory[1].type == SCROLL_MAPPING &&
+            item_value(game.inventory[1]) == 5,
+            "pickup did not put remainder in an empty slot");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.inventory[0] = {FOOD, 62};
+    game.ground[5] = {3, 4, {FOOD, 2}};
+    Game unchanged = game;
+    Session unchanged_session = session;
+    require(take_item(5) == PICKUP_NEEDS_SWAP &&
+            std::memcmp(&game, &unchanged, sizeof(game)) == 0 &&
+            std::memcmp(&session, &unchanged_session, sizeof(session)) == 0,
+            "failed pickup partially changed game state");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+        game.ground[i] = {3, 4, {ARMOR, 1}};
+    game.ground[5].item = {FOOD, 3};
+    game.inventory[2] = {SWORD, 4};
+    game.weapon_slot = 2;
+    session.repeat_slot = 2;
+    old_turn = game.turns;
+    require(take_item(5) == PICKUP_NEEDS_SWAP &&
+            game.turns == old_turn &&
+            swap_ground_item(5, 2) &&
+            game.inventory[2].type == FOOD &&
+            game.ground[5].item.type == SWORD &&
+            game.ground[5].x == 3 && game.ground[5].y == 4 &&
+            game.weapon_slot == NONE && session.repeat_slot == NONE &&
+            game.turns == static_cast<uint8_t>(old_turn + 1) &&
+            marked(game.marks[0], TAKEN_ITEMS, 5) &&
+            ground_item_before(3, 4, 6) == 5 &&
+            ground_item_before(3, 4, 5) == 4,
+            "full-table swap did not preserve the exact ground slot");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    uint8_t generated = NONE;
+    make_floor();
+    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+        if(game.ground[i].item.type != NO_ITEM) { generated = i; break; }
+    require(generated != NONE, "floor had no generated item to test");
+    require(swap_ground_item(generated, 0), "generated item swap failed");
+    make_floor();
+    require(game.ground[generated].item.type == NO_ITEM &&
+            marked(game.marks[0], TAKEN_ITEMS, generated),
+            "swapped generated item respawned on floor reconstruction");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.inventory[3] = {ARMOR, 5};
+    game.armor_slot = 3;
+    game.defense = 5;
+    require(swap_ground_item(7, 3) && game.armor_slot == NONE &&
+            game.defense == 0, "armor swap left its defense equipped");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.inventory[3] = {RING_ATTACK, 2};
+    game.ring_slots[1] = 3;
+    require(swap_ground_item(7, 3) && game.ring_slots[1] == NONE,
+            "ring swap left the ring equipped");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.inventory[3] = {AMULET_VITALITY, 2};
+    game.amulet_slot = 3;
+    game.hp = player_max_hp();
+    require(swap_ground_item(7, 3) && game.amulet_slot == NONE &&
+            game.hp == player_max_hp(),
+            "amulet swap did not clamp health");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.ground[7] = {3, 4, {SWORD, 1}};
+    game.inventory[3] = {RING_INVISIBILITY,
+                         static_cast<uint8_t>(1 | ITEM_CURSED)};
+    game.ring_slots[0] = 3;
+    unchanged = game;
+    require(!swap_ground_item(7, 3) &&
+            std::memcmp(&game, &unchanged, sizeof(game)) == 0,
+            "cursed equipped item could be swapped");
+
+    reset_item_fixture();
+    fill_item_inventory();
+    game.ground[15] = {3, 4, {YENDOR_AMULET, 1}};
+    require(take_item(15) == PICKUP_TAKEN && game.has_amulet &&
+            game.ground[15].item.type == NO_ITEM &&
+            marked(game.marks[0], TAKEN_ITEMS, 15),
+            "Yendor pickup required inventory space");
+
+    reset_item_fixture();
+    session.repeat_slot = INVENTORY;
+    action();
+    require(session.repeat_slot == NONE,
+            "out-of-range repeat slot was not cleared");
+}
+
+void check_ground_item_drop()
+{
+    reset_item_fixture();
+    game.inventory[0] = {SWORD, 2};
+    game.ground[0].item.type = NO_ITEM;
+    game.ground[1] = {3, 4, {ARMOR, 1}};
+    require(drop_disposition(0) == DROP_DISCARD_ALL &&
+            !drop_inventory(0) && game.inventory[0].type == SWORD,
+            "unmarked empty ground slot was reused");
+    require(!marked(game.marks[0], TAKEN_ITEMS, 15),
+            "reserved ground slot was unexpectedly marked reusable");
+    mark(game.marks[0], TAKEN_ITEMS, 0);
+    session.repeat_slot = 0;
+    uint8_t old_turn = game.turns;
+    require(drop_inventory(0) && game.ground[0].item.type == SWORD &&
+            game.ground[1].item.type == ARMOR &&
+            game.inventory[0].type == NO_ITEM &&
+            session.repeat_slot == NONE &&
+            game.turns == static_cast<uint8_t>(old_turn + 1),
+            "drop onto occupied tile did not use marked slot");
+
+    reset_item_fixture();
+    game.inventory[0] = {FOOD, 7};
+    game.ground[2] = {3, 4, {FOOD, 60}};
+    game.ground[3] = {3, 4, {FOOD, 60}};
+    require(drop_disposition(0) == DROP_DISCARD_REST &&
+            !drop_inventory(0) && item_value(game.ground[2].item) == 60 &&
+            item_value(game.inventory[0]) == 7,
+            "partial drop changed state before discard confirmation");
+    require(drop_inventory(0, true) &&
+            item_value(game.ground[2].item) == 63 &&
+            item_value(game.ground[3].item) == 63 &&
+            game.inventory[0].type == NO_ITEM &&
+            status_text.find("The rest is discarded.") != std::string::npos,
+            "partial discard did not fill ground stacks");
+
+    reset_item_fixture();
+    game.inventory[0] = {HEALING, 7};
+    game.ground[2] = {3, 4, {HEALING, 60}};
+    mark(game.marks[0], TAKEN_ITEMS, 4);
+    require(drop_inventory(0) && item_value(game.ground[2].item) == 63 &&
+            game.ground[4].item.type == HEALING &&
+            item_value(game.ground[4].item) == 4,
+            "drop remainder did not use a reusable slot");
+
+    reset_item_fixture();
+    game.inventory[0] = {FOOD, 3};
+    game.ground[2] = {3, 4, {FOOD, 60}};
+    require(drop_inventory(0) && item_value(game.ground[2].item) == 63 &&
+            game.inventory[0].type == NO_ITEM,
+            "drop did not fully merge into a ground stack");
+
+    reset_item_fixture();
+    game.inventory[0] = {SWORD, 1};
+    session.repeat_slot = 0;
+    Game unchanged = game;
+    require(drop_disposition(0) == DROP_DISCARD_ALL &&
+            !drop_inventory(0) &&
+            std::memcmp(&game, &unchanged, sizeof(game)) == 0,
+            "declined discard mutated game state");
+    require(drop_inventory(0, true) &&
+            game.inventory[0].type == NO_ITEM &&
+            session.repeat_slot == NONE &&
+            status_text.find("You discard") != std::string::npos,
+            "confirmed full discard failed");
+
+    reset_item_fixture();
+    game.inventory[0] = {ARMOR, static_cast<uint8_t>(3 | ITEM_CURSED)};
+    game.armor_slot = 0;
+    game.defense = 3;
+    mark(game.marks[0], TAKEN_ITEMS, 4);
+    unchanged = game;
+    require(drop_disposition(0) == DROP_INVALID &&
+            !drop_inventory(0) && !drop_inventory(0, true) &&
+            std::memcmp(&game, &unchanged, sizeof(game)) == 0,
+            "cursed equipped armor was removed");
+
+    reset_item_fixture();
+    game.inventory[0] = {ARMOR, 3};
+    game.armor_slot = 0;
+    game.defense = 3;
+    mark(game.marks[0], TAKEN_ITEMS, 4);
+    require(drop_inventory(0) && game.armor_slot == NONE &&
+            game.defense == 0 && game.ground[4].item.type == ARMOR,
+            "uncursed equipped armor did not drop cleanly");
+
+    reset_item_fixture();
+    game.inventory[0] = {AMULET_VITALITY, 2};
+    game.amulet_slot = 0;
+    game.hp = player_max_hp();
+    require(drop_inventory(0, true) && game.amulet_slot == NONE &&
+            game.hp == player_max_hp(),
+            "uncursed equipped amulet did not discard cleanly");
+
+    reset_item_fixture();
+    game.inventory[0] = {RING_INVISIBILITY, 1};
+    game.ring_slots[0] = 0;
+    require(player_is_invisible() && drop_inventory(0, true) &&
+            !player_is_invisible() &&
+            status_text.find("You become visible again.") != std::string::npos,
+            "discarding invisibility ring did not announce visibility");
+
+    reset_item_fixture();
+    game.inventory[0] = {YENDOR_AMULET, 1};
+    unchanged = game;
+    require(drop_disposition(0) == DROP_INVALID &&
+            !drop_inventory(0, true) &&
+            std::memcmp(&game, &unchanged, sizeof(game)) == 0,
+            "Yendor amulet could be discarded");
+}
+
 void check_scrolls_and_identification()
 {
     start_new(0x2468);
@@ -1130,6 +1410,8 @@ int main()
     check_confused_wall_bump();
     check_potions();
     check_repeat_inventory_action();
+    check_ground_item_exchange();
+    check_ground_item_drop();
     check_scrolls_and_identification();
     check_mapping_persists_rooms();
     check_teleport_avoids_prompts();

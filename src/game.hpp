@@ -14,11 +14,18 @@ uint8_t player_max_hp();
 bool player_can_see_monster(uint8_t index);
 void end_turn();
 void move_player(int8_t dx, int8_t dy);
-void take_item(uint8_t index);
+enum PickupResult : uint8_t { PICKUP_INVALID, PICKUP_TAKEN, PICKUP_NEEDS_SWAP };
+PickupResult take_item(uint8_t index);
+bool swap_ground_item(uint8_t index, uint8_t slot);
+bool inventory_item_removable(uint8_t slot);
+enum DropDisposition : uint8_t {
+    DROP_INVALID, DROP_GROUND, DROP_DISCARD_ALL, DROP_DISCARD_REST
+};
+DropDisposition drop_disposition(uint8_t slot);
 bool take_stairs();
 void action();
 bool use_inventory(uint8_t slot, uint8_t target_slot = NONE);
-bool drop_inventory(uint8_t slot);
+bool drop_inventory(uint8_t slot, bool discard = false);
 bool throw_potion(uint8_t slot, int8_t dx, int8_t dy);
 uint8_t monster_effect(const Monster& monster, MonsterEffect effect);
 bool potion_identified(uint8_t type);
