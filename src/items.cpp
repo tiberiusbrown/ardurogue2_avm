@@ -669,25 +669,6 @@ static void polymorph_monster(uint8_t index)
 
 static void dig_ray(int8_t dx, int8_t dy, bool powerful)
 {
-#if defined(AVM_DIG_RAY_COMPILER_REPRO)
-    // Retained only to reproduce the AVM backend crash documented in
-    // tests/compiler_repros/README.md. Never enabled in the game build.
-    for(uint8_t step = 1; step <= 6; ++step) {
-        for(int8_t side = powerful ? -1 : 0;
-            side <= (powerful ? 1 : 0); ++side) {
-            int16_t x = static_cast<int16_t>(game.player.x) + dx * step +
-                (dy ? side : 0);
-            int16_t y = static_cast<int16_t>(game.player.y) + dy * step +
-                (dx ? side : 0);
-            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
-            Position pos = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
-            carve(pos.x, pos.y);
-            explore(pos);
-            uint8_t door = door_at(pos);
-            if(door != NONE) open_door(door);
-        }
-    }
-#else
     for(uint8_t step = 1; step <= 6; ++step) {
         uint8_t lanes = powerful ? 3 : 1;
         for(uint8_t lane = 0; lane < lanes; ++lane) {
@@ -704,7 +685,6 @@ static void dig_ray(int8_t dx, int8_t dy, bool powerful)
             if(door != NONE) open_door(door);
         }
     }
-#endif
 }
 
 static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,

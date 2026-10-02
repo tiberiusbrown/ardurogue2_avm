@@ -2,12 +2,6 @@ cmake_minimum_required(VERSION 3.20)
 
 project(ardurogue2 LANGUAGES NONE)
 
-option(AVM_DIG_RAY_COMPILER_REPRO
-       "Build the original digging loop to reproduce an AVM backend crash" OFF)
-if(AVM_DIG_RAY_COMPILER_REPRO)
-    set(AVM_REPRO_DEFINE -DAVM_DIG_RAY_COMPILER_REPRO)
-endif()
-
 if(NOT DEFINED AVM_SDK_ROOT)
     set(AVM_SDK_ROOT "" CACHE PATH "Path to the installed AVM SDK")
 endif()
@@ -60,9 +54,6 @@ endif()
 set(ARDUROGUE2_OBJECTS)
 set(ARDUROGUE2_ELF "${CMAKE_CURRENT_BINARY_DIR}/ardurogue2.elf")
 set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/ardurogue2.arduboy")
-if(AVM_DIG_RAY_COMPILER_REPRO)
-    set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_BINARY_DIR}/ardurogue2-repro.arduboy")
-endif()
 
 set(ARDUROGUE2_SOURCES
     main state combat items world persistence status render ui)
@@ -86,7 +77,6 @@ foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
             -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables
             -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit
             -ffunction-sections -fdata-sections -Wall -Wextra -Werror
-            ${AVM_REPRO_DEFINE}
             -isystem "${AVM_SYSROOT}/include"
             -c "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
             -o "${ARDUROGUE2_OBJECT}"
