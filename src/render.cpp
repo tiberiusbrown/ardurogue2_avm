@@ -47,7 +47,11 @@ static const uint16_t PROGMEM item_icons[] = {
     0x0606, 0x0606, 0x0606, 0x0606, // amulet variants
     0x01b3, 0x01b3, 0x01b3, 0x01b3, 0x01b3,
     0x01b3, 0x01b3, 0x01b3, 0x01b3, // scroll variants
+    0x1248, 0x1248, 0x1248, 0x1248,
+    0x1248, 0x1248, 0x1248, // wand variants
 };
+static_assert(sizeof(item_icons) / sizeof(item_icons[0]) ==
+              WAND_POLYMORPH + 1, "item icon table changed");
 static constexpr uint16_t PLAYER_ICON = 0x6ff6;
 static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
 static constexpr uint16_t UP_STAIRS_ICON = 0x8cef;
@@ -91,6 +95,88 @@ static bool screen_tile(Position pos, uint8_t& sx, uint8_t& sy)
     sx = static_cast<uint8_t>(dx);
     sy = static_cast<uint8_t>(dy);
     return true;
+}
+
+static void animation_wait()
+{
+    uint16_t until = static_cast<uint16_t>(avm_millis() + 100);
+    while(static_cast<int16_t>(avm_millis() - until) < 0)
+        avm_idle();
+}
+
+static void effect_pixel(int16_t x, int16_t y, bool lit)
+{
+    if(x < 0 || x >= 64 || y < 0 || y >= 64) return;
+    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
+    uint8_t mask = static_cast<uint8_t>(1u << (y & 7));
+    if(lit) __avm_framebuffer[offset] |= mask;
+    else __avm_framebuffer[offset] &= static_cast<uint8_t>(~mask);
+}
+
+// ArduRogue clears the sprite's set pixels at all eight neighboring pixel
+// positions before setting the four sprite columns at the current tile.
+static void effect_sprite(uint8_t sx, uint8_t sy)
+{
+    constexpr uint16_t shape = 0x0eae;
+    int16_t x = static_cast<int16_t>(sx) * 5;
+    int16_t y = static_cast<int16_t>(sy) * 5;
+    for(int8_t oy = -1; oy <= 1; ++oy)
+        for(int8_t ox = -1; ox <= 1; ++ox) {
+            if(!ox && !oy) continue;
+            for(uint8_t col = 0; col < 4; ++col) {
+                uint8_t bits = static_cast<uint8_t>(
+                    (shape >> (12 - col * 4)) & 0x0f);
+                for(uint8_t row = 0; row < 4; ++row)
+                    if(bits & (1u << row))
+                        effect_pixel(x + ox + col, y + oy + row, false);
+            }
+        }
+    for(uint8_t col = 0; col < 4; ++col) {
+        uint8_t bits = static_cast<uint8_t>(
+            (shape >> (12 - col * 4)) & 0x0f);
+        for(uint8_t row = 0; row < 4; ++row)
+            if(bits & (1u << row))
+                effect_pixel(x + col, y + row, true);
+    }
+}
+
+static void animation_tile(int16_t x, int16_t y)
+{
+    if(x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) {
+        uint8_t sx, sy;
+        if(screen_tile({static_cast<uint8_t>(x), static_cast<uint8_t>(y)}, sx, sy))
+            effect_sprite(sx, sy);
+    }
+    avm_display(false);
+    animation_wait();
+}
+
+__attribute__((noinline)) void animate_ray(Position origin, int8_t dx,
+                                           int8_t dy, uint8_t steps)
+{
+    render_play();
+    int16_t x = origin.x, y = origin.y;
+    for(uint8_t step = 0; step < steps; ++step) {
+        x += dx;
+        y += dy;
+        animation_tile(x, y);
+    }
+    render_play();
+    avm_display(false);
+}
+
+__attribute__((noinline)) void animate_fire_burst(Position center)
+{
+    static const int8_t PROGMEM offsets[] = {
+        0, 0, -1, -1, 0, -1, 1, -1, 1, 0,
+        1, 1, 0, 1, -1, 1, -1, 0
+    };
+    render_play();
+    for(uint8_t i = 0; i < 18; i += 2)
+        animation_tile(static_cast<int16_t>(center.x) + offsets[i],
+                       static_cast<int16_t>(center.y) + offsets[i + 1]);
+    render_play();
+    avm_display(false);
 }
 
 static bool in_sight(Position pos, const uint16_t sight[13],
@@ -304,6 +390,7 @@ void render_inventory(const char AVM_PROGMEM* prompt,
             case ARMORS: avm_draw_text_P(1, y, F("Armor")); break;
             case RINGS: avm_draw_text_P(1, y, F("Rings")); break;
             case AMULETS: avm_draw_text_P(1, y, F("Amulets")); break;
+            case WANDS: avm_draw_text_P(1, y, F("Wands")); break;
             case POTIONS: avm_draw_text_P(1, y, F("Potions")); break;
             case SCROLLS: avm_draw_text_P(1, y, F("Scrolls")); break;
             case FOODS: avm_draw_text_P(1, y, F("Food")); break;
@@ -331,7 +418,8 @@ void render_inventory(const char AVM_PROGMEM* prompt,
 
 __attribute__((noinline)) static void render_throw_direction()
 {
-    avm_draw_text_P(8, 12, F("THROW POTION"));
+    avm_draw_text_P(8, 12, ui.mode == WAND_DIRECTION
+        ? F("USE WAND") : F("THROW POTION"));
     char label[ITEM_TEXT_CAPACITY];
     format_item(game.inventory[ui.selection], label);
     avm_draw_text(8, 27, label);
@@ -378,6 +466,7 @@ void render()
     case PLAY: render_play(); break;
     case MENU: render_menu(); break;
     case THROW_DIRECTION: render_throw_direction(); break;
+    case WAND_DIRECTION: render_throw_direction(); break;
     case FULL_MAP: render_full_map(); break;
     case END: render_end(); break;
     }

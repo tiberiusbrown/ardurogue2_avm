@@ -304,6 +304,14 @@ static void consume_potion(Item& item)
     }
 }
 
+static bool legal_teleport_position(Position pos, bool player)
+{
+    return !blocked(pos.x, pos.y) && monster_at(pos) == NONE &&
+        (player || pos != game.player) &&
+        pos != game.up && pos != game.down &&
+        (!player || item_at(pos) == NONE);
+}
+
 static void scroll_effect(uint8_t type, uint8_t target_slot)
 {
     if(type == SCROLL_IDENTIFY || type == SCROLL_ENCHANT ||
@@ -319,11 +327,14 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
             status(F("You identify")); status(target, '.');
         } else if(type == SCROLL_ENCHANT) {
             if(target.type != SWORD && target.type != ARMOR &&
-               !is_ring(target.type) && !is_amulet(target.type)) {
+               !is_ring(target.type) && !is_amulet(target.type) &&
+               !is_wand(target.type)) {
                 status(F("Nothing happens."));
             } else {
                 uint8_t value = item_value(target);
-                if(item_is_cursed(target) &&
+                if(is_wand(target.type)) {
+                    set_item_value(target, value > 11 ? 15 : value + 4);
+                } else if(item_is_cursed(target) &&
                    (is_ring(target.type) || is_amulet(target.type))) {
                     if(value) set_item_value(target, value - 1);
                 } else if(value < ITEM_VALUE_MASK) {
@@ -333,7 +344,7 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
                     game.defense = item_value(target);
                 status(F("The")); status(target); status(F("glows blue."));
             }
-        } else if(item_is_cursed(target)) {
+        } else if(item_is_cursed(target) && !is_wand(target.type)) {
             target.info &= static_cast<uint8_t>(~ITEM_CURSED);
             status(F("The")); status(target); status(F("glows white."));
         } else {
@@ -346,8 +357,7 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
             Position pos = {
                 static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
                 static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
-            if(!blocked(pos.x, pos.y) && monster_at(pos) == NONE &&
-               item_at(pos) == NONE && pos != game.up && pos != game.down) {
+            if(legal_teleport_position(pos, true)) {
                 game.player = pos;
                 status(F("You teleport!"));
                 return;
@@ -563,21 +573,7 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
     set_item_value(item, static_cast<uint8_t>(item_value(item) - 1));
     if(!item_value(item)) item.type = NO_ITEM;
 
-    uint8_t hit = NONE;
-    int16_t x = game.player.x, y = game.player.y;
-    for(uint8_t step = 0; step < 8; ++step) {
-        x += dx;
-        y += dy;
-        if(wall_at(x, y))
-            break;
-        Position pos = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
-        uint8_t door = door_at(pos);
-        if(door != NONE && !door_open(door))
-            break;
-        hit = monster_at(pos);
-        if(hit != NONE)
-            break;
-    }
+    uint8_t hit = scan_ray(game.player, dx, dy, 8).monster;
     if(hit != NONE) {
         status(F("It hits the"));
         status(static_cast<MonsterType>(game.monsters[hit].type), '.');
@@ -594,6 +590,130 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
         end_turn();
     if(item.type == NO_ITEM && session.repeat_slot == slot)
         session.repeat_slot = NONE;
+    return true;
+}
+
+static bool teleport_monster(uint8_t index)
+{
+    Monster& target = game.monsters[index];
+    for(uint8_t attempt = 0; attempt < 100; ++attempt) {
+        Position pos = {
+            static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
+            static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
+        if(!legal_teleport_position(pos, false))
+            continue;
+        target.pos = pos;
+        set_monster_effect(target, MON_CONFUSED, 8);
+        monster_status(target, F("disappears!"));
+        return true;
+    }
+    status(F("Nothing happens."));
+    return false;
+}
+
+static void force_monster(uint8_t index, int8_t dx, int8_t dy)
+{
+    Monster& target = game.monsters[index];
+    monster_status(target, F("is blasted back!"));
+    RayResult path = scan_ray(target.pos, dx, dy, 8);
+    target.pos = path.monster != NONE ? path.before : path.end;
+    if(path.monster != NONE) {
+        monster_status(target, F("crashes into another monster!"));
+        target.stun = 4;
+        game.monsters[path.monster].stun = 4;
+    } else if(path.blocker) {
+        monster_status(target, F("hits a wall!"));
+        target.stun = 4;
+    }
+}
+
+bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
+{
+    if(slot >= INVENTORY || game.paralyzed ||
+       !is_wand(game.inventory[slot].type) ||
+       (dx == 0 && dy == 0) || (dx != 0 && dy != 0) ||
+       dx < -1 || dx > 1 || dy < -1 || dy > 1)
+        return false;
+    Item& item = game.inventory[slot];
+    if(!item_value(item)) {
+        status(F("The wand has no charges."));
+        return false;
+    }
+    uint8_t type = item.type;
+    bool known = item_type_identified(type);
+    status(F("You use"));
+    status(Item{type, item.info}, '.');
+    uint8_t remaining = static_cast<uint8_t>(item_value(item) - 1);
+    set_item_value(item, remaining);
+    identify_type(type);
+    item.info |= ITEM_IDENTIFIED;
+    if(!known) {
+        status(F("It is"));
+        status(Item{type, item.info}, '.');
+    }
+
+    if(type == WAND_DIGGING) {
+        int16_t x = game.player.x, y = game.player.y;
+        for(uint8_t step = 0; step < 6; ++step) {
+            x += dx;
+            y += dy;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) break;
+            Position pos = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
+            carve(pos.x, pos.y);
+            explore(pos);
+            uint8_t door = door_at(pos);
+            if(door != NONE) open_door(door);
+        }
+        status(F("The stone gives way."));
+    } else {
+        RayResult ray = scan_ray(game.player, dx, dy, 6);
+        animate_ray(game.player, dx, dy, ray.steps);
+        if(type == WAND_FIRE) {
+            animate_fire_burst(ray.end);
+            fire_burst_damage(ray.end, true);
+        } else if(ray.monster != NONE) {
+            Monster& target = game.monsters[ray.monster];
+            target.state |= MON_AGGRO;
+            switch(type) {
+            case WAND_FORCE:
+                force_monster(ray.monster, dx, dy);
+                break;
+            case WAND_TELEPORT:
+                teleport_monster(ray.monster);
+                break;
+            case WAND_STRIKING: {
+                uint8_t damage = static_cast<uint8_t>(12 + roll(12));
+                damage_monster(ray.monster, damage, true);
+                if(target.type) monster_status(target, F("is struck!"));
+                break;
+            }
+            case WAND_ICE: {
+                set_monster_effect(target, MON_SLOWED, 15);
+                uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+                damage_monster(ray.monster, damage, true);
+                if(target.type) monster_status(target, F("slows down!"));
+                break;
+            }
+            case WAND_POLYMORPH:
+                if(target.type > BAT && target.type < LORD) {
+                    monster_status(target, F("changes form!"));
+                    target.type = static_cast<uint8_t>(target.type +
+                        (target.type != ANGEL && roll(4) == 0 ? 1 : -1));
+                    target.hp = monster_info(target.type).health;
+                    target.stun = 0;
+                    target.effects[0] = target.effects[1] = 0;
+                } else status(F("Nothing happens."));
+                break;
+            default: break;
+            }
+        } else status(F("Nothing happens."));
+    }
+    if(!remaining) {
+        item.type = NO_ITEM;
+        status(F("The wand crumbles to dust."));
+        if(session.repeat_slot == slot) session.repeat_slot = NONE;
+    }
+    if(!session.ended) end_turn();
     return true;
 }
 

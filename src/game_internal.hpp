@@ -19,6 +19,10 @@ void monster_status(const Monster& monster, const char PROGMEM* message);
 void set_monster_effect(Monster& monster, MonsterEffect effect,
                         uint8_t duration);
 void defeat_monster(uint8_t index);
+void damage_monster(uint8_t index, uint8_t damage, bool player_attack);
+void fire_burst_damage(Position center, bool player_attack);
+void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
+void animate_fire_burst(Position center);
 void apply_monster_potion(uint8_t type, uint8_t index);
 
 } // namespace rogue

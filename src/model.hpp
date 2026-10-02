@@ -31,7 +31,7 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-constexpr uint8_t SAVE_VERSION = 14;
+constexpr uint8_t SAVE_VERSION = 15;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -45,12 +45,15 @@ enum ItemType : uint8_t {
     AMULET_VITALITY, AMULET_WISDOM,
     SCROLL_IDENTIFY, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE,
     SCROLL_TELEPORT, SCROLL_MAPPING, SCROLL_FEAR,
-    SCROLL_TORMENT, SCROLL_MASS_CONFUSE, SCROLL_MASS_POISON
+    SCROLL_TORMENT, SCROLL_MASS_CONFUSE, SCROLL_MASS_POISON,
+    WAND_FORCE, WAND_TELEPORT, WAND_DIGGING, WAND_FIRE,
+    WAND_STRIKING, WAND_ICE, WAND_POLYMORPH
 };
 constexpr uint8_t POTION_COUNT = INVISIBILITY - HEALING + 1;
 constexpr uint8_t RING_COUNT = RING_INVISIBILITY - RING_SEE_INVISIBLE + 1;
 constexpr uint8_t AMULET_COUNT = AMULET_WISDOM - AMULET_SPEED + 1;
 constexpr uint8_t SCROLL_COUNT = SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1;
+constexpr uint8_t WAND_COUNT = WAND_POLYMORPH - WAND_FORCE + 1;
 constexpr bool is_potion(uint8_t type)
 {
     return type >= HEALING && type <= INVISIBILITY;
@@ -66,6 +69,10 @@ constexpr bool is_amulet(uint8_t type)
 constexpr bool is_scroll(uint8_t type)
 {
     return type >= SCROLL_IDENTIFY && type <= SCROLL_MASS_POISON;
+}
+constexpr bool is_wand(uint8_t type)
+{
+    return type >= WAND_FORCE && type <= WAND_POLYMORPH;
 }
 
 enum MonsterType : uint8_t {
@@ -154,7 +161,7 @@ struct Game {
     uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
-    uint8_t identified_items[5];
+    uint8_t identified_items[6];
 };
 
 enum RunResult : uint8_t {
@@ -173,7 +180,7 @@ extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 820, "Game saved layout changed");
+static_assert(sizeof(Game) == 821, "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -189,8 +196,11 @@ static_assert(offsetof(Game, doors) == 560 &&
               offsetof(Game, inventory) == 742 &&
               offsetof(Game, player) == 786 &&
               offsetof(Game, up) == 788 && offsetof(Game, down) == 790 &&
-              offsetof(Game, hp) == 792, "game save offsets changed");
+              offsetof(Game, hp) == 792 &&
+              offsetof(Game, identified_items) == 815,
+              "game save offsets changed");
 static_assert(POTION_COUNT == 10 && SCROLL_COUNT == 9 &&
-              RING_COUNT == 8 && AMULET_COUNT == 8, "item table counts changed");
+              RING_COUNT == 8 && AMULET_COUNT == 8 && WAND_COUNT == 7,
+              "item table counts changed");
 
 } // namespace rogue

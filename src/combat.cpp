@@ -123,25 +123,47 @@ static void leave_yendor(const Monster& monster)
         game.ground[15] = {monster.pos, {YENDOR_AMULET, 1}};
 }
 
-static void fire_splash_monsters()
+void damage_monster(uint8_t index, uint8_t damage, bool player_attack)
+{
+    Monster& target = game.monsters[index];
+    if(!target.type) return;
+    if(player_attack) target.state |= MON_AGGRO;
+    if(damage >= target.hp) {
+        if(player_attack) defeat_monster(index);
+        else {
+            leave_yendor(target);
+            target.type = NO_MONSTER;
+        }
+    } else
+        target.hp = static_cast<uint8_t>(target.hp - damage);
+}
+
+void fire_burst_damage(Position center, bool player_attack)
 {
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         Monster& target = game.monsters[i];
         if(!target.type || target.type == DRAGON)
             continue;
-        uint8_t dx = target.pos.x > game.player.x ? target.pos.x - game.player.x :
-            game.player.x - target.pos.x;
-        uint8_t dy = target.pos.y > game.player.y ? target.pos.y - game.player.y :
-            game.player.y - target.pos.y;
+        uint8_t dx = target.pos.x > center.x ? target.pos.x - center.x :
+            center.x - target.pos.x;
+        uint8_t dy = target.pos.y > center.y ? target.pos.y - center.y :
+            center.y - target.pos.y;
         if(dx > 1 || dy > 1)
             continue;
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
-        if(damage >= target.hp) {
-            leave_yendor(target);
-            target.type = NO_MONSTER;
-        } else {
-            target.hp = static_cast<uint8_t>(target.hp - damage);
-        }
+        damage_monster(i, damage, player_attack);
+    }
+    if(player_attack &&
+       game.player.x + 1 >= center.x && game.player.x <= center.x + 1 &&
+       game.player.y + 1 >= center.y && game.player.y <= center.y + 1) {
+        uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+        int8_t protection = ring_bonus(RING_FIRE_IMMUNITY);
+        if(protection > 0) damage = 0;
+        if(protection < 0) damage = static_cast<uint8_t>(damage * 2);
+        if(damage) {
+            hurt_player(damage);
+            status(F("You are caught in the flames!"));
+        } else status(F("The flames do not affect you."));
     }
 }
 
@@ -156,15 +178,8 @@ static bool fire_line_clear(const Monster& monster)
     uint8_t range = distance(monster.pos, game.player);
     if(!range || range > 5)
         return false;
-    int16_t x = monster.pos.x, y = monster.pos.y;
-    for(uint8_t i = 1; i < range; ++i) {
-        x += dx;
-        y += dy;
-        if(blocked(x, y) || monster_at({static_cast<uint8_t>(x),
-                                       static_cast<uint8_t>(y)}) != NONE)
-            return false;
-    }
-    return true;
+    RayResult ray = scan_ray(monster.pos, dx, dy, range);
+    return ray.steps == range && ray.monster == NONE && !ray.blocker;
 }
 
 static void advance_monster(uint8_t index)
@@ -191,6 +206,12 @@ static void advance_monster(uint8_t index)
             status(F("The"));
             status(static_cast<MonsterType>(monster.type));
             status(F("breathes fire!"));
+            int8_t dx = monster.pos.x == game.player.x ? 0 :
+                monster.pos.x < game.player.x ? 1 : -1;
+            int8_t dy = monster.pos.y == game.player.y ? 0 :
+                monster.pos.y < game.player.y ? 1 : -1;
+            animate_ray(monster.pos, dx, dy, range);
+            animate_fire_burst(game.player);
             uint8_t damage = static_cast<uint8_t>(8 + roll(8));
             int8_t protection = ring_bonus(RING_FIRE_IMMUNITY);
             if(protection > 0) damage = 0;
@@ -199,7 +220,7 @@ static void advance_monster(uint8_t index)
                 status(F("The flames do not affect you."));
             else
                 hurt_player(damage);
-            fire_splash_monsters();
+            fire_burst_damage(game.player, false);
         } else if(range == 1 && pursuing && !confused && !afraid) {
             uint8_t attacker_dex = info.dexterity;
             uint8_t player_dex = game.dexterity;

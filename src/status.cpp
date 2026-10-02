@@ -17,10 +17,12 @@ int16_t text_width(const char* words)
     return avm_draw_text(128, 0, words).x - 128;
 }
 
+#if defined(__AVM__)
 int16_t text_width(const char AVM_PROGMEM* words)
 {
     return avm_draw_text_P(128, 0, words).x - 128;
 }
+#endif
 
 void status_next_line()
 {
@@ -152,6 +154,14 @@ static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
 static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
     F("diamond"), F("ruby"), F("emerald"), F("topaz"),
     F("gold"), F("silver"), F("platinum"), F("iron")
+};
+static const char PROGMEM* const PROGMEM wand_names[] = {
+    F("force"), F("teleportation"), F("digging"), F("fire"),
+    F("striking"), F("ice"), F("polymorph")
+};
+static const char PROGMEM* const PROGMEM wand_descriptors[] = {
+    F("long"), F("short"), F("slender"), F("thick"),
+    F("twisted"), F("curved"), F("glossy")
 };
 
 const char PROGMEM* ring_name(uint8_t type)
@@ -299,6 +309,20 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
         } else {
             text.word(jewel_descriptors[item_appearance(item.type)]);
             text.word(F("amulet"));
+        }
+        return;
+    }
+    if(is_wand(item.type)) {
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        else if(style == STATUS_ITEM) text.word(F("a"));
+        if(known) {
+            text.word(F("wand"));
+            text.word(F("of"));
+            text.word(wand_names[item.type - WAND_FORCE]);
+            if(style == INVENTORY_ITEM) text.number(item_value(item));
+        } else {
+            text.word(wand_descriptors[item_appearance(item.type)]);
+            text.word(F("wand"));
         }
         return;
     }

@@ -23,9 +23,10 @@ door coordinate records whether that door is open. Each inventory item uses two
 bytes: a type byte and an info byte with a six-bit quantity or level, a cursed
 bit, and an identified bit. Ground slots store their coordinates and a complete
 item.
-Save version 14 stores one active floor in an 820-byte `Game`. It derives
-potion, scroll, ring, and amulet appearances from the run seed instead of
-storing 35 mapping bytes. It stores their discoveries, monster potion effects,
+Save version 15 stores one active floor in an 821-byte AVM `Game` (820 bytes in
+version 14). It derives potion, scroll, ring, amulet, and wand appearances from
+the run seed instead of storing 42 mapping bytes. Six bytes store their
+discoveries. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots; older saves
 are not compatible.
 
@@ -66,6 +67,19 @@ The player has a base speed of 4. Enemy speed values are turn costs, as in
 ArduRogue: lower values act more often. Slowing doubles an enemy's turn cost;
 a slowed player gives enemies more turns.
 
+The seven wands are force, teleportation, digging, fire, striking, ice, and
+polymorph. Each has an independently permuted unknown appearance (long, short,
+slender, thick, twisted, curved, or glossy) until use identifies its type for
+the rest of the run. A wand starts with 3–10 charges, never stacks, and crumbles
+after its last charge. An enchant scroll adds four charges, up to 15. Wands
+appear only during descent, so saved charges are resources for the ascent.
+Choose **Use Item**, select a wand, and press a direction to fire up to six
+tiles; B cancels without using a charge or turn. Except for digging, each wand
+shows ArduRogue's accumulating animated ray. Fire wands add an animated
+three-by-three burst that can strike several monsters or the player. Dragon
+breath uses the same animated ray and burst while retaining its five-tile
+range and fire immunity rules.
+
 Select **Throw Potion** from the action menu, choose a potion, then press a
 direction. It travels up to eight tiles and shatters on the first monster,
 closed door, or wall. A hit applies the potion to that monster and identifies
@@ -94,6 +108,8 @@ Canceling that selection still consumes the scroll, as in ArduRogue.
 | Item selection | Up/Down, A | Select an item for the chosen action |
 | Item selection | B | Cancel selection |
 | Throw selection | Up/Down, A | Choose a potion from inventory |
+| Wand direction | Direction pad | Fire the selected wand |
+| Wand direction | B | Cancel without spending a charge or turn |
 | Throw direction | Direction pad | Throw the selected potion |
 | Confirmation | A/B | Confirm or cancel abandoning the game |
 | Throw direction, full map | B | Return to the dungeon |

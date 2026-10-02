@@ -27,6 +27,7 @@ void action();
 bool use_inventory(uint8_t slot, uint8_t target_slot = NONE);
 bool drop_inventory(uint8_t slot, bool discard = false);
 bool throw_potion(uint8_t slot, int8_t dx, int8_t dy);
+bool use_wand(uint8_t slot, int8_t dx, int8_t dy);
 uint8_t monster_effect(const Monster& monster, MonsterEffect effect);
 bool potion_identified(uint8_t type);
 uint8_t potion_color(uint8_t type);

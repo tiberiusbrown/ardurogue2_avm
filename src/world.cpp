@@ -1,4 +1,5 @@
 #include "world.hpp"
+#include "game.hpp"
 #include "game_internal.hpp"
 #include <string.h>
 
@@ -243,13 +244,16 @@ void make_floor()
             ? static_cast<uint8_t>(HEALING + floor_roll(seed, POTION_COUNT)) :
               chance < 48 ? static_cast<uint8_t>(SCROLL_IDENTIFY +
                                                 floor_roll(seed, SCROLL_COUNT)) :
-              chance < 58 ? SWORD : chance < 68 ? ARMOR :
+              chance < 56 ? SWORD : chance < 64 ? ARMOR :
+              chance < 68 ? static_cast<uint8_t>(WAND_FORCE +
+                                                 floor_roll(seed, WAND_COUNT)) :
               chance < 70
                 ? static_cast<uint8_t>(RING_SEE_INVISIBLE +
                                        floor_roll(seed, RING_COUNT))
                 : static_cast<uint8_t>(AMULET_SPEED +
                                        floor_roll(seed, AMULET_COUNT));
-        uint8_t info = type == SWORD || type == ARMOR
+        uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) :
+            type == SWORD || type == ARMOR
             ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
         if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
             info |= ITEM_CURSED;
@@ -257,6 +261,26 @@ void make_floor()
             continue;
         game.ground[i] = {{x, y}, {type, info}};
     }
+}
+
+RayResult scan_ray(Position origin, int8_t dx, int8_t dy, uint8_t range)
+{
+    RayResult result = {origin, origin, NONE, 0, false};
+    int16_t x = origin.x, y = origin.y;
+    for(uint8_t step = 0; step < range; ++step) {
+        x += dx;
+        y += dy;
+        if(blocked(x, y)) {
+            result.blocker = true;
+            break;
+        }
+        result.before = result.end;
+        result.end = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
+        ++result.steps;
+        result.monster = monster_at(result.end);
+        if(result.monster != NONE) break;
+    }
+    return result;
 }
 
 bool can_see(Position pos)

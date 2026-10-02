@@ -11,6 +11,9 @@
 #include <string>
 
 static std::string status_text;
+static int ray_animations = 0, burst_animations = 0;
+static rogue::Position animated_origin = {}, animated_burst = {};
+static uint8_t animated_steps = 0;
 
 namespace rogue {
 Game game = {};
@@ -33,6 +36,15 @@ void status(MonsterType) {}
 void status(MonsterType, char) {}
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
+void animate_ray(Position origin, int8_t, int8_t, uint8_t steps) {
+    ++ray_animations;
+    animated_origin = origin;
+    animated_steps = steps;
+}
+void animate_fire_burst(Position center) {
+    ++burst_animations;
+    animated_burst = center;
+}
 }
 
 void require(bool condition, const char* reason)
@@ -51,7 +63,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  sizeof(Game) == 820,
+                  sizeof(Game) == 822 && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -1437,7 +1449,10 @@ void check_enemy_abilities()
         end_turn();
         breathed = status_text.find("breathes fire!") != std::string::npos;
     }
-    require(breathed && game.hp < 240, "dragon fire did not hurt the player");
+    require(breathed && game.hp < 240 && ray_animations > 0 &&
+            burst_animations > 0 && animated_origin == Position{13, 10} &&
+            animated_steps == 3 && animated_burst == game.player,
+            "dragon fire damage or shared animation changed");
     arena(DRAGON, 13);
     game.monsters[1] = {{10, 11}, GOBLIN, monster_info(GOBLIN).health,
                         100, {0, 0}, 0};
@@ -1561,8 +1576,295 @@ void check_vampire_amulet()
             "lethal cursed vampire drain did not end the run after a kill");
 }
 
+void wand_arena(uint8_t type, uint8_t charges = 2)
+{
+    start_new(0x4312);
+    std::memset(game.walls, 0, sizeof game.walls);
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    std::memset(game.inventory, 0, sizeof game.inventory);
+    game.door_count = 0;
+    game.player = {10, 10};
+    game.hp = game.max_hp = 240;
+    game.hunger = 255;
+    game.inventory[0] = {type, charges};
+    status_text.clear();
+    ray_animations = burst_animations = 0;
+}
+
+void check_wand_identity_and_generation()
+{
+    static_assert(WAND_COUNT == 7 && sizeof(Item) == 2,
+                  "wand layout changed");
+    start_new(0x1248);
+    uint8_t first[WAND_COUNT];
+    bool seen[WAND_COUNT] = {};
+    for(uint8_t i = 0; i < WAND_COUNT; ++i) {
+        uint8_t type = static_cast<uint8_t>(WAND_FORCE + i);
+        require(is_wand(type) && !item_type_identified(type),
+                "wand range or initial knowledge is wrong");
+        first[i] = item_appearance(type);
+        require(first[i] < WAND_COUNT && !seen[first[i]],
+                "wand appearances are not a permutation");
+        seen[first[i]] = true;
+    }
+    start_new(0x1248);
+    for(uint8_t i = 0; i < WAND_COUNT; ++i)
+        require(item_appearance(static_cast<uint8_t>(WAND_FORCE + i)) == first[i],
+                "wand appearance changed for the same seed");
+    start_new(0x1249);
+    bool different = false;
+    for(uint8_t i = 0; i < WAND_COUNT; ++i)
+        different |= item_appearance(static_cast<uint8_t>(WAND_FORCE + i)) != first[i];
+    require(different, "wand appearances do not vary between runs");
+
+    unsigned generated = 0;
+    for(uint16_t seed = 1; seed <= 100; ++seed) {
+        start_new(seed);
+        for(uint8_t floor = 0; floor < FLOORS; ++floor) {
+            game.floor = floor;
+            make_floor();
+            for(const GroundItem& ground : game.ground)
+                if(is_wand(ground.item.type)) {
+                    ++generated;
+                    require(item_value(ground.item) >= 3 &&
+                            item_value(ground.item) <= 10,
+                            "generated wand charge range changed");
+                }
+        }
+        game.has_amulet = 1;
+        make_floor();
+        for(const GroundItem& ground : game.ground)
+            require(ground.item.type == NO_ITEM,
+                    "ascent generated ordinary items");
+    }
+    require(generated > 0, "descent never generated a wand");
+
+    wand_arena(WAND_FIRE);
+    game.ground[0] = {game.player, {WAND_FIRE, 4}};
+    game.ground[1] = {game.player, {WAND_FIRE, 7}};
+    require(take_item(0) == PICKUP_TAKEN &&
+            take_item(1) == PICKUP_TAKEN &&
+            game.inventory[0].type == WAND_FIRE &&
+            game.inventory[1].type == WAND_FIRE &&
+            item_value(game.inventory[0]) == 2 &&
+            item_value(game.inventory[1]) == 4 &&
+            game.inventory[2].type == WAND_FIRE &&
+            item_value(game.inventory[2]) == 7,
+            "wands stacked instead of occupying separate inventory slots");
+}
+
+void check_wand_rays_and_charges()
+{
+    wand_arena(WAND_STRIKING, 2);
+    uint8_t turns = game.turns;
+    require(!use_wand(0, 0, 0) && item_value(game.inventory[0]) == 2 &&
+            game.turns == turns, "invalid or canceled direction spent a charge");
+    require(use_wand(0, 1, 0) && item_value(game.inventory[0]) == 1 &&
+            game.turns == static_cast<uint8_t>(turns + 1) &&
+            item_type_identified(WAND_STRIKING) &&
+            ray_animations == 1 && animated_origin == Position{10, 10} &&
+            animated_steps == 6,
+            "empty wand shot did not spend a turn, charge, or identify");
+    game.inventory[1] = {WAND_STRIKING, 3};
+    require(item_type_identified(game.inventory[1].type),
+            "wand use did not identify other wands of its type");
+    session.repeat_slot = 0;
+    require(use_wand(0, 1, 0) && game.inventory[0].type == NO_ITEM &&
+            session.repeat_slot == NONE,
+            "last wand charge did not crumble and clear repeat slot");
+
+    wand_arena(WAND_FORCE);
+    RayResult ray = scan_ray(game.player, 1, 0, 6);
+    require(ray.steps == 6 && ray.end == Position{16, 10} &&
+            ray.monster == NONE, "open ray range changed");
+    uint16_t wall = 10 * MAP_W + 12;
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    ray = scan_ray(game.player, 1, 0, 6);
+    require(ray.steps == 1 && ray.end == Position{11, 10} && ray.blocker,
+            "ray did not stop before a wall");
+    game.walls[wall >> 3] = 0;
+    game.doors[0] = {{12, 10}};
+    game.door_count = 1;
+    ray = scan_ray(game.player, 1, 0, 6);
+    require(ray.steps == 1 && ray.blocker,
+            "ray did not stop before a closed door");
+    open_door(0);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    game.monsters[1] = {{13, 10}, ORC, 20, 0, {0, 0}, 0};
+    ray = scan_ray(game.player, 1, 0, 6);
+    require(ray.steps == 2 && ray.monster == 0 &&
+            ray.end == Position{12, 10},
+            "ray did not select the first monster");
+}
+
+void check_wand_effects()
+{
+    wand_arena(WAND_STRIKING);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].hp >= 77 &&
+            game.monsters[0].hp <= 88 && animated_steps == 2,
+            "striking damage or ray endpoint changed");
+
+    wand_arena(WAND_ICE);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].hp >= 85 &&
+            game.monsters[0].hp <= 92 &&
+            monster_effect(game.monsters[0], MON_SLOWED) == 15,
+            "ice damage or slowing changed");
+
+    wand_arena(WAND_TELEPORT);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) &&
+            game.monsters[0].pos != Position{12, 10} &&
+            !blocked(game.monsters[0].pos.x, game.monsters[0].pos.y) &&
+            game.monsters[0].pos != game.player &&
+            game.monsters[0].pos != game.up &&
+            game.monsters[0].pos != game.down,
+            "teleport wand chose an invalid position");
+
+    wand_arena(WAND_FORCE);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos == Position{20, 10},
+            "force wand did not move target eight tiles");
+    wand_arena(WAND_FORCE);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    uint16_t wall = 10 * MAP_W + 15;
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos == Position{14, 10} &&
+            game.monsters[0].stun == 4,
+            "force wall collision did not stun at last free tile");
+    wand_arena(WAND_FORCE);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    game.monsters[1] = {{15, 10}, GOBLIN, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos == Position{14, 10} &&
+            game.monsters[1].pos == Position{15, 10} &&
+            game.monsters[0].stun == 4 && game.monsters[1].stun == 4,
+            "force monster collision overlapped or failed to stun");
+
+    wand_arena(WAND_DIGGING);
+    for(uint8_t x = 11; x <= 17; ++x) {
+        uint16_t bit = 10 * MAP_W + x;
+        game.walls[bit >> 3] |= static_cast<uint8_t>(1u << (bit & 7));
+    }
+    game.doors[0] = {{13, 10}};
+    game.door_count = 1;
+    session.ended = true;
+    require(use_wand(0, 1, 0) && burst_animations == 0 &&
+            ray_animations == 0 && door_open(0),
+            "digging used projectile animation or left door shut");
+    for(uint8_t x = 11; x <= 16; ++x)
+        require(!wall_at(x, 10) && explored({x, 10}),
+                "digging failed to carve and explore six tiles");
+    require(wall_at(17, 10), "digging exceeded six tiles");
+    wand_arena(WAND_DIGGING);
+    game.player = {MAP_W - 2, 10};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && !wall_at(MAP_W - 1, 10),
+            "edge digging failed or exceeded map bounds");
+
+    wand_arena(WAND_POLYMORPH);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) &&
+            (game.monsters[0].type == PHANTOM ||
+             game.monsters[0].type == TARANTULA) &&
+            game.monsters[0].hp == monster_info(game.monsters[0].type).health,
+            "polymorph did not choose a neighboring type and reset HP");
+    wand_arena(WAND_POLYMORPH);
+    game.monsters[0] = {{12, 10}, LORD, 128, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].type == LORD,
+            "Lord was polymorphed");
+    for(uint16_t seed = 1; seed <= 32; ++seed) {
+        wand_arena(WAND_POLYMORPH);
+        game.random_state = seed;
+        game.monsters[0] = {{12, 10}, ANGEL, 24, 0, {0, 0}, 0};
+        session.ended = true;
+        require(use_wand(0, 1, 0) && game.monsters[0].type != LORD,
+                "polymorph created the Lord");
+    }
+}
+
+void check_wand_fire_and_lord()
+{
+    wand_arena(WAND_FIRE);
+    game.monsters[0] = {{12, 10}, ORC, 5, 0, {0, 0}, 0};
+    game.monsters[1] = {{13, 11}, GOBLIN, 5, 0, {0, 0}, 0};
+    game.monsters[2] = {{15, 10}, GOBLIN, 5, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
+            game.monsters[1].type == NO_MONSTER &&
+            game.monsters[2].type == GOBLIN && burst_animations == 1 &&
+            animated_burst == Position{12, 10},
+            "fire wand failed 3x3 multi-target burst");
+    wand_arena(WAND_FIRE);
+    uint16_t wall = 10 * MAP_W + 11;
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.hp <= 232 && game.hp >= 225,
+            "point-blank fire wand did not burn player");
+    wand_arena(WAND_FIRE);
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    game.inventory[1] = {RING_FIRE_IMMUNITY, 1};
+    game.ring_slots[0] = 1;
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.hp == 240,
+            "fire immunity did not prevent self-inflicted wand damage");
+    wand_arena(WAND_FIRE);
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    game.inventory[1] = {RING_FIRE_IMMUNITY,
+                         static_cast<uint8_t>(ITEM_CURSED | 1)};
+    game.ring_slots[0] = 1;
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.hp <= 224 && game.hp >= 210,
+            "cursed fire ring did not double wand self-damage");
+    for(uint8_t type : {WAND_FIRE, WAND_STRIKING, WAND_ICE}) {
+        wand_arena(type);
+        game.monsters[0] = {{12, 10}, LORD, 1, 0, {0, 0}, 0};
+        session.ended = true;
+        require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
+                game.ground[15].item.type == YENDOR_AMULET &&
+                game.ground[15].pos == Position{12, 10},
+                "wand Lord kill did not leave Yendor");
+    }
+}
+
+void check_wand_enchant_and_save()
+{
+    wand_arena(WAND_FIRE, 5);
+    game.inventory[1] = {SCROLL_ENCHANT, 1};
+    require(use_inventory(1, 0) && item_value(game.inventory[0]) == 9,
+            "enchant scroll did not add four wand charges");
+    game.inventory[1] = {SCROLL_ENCHANT, 1};
+    require(use_inventory(1, 0) && item_value(game.inventory[0]) == 13,
+            "second enchant scroll changed charge increment");
+    game.inventory[1] = {SCROLL_ENCHANT, 1};
+    require(use_inventory(1, 0) && item_value(game.inventory[0]) == 15,
+            "wand enchant cap changed");
+    identify_type(WAND_FIRE);
+    Game saved = game;
+    std::memset(&game, 0, sizeof game);
+    game = saved;
+    require(restore_startup_save(true) &&
+            game.inventory[0].type == WAND_FIRE &&
+            item_value(game.inventory[0]) == 15 &&
+            item_type_identified(WAND_FIRE),
+            "save round trip lost wand type, charges, or knowledge");
+}
+
 int main()
 {
+    check_wand_identity_and_generation();
+    check_wand_rays_and_charges();
+    check_wand_effects();
+    check_wand_fire_and_lord();
+    check_wand_enchant_and_save();
     check_startup_save_state();
     check_new_run_state();
     check_position_value_and_boundaries();

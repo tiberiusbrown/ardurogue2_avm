@@ -233,12 +233,13 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
         }
         return false;
     }
-    if(ui.mode == THROW_DIRECTION) {
+    if(ui.mode == THROW_DIRECTION || ui.mode == WAND_DIRECTION) {
         if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
             status_clear();
             ui.dirty = true;
         } else if(direction) {
+            bool wand_direction = ui.mode == WAND_DIRECTION;
             int8_t dx = direction == AVM_BUTTON_L ? -1 :
                         direction == AVM_BUTTON_R ? 1 : 0;
             int8_t dy = direction == AVM_BUTTON_U ? -1 :
@@ -246,7 +247,10 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
             ui.mode = PLAY;
             status_clear();
             render();
-            if(!throw_potion(ui.selection, dx, dy))
+            if(wand_direction) {
+                if(!use_wand(ui.selection, dx, dy))
+                    ui.mode = WAND_DIRECTION;
+            } else if(!throw_potion(ui.selection, dx, dy))
                 ui.mode = THROW_DIRECTION;
             ui.dirty = true;
         }
@@ -271,15 +275,18 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
                 status(F("You wait."));
                 end_turn();
                 break;
-            case 1:
+            case 1: {
                 ui.mode = PLAY;
-                if(uint8_t slot = choose_item(F("Use which item?"), nullptr);
-                   slot != NONE) {
+                uint8_t slot = choose_item(F("Use which item?"), nullptr);
+                if(slot != NONE) {
                     status_clear();
                     render();
                     uint8_t type = game.inventory[slot].type;
                     uint8_t target = NONE;
-                    if(type == SCROLL_IDENTIFY)
+                    if(is_wand(type)) {
+                        ui.selection = slot;
+                        ui.mode = WAND_DIRECTION;
+                    } else if(type == SCROLL_IDENTIFY)
                         target = choose_item(F("Identify which item?"), nullptr);
                     else if(type == SCROLL_ENCHANT)
                         target = choose_item(F("Enchant which item?"), nullptr);
@@ -287,13 +294,15 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
                         target = choose_item(F("Uncurse which item?"), nullptr);
                     status_clear();
                     render();
-                    use_inventory(slot, target);
+                    if(ui.mode != WAND_DIRECTION)
+                        use_inventory(slot, target);
                 } else status_clear();
                 break;
-            case 2:
+            }
+            case 2: {
                 ui.mode = PLAY;
-                if(uint8_t slot = choose_item(F("Drop which item?"), nullptr);
-                   slot != NONE) {
+                uint8_t slot = choose_item(F("Drop which item?"), nullptr);
+                if(slot != NONE) {
                     status_clear();
                     render();
                     DropDisposition disposition = drop_disposition(slot);
@@ -313,10 +322,11 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
                     }
                 } else status_clear();
                 break;
-            case 3:
+            }
+            case 3: {
                 ui.mode = PLAY;
-                if(uint8_t slot = choose_item(F("Throw what?"), is_potion);
-                   slot != NONE) {
+                uint8_t slot = choose_item(F("Throw what?"), is_potion);
+                if(slot != NONE) {
                     ui.selection = slot;
                     ui.mode = THROW_DIRECTION;
                 } else {
@@ -327,6 +337,7 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
                     }
                 }
                 break;
+            }
             case 4: ui.mode = FULL_MAP; break;
             case 5:
                 save_resumable_game();
