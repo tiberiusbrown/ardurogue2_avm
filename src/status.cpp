@@ -62,6 +62,61 @@ void status_formatted_number(uint8_t value, bool bonus, char punctuation)
     status_x = static_cast<uint8_t>(status_x + text_width(" "));
 }
 
+void status_word_mutable(char* word)
+{
+    ui.repeat_suppressed = true;
+    const int16_t space_width = text_width(" ");
+    if((*word == '.' || *word == '!' || *word == '?' ||
+        *word == ',' || *word == ':') &&
+       status_x > 67)
+        status_x = static_cast<uint8_t>(status_x - space_width);
+    while(*word) {
+        uint8_t count = 0;
+        int16_t width = 0;
+        while(word[count] && count < 15) {
+            char saved = word[count + 1];
+            word[count + 1] = 0;
+            int16_t candidate = text_width(word);
+            word[count + 1] = saved;
+            if(count && candidate > 60)
+                break;
+            width = candidate;
+            ++count;
+        }
+        if(status_x != 67 && status_x + width > 128)
+            status_next_line();
+        char saved = word[count];
+        word[count] = 0;
+        status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, word).x);
+        word[count] = saved;
+        word += count;
+        if(*word)
+            status_next_line();
+    }
+    status_x = static_cast<uint8_t>(status_x + space_width);
+}
+
+void status_word_mutable(char* word, char punctuation)
+{
+    if(!punctuation) {
+        status_word_mutable(word);
+        return;
+    }
+    char mark[2] = {punctuation, 0};
+    int16_t width = text_width(word) + text_width(mark);
+    if(width > 60) {
+        status_word_mutable(word);
+        status_word_mutable(mark);
+        return;
+    }
+    ui.repeat_suppressed = true;
+    if(status_x != 67 && status_x + width > 128)
+        status_next_line();
+    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, word).x);
+    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, mark).x +
+                                    text_width(" "));
+}
+
 // Keep text scratch in its own frame on the 256-byte VM stack.
 
 template<typename Pointer>
@@ -78,9 +133,9 @@ __attribute__((noinline)) void status_words(Pointer words, char suffix = 0)
         if(length) {
             word[length] = 0;
             if(!c && suffix)
-                rogue::status_word(word, suffix);
+                status_word_mutable(word, suffix);
             else
-                rogue::status_word(word);
+                status_word_mutable(word);
             length = 0;
         }
         if(!c)
@@ -208,6 +263,47 @@ struct BufferedItemText {
         snprintf_P(out + length, ITEM_TEXT_CAPACITY - length,
                    F("+%u"), value);
         length = static_cast<uint8_t>(strlen(out));
+    }
+
+    void finish(char = 0) {}
+};
+
+struct DrawItemText {
+    int16_t x;
+    int16_t y;
+    bool has_text = false;
+
+    void space()
+    {
+        if(has_text)
+            x = avm_draw_text_P(x, y, F(" ")).x;
+        has_text = true;
+    }
+
+    void word(const char AVM_PROGMEM* words)
+    {
+        space();
+        x = avm_draw_text_P(x, y, words).x;
+    }
+
+#if defined(__AVM__)
+    void word(const char* words)
+    {
+        space();
+        x = avm_draw_text(x, y, words).x;
+    }
+#endif
+
+    void number(uint8_t value)
+    {
+        space();
+        x = avm_draw_textf_P(x, y, F("%u"), value).x;
+    }
+
+    void bonus(uint8_t value)
+    {
+        space();
+        x = avm_draw_textf_P(x, y, F("+%u"), value).x;
     }
 
     void finish(char = 0) {}
@@ -387,6 +483,12 @@ void rogue::format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY])
 {
     buffer[0] = 0;
     BufferedItemText text{buffer};
+    emit_item(item, INVENTORY_ITEM, text);
+}
+
+void rogue::draw_item_text(int16_t x, int16_t y, Item item)
+{
+    DrawItemText text{x, y};
     emit_item(item, INVENTORY_ITEM, text);
 }
 

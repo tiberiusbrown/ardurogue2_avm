@@ -45,7 +45,7 @@ static uint8_t choose_item_modal(const char AVM_PROGMEM* prompt_text,
                           ItemTypeFilter item_type_filter)
 {
     InventoryView view(game, item_type_filter);
-    if(!view.count) {
+    if(!view.count()) {
         render_inventory(prompt_text, view, NONE, 0);
         avm_display(false);
         for(;;) {
@@ -340,7 +340,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                 } else {
                     status_clear();
                     InventoryView potions(game, is_potion);
-                    if(!potions.count) {
+                    if(!potions.count()) {
                         status(F("You have no potions."));
                     }
                 }

@@ -185,7 +185,8 @@ void check_inventory_view()
 {
     std::memset(game.inventory, 0, sizeof(game.inventory));
     InventoryView empty(game, nullptr);
-    require(empty.count == 0 && empty.first_slot() == NONE,
+    require(empty.count() == 0 && empty.first_slot() == NONE &&
+            empty.entry_at(0) == NONE,
             "empty inventory has selectable rows");
 
     game.inventory[0] = {HEALING, 2};
@@ -205,24 +206,62 @@ void check_inventory_view()
         INVENTORY + POTIONS, 0, 3,
         INVENTORY + FOODS, 5
     };
-    require(view.count == sizeof(expected) &&
-            std::memcmp(view.rows, expected, sizeof(expected)) == 0,
-            "inventory rows are not grouped by type");
+    require(sizeof(view) < INVENTORY + INVENTORY_GROUPS + 1,
+            "inventory view still stores a row mapping");
+    require(view.count() == sizeof(expected),
+            "inventory row count changed");
+    for(uint8_t row = 0; row < sizeof(expected); ++row)
+        require(view.entry_at(row) == expected[row],
+                "inventory rows are not grouped by type");
+    require(view.entry_at(sizeof(expected)) == NONE,
+            "inventory row lookup passed the end");
     require(view.first_slot() == 2 && view.move(6, 1) == 1 &&
             view.move(1, -1) == 6 && view.move(5, 1) == 5 &&
             view.move(2, -1) == 2,
             "inventory selection entered a header or passed the end");
     uint8_t top = 0;
     view.keep_visible(5, top);
-    require(top == view.count - INVENTORY_VISIBLE_ROWS,
+    require(top == view.count() - INVENTORY_VISIBLE_ROWS,
             "inventory scrolled beyond the last item");
     view.keep_visible(2, top);
     require(top == 1, "inventory did not scroll back to the first item");
 
     InventoryView potions(game, is_potion);
-    require(potions.count == 3 && potions.first_slot() == 0 &&
+    require(potions.count() == 3 && potions.entry_at(0) == INVENTORY + POTIONS &&
+            potions.entry_at(1) == 0 && potions.entry_at(2) == 3 &&
+            potions.first_slot() == 0 &&
             potions.move(0, 1) == 3 && potions.move(3, 1) == 3,
             "throw selection includes non-potions or headers");
+
+    const uint8_t types[INVENTORY] = {
+        WAND_FORCE, FOOD, SCROLL_IDENTIFY, HEALING,
+        RING_ATTACK, ARMOR, SWORD, AMULET_SPEED,
+        YENDOR_AMULET, WAND_FIRE, SCROLL_FEAR, POISON,
+        RING_STRENGTH, ARMOR, SWORD, FOOD
+    };
+    for(uint8_t slot = 0; slot < INVENTORY; ++slot)
+        game.inventory[slot] = {types[slot], 1};
+    InventoryView full(game, nullptr);
+    const uint8_t full_rows[] = {
+        INVENTORY + WEAPONS, 6, 14,
+        INVENTORY + ARMORS, 5, 13,
+        INVENTORY + RINGS, 4, 12,
+        INVENTORY + AMULETS, 7,
+        INVENTORY + WANDS, 0, 9,
+        INVENTORY + POTIONS, 3, 11,
+        INVENTORY + SCROLLS, 2, 10,
+        INVENTORY + FOODS, 1, 15,
+        INVENTORY + QUEST_ITEMS, 8
+    };
+    require(full.count() == sizeof(full_rows),
+            "full inventory row count changed");
+    for(uint8_t row = 0; row < sizeof(full_rows); ++row)
+        require(full.entry_at(row) == full_rows[row],
+                "full inventory ordering changed");
+    top = 0;
+    full.keep_visible(8, top);
+    require(top == full.count() - INVENTORY_VISIBLE_ROWS,
+            "full inventory scrolling changed");
     std::memset(game.inventory, 0, sizeof(game.inventory));
 }
 

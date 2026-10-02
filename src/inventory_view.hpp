@@ -27,10 +27,13 @@ inline InventoryGroup inventory_group(uint8_t type)
 
 // Item rows contain inventory slot numbers; header rows start at INVENTORY.
 struct InventoryView {
-    uint8_t rows[INVENTORY + INVENTORY_GROUPS];
-    uint8_t count = 0;
+    const Game& source;
+    ItemTypeFilter filter;
 
     explicit InventoryView(const Game& source, ItemTypeFilter filter)
+        : source(source), filter(filter) {}
+
+    uint8_t entry_at(uint8_t row) const
     {
         for(uint8_t group = 0; group < INVENTORY_GROUPS; ++group) {
             bool has_header = false;
@@ -40,25 +43,49 @@ struct InventoryView {
                    (filter && !filter(type)))
                     continue;
                 if(!has_header) {
-                    rows[count++] = static_cast<uint8_t>(INVENTORY + group);
+                    if(row-- == 0)
+                        return static_cast<uint8_t>(INVENTORY + group);
                     has_header = true;
                 }
-                rows[count++] = slot;
+                if(row-- == 0) return slot;
             }
         }
+        return NONE;
+    }
+
+    uint8_t count() const
+    {
+        uint8_t rows = 0;
+        for(uint8_t group = 0; group < INVENTORY_GROUPS; ++group) {
+            bool has_header = false;
+            for(uint8_t slot = 0; slot < INVENTORY; ++slot) {
+                uint8_t type = source.inventory[slot].type;
+                if(type == NO_ITEM || inventory_group(type) != group ||
+                   (filter && !filter(type)))
+                    continue;
+                if(!has_header) {
+                    ++rows;
+                    has_header = true;
+                }
+                ++rows;
+            }
+        }
+        return rows;
     }
 
     uint8_t first_slot() const
     {
-        for(uint8_t row = 0; row < count; ++row)
-            if(rows[row] < INVENTORY) return rows[row];
+        for(uint8_t row = 0, total = count(); row < total; ++row) {
+            uint8_t entry = entry_at(row);
+            if(entry < INVENTORY) return entry;
+        }
         return NONE;
     }
 
     uint8_t position(uint8_t slot) const
     {
-        for(uint8_t row = 0; row < count; ++row)
-            if(rows[row] == slot) return row;
+        for(uint8_t row = 0, total = count(); row < total; ++row)
+            if(entry_at(row) == slot) return row;
         return NONE;
     }
 
@@ -67,17 +94,19 @@ struct InventoryView {
         uint8_t selected = position(slot);
         if(selected == NONE) return first_slot();
         for(int16_t row = static_cast<int16_t>(selected) + step;
-            row >= 0 && row < count; row += step)
-            if(rows[row] < INVENTORY)
-                return rows[row];
+            row >= 0 && row < count(); row += step) {
+            uint8_t entry = entry_at(static_cast<uint8_t>(row));
+            if(entry < INVENTORY) return entry;
+        }
         return slot;
     }
 
     void keep_visible(uint8_t slot, uint8_t& top) const
     {
         uint8_t selected = position(slot);
-        uint8_t maximum = count > INVENTORY_VISIBLE_ROWS
-            ? static_cast<uint8_t>(count - INVENTORY_VISIBLE_ROWS) : 0;
+        uint8_t total = count();
+        uint8_t maximum = total > INVENTORY_VISIBLE_ROWS
+            ? static_cast<uint8_t>(total - INVENTORY_VISIBLE_ROWS) : 0;
         if(selected == NONE) top = 0;
         else if(selected < top) top = selected;
         else if(selected >= top + INVENTORY_VISIBLE_ROWS)

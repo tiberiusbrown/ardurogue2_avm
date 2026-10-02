@@ -14,8 +14,10 @@
 #define snprintf_P snprintf
 
 struct AvmTextCursor { int16_t x; };
-inline AvmTextCursor avm_draw_text(int16_t x, int16_t, const char* text)
+extern void (*avm_test_text_hook)(int16_t, int16_t, const char*);
+inline AvmTextCursor avm_draw_text(int16_t x, int16_t y, const char* text)
 {
+    if(avm_test_text_hook) avm_test_text_hook(x, y, text);
     return {static_cast<int16_t>(x + strlen(text) * 4)};
 }
 inline AvmTextCursor avm_draw_text_P(int16_t x, int16_t y, const char* text)
@@ -23,11 +25,12 @@ inline AvmTextCursor avm_draw_text_P(int16_t x, int16_t y, const char* text)
     return avm_draw_text(x, y, text);
 }
 template<typename... Args>
-inline AvmTextCursor avm_draw_textf_P(int16_t x, int16_t, const char* format,
+inline AvmTextCursor avm_draw_textf_P(int16_t x, int16_t y, const char* format,
                                       Args... args)
 {
     char text[48];
     snprintf(text, sizeof text, format, args...);
+    if(avm_test_text_hook) avm_test_text_hook(x, y, text);
     return {static_cast<int16_t>(x + strlen(text) * 4)};
 }
 inline void avm_display(bool) {}

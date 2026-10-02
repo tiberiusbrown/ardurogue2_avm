@@ -260,10 +260,8 @@ static bool in_sight(Position pos, const uint16_t sight[13],
     return screen_tile(pos, sx, sy) && (sight[sy] & (1u << sx));
 }
 
-void render_play()
+__attribute__((noinline)) static void render_dungeon_view()
 {
-    avm_draw_filled_rect_black(0, 0, 65, 64);
-    avm_draw_filled_rect_black(65, 0, 63, 23);
     uint16_t sight[13] = {};
     // Reuse this array for ray blockers, then restore door tiles before drawing.
     // Keeping a third 26-byte row array here crowds the nested modal stack.
@@ -414,6 +412,13 @@ void render_play()
                  static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
     }
     icon(PLAYER_ICON, 30, 30);
+}
+
+void render_play()
+{
+    avm_draw_filled_rect_black(0, 0, 65, 64);
+    avm_draw_filled_rect_black(65, 0, 63, 23);
+    render_dungeon_view();
     for(uint8_t y = 0; y < 64; ++y)
         pixel(64, y);
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
@@ -450,15 +455,16 @@ void render_inventory(const char AVM_PROGMEM* prompt,
     avm_draw_filled_rect_black(0, 0, 128, 64);
     avm_draw_text_P(1, 7, prompt);
     avm_draw_filled_rect_white(1, 9, 127, 1);
-    if(!view.count) {
+    uint8_t total = view.count();
+    if(!total) {
         avm_draw_text_P(8, 18, F("Empty"));
         return;
     }
     for(uint8_t row = 0; row < INVENTORY_VISIBLE_ROWS; ++row) {
         uint8_t index = static_cast<uint8_t>(top + row);
-        if(index >= view.count) break;
+        if(index >= total) break;
         int16_t y = static_cast<int16_t>(18 + row * 7);
-        uint8_t entry = view.rows[index];
+        uint8_t entry = view.entry_at(index);
         if(entry >= INVENTORY) {
             switch(entry - INVENTORY) {
             case WEAPONS: avm_draw_text_P(1, y, F("Weapons")); break;
@@ -478,9 +484,7 @@ void render_inventory(const char AVM_PROGMEM* prompt,
             avm_draw_filled_rect_white(7, y - 6, 121, 7);
             avm_set_text_mode(AVM_TEXT_BLACK_TRANSPARENT);
         }
-        char label[ITEM_TEXT_CAPACITY];
-        format_item(item, label);
-        avm_draw_text(8, y, label);
+        draw_item_text(8, y, item);
         if(game.weapon_slot == entry || game.armor_slot == entry ||
            game.amulet_slot == entry || game.ring_slots[0] == entry ||
            game.ring_slots[1] == entry)
@@ -495,9 +499,7 @@ __attribute__((noinline)) static void render_throw_direction()
 {
     avm_draw_text_P(8, 12, ui.mode == WAND_DIRECTION
         ? F("USE WAND") : F("THROW POTION"));
-    char label[ITEM_TEXT_CAPACITY];
-    format_item(game.inventory[ui.selection], label);
-    avm_draw_text(8, 27, label);
+    draw_item_text(8, 27, game.inventory[ui.selection]);
     avm_draw_text_P(8, 43, F("D-PAD: DIRECTION"));
     avm_draw_text_P(8, 56, F("B: BACK"));
 }
