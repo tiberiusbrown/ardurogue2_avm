@@ -304,7 +304,10 @@ static void consume_potion(Item& item)
     }
 }
 
-static bool legal_teleport_position(Position pos, bool player)
+// Keep this position check out of use_inventory's frame so nested status text fits
+// within the 256-byte VM stack above the framebuffer.
+__attribute__((noinline)) static bool legal_teleport_position(Position pos,
+                                                              bool player)
 {
     return !blocked(pos.x, pos.y) && monster_at(pos) == NONE &&
         (player || pos != game.player) &&
