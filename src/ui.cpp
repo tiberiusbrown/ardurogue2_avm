@@ -116,7 +116,7 @@ __attribute__((noinline)) void prompt_stairs()
 __attribute__((noinline)) void prompt_ground_items()
 {
     uint8_t before = GROUND_ITEMS;
-    while(!session.ended) {
+    while(!session.ended && !game.paralyzed) {
         uint8_t slot = ground_item_before(game.px, game.py, before);
         if(slot == NONE) break;
         before = slot;

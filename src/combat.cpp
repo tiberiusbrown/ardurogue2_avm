@@ -403,11 +403,15 @@ static void attack_monster(uint8_t index)
         status(F("You hit the"));
         status(static_cast<MonsterType>(target.type), '.');
     }
-    if(amulet_bonus(AMULET_VAMPIRE) > 0 && game.hp < player_max_hp()) {
+    int8_t vampire_bonus = amulet_bonus(AMULET_VAMPIRE);
+    if(vampire_bonus > 0 && game.hp < player_max_hp()) {
         heal_player(1);
         status(F("Your amulet drains a little life."));
+    } else if(vampire_bonus < 0) {
+        hurt_player(1);
+        status(F("Your amulet drains your life."));
     }
-    end_turn();
+    if(!session.ended) end_turn();
 }
 
 void move_player(int8_t dx, int8_t dy)
@@ -417,7 +421,8 @@ void move_player(int8_t dx, int8_t dy)
         end_turn();
         return;
     }
-    if(game.confused && roll(2) == 0) {
+    bool confused_direction = game.confused && roll(2) == 0;
+    if(confused_direction) {
         uint8_t direction = roll(4);
         dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
         dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
@@ -426,6 +431,7 @@ void move_player(int8_t dx, int8_t dy)
     int16_t y = static_cast<int16_t>(game.py) + dy;
     if(wall_at(x, y)) {
         status(F("A wall blocks your way."));
+        if(confused_direction) end_turn();
         return;
     }
     uint8_t door = door_at(static_cast<uint8_t>(x), static_cast<uint8_t>(y));

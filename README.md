@@ -83,7 +83,7 @@ Canceling that selection still consumes the scroll, as in ArduRogue.
 | Dungeon | Direction pad | Move, attack, or open a door |
 | Dungeon | Move onto an item | Prompt to pick up each item on the tile, topmost first |
 | Dungeon | Move onto stairs | Prompt to take the stairs |
-| Dungeon | A | Repeat the last inventory action or wait |
+| Dungeon | A | Repeat the last equipment action or wait |
 | Pickup or stairs prompt | A/B | Confirm or cancel the action |
 | Dungeon | B | Open the action menu |
 | Status prompt | A | Continue a long message after `[more]` |

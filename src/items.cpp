@@ -230,7 +230,10 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
         for(uint8_t attempt = 0; attempt < 100; ++attempt) {
             uint8_t x = static_cast<uint8_t>(next_random(game.random_state) % MAP_W);
             uint8_t y = static_cast<uint8_t>(next_random(game.random_state) % MAP_H);
-            if(!blocked(x, y) && monster_at(x, y) == NONE) {
+            if(!blocked(x, y) && monster_at(x, y) == NONE &&
+               item_at(x, y) == NONE &&
+               !(x == game.up_x && y == game.up_y) &&
+               !(x == game.down_x && y == game.down_y)) {
                 game.px = x; game.py = y;
                 visit_room();
                 status(F("You teleport!"));
@@ -242,6 +245,8 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
     }
     if(type == SCROLL_MAPPING) {
         memset(game.explored, 0xff, sizeof(game.explored));
+        for(uint8_t i = 0; i < ROOMS; ++i)
+            mark(game.marks[game.floor], VISITED_ROOMS, i);
         status(F("You become aware of your surroundings."));
         return;
     }
@@ -283,12 +288,10 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
     Item& item = game.inventory[slot];
     if(item.type == NO_ITEM)
         return false;
-    session.repeat_slot = slot;
     switch(item.type) {
     case SCROLL_IDENTIFY: case SCROLL_ENCHANT: case SCROLL_REMOVE_CURSE:
     case SCROLL_TELEPORT: case SCROLL_MAPPING: case SCROLL_FEAR:
     case SCROLL_TORMENT: case SCROLL_MASS_CONFUSE: case SCROLL_MASS_POISON: {
-        session.repeat_slot = NONE;
         uint8_t type = item.type;
         bool known = item_type_identified(type);
         status(F("You read"));
@@ -405,12 +408,14 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
         break;
     }
     case SWORD:
+        session.repeat_slot = slot;
         game.weapon_slot = slot;
         identify_item(slot);
         status(F("You equip"));
         status(item, '.');
         break;
     case ARMOR:
+        session.repeat_slot = slot;
         game.armor_slot = slot;
         game.defense = item_value(item);
         identify_item(slot);
@@ -421,6 +426,7 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
         if(is_ring(item.type) || is_amulet(item.type)) {
             if(!toggle_accessory(slot))
                 return false;
+            session.repeat_slot = slot;
             break;
         }
         return false;

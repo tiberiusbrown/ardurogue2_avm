@@ -304,6 +304,47 @@ void check_floor_marks()
     game.marks[game.floor] = old_marks;
 }
 
+void check_confused_wall_bump()
+{
+    start_new(0x1234);
+    std::memset(game.walls, 0, sizeof(game.walls));
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.door_count = 0;
+    game.px = 10;
+    game.py = 10;
+    uint16_t wall = static_cast<uint16_t>(9 * MAP_W + 10);
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+
+    uint8_t turns = game.turns;
+    move_player(0, -1);
+    require(game.turns == turns, "normal wall bump consumed a turn");
+
+    uint16_t redirected_seed = 0, normal_seed = 0;
+    for(uint16_t seed = 1; seed < 1024; ++seed) {
+        uint16_t state = seed;
+        if(next_random(state) % 2) {
+            normal_seed = seed;
+        } else if(next_random(state) % 4 == 3) {
+            redirected_seed = seed;
+        }
+        if(redirected_seed && normal_seed) break;
+    }
+    require(redirected_seed && normal_seed,
+            "could not find confusion direction test seeds");
+
+    game.confused = 3;
+    game.random_state = normal_seed;
+    move_player(0, -1);
+    require(game.turns == turns && game.confused == 3,
+            "unmodified wall bump while confused consumed a turn");
+
+    game.random_state = redirected_seed;
+    move_player(1, 0);
+    require(game.turns == static_cast<uint8_t>(turns + 1) &&
+            game.confused == 2 && game.px == 10 && game.py == 10,
+            "confusion-generated wall bump did not consume a turn");
+}
+
 void check_potions()
 {
     start_new(0x1234);
@@ -389,6 +430,60 @@ void check_potions()
     require(kinds >= 8, "floor generation lacks potion variety");
 }
 
+void check_repeat_inventory_action()
+{
+    start_new(0x1234);
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.inventory[1] = {SWORD, 1};
+    require(use_inventory(1) && session.repeat_slot == 1,
+            "equipping a weapon did not record the repeat action");
+
+    game.inventory[0] = {FOOD, 2};
+    require(use_inventory(0) && session.repeat_slot == 1 &&
+            item_value(game.inventory[0]) == 1,
+            "eating food changed the previous repeat action");
+    action();
+    require(item_value(game.inventory[0]) == 1,
+            "repeat action ate another food");
+    require(use_inventory(0) && game.inventory[0].type == NO_ITEM &&
+            session.repeat_slot == 1,
+            "eating the last food changed the previous repeat action");
+
+    game.ground[0] = {game.px, game.py, {HEALING, 2}};
+    take_item(0);
+    require(game.inventory[0].type == HEALING && session.repeat_slot == 1,
+            "pickup did not reuse the consumed food slot");
+    action();
+    require(item_value(game.inventory[0]) == 2,
+            "repeat action drank an unrelated potion after slot reuse");
+    require(use_inventory(0) && session.repeat_slot == 1 &&
+            item_value(game.inventory[0]) == 1,
+            "drinking a potion changed the previous repeat action");
+    action();
+    require(item_value(game.inventory[0]) == 1,
+            "repeat action drank another potion");
+    require(use_inventory(0) && game.inventory[0].type == NO_ITEM &&
+            session.repeat_slot == 1,
+            "drinking the last potion changed the previous repeat action");
+
+    game.inventory[0] = {SCROLL_MAPPING, 1};
+    require(use_inventory(0) && game.inventory[0].type == NO_ITEM &&
+            session.repeat_slot == 1,
+            "reading a scroll changed the previous repeat action");
+
+    start_new(0x1234);
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.inventory[0] = {FOOD, 1};
+    require(use_inventory(0) && session.repeat_slot == NONE,
+            "food recorded a repeat action when none existed");
+    game.inventory[0] = {HEALING, 1};
+    require(use_inventory(0) && session.repeat_slot == NONE,
+            "potion recorded a repeat action when none existed");
+    game.inventory[0] = {SCROLL_MAPPING, 1};
+    require(use_inventory(0) && session.repeat_slot == NONE,
+            "scroll recorded a repeat action when none existed");
+}
+
 void check_scrolls_and_identification()
 {
     start_new(0x2468);
@@ -467,6 +562,74 @@ void check_scrolls_and_identification()
     require(use_inventory(0) && !wall_at(game.px, game.py) &&
             monster_at(game.px, game.py) == NONE,
             "teleport scroll placed player on an invalid tile");
+}
+
+void check_mapping_persists_rooms()
+{
+    start_new(0x2468);
+    std::memset(game.monsters, 0, sizeof(game.monsters));
+    game.inventory[0] = {SCROLL_MAPPING, 1};
+    require(use_inventory(0), "mapping scroll could not be read");
+    for(uint8_t i = 0; i < ROOMS; ++i)
+        require(marked(game.marks[0], VISITED_ROOMS, i),
+                "mapping scroll did not mark every room visited");
+
+    make_floor();
+    for(const Room& room : game.rooms)
+        require(explored(static_cast<uint8_t>(room.x + 1),
+                         static_cast<uint8_t>(room.y + 1)),
+                "mapped room was forgotten after rebuilding the floor");
+}
+
+void check_teleport_avoids_prompts()
+{
+    uint16_t seed_for_destination = 0;
+    uint8_t candidate_x = 0, candidate_y = 0;
+    for(uint16_t seed = 1; seed < 1024; ++seed) {
+        uint16_t state = seed;
+        uint8_t x = static_cast<uint8_t>(next_random(state) % MAP_W);
+        uint8_t y = static_cast<uint8_t>(next_random(state) % MAP_H);
+        if(x > 2 && y > 2) {
+            seed_for_destination = seed;
+            candidate_x = x;
+            candidate_y = y;
+            break;
+        }
+    }
+    require(seed_for_destination, "could not find a teleport test destination");
+
+    for(uint8_t excluded = 0; excluded < 3; ++excluded) {
+        start_new(0x2468);
+        std::memset(game.walls, 0, sizeof(game.walls));
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        std::memset(game.ground, 0, sizeof(game.ground));
+        game.door_count = 0;
+        game.px = 2;
+        game.py = 2;
+        game.up_x = 0;
+        game.up_y = 0;
+        game.down_x = 1;
+        game.down_y = 0;
+        if(excluded == 0)
+            game.ground[0] = {candidate_x, candidate_y, {FOOD, 1}};
+        else if(excluded == 1) {
+            game.up_x = candidate_x;
+            game.up_y = candidate_y;
+        } else {
+            game.down_x = candidate_x;
+            game.down_y = candidate_y;
+        }
+        game.random_state = seed_for_destination;
+        game.inventory[0] = {SCROLL_TELEPORT, 1};
+        status_text.clear();
+        require(use_inventory(0) &&
+                status_text.find("You teleport!") != std::string::npos &&
+                (game.px != candidate_x || game.py != candidate_y) &&
+                item_at(game.px, game.py) == NONE &&
+                !(game.px == game.up_x && game.py == game.up_y) &&
+                !(game.px == game.down_x && game.py == game.down_y),
+                "teleport landed on an item or stair");
+    }
 }
 
 void check_thrown_potions()
@@ -875,6 +1038,67 @@ void check_enemy_abilities()
     }
 }
 
+void check_vampire_amulet()
+{
+    auto arena = []() {
+        start_new(0x84e2);
+        std::memset(game.walls, 0, sizeof(game.walls));
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        game.door_count = 0;
+        game.px = 10;
+        game.py = 10;
+        game.hp = 10;
+        game.hunger = 255;
+        game.invisible = 100;
+        game.dexterity = 12;
+        game.monsters[0] = {11, 10, GOBLIN, 10, 0, {0, 0}, 0};
+        game.inventory[0] = {AMULET_VAMPIRE,
+                             static_cast<uint8_t>(ITEM_CURSED | 1)};
+        game.amulet_slot = 0;
+        status_text.clear();
+    };
+    uint8_t monster_dexterity = monster_info(GOBLIN).dexterity;
+    uint8_t hit_range = static_cast<uint8_t>(12 * 3 + monster_dexterity + 1);
+    uint16_t hit_seed = 0, miss_seed = 0;
+    for(uint16_t seed = 1; seed < 1024; ++seed) {
+        uint16_t state = seed;
+        if(next_random(state) % hit_range < monster_dexterity)
+            miss_seed = seed;
+        else
+            hit_seed = seed;
+        if(hit_seed && miss_seed) break;
+    }
+    require(hit_seed && miss_seed, "could not find melee test seeds");
+
+    arena();
+    game.random_state = miss_seed;
+    move_player(1, 0);
+    require(game.hp == 10 && game.monsters[0].hp == 10,
+            "cursed vampire amulet drained on a miss");
+
+    arena();
+    game.random_state = hit_seed;
+    move_player(1, 0);
+    require(game.hp == 9 && game.monsters[0].hp < 10 &&
+            status_text.find("Your amulet drains your life.") !=
+                std::string::npos,
+            "cursed vampire amulet did not drain on a hit");
+
+    arena();
+    game.inventory[0].info = 1;
+    game.random_state = hit_seed;
+    move_player(1, 0);
+    require(game.hp == 11, "positive vampire amulet stopped healing");
+
+    arena();
+    game.hp = game.monsters[0].hp = 1;
+    game.random_state = hit_seed;
+    move_player(1, 0);
+    require(game.monsters[0].type == NO_MONSTER && game.hp == 0 &&
+            session.ended && session.result == DEATH && game.turns == 0,
+            "lethal cursed vampire drain did not end the run after a kill");
+}
+
 int main()
 {
     check_startup_save_state();
@@ -883,8 +1107,13 @@ int main()
     check_stacked_ground_items();
     check_enemy_roster();
     check_enemy_abilities();
+    check_vampire_amulet();
+    check_confused_wall_bump();
     check_potions();
+    check_repeat_inventory_action();
     check_scrolls_and_identification();
+    check_mapping_persists_rooms();
+    check_teleport_avoids_prompts();
     check_thrown_potions();
     check_effect_messages();
     start_new(0x1234);
