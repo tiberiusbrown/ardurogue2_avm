@@ -14,8 +14,10 @@ uint8_t avm_test_button_index = 0;
 
 namespace rogue {
 Game game = {};
-void status_word(const char*) {}
-void status_word(const char*, char) {}
+const char* status_word(const char*) { return nullptr; }
+void status_words(const char*) {}
+void status_suffix(char) {}
+void status_capitalize() {}
 void status(const char*) {}
 void status(const char*, char) {}
 void status(Item) {}

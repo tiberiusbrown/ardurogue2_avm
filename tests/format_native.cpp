@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 
 uint8_t avm_test_buttons[16] = {};
 uint8_t avm_test_button_count = 0;
@@ -47,26 +49,206 @@ static void capture_status(int16_t x, int16_t y, const char* text)
                  sizeof status_draws - std::strlen(status_draws) - 1);
 }
 
-static void check_mutable_status_word(const char* word, char punctuation)
+struct Glyph { int16_t x, y; char c; };
+static std::vector<Glyph> glyphs;
+static unsigned more_count;
+static void capture_glyphs(int16_t x, int16_t y, const char* text)
 {
-    using namespace rogue;
-    reset_status_position();
-    status_draws[0] = 0;
-    avm_test_text_hook = capture_status;
-    status_word(word, punctuation);
-    char expected[sizeof status_draws];
-    std::strcpy(expected, status_draws);
-    uint8_t expected_y = status_baseline();
-    reset_status_position();
-    status_draws[0] = 0;
-    status(word, punctuation);
-    avm_test_text_hook = nullptr;
-    if(std::strcmp(status_draws, expected) ||
-       status_baseline() != expected_y) {
-        std::fprintf(stderr, "mutable status wrapping changed: %s != %s\n",
-                     status_draws, expected);
+    if(x == 128) return; // Width measurement is off-screen.
+    if(!std::strcmp(text, "[more]")) { ++more_count; return; }
+    if(std::strlen(text) > 4) {
+        std::fprintf(stderr, "status draw exceeded four characters: %s\n", text);
         std::exit(1);
     }
+    while(*text) {
+        glyphs.push_back({x, y, *text++});
+        x += 4;
+    }
+}
+
+static void begin_capture()
+{
+    rogue::reset_status_position();
+    rogue::status_suffix(0);
+    glyphs.clear();
+    more_count = 0;
+    avm_test_text_hook = capture_glyphs;
+}
+
+// Independent lexical layout oracle for the fixed-width native test font.
+static void expect_status(const char* expected)
+{
+    std::vector<Glyph> reference;
+    int16_t x = 67, y = 28;
+    unsigned pages = 0;
+    while(*expected) {
+        while(*expected == ' ') ++expected;
+        const char* end = expected;
+        while(*end && *end != ' ') ++end;
+        if(end == expected) break;
+        int16_t width = static_cast<int16_t>((end - expected) * 4);
+        if(x != 67) {
+            if(x + 4 + width > 128) {
+                x = 67;
+                y += 7;
+                if(y > 56) { y = 28; ++pages; }
+            } else x += 4;
+        }
+        while(expected != end) {
+            reference.push_back({x, y, *expected++});
+            x += 4;
+        }
+    }
+    avm_test_text_hook = nullptr;
+    bool ok = glyphs.size() == reference.size() && more_count == pages &&
+        rogue::status_baseline() == y;
+    for(size_t i = 0; ok && i < reference.size(); ++i)
+        ok = glyphs[i].x == reference[i].x && glyphs[i].y == reference[i].y &&
+             glyphs[i].c == reference[i].c;
+    if(!ok) {
+        std::fprintf(stderr, "streaming status layout mismatch (%zu/%zu glyphs, %u/%u pages)\n",
+                     glyphs.size(), reference.size(), more_count, pages);
+        std::exit(1);
+    }
+}
+
+static void check_streaming_status()
+{
+    using namespace rogue;
+    const char* cases[] = {"a", "abcd", "abcde", "abcdefgh", "abcdefghi",
+        "extraordinarilylongword", "alpha beta gamma", "  alpha   beta  ",
+        "", "   ", "alpha beta gamma delta epsilon zeta"};
+    for(const char* text : cases) {
+        begin_capture();
+        status_words(text);
+        expect_status(text);
+    }
+    const char* source = "  abcd   abcde  abcdefgh abcdefghi  ";
+    begin_capture();
+    const char* next = status_word(source);
+    if(next != source + 9) std::exit(1);
+    next = status_word(next);
+    if(next != source + 16) std::exit(1);
+    next = status_word(next);
+    if(next != source + 25) std::exit(1);
+    if(status_word(next)) std::exit(1);
+    expect_status(source);
+
+    begin_capture();
+    status_suffix('?');
+    status_capitalize();
+    if(status_word("") || status_word("    ")) std::exit(1);
+    status_words("   food    lowerCase");
+    expect_status("Food? lowerCase");
+
+    begin_capture();
+    status_capitalize();
+    status_words("");
+    status_words("  abcdefghi beta");
+    expect_status("Abcdefghi beta");
+
+    begin_capture();
+    status_suffix('!');
+    status_suffix('?');
+    status_word("food");
+    status_word("x");
+    expect_status("food? x");
+
+    begin_capture();
+    status_word("abcdefghij");
+    status_suffix('?');
+    status_word("food"); // Suffix forces the entire word onto the next line.
+    expect_status("abcdefghij food?");
+
+    begin_capture();
+    status_capitalize();
+    status_suffix('!');
+    status_word("abcdefghijk");
+    expect_status("Abcdefghijk!");
+
+    // Pending modifiers also survive pagination; the initiating A is released
+    // before a fresh press advances [more].
+    for(uint8_t i = 0; i < 16; ++i)
+        avm_test_buttons[i] = i & 1 ? AVM_BUTTON_A : 0;
+    avm_test_button_count = 16;
+    avm_test_button_index = 0;
+    avm_test_buttons[2] = AVM_BUTTON_A; // A remains down for previous_buttons.
+    ui.held_direction = AVM_BUTTON_R;
+    begin_capture();
+    for(uint8_t i = 0; i < 10; ++i) status_word("alpha");
+    status_suffix('?');
+    status_capitalize();
+    status_word("  food");
+    expect_status("alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha Food?");
+    if(more_count != 1 || ui.previous_buttons != AVM_BUTTON_A ||
+       ui.held_direction != 0 || !ui.repeat_suppressed) std::exit(1);
+    avm_test_button_count = 0;
+
+    // Exercise all uint8_t digit boundaries, and suffix/capitalization consumption.
+    for(unsigned n : {0u, 1u, 9u, 10u, 99u, 100u, 255u}) {
+        begin_capture();
+        status_capitalize();
+        status_number(static_cast<uint8_t>(n), '.');
+        status_word("food");
+        std::string expected = std::to_string(n) + ". food";
+        expect_status(expected.c_str());
+    }
+}
+
+static void check_status_item(rogue::Item item, char suffix, const char* expected,
+                              bool capitalize = false)
+{
+    begin_capture();
+    if(capitalize) rogue::status_capitalize();
+    rogue::status(item, suffix);
+    expect_status(expected);
+}
+
+static void check_item_status()
+{
+    using namespace rogue;
+    check_status_item({FOOD, 1}, '?', "the food?");
+    check_status_item({FOOD, 1}, '.', "Some food.", true);
+    check_status_item({FOOD, 3}, '?', "the 3 food rations?");
+    check_status_item({FOOD, 3}, '.', "3 food rations.");
+    other_known[HEALING] = false;
+    check_status_item({HEALING, 1}, '?', "the red potion?");
+    check_status_item({HEALING, 3}, '.', "3 red potions.");
+    other_known[HEALING] = true;
+    check_status_item({HEALING, 1}, '?', "the potion of healing?");
+    check_status_item({HEALING, 1}, '.', "a potion of healing.");
+    other_known[SCROLL_REMOVE_CURSE] = false;
+    check_status_item({SCROLL_REMOVE_CURSE, 1}, '?', "the faded scroll?");
+    other_known[SCROLL_REMOVE_CURSE] = true;
+    check_status_item({SCROLL_REMOVE_CURSE, 1}, '?', "the scroll of remove curse?");
+    check_status_item({SWORD, 2}, '?', "the sword?");
+    check_status_item({SWORD, ITEM_IDENTIFIED | 2}, '?', "the sword +2?");
+    check_status_item({SWORD, ITEM_IDENTIFIED | 63}, '.', "a sword +63.");
+    check_status_item({ARMOR, ITEM_IDENTIFIED | 3}, '?', "the armor +3?");
+    check_status_item({YENDOR_AMULET, 1}, '?', "the amulet?");
+    other_known[RING_SEE_INVISIBLE] = false;
+    check_status_item({RING_SEE_INVISIBLE, 1}, '?', "the diamond ring?");
+    other_known[RING_SEE_INVISIBLE] = true;
+    check_status_item({RING_SEE_INVISIBLE, 1}, '?', "the ring of see invisible?");
+    other_known[AMULET_VAMPIRE] = true;
+    check_status_item({AMULET_VAMPIRE, 1}, '?', "the amulet of the vampire?");
+    known[WAND_TELEPORT - WAND_FORCE] = true;
+    Item longest{WAND_TELEPORT, ITEM_IDENTIFIED | 15};
+    set_wand_modifier(longest, WAND_OVERPOWERED);
+    check_status_item(longest, '?', "the overpowered wand of teleportation?");
+    check_status_item(longest, '.', "an overpowered wand of teleportation.");
+    known[WAND_FIRE - WAND_FORCE] = false;
+    check_status_item({WAND_FIRE, 1}, '?', "the thick wand?");
+    begin_capture();
+    status_words("Pick up");
+    status(Item{FOOD, 1}, '?');
+    expect_status("Pick up the food?");
+    begin_capture();
+    status(MonsterType(LORD), '!');
+    expect_status("Lord of Darkness!");
+    begin_capture();
+    status("   alpha beta   ", '?');
+    expect_status("alpha beta?");
 }
 
 static void check_status_paging()
@@ -201,9 +383,9 @@ int main()
         item.info |= ITEM_IDENTIFIED;
         check_drawn_item(item);
     }
-    check_mutable_status_word("extraordinarilylongword", 0);
-    check_mutable_status_word("extraordinarilylongword", '!');
+    check_streaming_status();
+    check_item_status();
     check_status_paging();
-    std::puts("wand item text passed");
+    std::puts("streaming status and item text passed");
     return 0;
 }

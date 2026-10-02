@@ -17,20 +17,16 @@ int16_t text_width(const char* words)
     return avm_draw_text(128, 0, words).x - 128;
 }
 
-#if defined(__AVM__)
-int16_t text_width(const char AVM_PROGMEM* words)
-{
-    return avm_draw_text_P(128, 0, words).x - 128;
-}
-#endif
+static char pending_suffix = 0;
+static bool pending_capitalize = false;
 
-void status_next_line()
+void status_next_line(uint8_t& x, uint8_t& y)
 {
-    status_x = 67;
-    status_y = static_cast<uint8_t>(status_y + 7);
-    if(status_y <= 56)
+    x = 67;
+    y = static_cast<uint8_t>(y + 7);
+    if(y <= 56)
         return;
-    int16_t more_width = text_width(F("[more]"));
+    int16_t more_width = avm_draw_text_P(128, 0, F("[more]")).x - 128;
     avm_draw_text_P(static_cast<int16_t>(128 - more_width), 63, F("[more]"));
     avm_display(false);
     // A that initiated this turn must be released before it can advance a page.
@@ -41,114 +37,124 @@ void status_next_line()
     ui.previous_buttons = avm_buttons();
     ui.held_direction = 0;
     status_clear();
+    x = 67;
+    y = 28;
 }
 
-void status_formatted_number(uint8_t value, bool bonus, char punctuation)
+char capitalized(char c)
 {
-    int16_t width = bonus
-        ? avm_draw_textf_P(128, 0, F("+%u"), value).x - 128
-        : avm_draw_textf_P(128, 0, F("%u"), value).x - 128;
-    char mark[2] = {punctuation, 0};
-    if(punctuation) width += text_width(mark);
-    ui.repeat_suppressed = true;
-    if(status_x != 67 && status_x + width > 128)
-        status_next_line();
-    status_x = static_cast<uint8_t>(bonus
-        ? avm_draw_textf_P(status_x, status_y, F("+%u"), value).x
-        : avm_draw_textf_P(status_x, status_y, F("%u"), value).x);
-    if(punctuation)
-        status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y,
-                                                      mark).x);
-    status_x = static_cast<uint8_t>(status_x + text_width(" "));
+    return c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
 }
 
-void status_word_mutable(char* word)
+// Pointer retains its address space: RAM loads for AS0, program loads for AS1.
+// Only this frame owns text scratch, including while waiting for [more].
+template<typename Pointer>
+Pointer stream_status_word(Pointer word)
 {
-    ui.repeat_suppressed = true;
-    const int16_t space_width = text_width(" ");
-    if((*word == '.' || *word == '!' || *word == '?' ||
-        *word == ',' || *word == ':') &&
-       status_x > 67)
-        status_x = static_cast<uint8_t>(status_x - space_width);
-    while(*word) {
+    uint8_t x = status_x, y = status_y;
+    bool capitalize = pending_capitalize;
+    char suffix = pending_suffix;
+    while(*word == ' ') ++word;
+    if(!*word) return nullptr;
+
+    char buf[5];
+    buf[4] = 0;
+    int16_t width = 0;
+    Pointer scan = word;
+    while(*scan && *scan != ' ') {
         uint8_t count = 0;
-        int16_t width = 0;
-        while(word[count] && count < 15) {
-            char saved = word[count + 1];
-            word[count + 1] = 0;
-            int16_t candidate = text_width(word);
-            word[count + 1] = saved;
-            if(count && candidate > 60)
-                break;
-            width = candidate;
+        while(count < 4 && scan[count] && scan[count] != ' ') {
+            buf[count] = scan[count];
             ++count;
         }
-        if(status_x != 67 && status_x + width > 128)
-            status_next_line();
-        char saved = word[count];
-        word[count] = 0;
-        status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, word).x);
-        word[count] = saved;
-        word += count;
-        if(*word)
-            status_next_line();
+        buf[count] = 0;
+        if(capitalize && scan == word) buf[0] = capitalized(buf[0]);
+        width += text_width(buf);
+        scan += count;
     }
-    status_x = static_cast<uint8_t>(status_x + space_width);
+    buf[0] = suffix;
+    buf[1] = 0;
+    if(suffix) width += text_width(buf);
+    if(x != 67) {
+        buf[0] = ' ';
+        width += text_width(buf);
+        if(x + width > 128) status_next_line(x, y);
+        else x = static_cast<uint8_t>(x + text_width(buf));
+    }
+
+    ui.repeat_suppressed = true;
+    scan = word;
+    while(*scan && *scan != ' ') {
+        uint8_t count = 0;
+        while(count < 4 && scan[count] && scan[count] != ' ') {
+            buf[count] = scan[count];
+            ++count;
+        }
+        buf[count] = 0;
+        if(capitalize && scan == word) buf[0] = capitalized(buf[0]);
+        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
+        scan += count;
+    }
+    if(suffix) {
+        buf[0] = suffix;
+        buf[1] = 0;
+        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
+    }
+    status_x = x;
+    status_y = y;
+    pending_capitalize = false;
+    pending_suffix = 0;
+    while(*scan == ' ') ++scan;
+    return *scan ? scan : nullptr;
 }
 
-void status_word_mutable(char* word, char punctuation)
+// A phrase suffix belongs to its last lexical word, including multiword names.
+void status_final_words(const char AVM_PROGMEM* words, char suffix)
 {
-    if(!punctuation) {
-        status_word_mutable(word);
-        return;
+    while(*words == ' ') ++words;
+    while(*words) {
+        const char AVM_PROGMEM* next = words;
+        while(*next && *next != ' ') ++next;
+        while(*next == ' ') ++next;
+        if(!*next) status_suffix(suffix);
+        words = status_word(words);
+        if(!words) return;
     }
-    char mark[2] = {punctuation, 0};
-    int16_t width = text_width(word) + text_width(mark);
-    if(width > 60) {
-        status_word_mutable(word);
-        status_word_mutable(mark);
-        return;
+}
+
+void status_formatted_number(uint8_t value, bool bonus)
+{
+    uint8_t x = status_x, y = status_y;
+    char suffix = pending_suffix;
+    // At most '+255' and NUL, reused for suffix measurement and drawing.
+    // Emit here to avoid keeping a number buffer live across status_word().
+    char buf[5];
+    buf[0] = suffix;
+    buf[1] = 0;
+    int16_t width = suffix ? text_width(buf) : 0;
+    uint8_t n = 0;
+    if(bonus) buf[n++] = '+';
+    if(value >= 100) buf[n++] = static_cast<char>('0' + value / 100);
+    if(value >= 10) buf[n++] = static_cast<char>('0' + value / 10 % 10);
+    buf[n++] = static_cast<char>('0' + value % 10);
+    buf[n] = 0;
+    width += text_width(buf);
+    if(x != 67) {
+        int16_t space_width = avm_draw_text_P(128, 0, F(" ")).x - 128;
+        if(x + space_width + width > 128) status_next_line(x, y);
+        else x = static_cast<uint8_t>(x + space_width);
     }
     ui.repeat_suppressed = true;
-    if(status_x != 67 && status_x + width > 128)
-        status_next_line();
-    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, word).x);
-    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, mark).x +
-                                    text_width(" "));
-}
-
-// Keep text scratch in its own frame on the 256-byte VM stack.
-
-template<typename Pointer>
-__attribute__((noinline)) void status_words(Pointer words, char suffix = 0)
-{
-    char word[32];
-    uint8_t length = 0;
-    for(;;) {
-        char c = *words++;
-        if(c != ' ' && c != 0 && length < sizeof(word) - 1) {
-            word[length++] = c;
-            continue;
-        }
-        if(length) {
-            word[length] = 0;
-            if(!c && suffix)
-                status_word_mutable(word, suffix);
-            else
-                status_word_mutable(word);
-            length = 0;
-        }
-        if(!c)
-            return;
-        if(c != ' ')
-            word[length++] = c;
+    x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
+    if(suffix) {
+        buf[0] = suffix;
+        buf[1] = 0;
+        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
     }
-}
-
-__attribute__((noinline)) void status_words_P(
-    const char AVM_PROGMEM* words, char suffix = 0)
-{
-    status_words(words, suffix);
+    status_x = x;
+    status_y = y;
+    pending_suffix = 0;
+    pending_capitalize = false;
 }
 
 const char AVM_PROGMEM* monster_name(uint8_t type)
@@ -176,7 +182,7 @@ const char AVM_PROGMEM* monster_name(uint8_t type)
 
 void status_entity(uint8_t type, char punctuation = 0)
 {
-    status_words_P(monster_name(type), punctuation);
+    status_final_words(monster_name(type), punctuation);
 }
 
 static const char PROGMEM* const PROGMEM potion_effect_names[] = {
@@ -265,7 +271,10 @@ struct BufferedItemText {
         length = static_cast<uint8_t>(strlen(out));
     }
 
-    void finish(char = 0) {}
+    void words(const char AVM_PROGMEM* words) { word(words); }
+    void final_word(const char AVM_PROGMEM* words, char) { word(words); }
+    void final_bonus(uint8_t value, char) { bonus(value); }
+    void final_number(uint8_t value, char) { number(value); }
 };
 
 struct DrawItemText {
@@ -306,7 +315,10 @@ struct DrawItemText {
         x = avm_draw_textf_P(x, y, F("+%u"), value).x;
     }
 
-    void finish(char = 0) {}
+    void words(const char AVM_PROGMEM* words) { word(words); }
+    void final_word(const char AVM_PROGMEM* words, char) { word(words); }
+    void final_bonus(uint8_t value, char) { bonus(value); }
+    void final_number(uint8_t value, char) { number(value); }
 };
 
 enum ItemTextStyle : uint8_t { STATUS_ITEM, INVENTORY_ITEM, PROMPT_ITEM };
@@ -323,44 +335,28 @@ const char AVM_PROGMEM* article_for(const char AVM_PROGMEM* word)
 }
 
 struct StatusItemText {
-    const char AVM_PROGMEM* pending_word = nullptr;
-    uint8_t pending_value = 0;
-    uint8_t kind = 0; // Text, quantity, or bonus.
-
-    void flush(char suffix = 0)
+    void word(const char AVM_PROGMEM* word) { status_word(word); }
+    void words(const char AVM_PROGMEM* words) { status_words(words); }
+    void final_word(const char AVM_PROGMEM* words, char suffix)
     {
-        if(kind == 1) status(pending_word, suffix);
-        else if(kind == 2) status_number(pending_value, suffix);
-        else if(kind) status_formatted_number(pending_value, true, suffix);
-        kind = 0;
+        status_final_words(words, suffix);
     }
-
-    void word(const char AVM_PROGMEM* words)
+    void number(uint8_t value) { status_formatted_number(value, false); }
+    void bonus(uint8_t value) { status_formatted_number(value, true); }
+    void final_bonus(uint8_t value, char suffix)
     {
-        flush();
-        pending_word = words;
-        kind = 1;
+        status_suffix(suffix);
+        bonus(value);
     }
-
-    void number(uint8_t value)
+    void final_number(uint8_t value, char suffix)
     {
-        flush();
-        pending_value = value;
-        kind = 2;
+        status_suffix(suffix);
+        number(value);
     }
-
-    void bonus(uint8_t value)
-    {
-        flush();
-        pending_value = value;
-        kind = 3;
-    }
-
-    void finish(char suffix = 0) { flush(suffix); }
 };
 
 template<typename Output>
-void emit_item(Item item, ItemTextStyle style, Output& text)
+void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
 {
     bool known = item_type_identified(item.type);
     if(is_potion(item.type) || is_scroll(item.type)) {
@@ -379,14 +375,14 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
                 ? (plural ? F("scrolls") : F("scroll"))
                 : (plural ? F("potions") : F("potion")));
             text.word(F("of"));
-            text.word(is_scroll(item.type)
+            text.final_word(is_scroll(item.type)
                 ? scroll_names[item.type - SCROLL_IDENTIFY]
-                : potion_effect_names[item.type - HEALING]);
+                : potion_effect_names[item.type - HEALING], suffix);
         } else {
             text.word(first_word);
-            text.word(is_scroll(item.type)
+            text.final_word(is_scroll(item.type)
                 ? (plural ? F("scrolls") : F("scroll"))
-                : (plural ? F("potions") : F("potion")));
+                : (plural ? F("potions") : F("potion")), suffix);
         }
         return;
     }
@@ -398,10 +394,10 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
         if(known) {
             text.word(first_word);
             text.word(F("of"));
-            text.word(ring_name(item.type));
+            text.final_word(ring_name(item.type), suffix);
         } else {
             text.word(first_word);
-            text.word(F("ring"));
+            text.final_word(F("ring"), suffix);
         }
         return;
     }
@@ -413,10 +409,10 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
         if(known) {
             text.word(first_word);
             text.word(F("of"));
-            text.word(amulet_name(item.type));
+            text.final_word(amulet_name(item.type), suffix);
         } else {
             text.word(first_word);
-            text.word(F("amulet"));
+            text.final_word(F("amulet"), suffix);
         }
         return;
     }
@@ -433,48 +429,49 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
             if(modifier != WAND_NORMAL) text.word(first_word);
             text.word(F("wand"));
             text.word(F("of"));
-            text.word(wand_names[item.type - WAND_FORCE]);
-            if(individual && style == INVENTORY_ITEM)
-                text.number(wand_charges(item));
+            if(individual && style == INVENTORY_ITEM) {
+                text.words(wand_names[item.type - WAND_FORCE]);
+                text.final_number(wand_charges(item), suffix);
+            } else text.final_word(wand_names[item.type - WAND_FORCE], suffix);
         } else {
             text.word(first_word);
-            text.word(F("wand"));
+            text.final_word(F("wand"), suffix);
         }
         return;
     }
+    bool has_bonus = (item.type == SWORD || item.type == ARMOR) &&
+        item_is_identified(item) && item_value(item);
     switch(item.type) {
     case FOOD:
         if(item_value(item) > 1) {
             if(style == PROMPT_ITEM) text.word(F("the"));
             text.number(item_value(item));
-            text.word(F("food rations"));
+            text.final_word(F("food rations"), suffix);
         } else {
             if(style == PROMPT_ITEM) text.word(F("the"));
             else if(style == STATUS_ITEM) text.word(F("some"));
-            text.word(F("food"));
+            text.final_word(F("food"), suffix);
         }
         break;
     case SWORD:
         if(style == PROMPT_ITEM) text.word(F("the"));
         else if(style == STATUS_ITEM) text.word(F("a"));
-        text.word(F("sword"));
+        text.final_word(F("sword"), has_bonus ? 0 : suffix);
         break;
     case ARMOR:
         if(style == PROMPT_ITEM) text.word(F("the"));
-        text.word(F("armor"));
+        text.final_word(F("armor"), has_bonus ? 0 : suffix);
         break;
     case YENDOR_AMULET:
         if(style != INVENTORY_ITEM) text.word(F("the"));
-        text.word(F("amulet"));
+        text.final_word(F("amulet"), suffix);
         break;
     default:
         if(style == PROMPT_ITEM) text.word(F("the"));
-        text.word(F("item"));
+        text.final_word(F("item"), suffix);
         break;
     }
-    if((item.type == SWORD || item.type == ARMOR) &&
-       item_is_identified(item) && item_value(item))
-        text.bonus(item_value(item));
+    if(has_bonus) text.final_bonus(item_value(item), suffix);
 }
 
 } // namespace
@@ -503,67 +500,39 @@ uint8_t rogue::status_baseline()
     return status_y;
 }
 
-void rogue::status_word(const char* word)
+void rogue::status_suffix(char c) { pending_suffix = c; }
+void rogue::status_capitalize() { pending_capitalize = true; }
+
+const char* rogue::status_word(const char* word)
 {
-    ui.repeat_suppressed = true;
-    const int16_t space_width = text_width(" ");
-    if((*word == '.' || *word == '!' || *word == '?' ||
-        *word == ',' || *word == ':') &&
-       status_x > 67)
-        status_x = static_cast<uint8_t>(status_x - space_width);
-    while(*word) {
-        char part[16];
-        uint8_t count = 0;
-        int16_t width = 0;
-        while(word[count] && count < sizeof(part) - 1) {
-            part[count] = word[count];
-            part[count + 1] = 0;
-            int16_t candidate = text_width(part);
-            if(count && candidate > 60)
-                break;
-            width = candidate;
-            ++count;
-        }
-        if(status_x != 67 && status_x + width > 128)
-            status_next_line();
-        part[count] = 0;
-        status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, part).x);
-        word += count;
-        if(*word)
-            status_next_line();
-    }
-    status_x = static_cast<uint8_t>(status_x + space_width);
+    return stream_status_word(word);
 }
 
-void rogue::status_word(const char* word, char punctuation)
+void rogue::status_words(const char* words)
 {
-    if(!punctuation) {
-        status_word(word);
-        return;
-    }
-    char mark[2] = {punctuation, 0};
-    int16_t width = text_width(word) + text_width(mark);
-    if(width > 60) {
-        status_word(word);
-        status_word(mark);
-        return;
-    }
-    ui.repeat_suppressed = true;
-    if(status_x != 67 && status_x + width > 128)
-        status_next_line();
-    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, word).x);
-    status_x = static_cast<uint8_t>(avm_draw_text(status_x, status_y, mark).x +
-                                    text_width(" "));
+    while(words) words = status_word(words);
 }
+
+#if defined(__AVM__)
+const char AVM_PROGMEM* rogue::status_word(const char AVM_PROGMEM* word)
+{
+    return stream_status_word(word);
+}
+
+void rogue::status_words(const char AVM_PROGMEM* words)
+{
+    while(words) words = status_word(words);
+}
+#endif
 
 void rogue::status(const char PROGMEM* words)
 {
-    status_words_P(words);
+    status_words(words);
 }
 
 void rogue::status(const char PROGMEM* words, char punctuation)
 {
-    status_words_P(words, punctuation);
+    status_final_words(words, punctuation);
 }
 
 void rogue::status(Item item)
@@ -574,8 +543,8 @@ void rogue::status(Item item)
 void rogue::status(Item item, char punctuation)
 {
     StatusItemText text;
-    emit_item(item, punctuation == '?' ? PROMPT_ITEM : STATUS_ITEM, text);
-    text.finish(punctuation);
+    emit_item(item, punctuation == '?' ? PROMPT_ITEM : STATUS_ITEM,
+              text, punctuation);
 }
 
 void rogue::status(MonsterType monster)
@@ -595,5 +564,6 @@ void rogue::status_number(uint8_t value)
 
 void rogue::status_number(uint8_t value, char punctuation)
 {
-    status_formatted_number(value, false, punctuation);
+    status_suffix(punctuation);
+    status_formatted_number(value, false);
 }

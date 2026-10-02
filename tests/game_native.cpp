@@ -25,8 +25,10 @@ Game game = {};
 using namespace rogue;
 
 namespace rogue {
-void status_word(const char*) {}
-void status_word(const char*, char) {}
+const char* status_word(const char*) { return nullptr; }
+void status_words(const char*) {}
+void status_suffix(char) {}
+void status_capitalize() {}
 void status(const char* words) { status_text += words; status_text += ' '; }
 void status(const char* words, char punctuation) {
     status_text += words;
