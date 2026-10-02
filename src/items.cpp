@@ -315,6 +315,8 @@ __attribute__((noinline)) static bool legal_teleport_position(Position pos,
         (!player || item_at(pos) == NONE);
 }
 
+static bool teleport_player();
+
 static void scroll_effect(uint8_t type, uint8_t target_slot)
 {
     if(type == SCROLL_IDENTIFY || type == SCROLL_ENCHANT ||
@@ -347,7 +349,10 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
                     game.defense = item_value(target);
                 status(F("The")); status(target); status(F("glows blue."));
             }
-        } else if(item_is_cursed(target) && !is_wand(target.type)) {
+        } else if(is_wand(target.type) && wand_afflicted(target)) {
+            set_wand_modifier(target, WAND_NORMAL);
+            status(F("The")); status(target); status(F("glows white."));
+        } else if(!is_wand(target.type) && item_is_cursed(target)) {
             target.info &= static_cast<uint8_t>(~ITEM_CURSED);
             status(F("The")); status(target); status(F("glows white."));
         } else {
@@ -356,17 +361,7 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
         return;
     }
     if(type == SCROLL_TELEPORT) {
-        for(uint8_t attempt = 0; attempt < 100; ++attempt) {
-            Position pos = {
-                static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
-                static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
-            if(legal_teleport_position(pos, true)) {
-                game.player = pos;
-                status(F("You teleport!"));
-                return;
-            }
-        }
-        status(F("Nothing happens."));
+        teleport_player();
         return;
     }
     if(type == SCROLL_MAPPING) {
@@ -403,6 +398,22 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
         }
     }
     if(!found) status(F("Nothing happens."));
+}
+
+static bool teleport_player()
+{
+    for(uint8_t attempt = 0; attempt < 100; ++attempt) {
+        Position pos = {
+            static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
+            static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
+        if(legal_teleport_position(pos, true)) {
+            game.player = pos;
+            status(F("You teleport!"));
+            return true;
+        }
+    }
+    status(F("Nothing happens."));
+    return false;
 }
 
 bool use_inventory(uint8_t slot, uint8_t target_slot)
@@ -614,103 +625,294 @@ static bool teleport_monster(uint8_t index)
     return false;
 }
 
-static void force_monster(uint8_t index, int8_t dx, int8_t dy)
+static void force_monster(uint8_t index, int8_t dx, int8_t dy,
+                          bool powerful)
 {
     Monster& target = game.monsters[index];
     monster_status(target, F("is blasted back!"));
-    RayResult path = scan_ray(target.pos, dx, dy, 8);
+    RayResult path = scan_ray(target.pos, dx, dy, powerful ? 16 : 8);
     target.pos = path.monster != NONE ? path.before : path.end;
+    uint8_t stun = powerful ? 8 : 4;
     if(path.monster != NONE) {
         monster_status(target, F("crashes into the"));
         status(static_cast<MonsterType>(game.monsters[path.monster].type), '!');
-        target.stun = 4;
-        game.monsters[path.monster].stun = 4;
+        target.stun = stun;
+        game.monsters[path.monster].stun = stun;
     } else if(path.blocker) {
         monster_status(target, F("hits a wall!"));
-        target.stun = 4;
+        target.stun = stun;
     }
 }
 
-bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
+static bool in_wand_area(Position pos, Position center)
 {
-    if(slot >= INVENTORY || game.paralyzed ||
-       !is_wand(game.inventory[slot].type) ||
-       (dx == 0 && dy == 0) || (dx != 0 && dy != 0) ||
-       dx < -1 || dx > 1 || dy < -1 || dy > 1)
-        return false;
-    Item& item = game.inventory[slot];
-    if(!item_value(item)) {
-        status(F("The wand has no charges."));
-        return false;
-    }
-    uint8_t type = item.type;
-    bool known = item_type_identified(type);
-    status(F("You use"));
-    status(Item{type, item.info}, '.');
-    uint8_t remaining = static_cast<uint8_t>(item_value(item) - 1);
-    set_item_value(item, remaining);
-    identify_type(type);
-    item.info |= ITEM_IDENTIFIED;
-    if(!known) {
-        status(F("It is"));
-        status(Item{type, item.info}, '.');
-    }
+    int16_t dx = static_cast<int16_t>(pos.x) - center.x;
+    int16_t dy = static_cast<int16_t>(pos.y) - center.y;
+    return dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1;
+}
 
-    if(type == WAND_DIGGING) {
-        int16_t x = game.player.x, y = game.player.y;
-        for(uint8_t step = 0; step < 6; ++step) {
-            x += dx;
-            y += dy;
-            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) break;
+static void polymorph_monster(uint8_t index)
+{
+    Monster& target = game.monsters[index];
+    if(target.type <= BAT || target.type >= LORD) {
+        status(F("Nothing happens."));
+        return;
+    }
+    target.state |= MON_AGGRO;
+    monster_status(target, F("changes form!"));
+    target.type = static_cast<uint8_t>(target.type +
+        (target.type != ANGEL && roll(4) == 0 ? 1 : -1));
+    target.hp = monster_info(target.type).health;
+    target.stun = 0;
+    target.effects[0] = target.effects[1] = 0;
+}
+
+static void dig_ray(int8_t dx, int8_t dy, bool powerful)
+{
+#if defined(AVM_DIG_RAY_COMPILER_REPRO)
+    // Retained only to reproduce the AVM backend crash documented in
+    // tests/compiler_repros/README.md. Never enabled in the game build.
+    for(uint8_t step = 1; step <= 6; ++step) {
+        for(int8_t side = powerful ? -1 : 0;
+            side <= (powerful ? 1 : 0); ++side) {
+            int16_t x = static_cast<int16_t>(game.player.x) + dx * step +
+                (dy ? side : 0);
+            int16_t y = static_cast<int16_t>(game.player.y) + dy * step +
+                (dx ? side : 0);
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
             Position pos = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
             carve(pos.x, pos.y);
             explore(pos);
             uint8_t door = door_at(pos);
             if(door != NONE) open_door(door);
         }
-        status(F("The stone gives way."));
-    } else {
-        RayResult ray = scan_ray(game.player, dx, dy, 6);
-        animate_ray(game.player, dx, dy, ray.steps);
-        if(type == WAND_FIRE) {
-            animate_fire_burst(ray.end);
-            fire_burst_damage(ray.end, true);
-        } else if(ray.monster != NONE) {
-            Monster& target = game.monsters[ray.monster];
+    }
+#else
+    for(uint8_t step = 1; step <= 6; ++step) {
+        uint8_t lanes = powerful ? 3 : 1;
+        for(uint8_t lane = 0; lane < lanes; ++lane) {
+            int16_t side = powerful ? static_cast<int16_t>(lane) - 1 : 0;
+            int16_t x = static_cast<int16_t>(game.player.x) + dx * step;
+            int16_t y = static_cast<int16_t>(game.player.y) + dy * step;
+            if(dx) y += side;
+            else x += side;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
+            Position pos = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
+            carve(pos.x, pos.y);
+            explore(pos);
+            uint8_t door = door_at(pos);
+            if(door != NONE) open_door(door);
+        }
+    }
+#endif
+}
+
+static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
+                             int8_t dx, int8_t dy, bool powerful)
+{
+    if(powerful && (type == WAND_TELEPORT || type == WAND_ICE ||
+                    type == WAND_POLYMORPH)) {
+        bool found = false;
+        for(uint8_t i = 0; i < MONSTERS; ++i) {
+            Monster& target = game.monsters[i];
+            if(!target.type || !in_wand_area(target.pos, end)) continue;
+            found = true;
             target.state |= MON_AGGRO;
-            switch(type) {
-            case WAND_FORCE:
-                force_monster(ray.monster, dx, dy);
-                break;
-            case WAND_TELEPORT:
-                teleport_monster(ray.monster);
-                break;
-            case WAND_STRIKING: {
-                uint8_t damage = static_cast<uint8_t>(12 + roll(12));
-                damage_monster(ray.monster, damage, true);
-                if(target.type) monster_status(target, F("is struck!"));
-                break;
-            }
-            case WAND_ICE: {
+            if(type == WAND_TELEPORT) teleport_monster(i);
+            else if(type == WAND_POLYMORPH) polymorph_monster(i);
+            else {
                 set_monster_effect(target, MON_SLOWED, 15);
-                uint8_t damage = static_cast<uint8_t>(8 + roll(8));
-                damage_monster(ray.monster, damage, true);
+                damage_monster(i, static_cast<uint8_t>(8 + roll(8)), true);
                 if(target.type) monster_status(target, F("slows down!"));
-                break;
             }
-            case WAND_POLYMORPH:
-                if(target.type > BAT && target.type < LORD) {
-                    monster_status(target, F("changes form!"));
-                    target.type = static_cast<uint8_t>(target.type +
-                        (target.type != ANGEL && roll(4) == 0 ? 1 : -1));
-                    target.hp = monster_info(target.type).health;
-                    target.stun = 0;
-                    target.effects[0] = target.effects[1] = 0;
-                } else status(F("Nothing happens."));
-                break;
-            default: break;
-            }
-        } else status(F("Nothing happens."));
+        }
+        if(!found) status(F("Nothing happens."));
+        return;
+    }
+    if(hit == NONE) { status(F("Nothing happens.")); return; }
+    Monster& target = game.monsters[hit];
+    if(!target.type) return;
+    target.state |= MON_AGGRO;
+    switch(type) {
+    case WAND_FORCE:
+        force_monster(hit, dx, dy, powerful);
+        break;
+    case WAND_TELEPORT:
+        teleport_monster(hit);
+        break;
+    case WAND_STRIKING:
+        damage_monster(hit, static_cast<uint8_t>(
+            powerful ? 24 + roll(24) : 12 + roll(12)), true);
+        if(target.type) monster_status(target, F("is struck!"));
+        break;
+    case WAND_ICE:
+        set_monster_effect(target, MON_SLOWED, 15);
+        damage_monster(hit, static_cast<uint8_t>(8 + roll(8)), true);
+        if(target.type) monster_status(target, F("slows down!"));
+        break;
+    case WAND_POLYMORPH:
+        polymorph_monster(hit);
+        break;
+    default: break;
+    }
+}
+
+static const int8_t PROGMEM wand_directions[] = {0, -1, 1, 0, 0, 1, -1, 0};
+
+static void force_player()
+{
+    uint8_t direction = roll(4);
+    int8_t dx = wand_directions[direction * 2];
+    int8_t dy = wand_directions[direction * 2 + 1];
+    RayResult path = scan_ray(game.player, dx, dy, 8);
+    game.player = path.monster != NONE ? path.before : path.end;
+    if(path.blocker || path.monster != NONE) {
+        if(amulet_bonus(AMULET_IRONBLOOD) <= 0 && game.paralyzed < 4)
+            game.paralyzed = 4;
+        if(path.monster != NONE && game.monsters[path.monster].stun < 4)
+            game.monsters[path.monster].stun = 4;
+        status(F("You crash into an obstacle!"));
+    } else status(F("You are blasted back!"));
+}
+
+static void cursed_wand_effect(uint8_t type)
+{
+    switch(type) {
+    case WAND_FORCE: force_player(); break;
+    case WAND_TELEPORT: teleport_player(); break;
+    case WAND_DIGGING:
+        status(F("The wand digs into you!"));
+        hurt_player(static_cast<uint8_t>(12 + roll(12)));
+        break;
+    case WAND_FIRE:
+        animate_fire_burst(game.player);
+        fire_burst_damage(game.player, true);
+        break;
+    case WAND_STRIKING:
+        status(F("The wand strikes you!"));
+        hurt_player(static_cast<uint8_t>(12 + roll(12)));
+        break;
+    case WAND_ICE:
+        status(F("The wand freezes you!"));
+        game.slowed = static_cast<uint8_t>(8 + roll(8));
+        hurt_player(static_cast<uint8_t>(8 + roll(8)));
+        break;
+    case WAND_POLYMORPH:
+        status(F("Your form twists!"));
+        switch(roll(4)) {
+        case 0: if(game.weakened < 3) ++game.weakened; break;
+        case 1:
+            if(amulet_bonus(AMULET_CLARITY) <= 0)
+                game.confused = static_cast<uint8_t>(8 + roll(8));
+            break;
+        case 2: game.slowed = static_cast<uint8_t>(8 + roll(8)); break;
+        case 3:
+            if(amulet_bonus(AMULET_IRONBLOOD) <= 0)
+                game.paralyzed = static_cast<uint8_t>(3 + roll(4));
+            break;
+        }
+        break;
+    default: break;
+    }
+}
+
+__attribute__((noinline)) static void animate_all_wand_rays()
+{
+    uint8_t steps[4];
+    for(uint8_t i = 0; i < 4; ++i)
+        steps[i] = scan_ray(game.player, wand_directions[i * 2],
+                            wand_directions[i * 2 + 1], 6).steps;
+    animate_spreading_rays(game.player, steps);
+}
+
+__attribute__((noinline)) static void resolve_all_fire_rays(bool powerful)
+{
+    Position ends[4];
+    for(uint8_t i = 0; i < 4; ++i)
+        ends[i] = scan_ray(game.player, wand_directions[i * 2],
+                           wand_directions[i * 2 + 1], 6).end;
+    animate_fire_bursts(ends, 4, powerful);
+    for(uint8_t i = 0; i < 4 && !session.ended; ++i)
+        fire_burst_damage(ends[i], true, powerful ? 2 : 1);
+}
+
+__attribute__((noinline)) static void resolve_all_other_rays(
+    uint8_t type, bool powerful)
+{
+    Position ends[4];
+    uint8_t hits[4];
+    for(uint8_t i = 0; i < 4; ++i) {
+        RayResult ray = scan_ray(game.player, wand_directions[i * 2],
+                                 wand_directions[i * 2 + 1], 6);
+        ends[i] = ray.end;
+        hits[i] = ray.monster;
+    }
+    for(uint8_t i = 0; i < 4 && !session.ended; ++i)
+        resolve_wand_ray(type, ends[i], hits[i], wand_directions[i * 2],
+                         wand_directions[i * 2 + 1], powerful);
+}
+
+__attribute__((noinline)) static void single_wand_ray(
+    uint8_t type, int8_t dx, int8_t dy, bool powerful)
+{
+    RayResult ray = scan_ray(game.player, dx, dy, 6);
+    animate_ray(game.player, dx, dy, ray.steps);
+    if(type == WAND_FIRE) {
+        if(powerful) animate_fire_bursts(&ray.end, 1, true);
+        else animate_fire_burst(ray.end);
+        fire_burst_damage(ray.end, true, powerful ? 2 : 1);
+    } else resolve_wand_ray(type, ray.end, ray.monster, dx, dy, powerful);
+}
+
+bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
+{
+    if(slot >= INVENTORY || game.paralyzed ||
+       !is_wand(game.inventory[slot].type))
+        return false;
+    Item& item = game.inventory[slot];
+    if(wand_needs_direction(item) &&
+       ((dx == 0 && dy == 0) || (dx != 0 && dy != 0) ||
+        dx < -1 || dx > 1 || dy < -1 || dy > 1))
+        return false;
+    if(!wand_charges(item)) {
+        status(F("The wand has no charges."));
+        return false;
+    }
+    uint8_t type = item.type;
+    WandModifier modifier = wand_modifier(item);
+    bool known = item_type_identified(type);
+    bool individual = item_is_identified(item);
+    status(F("You use"));
+    status(Item{type, item.info}, '.');
+    uint8_t remaining = static_cast<uint8_t>(wand_charges(item) - 1);
+    set_wand_charges(item, remaining);
+    identify_type(type);
+    item.info |= ITEM_IDENTIFIED;
+    if(!known || !individual) {
+        status(F("It is"));
+        status(Item{type, item.info}, '.');
+    }
+    bool spreading = wand_spreads(item);
+    bool powerful = wand_powerful(item);
+    if(modifier == WAND_CURSED) cursed_wand_effect(type);
+    else {
+        if(modifier == WAND_UNRELIABLE) {
+            uint8_t direction = roll(4);
+            dx = wand_directions[direction * 2];
+            dy = wand_directions[direction * 2 + 1];
+        }
+        if(type == WAND_DIGGING) {
+            if(spreading) {
+                for(uint8_t i = 0; i < 4; ++i)
+                    dig_ray(wand_directions[i * 2],
+                            wand_directions[i * 2 + 1], powerful);
+            } else dig_ray(dx, dy, powerful);
+            status(F("The stone gives way."));
+        } else if(spreading) {
+            animate_all_wand_rays();
+            if(type == WAND_FIRE) resolve_all_fire_rays(powerful);
+            else resolve_all_other_rays(type, powerful);
+        } else single_wand_ray(type, dx, dy, powerful);
     }
     if(!remaining) {
         item.type = NO_ITEM;

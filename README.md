@@ -20,11 +20,12 @@ terrain, doors, and monsters, but no ordinary random loot. This follows the
 classic Rogue nonpersistent-floor model and saves 112 bytes of AVM RAM.
 The active floor's explored map uses one bit per tile, and a spare bit in each
 door coordinate records whether that door is open. Each inventory item uses two
-bytes: a type byte and an info byte with a six-bit quantity or level, a cursed
-bit, and an identified bit. Ground slots store their coordinates and a complete
-item.
-Save version 15 stores one active floor in an 821-byte AVM `Game` (820 bytes in
-version 14). It derives potion, scroll, ring, amulet, and wand appearances from
+bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
+bit, and an identified bit. Wands use four charge bits, three modifier bits,
+and an individual identification bit. Ground slots store coordinates and a
+complete item.
+Save version 16 stores one active floor in an 821-byte AVM `Game` (unchanged
+from version 15). It derives potion, scroll, ring, amulet, and wand appearances from
 the run seed instead of storing 42 mapping bytes. Six bytes store their
 discoveries. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots; older saves
@@ -68,17 +69,25 @@ ArduRogue: lower values act more often. Slowing doubles an enemy's turn cost;
 a slowed player gives enemies more turns.
 
 The seven wands are force, teleportation, digging, fire, striking, ice, and
-polymorph. Each has an independently permuted unknown appearance (long, short,
-slender, thick, twisted, curved, or glossy) until use identifies its type for
-the rest of the run. A wand starts with 3–10 charges, never stacks, and crumbles
-after its last charge. An enchant scroll adds four charges, up to 15. Wands
-appear only during descent, so saved charges are resources for the ascent.
-Choose **Use Item**, select a wand, and press a direction to fire up to six
-tiles; B cancels without using a charge or turn. Except for digging, each wand
-shows ArduRogue's accumulating animated ray. Fire wands add an animated
-three-by-three burst that can strike several monsters or the player. Dragon
-breath uses the same animated ray and burst while retaining its five-tile
-range and fire immunity rules.
+polymorph. Each type has a permuted unknown appearance (long, short, slender,
+thick, twisted, curved, or glossy). Using or identifying a wand reveals that
+appearance's type for the run. Every individual wand also has one modifier:
+normal, cursed, unreliable, spreading, powerful, or overpowered. Its modifier
+and exact charges remain unknown until that specific wand is used or identified,
+even when its type is already known. A wand starts with 3–10 charges, never
+stacks, and crumbles after its last charge. Enchanting adds four charges, up to
+15. Remove Curse changes cursed and unreliable wands to normal without
+identifying them. Wands appear only during descent.
+
+Choose **Use Item** and select a wand. Normal and powerful wands ask for a
+direction; B cancels without spending a charge or turn. Cursed wands immediately
+target the player, unreliable wands immediately choose a random cardinal
+direction, and spreading wands fire in all four directions at once. Powerful
+wands amplify their effect; overpowered wands combine spreading and powerful.
+Each activation spends one charge and one turn. Non-digging shots show
+ArduRogue's accumulating animated ray. Fire wands add an animated three-by-three
+burst, or five-by-five when powerful. Dragon breath keeps its five-tile range,
+ordinary three-by-three burst, and fire immunity rules.
 
 Select **Throw Potion** from the action menu, choose a potion, then press a
 direction. It travels up to eight tiles and shatters on the first monster,

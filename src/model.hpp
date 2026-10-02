@@ -31,7 +31,7 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-constexpr uint8_t SAVE_VERSION = 15;
+constexpr uint8_t SAVE_VERSION = 16;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -126,18 +126,68 @@ struct Item { uint8_t type, info; };
 constexpr uint8_t ITEM_VALUE_MASK = 0x3f;
 constexpr uint8_t ITEM_CURSED = 0x40;
 constexpr uint8_t ITEM_IDENTIFIED = 0x80;
+enum WandModifier : uint8_t {
+    WAND_NORMAL, WAND_CURSED, WAND_UNRELIABLE,
+    WAND_SPREADING, WAND_POWERFUL, WAND_OVERPOWERED
+};
+constexpr uint8_t WAND_CHARGE_MASK = 0x0f;
+constexpr uint8_t WAND_MODIFIER_MASK = 0x70;
+constexpr uint8_t WAND_MODIFIER_SHIFT = 4;
+constexpr uint8_t wand_charges(const Item& item)
+{
+    return item.info & WAND_CHARGE_MASK;
+}
+constexpr void set_wand_charges(Item& item, uint8_t charges)
+{
+    item.info = static_cast<uint8_t>((item.info & ~WAND_CHARGE_MASK) |
+                                     (charges & WAND_CHARGE_MASK));
+}
+constexpr WandModifier wand_modifier(const Item& item)
+{
+    return static_cast<WandModifier>((item.info & WAND_MODIFIER_MASK) >>
+                                     WAND_MODIFIER_SHIFT);
+}
+constexpr void set_wand_modifier(Item& item, WandModifier modifier)
+{
+    item.info = static_cast<uint8_t>((item.info & ~WAND_MODIFIER_MASK) |
+        ((static_cast<uint8_t>(modifier) << WAND_MODIFIER_SHIFT) &
+         WAND_MODIFIER_MASK));
+}
+constexpr bool wand_spreads(const Item& item)
+{
+    return wand_modifier(item) == WAND_SPREADING ||
+           wand_modifier(item) == WAND_OVERPOWERED;
+}
+constexpr bool wand_powerful(const Item& item)
+{
+    return wand_modifier(item) == WAND_POWERFUL ||
+           wand_modifier(item) == WAND_OVERPOWERED;
+}
+constexpr bool wand_afflicted(const Item& item)
+{
+    return wand_modifier(item) == WAND_CURSED ||
+           wand_modifier(item) == WAND_UNRELIABLE;
+}
+constexpr bool wand_needs_direction(const Item& item)
+{
+    return wand_modifier(item) == WAND_NORMAL ||
+           wand_modifier(item) == WAND_POWERFUL;
+}
 constexpr uint8_t item_value(const Item& item)
 {
-    return item.info & ITEM_VALUE_MASK;
+    return is_wand(item.type) ? wand_charges(item) :
+           item.info & ITEM_VALUE_MASK;
 }
 constexpr void set_item_value(Item& item, uint8_t value)
 {
-    item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) |
-                                     (value & ITEM_VALUE_MASK));
+    if(is_wand(item.type)) set_wand_charges(item, value);
+    else item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) |
+                                          (value & ITEM_VALUE_MASK));
 }
 constexpr bool item_is_cursed(const Item& item)
 {
-    return (item.info & ITEM_CURSED) != 0;
+    return is_wand(item.type) ? wand_modifier(item) == WAND_CURSED :
+           (item.info & ITEM_CURSED) != 0;
 }
 constexpr bool item_is_identified(const Item& item)
 {

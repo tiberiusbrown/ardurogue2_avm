@@ -23,11 +23,22 @@ extern "C" int main()
         if(buttons != ui.previous_buttons ||
            (ui.held_direction && !ui.repeat_suppressed &&
             static_cast<int16_t>(avm_millis() -
-               ui.next_repeat_ms) >= 0))
-            if(handle_input(buttons)) {
+               ui.next_repeat_ms) >= 0)) {
+            InputAction input = handle_input(buttons);
+            if(input == INPUT_MOVED) {
                 prompt_ground_items();
                 prompt_stairs();
+            } else if(input >= INPUT_WAND_UP &&
+                      input <= INPUT_WAND_IMMEDIATE) {
+                int8_t dx = input == INPUT_WAND_RIGHT ? 1 :
+                            input == INPUT_WAND_LEFT ? -1 : 0;
+                int8_t dy = input == INPUT_WAND_UP ? -1 :
+                            input == INPUT_WAND_DOWN ? 1 : 0;
+                if(!use_wand(ui.selection, dx, dy) &&
+                   input != INPUT_WAND_IMMEDIATE)
+                    ui.mode = WAND_DIRECTION;
             }
+        }
         if(session.ended) {
             save_finished_game();
             ui.has_save = false;

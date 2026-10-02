@@ -5,8 +5,13 @@
 
 namespace rogue {
 
-// Returns after movement so the main loop can prompt with the input frame unwound.
-bool handle_input(uint8_t buttons);
+// Return wand actions so the main loop activates them after this UI frame
+// unwinds, leaving room for dungeon rendering on the 256-byte VM stack.
+enum InputAction : uint8_t {
+    INPUT_NONE, INPUT_MOVED, INPUT_WAND_UP, INPUT_WAND_RIGHT,
+    INPUT_WAND_DOWN, INPUT_WAND_LEFT, INPUT_WAND_IMMEDIATE
+};
+InputAction handle_input(uint8_t buttons);
 void prompt_ground_items();
 void prompt_stairs();
 

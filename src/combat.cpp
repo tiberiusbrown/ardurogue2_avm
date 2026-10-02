@@ -110,7 +110,7 @@ static bool can_monster_move(uint8_t x, uint8_t y)
     return pos != game.player && monster_at(pos) == NONE;
 }
 
-static void hurt_player(uint8_t damage)
+void hurt_player(uint8_t damage)
 {
     game.hp = damage >= game.hp ? 0 : static_cast<uint8_t>(game.hp - damage);
     if(!game.hp)
@@ -138,7 +138,7 @@ void damage_monster(uint8_t index, uint8_t damage, bool player_attack)
         target.hp = static_cast<uint8_t>(target.hp - damage);
 }
 
-void fire_burst_damage(Position center, bool player_attack)
+void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
 {
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         Monster& target = game.monsters[i];
@@ -148,14 +148,16 @@ void fire_burst_damage(Position center, bool player_attack)
             center.x - target.pos.x;
         uint8_t dy = target.pos.y > center.y ? target.pos.y - center.y :
             center.y - target.pos.y;
-        if(dx > 1 || dy > 1)
+        if(dx > radius || dy > radius)
             continue;
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
         damage_monster(i, damage, player_attack);
     }
-    if(player_attack &&
-       game.player.x + 1 >= center.x && game.player.x <= center.x + 1 &&
-       game.player.y + 1 >= center.y && game.player.y <= center.y + 1) {
+    uint8_t px = game.player.x > center.x ? game.player.x - center.x :
+        center.x - game.player.x;
+    uint8_t py = game.player.y > center.y ? game.player.y - center.y :
+        center.y - game.player.y;
+    if(player_attack && px <= radius && py <= radius) {
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
         int8_t protection = ring_bonus(RING_FIRE_IMMUNITY);
         if(protection > 0) damage = 0;

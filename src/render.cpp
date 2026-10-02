@@ -140,13 +140,18 @@ static void effect_sprite(uint8_t sx, uint8_t sy)
     }
 }
 
-static void animation_tile(int16_t x, int16_t y)
+static void draw_effect_tile(int16_t x, int16_t y)
 {
     if(x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) {
         uint8_t sx, sy;
         if(screen_tile({static_cast<uint8_t>(x), static_cast<uint8_t>(y)}, sx, sy))
             effect_sprite(sx, sy);
     }
+}
+
+static void animation_tile(int16_t x, int16_t y)
+{
+    draw_effect_tile(x, y);
     avm_display(false);
     animation_wait();
 }
@@ -175,6 +180,76 @@ __attribute__((noinline)) void animate_fire_burst(Position center)
     for(uint8_t i = 0; i < 18; i += 2)
         animation_tile(static_cast<int16_t>(center.x) + offsets[i],
                        static_cast<int16_t>(center.y) + offsets[i + 1]);
+    render_play();
+    avm_display(false);
+}
+
+__attribute__((noinline)) static void draw_spreading_rays(
+    Position origin, const uint8_t steps[4])
+{
+    static const int8_t PROGMEM directions[] = {0, -1, 1, 0, 0, 1, -1, 0};
+    uint8_t maximum = 0;
+    for(uint8_t i = 0; i < 4; ++i)
+        if(steps[i] > maximum) maximum = steps[i];
+    for(uint8_t step = 1; step <= maximum; ++step) {
+        for(uint8_t i = 0; i < 4; ++i)
+            if(step <= steps[i])
+                draw_effect_tile(static_cast<int16_t>(origin.x) +
+                                     directions[i * 2] * step,
+                                 static_cast<int16_t>(origin.y) +
+                                     directions[i * 2 + 1] * step);
+        avm_display(false);
+        animation_wait();
+    }
+}
+
+__attribute__((noinline)) void animate_spreading_rays(
+    Position origin, const uint8_t steps[4])
+{
+    render_play();
+    draw_spreading_rays(origin, steps);
+    render_play();
+    avm_display(false);
+}
+
+__attribute__((noinline)) static void draw_fire_bursts(
+    const Position* centers, uint8_t count, bool powerful)
+{
+    static const int8_t PROGMEM offsets[] = {
+        0, 0, -1, -1, 0, -1, 1, -1, 1, 0,
+        1, 1, 0, 1, -1, 1, -1, 0
+    };
+    for(uint8_t i = 0; i < 18; i += 2) {
+        for(uint8_t j = 0; j < count; ++j)
+            draw_effect_tile(static_cast<int16_t>(centers[j].x) + offsets[i],
+                             static_cast<int16_t>(centers[j].y) + offsets[i + 1]);
+        avm_display(false);
+        animation_wait();
+    }
+    if(powerful) {
+        for(uint8_t frame = 0; frame < 4; ++frame) {
+            for(uint8_t j = 0; j < count; ++j) {
+                for(int8_t n = -2; n <= 2; ++n) {
+                    int8_t ox = frame == 0 || frame == 2 ? n :
+                        frame == 1 ? 2 : -2;
+                    int8_t oy = frame == 0 ? -2 : frame == 2 ? 2 : n;
+                    if((frame == 1 || frame == 3) && (n == -2 || n == 2))
+                        continue;
+                    draw_effect_tile(static_cast<int16_t>(centers[j].x) + ox,
+                                     static_cast<int16_t>(centers[j].y) + oy);
+                }
+            }
+            avm_display(false);
+            animation_wait();
+        }
+    }
+}
+
+__attribute__((noinline)) void animate_fire_bursts(
+    const Position* centers, uint8_t count, bool powerful)
+{
+    render_play();
+    draw_fire_bursts(centers, count, powerful);
     render_play();
     avm_display(false);
 }

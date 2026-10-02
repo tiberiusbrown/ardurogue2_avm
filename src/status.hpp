@@ -4,7 +4,7 @@
 
 namespace rogue {
 
-constexpr uint8_t ITEM_TEXT_CAPACITY = 36;
+constexpr uint8_t ITEM_TEXT_CAPACITY = 40;
 void format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY]);
 void reset_status_position();
 uint8_t status_baseline();

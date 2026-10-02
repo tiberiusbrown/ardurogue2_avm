@@ -20,9 +20,14 @@ void set_monster_effect(Monster& monster, MonsterEffect effect,
                         uint8_t duration);
 void defeat_monster(uint8_t index);
 void damage_monster(uint8_t index, uint8_t damage, bool player_attack);
-void fire_burst_damage(Position center, bool player_attack);
+void hurt_player(uint8_t damage);
+void fire_burst_damage(Position center, bool player_attack,
+                       uint8_t radius = 1);
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_fire_burst(Position center);
+void animate_spreading_rays(Position origin, const uint8_t steps[4]);
+void animate_fire_bursts(const Position* centers, uint8_t count,
+                         bool powerful);
 void apply_monster_potion(uint8_t type, uint8_t index);
 
 } // namespace rogue

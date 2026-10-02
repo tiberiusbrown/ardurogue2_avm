@@ -193,10 +193,11 @@ static void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
-// Return after movement so the main loop can prompt with this frame unwound.
-__attribute__((noinline)) bool handle_input(uint8_t buttons)
+// Defer wand activation to the main loop so this UI frame unwinds first.
+__attribute__((noinline)) InputAction handle_input(uint8_t buttons)
 {
     bool moved = false;
+    InputAction pending = INPUT_NONE;
     uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
     ui.previous_buttons = buttons;
     uint8_t direction = directional_press(buttons, edges);
@@ -216,14 +217,14 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
             begin_new_game();
             ui.dirty = true;
         }
-        return false;
+        return INPUT_NONE;
     }
     if(ui.mode == END) {
         if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) {
             ui.mode = TITLE;
             ui.dirty = true;
         }
-        return false;
+        return INPUT_NONE;
     }
     if(ui.mode == FULL_MAP) {
         if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) {
@@ -231,7 +232,7 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
             status_clear();
             ui.dirty = true;
         }
-        return false;
+        return INPUT_NONE;
     }
     if(ui.mode == THROW_DIRECTION || ui.mode == WAND_DIRECTION) {
         if(edges & AVM_BUTTON_B) {
@@ -248,13 +249,16 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
             status_clear();
             render();
             if(wand_direction) {
-                if(!use_wand(ui.selection, dx, dy))
-                    ui.mode = WAND_DIRECTION;
+                ui.dirty = true;
+                return direction == AVM_BUTTON_U ? INPUT_WAND_UP :
+                       direction == AVM_BUTTON_R ? INPUT_WAND_RIGHT :
+                       direction == AVM_BUTTON_D ? INPUT_WAND_DOWN :
+                                                   INPUT_WAND_LEFT;
             } else if(!throw_potion(ui.selection, dx, dy))
                 ui.mode = THROW_DIRECTION;
             ui.dirty = true;
         }
-        return false;
+        return INPUT_NONE;
     }
     if(ui.mode == MENU) {
         if(direction == AVM_BUTTON_U && ui.selection) {
@@ -285,17 +289,21 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
                     uint8_t target = NONE;
                     if(is_wand(type)) {
                         ui.selection = slot;
-                        ui.mode = WAND_DIRECTION;
+                        if(wand_needs_direction(game.inventory[slot]))
+                            ui.mode = WAND_DIRECTION;
+                        else
+                            pending = INPUT_WAND_IMMEDIATE;
                     } else if(type == SCROLL_IDENTIFY)
                         target = choose_item(F("Identify which item?"), nullptr);
                     else if(type == SCROLL_ENCHANT)
                         target = choose_item(F("Enchant which item?"), nullptr);
                     else if(type == SCROLL_REMOVE_CURSE)
                         target = choose_item(F("Uncurse which item?"), nullptr);
-                    status_clear();
-                    render();
-                    if(ui.mode != WAND_DIRECTION)
+                    if(!is_wand(type) && ui.mode != WAND_DIRECTION) {
+                        status_clear();
+                        render();
                         use_inventory(slot, target);
+                    }
                 } else status_clear();
                 break;
             }
@@ -352,7 +360,7 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
             }
             ui.dirty = true;
         }
-        return false;
+        return pending;
     }
     if(edges & AVM_BUTTON_B) {
         ui.mode = MENU;
@@ -370,10 +378,10 @@ __attribute__((noinline)) bool handle_input(uint8_t buttons)
         status_clear();
         action();
     } else {
-        return false;
+        return INPUT_NONE;
     }
     ui.dirty = true;
-    return moved;
+    return moved ? INPUT_MOVED : INPUT_NONE;
 }
 
 uint8_t choose_item(const char AVM_PROGMEM* prompt_text,

@@ -12,6 +12,9 @@
 
 static std::string status_text;
 static int ray_animations = 0, burst_animations = 0;
+static int spreading_animations = 0, multi_burst_animations = 0;
+static uint8_t spreading_steps[4] = {}, multi_burst_count = 0;
+static bool multi_burst_powerful = false;
 static rogue::Position animated_origin = {}, animated_burst = {};
 static uint8_t animated_steps = 0;
 
@@ -44,6 +47,15 @@ void animate_ray(Position origin, int8_t, int8_t, uint8_t steps) {
 void animate_fire_burst(Position center) {
     ++burst_animations;
     animated_burst = center;
+}
+void animate_spreading_rays(Position, const uint8_t steps[4]) {
+    ++spreading_animations;
+    std::memcpy(spreading_steps, steps, 4);
+}
+void animate_fire_bursts(const Position*, uint8_t count, bool powerful) {
+    ++multi_burst_animations;
+    multi_burst_count = count;
+    multi_burst_powerful = powerful;
 }
 }
 
@@ -1582,6 +1594,7 @@ void wand_arena(uint8_t type, uint8_t charges = 2)
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.inventory, 0, sizeof game.inventory);
+    std::memset(game.ground, 0, sizeof game.ground);
     game.door_count = 0;
     game.player = {10, 10};
     game.hp = game.max_hp = 240;
@@ -1589,6 +1602,75 @@ void wand_arena(uint8_t type, uint8_t charges = 2)
     game.inventory[0] = {type, charges};
     status_text.clear();
     ray_animations = burst_animations = 0;
+    spreading_animations = multi_burst_animations = 0;
+    std::memset(spreading_steps, 0, sizeof spreading_steps);
+    multi_burst_count = 0;
+    multi_burst_powerful = false;
+}
+
+void wand_modifier_at(WandModifier modifier)
+{
+    set_wand_modifier(game.inventory[0], modifier);
+}
+
+void check_wand_encoding_and_scrolls()
+{
+    static_assert(sizeof(Item) == 2 && WAND_MODIFIER_MASK == 0x70 &&
+                  WAND_CHARGE_MASK == 0x0f, "wand encoding changed");
+    for(uint8_t value = 0; value < 6; ++value) {
+        WandModifier modifier = static_cast<WandModifier>(value);
+        for(uint8_t charges = 0; charges <= 15; ++charges) {
+            Item wand = {WAND_FIRE, ITEM_IDENTIFIED};
+            set_wand_charges(wand, charges);
+            set_wand_modifier(wand, modifier);
+            require(wand_charges(wand) == charges && item_value(wand) == charges &&
+                    wand_modifier(wand) == modifier && item_is_identified(wand),
+                    "wand charge/modifier/identification encoding failed");
+            set_item_value(wand, static_cast<uint8_t>(15 - charges));
+            require(wand_modifier(wand) == modifier && item_is_identified(wand) &&
+                    wand_charges(wand) == 15 - charges,
+                    "generic item value overwrote wand modifier bits");
+        }
+        wand_arena(WAND_FIRE, 10);
+        wand_modifier_at(modifier);
+        game.inventory[1] = {SCROLL_ENCHANT, 1};
+        require(use_inventory(1, 0) && wand_charges(game.inventory[0]) == 14 &&
+                wand_modifier(game.inventory[0]) == modifier &&
+                !item_is_identified(game.inventory[0]),
+                "enchant changed modifier or identification");
+        game.inventory[1] = {SCROLL_ENCHANT, 1};
+        require(use_inventory(1, 0) && wand_charges(game.inventory[0]) == 15 &&
+                wand_modifier(game.inventory[0]) == modifier,
+                "enchant exceeded wand charge cap or changed modifier");
+        game.inventory[1] = {SCROLL_REMOVE_CURSE, 1};
+        status_text.clear();
+        require(use_inventory(1, 0) && wand_charges(game.inventory[0]) == 15 &&
+                wand_modifier(game.inventory[0]) ==
+                    (modifier == WAND_CURSED || modifier == WAND_UNRELIABLE
+                        ? WAND_NORMAL : modifier) &&
+                !item_is_identified(game.inventory[0]),
+                "remove curse changed the wrong wand bits");
+        require(status_text.find(modifier == WAND_CURSED ||
+                                 modifier == WAND_UNRELIABLE
+                    ? "glows white." : "Nothing happens.") !=
+                    std::string::npos,
+                "remove curse displayed the wrong outcome");
+    }
+    Item powerful = {WAND_FIRE, 0};
+    set_wand_modifier(powerful, WAND_POWERFUL);
+    require((powerful.info & ITEM_CURSED) && !item_is_cursed(powerful) &&
+            !wand_afflicted(powerful), "powerful wand was called cursed");
+    set_wand_modifier(powerful, WAND_OVERPOWERED);
+    require((powerful.info & ITEM_CURSED) && !item_is_cursed(powerful) &&
+            wand_spreads(powerful) && wand_powerful(powerful),
+            "overpowered wand composition or curse classification failed");
+    require(wand_needs_direction(Item{WAND_FIRE, 1}) &&
+            !wand_needs_direction(Item{WAND_FIRE, 0x11}) &&
+            !wand_needs_direction(Item{WAND_FIRE, 0x21}) &&
+            !wand_needs_direction(Item{WAND_FIRE, 0x31}) &&
+            wand_needs_direction(Item{WAND_FIRE, 0x41}) &&
+            !wand_needs_direction(Item{WAND_FIRE, 0x51}),
+            "wand direction modes are wrong");
 }
 
 void check_wand_identity_and_generation()
@@ -1622,14 +1704,26 @@ void check_wand_identity_and_generation()
         start_new(seed);
         for(uint8_t floor = 0; floor < FLOORS; ++floor) {
             game.floor = floor;
+            uint16_t combat_random = game.random_state;
             make_floor();
+            std::array<Item, GROUND_ITEMS> generated_items;
+            for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+                generated_items[i] = game.ground[i].item;
+            require(game.random_state == combat_random,
+                    "floor generation consumed combat randomness");
             for(const GroundItem& ground : game.ground)
                 if(is_wand(ground.item.type)) {
                     ++generated;
                     require(item_value(ground.item) >= 3 &&
-                            item_value(ground.item) <= 10,
-                            "generated wand charge range changed");
+                            item_value(ground.item) <= 10 &&
+                            wand_modifier(ground.item) <= WAND_OVERPOWERED,
+                            "generated wand charge or modifier range changed");
                 }
+            make_floor();
+            for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+                require(game.ground[i].item.type == generated_items[i].type &&
+                        game.ground[i].item.info == generated_items[i].info,
+                        "same seed and floor changed generated wand items");
         }
         game.has_amulet = 1;
         make_floor();
@@ -1668,10 +1762,27 @@ void check_wand_rays_and_charges()
     game.inventory[1] = {WAND_STRIKING, 3};
     require(item_type_identified(game.inventory[1].type),
             "wand use did not identify other wands of its type");
+    require(!item_is_identified(game.inventory[1]),
+            "identifying one wand identified a second individual wand");
+    session.ended = true;
+    require(use_wand(1, 1, 0) && item_is_identified(game.inventory[1]) &&
+            wand_charges(game.inventory[1]) == 2,
+            "globally known wand did not reveal its own properties on use");
+    session.ended = false;
     session.repeat_slot = 0;
     require(use_wand(0, 1, 0) && game.inventory[0].type == NO_ITEM &&
             session.repeat_slot == NONE,
             "last wand charge did not crumble and clear repeat slot");
+
+    wand_arena(WAND_FIRE, 6);
+    wand_modifier_at(WAND_OVERPOWERED);
+    game.inventory[1] = {WAND_FIRE, 4};
+    game.inventory[2] = {SCROLL_IDENTIFY, 1};
+    require(use_inventory(2, 0) && item_type_identified(WAND_FIRE) &&
+            item_is_identified(game.inventory[0]) &&
+            !item_is_identified(game.inventory[1]) &&
+            wand_modifier(game.inventory[0]) == WAND_OVERPOWERED,
+            "identify scroll did not preserve per-wand knowledge");
 
     wand_arena(WAND_FORCE);
     RayResult ray = scan_ray(game.player, 1, 0, 6);
@@ -1856,15 +1967,402 @@ void check_wand_enchant_and_save()
             item_value(game.inventory[0]) == 15 &&
             item_type_identified(WAND_FIRE),
             "save round trip lost wand type, charges, or knowledge");
+
+    wand_arena(WAND_ICE, 7);
+    wand_modifier_at(WAND_SPREADING);
+    identify_item(0);
+    require(drop_inventory(0) &&
+            game.ground[0].item.info == static_cast<uint8_t>(
+                ITEM_IDENTIFIED | (WAND_SPREADING << WAND_MODIFIER_SHIFT) | 7),
+            "drop lost individual wand information");
+    require(take_item(0) == PICKUP_TAKEN &&
+            game.inventory[0].info == static_cast<uint8_t>(
+                ITEM_IDENTIFIED | (WAND_SPREADING << WAND_MODIFIER_SHIFT) | 7),
+            "pickup lost individual wand information");
+    saved = game;
+    std::memset(&game, 0, sizeof game);
+    game = saved;
+    require(restore_startup_save(true) &&
+            game.inventory[0].info == static_cast<uint8_t>(
+                ITEM_IDENTIFIED | (WAND_SPREADING << WAND_MODIFIER_SHIFT) | 7),
+            "save lost per-wand modifier or identification");
+}
+
+void check_powerful_wands()
+{
+    wand_arena(WAND_FORCE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos == Position{28, 10},
+            "powerful force did not push sixteen tiles");
+    wand_arena(WAND_FORCE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    uint16_t wall = 10 * MAP_W + 18;
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos == Position{17, 10} &&
+            game.monsters[0].stun == 8, "powerful force wall stun failed");
+    wand_arena(WAND_FORCE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    game.monsters[1] = {{18, 10}, GOBLIN, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos == Position{17, 10} &&
+            game.monsters[0].stun == 8 && game.monsters[1].stun == 8,
+            "powerful force monster collision failed");
+
+    wand_arena(WAND_TELEPORT);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    game.monsters[1] = {{13, 11}, GOBLIN, 20, 0, {0, 0}, 0};
+    game.monsters[2] = {{14, 10}, GOBLIN, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) &&
+            game.monsters[0].pos != Position{12, 10} &&
+            game.monsters[1].pos != Position{13, 11} &&
+            game.monsters[2].pos == Position{14, 10} &&
+            !blocked(game.monsters[0].pos.x, game.monsters[0].pos.y) &&
+            !blocked(game.monsters[1].pos.x, game.monsters[1].pos.y),
+            "powerful teleport area or legal positions failed");
+    wand_arena(WAND_TELEPORT);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{16, 11}, ORC, 20, 0, {0, 0}, 0};
+    game.monsters[1] = {{15, 9}, GOBLIN, 20, 0, {0, 0}, 0};
+    game.monsters[2] = {{18, 10}, GOBLIN, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].pos != Position{16, 11} &&
+            game.monsters[1].pos != Position{15, 9} &&
+            game.monsters[2].pos == Position{18, 10},
+            "powerful teleport ignored an empty ray endpoint area");
+
+    wand_arena(WAND_DIGGING);
+    wand_modifier_at(WAND_POWERFUL);
+    for(uint8_t y = 9; y <= 11; ++y)
+        for(uint8_t x = 11; x <= 17; ++x) {
+            uint16_t bit = y * MAP_W + x;
+            game.walls[bit >> 3] |= static_cast<uint8_t>(1u << (bit & 7));
+        }
+    game.doors[0] = {{13, 9}};
+    game.doors[1] = {{13, 10}};
+    game.doors[2] = {{13, 11}};
+    game.door_count = 3;
+    session.ended = true;
+    require(use_wand(0, 1, 0) && ray_animations == 0,
+            "powerful digging fired a projectile");
+    for(uint8_t y = 9; y <= 11; ++y) {
+        for(uint8_t x = 11; x <= 16; ++x)
+            require(!wall_at(x, y) && explored({x, y}),
+                    "powerful digging missed horizontal corridor tile");
+        require(wall_at(17, y) && door_open(static_cast<uint8_t>(y - 9)),
+                "powerful digging range or door opening failed");
+    }
+    wand_arena(WAND_DIGGING);
+    wand_modifier_at(WAND_POWERFUL);
+    game.player = {1, 1};
+    session.ended = true;
+    require(use_wand(0, 0, -1) && explored({0, 0}) &&
+            explored({1, 0}) && explored({2, 0}),
+            "powerful vertical digging failed edge clipping");
+
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].hp >= 53 &&
+            game.monsters[0].hp <= 76, "powerful striking damage failed");
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, LORD, 1, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
+            game.ground[15].item.type == YENDOR_AMULET,
+            "powerful striking Lord kill lost Yendor");
+    wand_arena(WAND_ICE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    game.monsters[1] = {{13, 11}, GOBLIN, 100, 0, {0, 0}, 0};
+    game.monsters[2] = {{14, 10}, GOBLIN, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].hp <= 92 &&
+            game.monsters[1].hp <= 92 && game.monsters[2].hp == 100 &&
+            monster_effect(game.monsters[0], MON_SLOWED) == 15 &&
+            monster_effect(game.monsters[1], MON_SLOWED) == 15,
+            "powerful ice area failed");
+    wand_arena(WAND_POLYMORPH);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    game.monsters[1] = {{13, 11}, ANGEL, 100, 0, {0, 0}, 0};
+    game.monsters[2] = {{11, 9}, LORD, 128, 0, {0, 0}, 0};
+    game.monsters[3] = {{14, 10}, GOBLIN, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].type != ORC &&
+            game.monsters[1].type == DRAGON && game.monsters[2].type == LORD &&
+            game.monsters[3].type == GOBLIN &&
+            game.monsters[0].hp == monster_info(game.monsters[0].type).health &&
+            game.monsters[1].hp == monster_info(game.monsters[1].type).health,
+            "powerful polymorph area or Lord immunity failed");
+
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    game.monsters[1] = {{14, 12}, GOBLIN, 100, 0, {0, 0}, 0};
+    game.monsters[2] = {{15, 10}, GOBLIN, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[1].hp >= 85 &&
+            game.monsters[1].hp <= 92 && game.monsters[2].hp == 100 &&
+            game.hp >= 225 && game.hp <= 232 && multi_burst_animations == 1 &&
+            multi_burst_count == 1 && multi_burst_powerful,
+            "powerful fire coverage, damage, or animation failed");
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    game.inventory[1] = {RING_FIRE_IMMUNITY, 1};
+    game.ring_slots[0] = 1;
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.hp == 240,
+            "fire ring failed on powerful burst");
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, ORC, 100, 0, {0, 0}, 0};
+    game.inventory[1] = {RING_FIRE_IMMUNITY,
+                         static_cast<uint8_t>(ITEM_CURSED | 1)};
+    game.ring_slots[0] = 1;
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.hp >= 210 && game.hp <= 224,
+            "cursed fire ring failed on powerful burst");
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_POWERFUL);
+    game.monsters[0] = {{12, 10}, LORD, 1, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
+            game.ground[15].item.type == YENDOR_AMULET,
+            "powerful fire Lord kill lost Yendor");
+}
+
+void check_cursed_wands()
+{
+    uint16_t right_seed = 1;
+    for(; right_seed < 1000; ++right_seed) {
+        uint16_t state = right_seed;
+        if(next_random(state) % 4 == 1) break;
+    }
+    require(right_seed < 1000, "no deterministic rightward force seed");
+    wand_arena(WAND_FORCE);
+    wand_modifier_at(WAND_CURSED);
+    game.random_state = right_seed;
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.player == Position{18, 10} &&
+            wand_charges(game.inventory[0]) == 1 &&
+            item_is_identified(game.inventory[0]),
+            "cursed force did not immediately displace player");
+    wand_arena(WAND_FORCE);
+    wand_modifier_at(WAND_CURSED);
+    game.random_state = right_seed;
+    uint16_t wall = 10 * MAP_W + 12;
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.player == Position{11, 10} &&
+            game.paralyzed >= 4, "cursed force wall collision failed");
+    wand_arena(WAND_FORCE);
+    wand_modifier_at(WAND_CURSED);
+    game.random_state = right_seed;
+    game.monsters[0] = {{12, 10}, ORC, 20, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.player == Position{11, 10} &&
+            game.paralyzed >= 4 && game.monsters[0].stun >= 4,
+            "cursed force monster collision failed");
+
+    wand_arena(WAND_TELEPORT);
+    wand_modifier_at(WAND_CURSED);
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.player != Position{10, 10} &&
+            !blocked(game.player.x, game.player.y) &&
+            game.player != game.up && game.player != game.down,
+            "cursed teleport chose an invalid destination");
+    wand_arena(WAND_DIGGING);
+    wand_modifier_at(WAND_CURSED);
+    std::array<uint8_t, sizeof game.walls> walls;
+    std::memcpy(walls.data(), game.walls, walls.size());
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.hp >= 217 && game.hp <= 228 &&
+            std::memcmp(walls.data(), game.walls, walls.size()) == 0,
+            "cursed digging damage or terrain failed");
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_CURSED);
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.hp >= 217 && game.hp <= 228,
+            "cursed striking damage failed");
+    wand_arena(WAND_ICE);
+    wand_modifier_at(WAND_CURSED);
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.hp >= 225 && game.hp <= 232 &&
+            game.slowed >= 8 && game.slowed <= 15,
+            "cursed ice damage or slow failed");
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_CURSED);
+    game.monsters[0] = {{11, 10}, ORC, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 0, 0) && animated_burst == game.player &&
+            game.hp >= 225 && game.hp <= 232 &&
+            game.monsters[0].hp >= 85 && game.monsters[0].hp <= 92,
+            "cursed fire did not burst on player and nearby monsters");
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_CURSED);
+    game.inventory[1] = {RING_FIRE_IMMUNITY, 1};
+    game.ring_slots[0] = 1;
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.hp == 240,
+            "fire immunity failed on cursed wand");
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_CURSED);
+    game.inventory[1] = {RING_FIRE_IMMUNITY,
+                         static_cast<uint8_t>(ITEM_CURSED | 1)};
+    game.ring_slots[0] = 1;
+    session.ended = true;
+    require(use_wand(0, 0, 0) && game.hp >= 210 && game.hp <= 224,
+            "cursed fire ring penalty failed on cursed wand");
+    for(uint16_t seed = 1; seed <= 32; ++seed) {
+        wand_arena(WAND_POLYMORPH);
+        wand_modifier_at(WAND_CURSED);
+        game.random_state = seed;
+        session.ended = true;
+        require(use_wand(0, 0, 0) &&
+                (game.weakened || game.confused || game.slowed ||
+                 game.paralyzed),
+                "cursed polymorph applied no adverse condition");
+    }
+}
+
+void check_spreading_and_overpowered_wands()
+{
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_SPREADING);
+    require(use_wand(0, 0, 0) && spreading_animations == 1 &&
+            ray_animations == 0 && burst_animations == 0 &&
+            multi_burst_animations == 1 && multi_burst_count == 4 &&
+            !multi_burst_powerful,
+            "spreading fire did not animate four normal bursts together");
+
+    wand_arena(WAND_STRIKING, 3);
+    wand_modifier_at(WAND_SPREADING);
+    game.speed = 1;
+    const Position targets[] = {{10, 8}, {12, 10}, {10, 12}, {8, 10}};
+    for(uint8_t i = 0; i < 4; ++i)
+        game.monsters[i] = {targets[i], ORC, 100, 10, {0, 0}, 0};
+    uint8_t turns = game.turns;
+    require(use_wand(0, 0, 0) && wand_charges(game.inventory[0]) == 2 &&
+            game.turns == static_cast<uint8_t>(turns + 1) &&
+            spreading_animations == 1 && ray_animations == 0 &&
+            spreading_steps[0] == 2 && spreading_steps[1] == 2 &&
+            spreading_steps[2] == 2 && spreading_steps[3] == 2,
+            "spreading rays did not animate together or spend one charge/turn");
+    for(uint8_t i = 0; i < 4; ++i)
+        require(game.monsters[i].hp >= 77 && game.monsters[i].hp <= 88,
+                "spreading ray missed a cardinal target");
+
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_SPREADING);
+    game.speed = 1;
+    uint16_t wall = 10 * MAP_W + 11;
+    game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+    game.doors[0] = {{10, 9}};
+    game.door_count = 1;
+    game.monsters[0] = {{10, 12}, ORC, 100, 10, {0, 0}, 0};
+    require(use_wand(0, 0, 0) && spreading_steps[0] == 0 &&
+            spreading_steps[1] == 0 && spreading_steps[2] == 2 &&
+            spreading_steps[3] == 6 && game.monsters[0].hp < 100,
+            "spreading rays failed independent blockers");
+
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_OVERPOWERED);
+    game.speed = 1;
+    for(uint8_t i = 0; i < 4; ++i)
+        game.monsters[i] = {targets[i], ORC, 100, 10, {0, 0}, 0};
+    require(use_wand(0, 0, 0) && spreading_animations == 1 &&
+            wand_charges(game.inventory[0]) == 1,
+            "overpowered striking did not spread");
+    for(uint8_t i = 0; i < 4; ++i)
+        require(game.monsters[i].hp >= 53 && game.monsters[i].hp <= 76,
+                "overpowered striking did not amplify all four rays");
+
+    wand_arena(WAND_DIGGING);
+    wand_modifier_at(WAND_OVERPOWERED);
+    session.ended = true;
+    require(use_wand(0, 0, 0) && explored({10, 4}) && explored({16, 10}) &&
+            explored({10, 16}) && explored({4, 10}) &&
+            explored({9, 4}) && explored({16, 9}) &&
+            ray_animations == 0 && spreading_animations == 0,
+            "overpowered digging did not carve three-wide cross");
+
+    wand_arena(WAND_FIRE);
+    wand_modifier_at(WAND_OVERPOWERED);
+    game.speed = 1;
+    const Position endpoints[] = {{10, 4}, {16, 10}, {10, 16}, {4, 10}};
+    const Position outer[] = {{12, 4}, {16, 12}, {8, 16}, {4, 8}};
+    for(uint8_t i = 0; i < 4; ++i)
+        game.monsters[i] = {endpoints[i], ORC, 100, 10, {0, 0}, 0};
+    for(uint8_t i = 0; i < 4; ++i)
+        game.monsters[4 + i] = {outer[i], ORC, 100, 10, {0, 0}, 0};
+    game.monsters[8] = {{13, 4}, ORC, 100, 10, {0, 0}, 0};
+    require(use_wand(0, 0, 0) && spreading_animations == 1 &&
+            multi_burst_animations == 1 && multi_burst_count == 4 &&
+            multi_burst_powerful, "overpowered fire animation did not compose");
+    for(uint8_t i = 0; i < 4; ++i)
+        require(game.monsters[i].hp >= 85 && game.monsters[i].hp <= 92 &&
+                game.monsters[4 + i].hp >= 85 &&
+                game.monsters[4 + i].hp <= 92,
+                "overpowered fire missed an endpoint or radius-two target");
+    require(game.monsters[8].hp == 100,
+            "overpowered fire exceeded its five-by-five radius");
+}
+
+void check_unreliable_wand()
+{
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_UNRELIABLE);
+    game.random_state = 0x1234;
+    uint16_t state = game.random_state;
+    uint8_t direction = static_cast<uint8_t>(next_random(state) % 4);
+    const Position targets[] = {{10, 8}, {12, 10}, {10, 12}, {8, 10}};
+    for(uint8_t i = 0; i < 4; ++i)
+        game.monsters[i] = {targets[i], ORC, 100, 0, {0, 0}, 0};
+    session.ended = true;
+    require(use_wand(0, 0, 0) && wand_charges(game.inventory[0]) == 1 &&
+            item_is_identified(game.inventory[0]) && ray_animations == 1,
+            "unreliable wand did not activate immediately");
+    for(uint8_t i = 0; i < 4; ++i)
+        require(i == direction ? game.monsters[i].hp < 100 :
+                game.monsters[i].hp == 100,
+                "unreliable wand did not choose exactly one cardinal ray");
+    wand_arena(WAND_STRIKING);
+    wand_modifier_at(WAND_UNRELIABLE);
+    for(uint8_t y = 9; y <= 11; ++y)
+        for(uint8_t x = 9; x <= 11; ++x) {
+            if(x == 10 && y == 10) continue;
+            uint16_t bit = y * MAP_W + x;
+            game.walls[bit >> 3] |= static_cast<uint8_t>(1u << (bit & 7));
+        }
+    uint8_t turns = game.turns;
+    require(use_wand(0, 0, 0) && wand_charges(game.inventory[0]) == 1 &&
+            game.turns == static_cast<uint8_t>(turns + 1) &&
+            item_is_identified(game.inventory[0]),
+            "unreliable wall shot failed to spend one charge and turn");
 }
 
 int main()
 {
+    check_wand_encoding_and_scrolls();
     check_wand_identity_and_generation();
     check_wand_rays_and_charges();
     check_wand_effects();
     check_wand_fire_and_lord();
     check_wand_enchant_and_save();
+    check_powerful_wands();
+    check_cursed_wands();
+    check_spreading_and_overpowered_wands();
+    check_unreliable_wand();
     check_startup_save_state();
     check_new_run_state();
     check_position_value_and_boundaries();

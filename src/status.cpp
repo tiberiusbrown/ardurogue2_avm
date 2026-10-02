@@ -159,6 +159,10 @@ static const char PROGMEM* const PROGMEM wand_names[] = {
     F("force"), F("teleportation"), F("digging"), F("fire"),
     F("striking"), F("ice"), F("polymorph")
 };
+static const char PROGMEM* const PROGMEM wand_modifier_names[] = {
+    F(""), F("cursed"), F("unreliable"), F("spreading"),
+    F("powerful"), F("overpowered")
+};
 static const char PROGMEM* const PROGMEM wand_descriptors[] = {
     F("long"), F("short"), F("slender"), F("thick"),
     F("twisted"), F("curved"), F("glossy")
@@ -321,15 +325,21 @@ void emit_item(Item item, ItemTextStyle style, Output& text)
         return;
     }
     if(is_wand(item.type)) {
-        const char AVM_PROGMEM* first_word = known
-            ? F("wand") : wand_descriptors[item_appearance(item.type)];
+        bool individual = known && item_is_identified(item);
+        WandModifier modifier = individual ? wand_modifier(item) : WAND_NORMAL;
+        const char AVM_PROGMEM* first_word = !known
+            ? wand_descriptors[item_appearance(item.type)]
+            : modifier == WAND_NORMAL ? F("wand") :
+              wand_modifier_names[modifier];
         if(style == PROMPT_ITEM) text.word(F("the"));
         else if(style == STATUS_ITEM) text.word(article_for(first_word));
         if(known) {
-            text.word(first_word);
+            if(modifier != WAND_NORMAL) text.word(first_word);
+            text.word(F("wand"));
             text.word(F("of"));
             text.word(wand_names[item.type - WAND_FORCE]);
-            if(style == INVENTORY_ITEM) text.number(item_value(item));
+            if(individual && style == INVENTORY_ITEM)
+                text.number(wand_charges(item));
         } else {
             text.word(first_word);
             text.word(F("wand"));

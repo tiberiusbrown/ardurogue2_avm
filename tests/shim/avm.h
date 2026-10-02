@@ -31,7 +31,13 @@ inline AvmTextCursor avm_draw_textf_P(int16_t x, int16_t, const char* format,
     return {static_cast<int16_t>(x + strlen(text) * 4)};
 }
 inline void avm_display(bool) {}
-inline uint8_t avm_buttons() { return 0; }
+extern uint8_t avm_test_buttons[16];
+extern uint8_t avm_test_button_count;
+extern uint8_t avm_test_button_index;
+inline uint8_t avm_buttons() {
+    return avm_test_button_index < avm_test_button_count
+        ? avm_test_buttons[avm_test_button_index++] : 0;
+}
 inline void avm_idle() {}
 inline uint16_t avm_millis() { return 0; }
 inline uint16_t avm_generate_random_seed() { return 0x4312; }

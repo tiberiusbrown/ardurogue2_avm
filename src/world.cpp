@@ -108,6 +108,32 @@ bool door_open(uint8_t index)
     return (game.doors[index].pos.y & 0x80) != 0;
 }
 
+constexpr uint8_t NORMAL_WAND_WEIGHT = 60;
+constexpr uint8_t CURSED_WAND_WEIGHT = 10;
+constexpr uint8_t UNRELIABLE_WAND_WEIGHT = 10;
+constexpr uint8_t SPREADING_WAND_WEIGHT = 8;
+constexpr uint8_t POWERFUL_WAND_WEIGHT = 10;
+constexpr uint8_t OVERPOWERED_WAND_WEIGHT = 2;
+static_assert(NORMAL_WAND_WEIGHT + CURSED_WAND_WEIGHT +
+              UNRELIABLE_WAND_WEIGHT + SPREADING_WAND_WEIGHT +
+              POWERFUL_WAND_WEIGHT + OVERPOWERED_WAND_WEIGHT == 100,
+              "wand modifier weights must total 100");
+
+static WandModifier floor_wand_modifier(uint16_t& seed)
+{
+    uint8_t chance = floor_roll(seed, 100);
+    if(chance < NORMAL_WAND_WEIGHT) return WAND_NORMAL;
+    chance -= NORMAL_WAND_WEIGHT;
+    if(chance < CURSED_WAND_WEIGHT) return WAND_CURSED;
+    chance -= CURSED_WAND_WEIGHT;
+    if(chance < UNRELIABLE_WAND_WEIGHT) return WAND_UNRELIABLE;
+    chance -= UNRELIABLE_WAND_WEIGHT;
+    if(chance < SPREADING_WAND_WEIGHT) return WAND_SPREADING;
+    chance -= SPREADING_WAND_WEIGHT;
+    if(chance < POWERFUL_WAND_WEIGHT) return WAND_POWERFUL;
+    return WAND_OVERPOWERED;
+}
+
 void open_door(uint8_t index)
 {
     game.doors[index].pos.y |= 0x80;
@@ -257,6 +283,11 @@ void make_floor()
             ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
         if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
             info |= ITEM_CURSED;
+        if(is_wand(type)) {
+            Item wand = {type, info};
+            set_wand_modifier(wand, floor_wand_modifier(seed));
+            info = wand.info;
+        }
         if(game.floor == FLOORS - 1 && i == 15)
             continue;
         game.ground[i] = {{x, y}, {type, info}};
