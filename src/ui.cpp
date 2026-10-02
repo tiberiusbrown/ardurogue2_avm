@@ -41,8 +41,9 @@ static uint8_t directional_press(uint8_t buttons, uint8_t edges)
 }
 
 // Modal choice: owns its rendering and button loop, returning a real slot only.
-static uint8_t choose_item_modal(const char AVM_PROGMEM* prompt_text,
-                          ItemTypeFilter item_type_filter)
+// Modal loops release their rendering temporaries before gameplay resumes.
+__attribute__((noinline)) static uint8_t choose_item_modal(
+    const char AVM_PROGMEM* prompt_text, ItemTypeFilter item_type_filter)
 {
     InventoryView view(game, item_type_filter);
     if(!view.count()) {
@@ -80,7 +81,8 @@ static uint8_t choose_item_modal(const char AVM_PROGMEM* prompt_text,
     }
 }
 
-static bool yesno_modal(const char AVM_PROGMEM* prompt_text, const Item* item)
+__attribute__((noinline)) static bool yesno_modal(
+    const char AVM_PROGMEM* prompt_text, const Item* item)
 {
     status_clear();
     render_yesno_prompt(prompt_text, item);
@@ -112,7 +114,7 @@ static void show_pickup_rejection(const char AVM_PROGMEM* message)
     status_clear();
 }
 
-static void resolve_full_pack_pickup(uint8_t ground_slot)
+__attribute__((noinline)) static void resolve_full_pack_pickup(uint8_t ground_slot)
 {
     show_pickup_rejection(F("Your pack is full."));
     for(;;) {
@@ -395,7 +397,7 @@ bool yesno(const char AVM_PROGMEM* prompt_text)
     return yesno_modal(prompt_text, nullptr);
 }
 
-bool yesno(const char AVM_PROGMEM* prompt_text, Item item)
+__attribute__((noinline)) bool yesno(const char AVM_PROGMEM* prompt_text, Item item)
 {
     return yesno_modal(prompt_text, &item);
 }

@@ -61,7 +61,7 @@ void monster_status(const Monster& monster,
     status(message);
 }
 
-static void age_monster_effects(Monster& monster)
+__attribute__((noinline)) static void age_monster_effects(Monster& monster)
 {
     for(uint8_t i = MON_CONFUSED; i <= MON_INVISIBLE; ++i) {
         auto effect = static_cast<MonsterEffect>(i);
@@ -169,7 +169,7 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
     }
 }
 
-static bool fire_line_clear(const Monster& monster)
+__attribute__((noinline)) static bool fire_line_clear(const Monster& monster)
 {
     int8_t dx = monster.pos.x == game.player.x ? 0 :
         monster.pos.x < game.player.x ? 1 : -1;
@@ -182,6 +182,40 @@ static bool fire_line_clear(const Monster& monster)
         return false;
     RayResult ray = scan_ray(monster.pos, dx, dy, range);
     return ray.steps == range && ray.monster == NONE && !ray.blocker;
+}
+
+// Movement's coordinate and door temporaries are not live during fire animation.
+__attribute__((noinline)) static void move_monster(
+    Monster& monster, uint16_t flags, bool afraid, bool confused,
+    bool pursuing, uint8_t range)
+{
+    int8_t dx = 0, dy = 0;
+    if(afraid) {
+        dx = monster.pos.x < game.player.x ? -1 : monster.pos.x > game.player.x ? 1 : 0;
+        dy = monster.pos.y < game.player.y ? -1 : monster.pos.y > game.player.y ? 1 : 0;
+        if(!dx && !dy) dx = roll(2) ? 1 : -1;
+    } else if(confused || !pursuing || range > 8) {
+        uint8_t direction = roll(4);
+        dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
+        dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+    } else {
+        dx = monster.pos.x < game.player.x ? 1 : monster.pos.x > game.player.x ? -1 : 0;
+        dy = monster.pos.y < game.player.y ? 1 : monster.pos.y > game.player.y ? -1 : 0;
+    }
+    uint8_t nx = static_cast<uint8_t>(monster.pos.x + dx);
+    uint8_t ny = static_cast<uint8_t>(monster.pos.y + dy);
+    if(dx && nx < MAP_W && (flags & MON_OPENER) &&
+       door_at({nx, monster.pos.y}) != NONE &&
+       !door_open(door_at({nx, monster.pos.y})))
+        open_door(door_at({nx, monster.pos.y}));
+    else if(dy && ny < MAP_H && (flags & MON_OPENER) &&
+            door_at({monster.pos.x, ny}) != NONE &&
+            !door_open(door_at({monster.pos.x, ny})))
+        open_door(door_at({monster.pos.x, ny}));
+    else if(dx && can_monster_move(nx, monster.pos.y))
+        monster.pos.x = nx;
+    else if(dy && can_monster_move(monster.pos.x, ny))
+        monster.pos.y = ny;
 }
 
 static void advance_monster(uint8_t index)
@@ -271,33 +305,7 @@ static void advance_monster(uint8_t index)
                 }
             }
         } else if(afraid || confused || (pursuing && range <= 8) || roll(4) == 0) {
-            int8_t dx = 0, dy = 0;
-            if(afraid) {
-                dx = monster.pos.x < game.player.x ? -1 : monster.pos.x > game.player.x ? 1 : 0;
-                dy = monster.pos.y < game.player.y ? -1 : monster.pos.y > game.player.y ? 1 : 0;
-                if(!dx && !dy) dx = roll(2) ? 1 : -1;
-            } else if(confused || !pursuing || range > 8) {
-                uint8_t direction = roll(4);
-                dx = direction == 0 ? 1 : direction == 1 ? -1 : 0;
-                dy = direction == 2 ? 1 : direction == 3 ? -1 : 0;
-            } else {
-                dx = monster.pos.x < game.player.x ? 1 : monster.pos.x > game.player.x ? -1 : 0;
-                dy = monster.pos.y < game.player.y ? 1 : monster.pos.y > game.player.y ? -1 : 0;
-            }
-            uint8_t nx = static_cast<uint8_t>(monster.pos.x + dx);
-            uint8_t ny = static_cast<uint8_t>(monster.pos.y + dy);
-            if(dx && nx < MAP_W && (info.flags & MON_OPENER) &&
-               door_at({nx, monster.pos.y}) != NONE &&
-               !door_open(door_at({nx, monster.pos.y})))
-                open_door(door_at({nx, monster.pos.y}));
-            else if(dy && ny < MAP_H && (info.flags & MON_OPENER) &&
-                    door_at({monster.pos.x, ny}) != NONE &&
-                    !door_open(door_at({monster.pos.x, ny})))
-                open_door(door_at({monster.pos.x, ny}));
-            else if(dx && can_monster_move(nx, monster.pos.y))
-                monster.pos.x = nx;
-            else if(dy && can_monster_move(monster.pos.x, ny))
-                monster.pos.y = ny;
+            move_monster(monster, info.flags, afraid, confused, pursuing, range);
         }
     }
     if((info.flags & MON_REGENS) && monster.hp < info.health &&
@@ -403,7 +411,6 @@ static void attack_monster(uint8_t index)
     if(roll(hit_range8) < info.dexterity) {
         status(F("You miss the"));
         status(static_cast<MonsterType>(target.type), '.');
-        end_turn();
         return;
     }
     uint8_t bonus = game.weapon_slot != NONE
@@ -431,15 +438,14 @@ static void attack_monster(uint8_t index)
         hurt_player(1);
         status(F("Your amulet drains your life."));
     }
-    if(!session.ended) end_turn();
 }
 
-void move_player(int8_t dx, int8_t dy)
+// Resolve movement and combat before entering the deeper enemy-turn stack.
+__attribute__((noinline)) static bool apply_move(int8_t dx, int8_t dy)
 {
     if(game.paralyzed) {
         status(F("You cannot move!"));
-        end_turn();
-        return;
+        return true;
     }
     bool confused_direction = game.confused && roll(2) == 0;
     if(confused_direction) {
@@ -451,24 +457,28 @@ void move_player(int8_t dx, int8_t dy)
     int16_t y = static_cast<int16_t>(game.player.y) + dy;
     if(wall_at(x, y)) {
         status(F("A wall blocks your way."));
-        if(confused_direction) end_turn();
-        return;
+        return confused_direction;
     }
     Position destination = {static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
     uint8_t door = door_at(destination);
     if(door != NONE && !door_open(door)) {
         open_door(door);
         status(F("You open the door."));
-        end_turn();
-        return;
+        return true;
     }
     uint8_t monster = monster_at(destination);
     if(monster != NONE) {
         attack_monster(monster);
-        return;
+        return !session.ended;
     }
     game.player = destination;
-    end_turn();
+    return true;
+}
+
+void move_player(int8_t dx, int8_t dy)
+{
+    if(apply_move(dx, dy))
+        end_turn();
 }
 
 void apply_monster_potion(uint8_t type, uint8_t index)

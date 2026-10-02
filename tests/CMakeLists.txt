@@ -33,3 +33,16 @@ add_executable(ui_native
 target_compile_features(ui_native PRIVATE cxx_std_17)
 target_include_directories(ui_native PRIVATE shim ../src)
 add_test(NAME ui_native COMMAND ui_native)
+
+add_executable(render_native
+    render_native.cpp
+    ../src/render.cpp
+    ../src/status.cpp
+    ../src/state.cpp
+    ../src/combat.cpp
+    ../src/items.cpp
+    ../src/world.cpp
+)
+target_compile_features(render_native PRIVATE cxx_std_17)
+target_include_directories(render_native PRIVATE shim ../src)
+add_test(NAME render_native COMMAND render_native)

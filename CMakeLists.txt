@@ -90,6 +90,7 @@ endforeach()
 add_custom_command(
     OUTPUT "${ARDUROGUE2_ELF}" "${ARDUROGUE2_IMAGE}"
     COMMAND "${AVM_LD}" -flavor gnu --entry=_start --gc-sections --lto-O2
+        --avm-print-stack-usage
         -o "${ARDUROGUE2_ELF}"
         "${AVM_SYSROOT}/lib/crt0.o"
         ${ARDUROGUE2_OBJECTS}

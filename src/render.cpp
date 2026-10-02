@@ -67,7 +67,7 @@ static void pixel(int16_t x, int16_t y)
 }
 
 // All map symbols fit on screen. Write a whole vertical nibble at once.
-static void column(uint8_t x, uint8_t y, uint8_t bits)
+__attribute__((noinline)) static void column(uint8_t x, uint8_t y, uint8_t bits)
 {
     uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
     uint8_t shift = y & 7;
@@ -260,29 +260,25 @@ static bool in_sight(Position pos, const uint16_t sight[13],
     return screen_tile(pos, sx, sy) && (sight[sy] & (1u << sx));
 }
 
-__attribute__((noinline)) static void render_dungeon_view()
+// Keep viewport bounds separate from the visibility masks so the temporary
+// ray blockers can be released before drawing.
+struct DungeonView {
+    int16_t left, top;
+    uint8_t first_sx, end_sx, first_sy, end_sy;
+};
+
+__attribute__((noinline)) static void build_view_walls(
+    const DungeonView& view, uint16_t walls[13])
 {
-    uint16_t sight[13] = {};
-    // Reuse this array for ray blockers, then restore door tiles before drawing.
-    // Keeping a third 26-byte row array here crowds the nested modal stack.
-    uint16_t walls[13];
-    const int16_t left = static_cast<int16_t>(game.player.x) - 6;
-    const int16_t top = static_cast<int16_t>(game.player.y) - 6;
-    const uint8_t first_sx = left < 0 ? static_cast<uint8_t>(-left) : 0;
-    const uint8_t end_sx = left + 13 > MAP_W
-        ? static_cast<uint8_t>(MAP_W - left) : 13;
-    const uint8_t first_sy = top < 0 ? static_cast<uint8_t>(-top) : 0;
-    const uint8_t end_sy = top + 13 > MAP_H
-        ? static_cast<uint8_t>(MAP_H - top) : 13;
     const uint16_t valid_x = static_cast<uint16_t>(
-        ((1u << end_sx) - 1) & ~((1u << first_sx) - 1));
+        ((1u << view.end_sx) - 1) & ~((1u << view.first_sx) - 1));
     for(uint8_t sy = 0; sy < 13; ++sy)
         walls[sy] = 0x1fff;
-    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
         walls[sy] = static_cast<uint16_t>(0x1fff & ~valid_x);
-        uint16_t row = static_cast<uint16_t>((top + sy) * (MAP_W / 8));
-        uint8_t tx = static_cast<uint8_t>(left + first_sx);
-        for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
+        uint16_t row = static_cast<uint16_t>((view.top + sy) * (MAP_W / 8));
+        uint8_t tx = static_cast<uint8_t>(view.left + view.first_sx);
+        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx, ++tx) {
             if(game.walls[row + (tx >> 3)] & (1u << (tx & 7)))
                 walls[sy] |= static_cast<uint16_t>(1u << sx);
         }
@@ -293,6 +289,11 @@ __attribute__((noinline)) static void render_dungeon_view()
         if(!door_open(i) && screen_tile(door, sx, sy))
             walls[sy] |= static_cast<uint16_t>(1u << sx);
     }
+}
+
+__attribute__((noinline)) static void reveal_view_floor(
+    const DungeonView& view, uint16_t sight[13], const uint16_t walls[13])
+{
     const Room* player_room = nullptr;
     for(const Room& room : game.rooms)
         if(game.player.x >= room.x && game.player.x < room.x + room.w &&
@@ -300,10 +301,10 @@ __attribute__((noinline)) static void render_dungeon_view()
             player_room = &room;
             break;
         }
-    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
-        uint8_t ty = static_cast<uint8_t>(top + sy);
-        uint8_t tx = static_cast<uint8_t>(left + first_sx);
-        for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
+        uint8_t ty = static_cast<uint8_t>(view.top + sy);
+        uint8_t tx = static_cast<uint8_t>(view.left + view.first_sx);
+        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx, ++tx) {
             if(!in_light_radius(static_cast<int16_t>(sx) - LIGHT_RADIUS,
                                 static_cast<int16_t>(sy) - LIGHT_RADIUS))
                 continue;
@@ -317,11 +318,16 @@ __attribute__((noinline)) static void render_dungeon_view()
             }
         }
     }
+}
+
+__attribute__((noinline)) static void reveal_view_walls(
+    const DungeonView& view, uint16_t sight[13], const uint16_t walls[13])
+{
     // A ray to the center of a corridor wall can cross an earlier wall.
     // Reveal walls touching visible, non-opaque floor within the circular
     // light radius, without extending visibility through closed doors.
-    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
-        uint8_t ty = static_cast<uint8_t>(top + sy);
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
+        uint8_t ty = static_cast<uint8_t>(view.top + sy);
         int16_t dy = static_cast<int16_t>(sy) - LIGHT_RADIUS;
         uint16_t floor_sight = sight[sy] & ~walls[sy];
         uint16_t adjacent = static_cast<uint16_t>((floor_sight << 1) |
@@ -331,7 +337,7 @@ __attribute__((noinline)) static void render_dungeon_view()
         if(sy < 12)
             adjacent |= sight[sy + 1] & ~walls[sy + 1];
         uint16_t nearby_walls = adjacent & walls[sy];
-        for(uint8_t sx = first_sx; sx < end_sx; ++sx) {
+        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx) {
             uint16_t bit = static_cast<uint16_t>(1u << sx);
             if(!(nearby_walls & bit))
                 continue;
@@ -339,49 +345,56 @@ __attribute__((noinline)) static void render_dungeon_view()
             if(!in_light_radius(dx, dy))
                 continue;
             sight[sy] |= bit;
-            explore({static_cast<uint8_t>(left + sx), ty});
+            explore({static_cast<uint8_t>(view.left + sx), ty});
         }
     }
-    // Closed doors blocked the rays above, but their tiles are floor when drawn.
-    for(uint8_t i = 0; i < game.door_count; ++i) {
-        Position door = door_position(i);
-        uint8_t sx, sy;
-        if(!door_open(i) && screen_tile(door, sx, sy))
-            walls[sy] &= static_cast<uint16_t>(~(1u << sx));
+}
+
+__attribute__((noinline)) static void draw_view_tile(
+    const DungeonView& view, const uint16_t sight[13], uint8_t sx, uint8_t sy)
+{
+    uint8_t tx = static_cast<uint8_t>(view.left + sx);
+    uint8_t ty = static_cast<uint8_t>(view.top + sy);
+    uint8_t py = static_cast<uint8_t>(sy * 5);
+    bool visible = (sight[sy] & (1u << sx)) != 0;
+    if(!visible && !explored({tx, ty}))
+        return;
+    uint8_t px = static_cast<uint8_t>(sx * 5);
+    // Read terrain directly: the temporary mask also contained closed doors.
+    if(wall_at(tx, ty)) {
+        if(!wall_exposed(tx, ty))
+            return;
+        for(uint8_t col = 0; col < 4; ++col)
+            column(static_cast<uint8_t>(px + col), py, 0x0f);
+        if(sx < 12 && tx + 1 < MAP_W &&
+           wall_at(tx + 1, ty) &&
+           wall_exposed(tx + 1, ty) &&
+           explored({static_cast<uint8_t>(tx + 1), ty}))
+            column(static_cast<uint8_t>(px + 4), py, 0x0f);
+        if(sy < 12 && ty + 1 < MAP_H &&
+           wall_at(tx, ty + 1) &&
+           wall_exposed(tx, ty + 1) &&
+           explored({tx, static_cast<uint8_t>(ty + 1)}))
+            for(uint8_t col = 0; col < 4; ++col)
+                column(static_cast<uint8_t>(px + col),
+                       static_cast<uint8_t>(py + 4), 1);
+    } else if(visible) {
+        pixel(px + 2, py + 2);
     }
+}
+
+__attribute__((noinline)) static void draw_view_terrain(
+    const DungeonView& view, const uint16_t sight[13])
+{
     // Finish exploration before drawing: wall joins inspect the tile to the
     // right and below, which may be later in screen traversal order.
-    for(uint8_t sy = first_sy; sy < end_sy; ++sy) {
-        uint8_t ty = static_cast<uint8_t>(top + sy);
-        uint8_t py = static_cast<uint8_t>(sy * 5);
-        uint8_t tx = static_cast<uint8_t>(left + first_sx);
-        for(uint8_t sx = first_sx; sx < end_sx; ++sx, ++tx) {
-            bool visible = (sight[sy] & (1u << sx)) != 0;
-            if(!visible && !explored({tx, ty}))
-                continue;
-            uint8_t px = static_cast<uint8_t>(sx * 5);
-            if(walls[sy] & (1u << sx)) {
-                if(!wall_exposed(tx, ty))
-                    continue;
-                for(uint8_t col = 0; col < 4; ++col)
-                    column(static_cast<uint8_t>(px + col), py, 0x0f);
-                if(sx < 12 && tx + 1 < MAP_W &&
-                   (walls[sy] & (1u << (sx + 1))) &&
-                   wall_exposed(tx + 1, ty) &&
-                   explored({static_cast<uint8_t>(tx + 1), ty}))
-                    column(static_cast<uint8_t>(px + 4), py, 0x0f);
-                if(sy < 12 && ty + 1 < MAP_H &&
-                   (walls[sy + 1] & (1u << sx)) &&
-                   wall_exposed(tx, ty + 1) &&
-                   explored({tx, static_cast<uint8_t>(ty + 1)}))
-                    for(uint8_t col = 0; col < 4; ++col)
-                        column(static_cast<uint8_t>(px + col),
-                               static_cast<uint8_t>(py + 4), 1);
-            } else if(visible) {
-                pixel(px + 2, py + 2);
-            }
-        }
-    }
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy)
+        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx)
+            draw_view_tile(view, sight, sx, sy);
+}
+
+__attribute__((noinline)) static void draw_view_objects(const uint16_t sight[13])
+{
     for(uint8_t i = 0; i < game.door_count; ++i) {
         Position door = door_position(i);
         uint8_t sx, sy;
@@ -414,15 +427,47 @@ __attribute__((noinline)) static void render_dungeon_view()
     icon(PLAYER_ICON, 30, 30);
 }
 
-void render_play()
+__attribute__((noinline)) static void reveal_view(
+    const DungeonView& view, uint16_t sight[13])
+{
+    // This frame unwinds before terrain and object drawing begin.
+    uint16_t walls[13];
+    build_view_walls(view, walls);
+    reveal_view_floor(view, sight, walls);
+    reveal_view_walls(view, sight, walls);
+}
+
+__attribute__((noinline)) static void render_dungeon_view()
+{
+    DungeonView view = {};
+    uint16_t sight[13] = {};
+    view.left = static_cast<int16_t>(game.player.x) - 6;
+    view.top = static_cast<int16_t>(game.player.y) - 6;
+    view.first_sx = view.left < 0 ? static_cast<uint8_t>(-view.left) : 0;
+    view.end_sx = view.left + 13 > MAP_W
+        ? static_cast<uint8_t>(MAP_W - view.left) : 13;
+    view.first_sy = view.top < 0 ? static_cast<uint8_t>(-view.top) : 0;
+    view.end_sy = view.top + 13 > MAP_H
+        ? static_cast<uint8_t>(MAP_H - view.top) : 13;
+    reveal_view(view, sight);
+    draw_view_terrain(view, sight);
+    draw_view_objects(sight);
+}
+
+__attribute__((noinline)) static void render_stats()
+{
+    avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
+    avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
+}
+
+__attribute__((noinline)) void render_play()
 {
     avm_draw_filled_rect_black(0, 0, 65, 64);
     avm_draw_filled_rect_black(65, 0, 63, 23);
     render_dungeon_view();
     for(uint8_t y = 0; y < 64; ++y)
         pixel(64, y);
-    avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
-    avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
+    render_stats();
 }
 
 // Avoid carrying all screen renderers' locals into render_play's frame.
@@ -534,7 +579,7 @@ __attribute__((noinline)) static void render_end()
     avm_draw_text_P(16, 57, F("A: TITLE"));
 }
 
-void render()
+__attribute__((noinline)) void render()
 {
     if(ui.mode != PLAY)
         avm_draw_filled_rect_black(0, 0, 128, 64);

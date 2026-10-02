@@ -128,7 +128,7 @@ static bool add_inventory(Item incoming)
     return true;
 }
 
-PickupResult take_item(uint8_t index)
+__attribute__((noinline)) PickupResult take_item(uint8_t index)
 {
     if(index >= GROUND_ITEMS || game.ground[index].item.type == NO_ITEM)
         return PICKUP_INVALID;
@@ -191,7 +191,7 @@ bool inventory_item_removable(uint8_t slot)
     return !item_is_equipped(slot) || !item_is_cursed(game.inventory[slot]);
 }
 
-bool swap_ground_item(uint8_t index, uint8_t slot)
+__attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t slot)
 {
     if(index >= GROUND_ITEMS || slot >= INVENTORY ||
        game.ground[index].item.type == NO_ITEM ||
@@ -210,6 +210,13 @@ bool swap_ground_item(uint8_t index, uint8_t slot)
     status(outgoing);
     status(F("behind."));
     if(became_visible) status(F("You become visible again."));
+    return true;
+}
+
+__attribute__((noinline)) bool swap_ground_item(uint8_t index, uint8_t slot)
+{
+    if(!apply_ground_swap(index, slot))
+        return false;
     end_turn();
     return true;
 }
@@ -416,7 +423,9 @@ static bool teleport_player()
     return false;
 }
 
-bool use_inventory(uint8_t slot, uint8_t target_slot)
+// Release item-effect temporaries before running enemy turns and animations.
+__attribute__((noinline)) static bool apply_inventory(
+    uint8_t slot, uint8_t target_slot)
 {
     if(slot >= INVENTORY || game.paralyzed)
         return false;
@@ -566,9 +575,16 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
         }
         return false;
     }
+    return true;
+}
+
+bool use_inventory(uint8_t slot, uint8_t target_slot)
+{
+    if(!apply_inventory(slot, target_slot))
+        return false;
     if(!session.ended)
         end_turn();
-    if(item.type == NO_ITEM && session.repeat_slot == slot)
+    if(game.inventory[slot].type == NO_ITEM && session.repeat_slot == slot)
         session.repeat_slot = NONE;
     return true;
 }
@@ -844,7 +860,8 @@ __attribute__((noinline)) static void single_wand_ray(
     } else resolve_wand_ray(type, ray.end, ray.monster, dx, dy, powerful);
 }
 
-bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
+// Keep wand temporaries out of the main event loop's persistent frame.
+__attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
 {
     if(slot >= INVENTORY || game.paralyzed ||
        !is_wand(game.inventory[slot].type))
@@ -915,7 +932,7 @@ DropDisposition drop_disposition(uint8_t slot)
     return capacity ? DROP_DISCARD_REST : DROP_DISCARD_ALL;
 }
 
-bool drop_inventory(uint8_t slot, bool discard)
+__attribute__((noinline)) static bool apply_drop(uint8_t slot, bool discard)
 {
     if(slot >= INVENTORY || game.paralyzed)
         return false;
@@ -956,6 +973,13 @@ bool drop_inventory(uint8_t slot, bool discard)
         status(dropped, '.');
     }
     if(became_visible) status(F("You become visible again."));
+    return true;
+}
+
+bool drop_inventory(uint8_t slot, bool discard)
+{
+    if(!apply_drop(slot, discard))
+        return false;
     end_turn();
     return true;
 }
