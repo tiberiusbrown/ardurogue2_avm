@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 project(ardurogue2 LANGUAGES NONE)
 
-set(AVM_SDK_ROOT "" CACHE PATH "Path to the installed AVM SDK")
+if(NOT DEFINED AVM_SDK_ROOT)
+    set(AVM_SDK_ROOT "" CACHE PATH "Path to the installed AVM SDK")
+endif()
 
 if(CMAKE_HOST_WIN32)
     set(AVM_HOST_EXE_SUFFIX ".exe")
