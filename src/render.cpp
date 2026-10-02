@@ -62,12 +62,6 @@ static void pixel(int16_t x, int16_t y)
     __avm_framebuffer[offset] |= static_cast<uint8_t>(1u << (y & 7));
 }
 
-static void clear_pixel(uint8_t x, uint8_t y)
-{
-    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
-    __avm_framebuffer[offset] &= static_cast<uint8_t>(~(1u << (y & 7)));
-}
-
 // All map symbols fit on screen. Write a whole vertical nibble at once.
 static void column(uint8_t x, uint8_t y, uint8_t bits)
 {
@@ -391,24 +385,11 @@ void render()
     ui.dirty = false;
 }
 
-static void yesno_button(uint8_t x, uint8_t y, bool affirmative)
-{
-    // ArduRogue's seven-pixel circular button sprite and three-pixel letter.
-    static constexpr uint8_t circle[7] = {
-        0x1c, 0x3e, 0x7f, 0x7f, 0x7f, 0x3e, 0x1c
-    };
-    static constexpr uint8_t letter_a[3] = {0x1e, 0x05, 0x1e};
-    static constexpr uint8_t letter_b[3] = {0x1f, 0x15, 0x0a};
-    for(uint8_t col = 0; col < 7; ++col)
-        for(uint8_t row = 0; row < 7; ++row)
-            if(circle[col] & (1u << row)) pixel(x + col, y + row);
-    const uint8_t* letter = affirmative ? letter_a : letter_b;
-    for(uint8_t col = 0; col < 3; ++col)
-        for(uint8_t row = 0; row < 5; ++row)
-            if(letter[col] & (1u << row))
-                clear_pixel(static_cast<uint8_t>(x + 2 + col),
-                            static_cast<uint8_t>(y + 1 + row));
-}
+static const uint8_t AVM_PROGMEM yesno_buttons[] = {
+    7, 7,
+    0x1c, 0x3e, 0x43, 0x75, 0x43, 0x3e, 0x1c, // A
+    0x1c, 0x3e, 0x41, 0x55, 0x6b, 0x3e, 0x1c, // B
+};
 
 __attribute__((noinline)) void render_yesno_prompt(
     const char AVM_PROGMEM* prompt_text, const Item* item)
@@ -417,8 +398,8 @@ __attribute__((noinline)) void render_yesno_prompt(
     if(item) status(*item, '?');
     uint8_t buttons_y = static_cast<uint8_t>(status_baseline() + 3);
     if(buttons_y > 56) buttons_y = 56;
-    yesno_button(72, buttons_y, true);
-    yesno_button(104, buttons_y, false);
+    avm_draw_sprite_overwrite(72, buttons_y, yesno_buttons, 0);
+    avm_draw_sprite_overwrite(104, buttons_y, yesno_buttons, 1);
     avm_draw_text_P(83, buttons_y + 6, F("Yes"));
     avm_draw_text_P(115, buttons_y + 6, F("No"));
     avm_display(false);
