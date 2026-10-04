@@ -332,6 +332,15 @@ struct StatusItemText {
     }
 };
 
+const char AVM_PROGMEM* equipment_name(uint8_t type)
+{
+    switch(type) {
+    case SWORD: return F("sword");
+    case ARMOR: return F("armor");
+    default: return F("equipment");
+    }
+}
+
 template<typename Output>
 void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
 {
@@ -422,9 +431,17 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         }
         return;
     }
-    bool has_bonus = (item.type == SWORD || item.type == ARMOR) &&
-        item_is_identified(item) && equipment_enchant(item);
-    bool has_rating = item.type == ARMOR && item_is_identified(item);
+    if(is_equipment(item.type)) {
+        const char AVM_PROGMEM* name = equipment_name(item.type);
+        bool has_bonus = item_is_identified(item) && equipment_enchant(item);
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        else if(style == STATUS_ITEM && is_weapon(item.type))
+            text.word(article_for(cursed ? F("cursed") : name));
+        if(cursed) text.word(F("cursed"));
+        text.final_word(name, has_bonus ? 0 : suffix);
+        if(has_bonus) text.final_bonus(equipment_enchant(item), suffix);
+        return;
+    }
     switch(item.type) {
     case FOOD:
         if(item_value(item) > 1) {
@@ -437,17 +454,6 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
             text.final_word(F("food"), suffix);
         }
         break;
-    case SWORD:
-        if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) text.word(F("a"));
-        if(cursed) text.word(F("cursed"));
-        text.final_word(F("sword"), has_bonus ? 0 : suffix);
-        break;
-    case ARMOR:
-        if(style == PROMPT_ITEM) text.word(F("the"));
-        if(cursed) text.word(F("cursed"));
-        text.final_word(F("armor"), has_rating ? 0 : suffix);
-        break;
     case YENDOR_AMULET:
         if(style != INVENTORY_ITEM) text.word(F("the"));
         text.final_word(F("amulet"), suffix);
@@ -457,8 +463,6 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         text.final_word(F("item"), suffix);
         break;
     }
-    if(has_rating) text.final_number(armor_rating(item), has_bonus ? 0 : suffix);
-    if(has_bonus) text.final_bonus(equipment_enchant(item), suffix);
 }
 
 } // namespace

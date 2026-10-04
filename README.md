@@ -24,9 +24,9 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 20 stores one active floor in an 821-byte AVM `Game` (unchanged
-in size). Equipment inherent stats now come solely from type definitions, and
-value bits store only signed enchantment. Version 19 and older saves are
+Save version 21 stores one active floor in an 821-byte AVM `Game` (unchanged
+in size). Mimic state now stores a semantic appearance category, and equipment
+generation uses independent enchantment and curse rolls. Version 20 and older saves are
 incompatible; no migration is attempted. The former attack and cached defense bytes store strength and magic
 resistance at the same offsets.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
@@ -38,7 +38,8 @@ invisibility, harming, poison, confusion, paralysis, and slowing. Every new
 run assigns each type a different color. Potions of the same type keep that
 color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
-can increase strength. Confusion, paralysis, slowing, and invisibility wear off
+can increase strength. Strength potions cap permanent base STR at 12; strength
+rings and weakness adjust effective STR separately. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
 
 The nine scrolls from ArduRogue identify or enchant an item, remove a curse,
@@ -153,7 +154,8 @@ maximum absorption remains probabilistic. For rating 6, measured means at
 
 Live armor absorption uses the equipped armor's signed enchantment, including
 when protection rings adjust the effective rating. Unequipped armor supplies no
-enchantment. Armor and weapon rolls share the same repeated-roll helper.
+enchantment. The neutral `biased_range_roll` primitive implements repeated
+rolls; `weapon_damage_roll` and `armor_absorption` are thin semantic wrappers.
 
 `Item` remains two bytes. Both swords and armor store only
 `enchant + MAX_EQUIPMENT_ENCHANT` (0..10) in the six value bits of `info`.
@@ -161,22 +163,37 @@ Shared retrieval and modification logic keeps enchantment in -5..+5 for both
 types. The curse and identification bits remain independent. `weapon_definition`
 and `armor_definition` look up inherent damage, accuracy, and armor rating using
 `Item::type`; future equipment subtypes must extend those definitions, never
-derive capability from `info`. `armor_rating` reads the type definition and has
-no instance rating setter. Use `equipment_enchant`, `set_equipment_enchant`,
+derive capability from `info`. Definitions take the type directly, with no
+instance rating API. Use `equipment_enchant`, `set_equipment_enchant`,
 and `make_equipment` for instance state rather than treating `item_value` as a
 combat scalar. The absorption helper still supports ratings 0..255 for monsters
 and effective ratings adjusted by rings.
 
-Depth progression generates swords at enchantment +0..+3. Armor starts with
-enchantment zero and always has its type's fixed rating 4. Equipment supports negative enchantments,
-but generation does not introduce new curse or negative-enchantment rolls.
+Both generated weapons and armor use the same enchantment distribution:
+-2 at 5%, -1 at 10%, 0 at 70%, +1 at 10%, and +2 at 5%. A separate 1-in-8
+roll decides curse state, allowing curses at any enchantment and removable
+negative non-cursed equipment. Dungeon depth does not scale enchantment or
+inherent equipment capability. Armor always has its type's fixed rating 4.
 Enchant scrolls increase equipment enchantment up to +5, preserving inherent
 rating/range, identification, and curse state. Cursed gear can have positive,
 zero, or negative enchantment and cannot be dropped, exchanged, or replaced
 while equipped. Remove Curse clears the curse while preserving enchantment and
-armor rating. Identified item text displays signed enchantment and, for armor,
-the separate inherent rating. No weapon or armor subtypes, encumbrance, or speed
+armor rating. Identified item text displays signed enchantment after the type's
+name, with an independent curse prefix; ordinary labels do not expose a numeric
+armor rating. No weapon or armor subtypes, encumbrance, or speed
 penalties are introduced.
+
+`is_weapon`, `is_armor`, and `is_equipment` govern inventory grouping, equipping,
+repeat actions, enchantment, formatting, and shared equipment icons. Adding
+equipment types should extend those predicates, definitions, generation choices,
+and name lookup rather than duplicating generic mechanics.
+
+Mimics store one of five `MimicAppearance` categories: scroll, potion, amulet,
+ring, or wand. Explicit appearance bits are separate from aggression and fear.
+Rendering maps categories to shared icons through `mimic_icon`; `item_icon`
+also maps ordinary item categories to shared icons. Neither the stored mimic
+appearance nor the icon table depends on `ItemType` numeric ordering or roster
+size. The shared icon table remains in flash, and `Monster` remains eight bytes.
 
 Magic bypasses physical armor, protection, and DEX. MR saves when
 `roll(resistance + power + 1) < resistance`; each input caps at 127 to keep
@@ -271,7 +288,9 @@ ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
 The native suite includes deterministic range/overflow checks, signed weapon and
 armor enchantment sampling with 100,000 samples per distribution, diminishing
 returns and symmetry, paired-seed melee/ring/MR/fire checks, equipment encoding,
-scroll/curse and pickup/drop checks, depth generation, and save/layout tests.
+scroll/curse and pickup/drop checks, generic predicates and grouping, strength
+potion caps, seeded generation distributions and curse independence across all
+depths, mimic appearance/flag checks and rendering comparisons, and save/layout tests.
 Assertions use integer totals with tolerances; decimal means are diagnostic
 output only. To inspect sword and armor distributions and compare randomized
 damage against flat armor:

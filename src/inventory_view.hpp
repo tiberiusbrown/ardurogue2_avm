@@ -14,8 +14,8 @@ using ItemTypeFilter = bool (*)(uint8_t type);
 
 inline InventoryGroup inventory_group(uint8_t type)
 {
-    if(type == SWORD) return WEAPONS;
-    if(type == ARMOR) return ARMORS;
+    if(is_weapon(type)) return WEAPONS;
+    if(is_armor(type)) return ARMORS;
     if(is_ring(type)) return RINGS;
     if(is_amulet(type)) return AMULETS;
     if(is_wand(type)) return WANDS;

@@ -302,8 +302,7 @@ void action()
         return;
     }
     if(session.repeat_slot < INVENTORY &&
-       (game.inventory[session.repeat_slot].type == SWORD ||
-        game.inventory[session.repeat_slot].type == ARMOR ||
+       (is_equipment(game.inventory[session.repeat_slot].type) ||
         is_ring(game.inventory[session.repeat_slot].type) ||
         is_amulet(game.inventory[session.repeat_slot].type))) {
         use_inventory(session.repeat_slot);

@@ -336,23 +336,24 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
             identify_item(target_slot);
             status(F("You identify")); status(target, '.');
         } else if(type == SCROLL_ENCHANT) {
-            if(target.type != SWORD && target.type != ARMOR &&
+            if(!is_equipment(target.type) &&
                !is_ring(target.type) && !is_amulet(target.type) &&
                !is_wand(target.type)) {
                 status(F("Nothing happens."));
             } else {
-                uint8_t value = item_value(target);
-                if(target.type == SWORD || target.type == ARMOR) {
+                if(is_equipment(target.type)) {
                     int8_t enchant = equipment_enchant(target);
                     if(enchant < MAX_EQUIPMENT_ENCHANT)
                         set_equipment_enchant(target, static_cast<int8_t>(enchant + 1));
-                } else if(is_wand(target.type)) {
-                    set_item_value(target, value > 11 ? 15 : value + 4);
-                } else if(item_is_cursed(target) &&
-                   (is_ring(target.type) || is_amulet(target.type))) {
-                    if(value) set_item_value(target, value - 1);
-                } else if(value < ITEM_VALUE_MASK) {
-                    set_item_value(target, value + 1);
+                } else {
+                    uint8_t value = item_value(target);
+                    if(is_wand(target.type)) {
+                        set_item_value(target, value > 11 ? 15 : value + 4);
+                    } else if(item_is_cursed(target)) {
+                        if(value) set_item_value(target, value - 1);
+                    } else if(value < ITEM_VALUE_MASK) {
+                        set_item_value(target, value + 1);
+                    }
                 }
                 status(F("The")); status(target); status(F("glows blue."));
             }
@@ -432,6 +433,20 @@ __attribute__((noinline)) static bool apply_inventory(
     Item& item = game.inventory[slot];
     if(item.type == NO_ITEM)
         return false;
+    if(is_equipment(item.type)) {
+        uint8_t& equipped_slot = is_weapon(item.type) ? game.weapon_slot : game.armor_slot;
+        if(equipped_slot != slot && equipped_slot < INVENTORY &&
+           item_is_cursed(game.inventory[equipped_slot])) {
+            status(F("The cursed item cannot be removed."));
+            return false;
+        }
+        equipped_slot = slot;
+        session.repeat_slot = slot;
+        identify_item(slot);
+        status(F("You equip"));
+        status(item, '.');
+        return true;
+    }
     switch(item.type) {
     case SCROLL_IDENTIFY: case SCROLL_ENCHANT: case SCROLL_REMOVE_CURSE:
     case SCROLL_TELEPORT: case SCROLL_MAPPING: case SCROLL_FEAR:
@@ -489,7 +504,7 @@ __attribute__((noinline)) static bool apply_inventory(
             if(game.weakened) {
                 game.weakened = 0;
                 status(F("Your strength returns."));
-            } else if(game.strength < 250) {
+            } else if(game.strength < 12) {
                 ++game.strength;
                 status(F("You feel stronger."));
             }
@@ -551,30 +566,6 @@ __attribute__((noinline)) static bool apply_inventory(
         }
         break;
     }
-    case SWORD:
-        if(game.weapon_slot != slot && game.weapon_slot < INVENTORY &&
-           item_is_cursed(game.inventory[game.weapon_slot])) {
-            status(F("The cursed item cannot be removed."));
-            return false;
-        }
-        session.repeat_slot = slot;
-        game.weapon_slot = slot;
-        identify_item(slot);
-        status(F("You equip"));
-        status(item, '.');
-        break;
-    case ARMOR:
-        if(game.armor_slot != slot && game.armor_slot < INVENTORY &&
-           item_is_cursed(game.inventory[game.armor_slot])) {
-            status(F("The cursed item cannot be removed."));
-            return false;
-        }
-        session.repeat_slot = slot;
-        game.armor_slot = slot;
-        identify_item(slot);
-        status(F("You equip"));
-        status(item, '.');
-        break;
     default:
         if(is_ring(item.type) || is_amulet(item.type)) {
             if(!toggle_accessory(slot))
@@ -687,6 +678,9 @@ static void polymorph_monster(uint8_t index)
     monster_status(target, F("changes form!"));
     target.type = static_cast<uint8_t>(target.type +
         (target.type != ANGEL && roll(4) == 0 ? 1 : -1));
+    // A newly polymorphed mimic is already revealed; its default appearance
+    // is scroll. Other forms must not retain the old mimic's appearance bits.
+    target.state &= static_cast<uint8_t>(~MIMIC_APPEARANCE_MASK);
     target.hp = monster_info(target.type).health;
     target.stun = 0;
     target.effects[0] = target.effects[1] = 0;
@@ -935,7 +929,7 @@ DropDisposition drop_disposition(uint8_t slot)
        !inventory_item_removable(slot)) return DROP_INVALID;
     Item item = game.inventory[slot];
     uint16_t capacity = ground_capacity(item);
-    if(capacity >= item_value(item) && stackable(item.type))
+    if(stackable(item.type) && capacity >= item_value(item))
         return DROP_GROUND;
     if(reusable_ground_slot() != NONE) return DROP_GROUND;
     return capacity ? DROP_DISCARD_REST : DROP_DISCARD_ALL;

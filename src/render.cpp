@@ -32,26 +32,41 @@ static const uint16_t PROGMEM monster_icons[] = {
     0x0e5e, // fallen angel
     0x0f88, // Lord of Darkness
 };
-static const uint16_t PROGMEM item_icons[] = {
-    0x0000, // none
-    0x9429, // food
-    0x0bb0, // potions
-    0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0,
-    0x0bb0, 0x0bb0, 0x0bb0, 0x0bb0,
-    0x04f4, // sword
-    0x0f90, // armor
-    0x0606, // Yendor amulet
-    0x0aaa, 0x0aaa, 0x0aaa, 0x0aaa,
-    0x0aaa, 0x0aaa, 0x0aaa, 0x0aaa, // ring variants
-    0x0606, 0x0606, 0x0606, 0x0606,
-    0x0606, 0x0606, 0x0606, 0x0606, // amulet variants
-    0x01b3, 0x01b3, 0x01b3, 0x01b3, 0x01b3,
-    0x01b3, 0x01b3, 0x01b3, 0x01b3, // scroll variants
-    0x1248, 0x1248, 0x1248, 0x1248,
-    0x1248, 0x1248, 0x1248, // wand variants
+// Shared visual categories are independent of ItemType ordering and roster size.
+enum ItemIconCategory : uint8_t {
+    ICON_NONE, ICON_FOOD, ICON_POTION, ICON_WEAPON, ICON_ARMOR,
+    ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ITEM_ICON_CATEGORIES
 };
-static_assert(sizeof(item_icons) / sizeof(item_icons[0]) ==
-              WAND_POLYMORPH + 1, "item icon table changed");
+static const uint16_t PROGMEM item_icons[] = {
+    0x0000, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
+    0x0606, 0x0aaa, 0x01b3, 0x1248
+};
+static_assert(sizeof(item_icons) / sizeof(item_icons[0]) == ITEM_ICON_CATEGORIES,
+              "item icon categories changed");
+
+uint16_t item_icon(uint8_t type)
+{
+    if(is_weapon(type)) return item_icons[ICON_WEAPON];
+    if(is_armor(type)) return item_icons[ICON_ARMOR];
+    if(is_potion(type)) return item_icons[ICON_POTION];
+    if(is_scroll(type)) return item_icons[ICON_SCROLL];
+    if(is_amulet(type) || type == YENDOR_AMULET) return item_icons[ICON_AMULET];
+    if(is_ring(type)) return item_icons[ICON_RING];
+    if(is_wand(type)) return item_icons[ICON_WAND];
+    return item_icons[type == FOOD ? ICON_FOOD : ICON_NONE];
+}
+
+uint16_t mimic_icon(MimicAppearance appearance)
+{
+    switch(appearance) {
+    case MIMIC_SCROLL: return item_icons[ICON_SCROLL];
+    case MIMIC_POTION: return item_icons[ICON_POTION];
+    case MIMIC_AMULET: return item_icons[ICON_AMULET];
+    case MIMIC_RING: return item_icons[ICON_RING];
+    case MIMIC_WAND: return item_icons[ICON_WAND];
+    default: return item_icons[ICON_NONE];
+    }
+}
 static constexpr uint16_t PLAYER_ICON = 0x6ff6;
 static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
 static constexpr uint16_t UP_STAIRS_ICON = 0x8cef;
@@ -413,14 +428,14 @@ __attribute__((noinline)) static void draw_view_objects(const uint16_t sight[13]
              static_cast<uint8_t>(sy * 5));
     for(const GroundItem& ground : game.ground)
         if(ground.item.type && in_sight(ground.pos, sight, sx, sy))
-            icon(item_icons[ground.item.type], static_cast<uint8_t>(sx * 5),
+            icon(item_icon(ground.item.type), static_cast<uint8_t>(sx * 5),
                  static_cast<uint8_t>(sy * 5));
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         const Monster& monster = game.monsters[i];
         if(player_can_see_monster(i) &&
            in_sight(monster.pos, sight, sx, sy))
             icon(monster.type == MIMIC && !(monster.state & MON_AGGRO)
-                     ? item_icons[monster.state >> 1]
+                     ? mimic_icon(mimic_appearance(monster))
                      : monster_icons[monster.type],
                  static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
     }

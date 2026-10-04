@@ -29,7 +29,7 @@ int8_t strength_damage_bonus(uint8_t strength)
     return 3;
 }
 
-uint8_t weapon_damage_roll(uint8_t minimum, uint8_t maximum, int8_t enchant)
+uint8_t biased_range_roll(uint8_t minimum, uint8_t maximum, int8_t enchant)
 {
     if(minimum > maximum) minimum = maximum;
     if(minimum == maximum) return minimum;
@@ -52,6 +52,11 @@ uint8_t weapon_damage_roll(uint8_t minimum, uint8_t maximum, int8_t enchant)
     return result;
 }
 
+uint8_t weapon_damage_roll(uint8_t minimum, uint8_t maximum, int8_t enchant)
+{
+    return biased_range_roll(minimum, maximum, enchant);
+}
+
 uint8_t physical_raw_damage(uint8_t weapon_roll, uint8_t strength)
 {
     int16_t damage = static_cast<int16_t>(weapon_roll) +
@@ -72,7 +77,7 @@ uint8_t effective_armor_rating(uint8_t rating, int8_t protection)
 
 uint8_t armor_absorption(uint8_t rating, int8_t enchant)
 {
-    return weapon_damage_roll(rating / 2, rating, enchant);
+    return biased_range_roll(rating / 2, rating, enchant);
 }
 
 uint8_t physical_damage_after_armor(uint8_t raw, uint8_t absorbed)

@@ -144,14 +144,14 @@ uint8_t player_accuracy()
 uint8_t player_armor_rating()
 {
     uint8_t rating = game.armor_slot < INVENTORY
-        ? armor_rating(game.inventory[game.armor_slot]) : 0;
+        ? armor_definition(game.inventory[game.armor_slot].type).rating : 0;
     return effective_armor_rating(rating, ring_bonus(RING_PROTECTION));
 }
 
 int8_t player_armor_enchant()
 {
     return game.armor_slot < INVENTORY &&
-        game.inventory[game.armor_slot].type == ARMOR
+        is_armor(game.inventory[game.armor_slot].type)
         ? equipment_enchant(game.inventory[game.armor_slot]) : 0;
 }
 
@@ -453,7 +453,7 @@ static void attack_monster(uint8_t index)
         return;
     }
     bool armed = game.weapon_slot < INVENTORY &&
-        game.inventory[game.weapon_slot].type == SWORD;
+        is_weapon(game.inventory[game.weapon_slot].type);
     WeaponDefinition weapon = weapon_definition(armed ? game.inventory[game.weapon_slot].type : NO_ITEM);
     uint8_t weapon_roll = weapon_damage_roll(
         weapon.minimum_damage, weapon.maximum_damage,

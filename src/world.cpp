@@ -252,11 +252,11 @@ void make_floor()
         } else if(pos == game.up || pos == game.down) {
             pos.x = static_cast<uint8_t>(room.x + 1);
         }
-        uint8_t disguise = type == MIMIC
-            ? static_cast<uint8_t>((1 + floor_roll(seed, AMULET_WISDOM)) << 1)
-            : 0;
         game.monsters[i] = {pos, type, monster_info(type).health,
-            0, {0, 0}, disguise};
+            0, {0, 0}, 0};
+        if(type == MIMIC)
+            set_mimic_appearance(game.monsters[i], static_cast<MimicAppearance>(
+                floor_roll(seed, MIMIC_APPEARANCE_COUNT)));
     }
 
     // The ascent has fresh threats but no replenishing ordinary supplies.
@@ -286,9 +286,13 @@ void make_floor()
             set_wand_modifier(wand, floor_wand_modifier(seed));
             info = wand.info;
         }
-        if(type == SWORD || type == ARMOR) {
-            // Depth changes sword enchantment, never inherent equipment stats.
-            Item equipment = make_equipment(type, type == SWORD ? game.floor / 4 : 0);
+        if(is_equipment(type)) {
+            // Enchantment and curse are independent of depth and of each other.
+            uint8_t chance = floor_roll(seed, 100);
+            int8_t enchant = chance < 5 ? -2 : chance < 15 ? -1 :
+                chance < 85 ? 0 : chance < 95 ? 1 : 2;
+            Item equipment = make_equipment(type, enchant);
+            if(floor_roll(seed, 8) == 0) equipment.info |= ITEM_CURSED;
             info = equipment.info;
         }
         if(game.floor == FLOORS - 1 && i == 15)

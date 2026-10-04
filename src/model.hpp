@@ -32,8 +32,8 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-// Same byte layout, new equipment value semantics: old saves are invalid.
-constexpr uint8_t SAVE_VERSION = 20;
+// Same byte layout, new mimic appearance and generation semantics.
+constexpr uint8_t SAVE_VERSION = 21;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -56,6 +56,9 @@ constexpr uint8_t RING_COUNT = RING_INVISIBILITY - RING_SEE_INVISIBLE + 1;
 constexpr uint8_t AMULET_COUNT = AMULET_WISDOM - AMULET_SPEED + 1;
 constexpr uint8_t SCROLL_COUNT = SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1;
 constexpr uint8_t WAND_COUNT = WAND_POLYMORPH - WAND_FORCE + 1;
+constexpr bool is_weapon(uint8_t type) { return type == SWORD; }
+constexpr bool is_armor(uint8_t type) { return type == ARMOR; }
+constexpr bool is_equipment(uint8_t type) { return is_weapon(type) || is_armor(type); }
 constexpr bool is_potion(uint8_t type)
 {
     return type >= HEALING && type <= INVISIBILITY;
@@ -123,6 +126,26 @@ struct Door { Position pos; };
 struct Monster { Position pos; uint8_t type, hp, stun, effects[2], state; };
 constexpr uint8_t MON_AGGRO = 1;
 constexpr uint8_t MON_AFRAID = 0x40;
+enum MimicAppearance : uint8_t {
+    MIMIC_SCROLL, MIMIC_POTION, MIMIC_AMULET, MIMIC_RING, MIMIC_WAND,
+    MIMIC_APPEARANCE_COUNT
+};
+constexpr uint8_t MIMIC_APPEARANCE_SHIFT = 1;
+constexpr uint8_t MIMIC_APPEARANCE_MASK = 0x0e;
+static_assert((MIMIC_APPEARANCE_MASK & (MON_AGGRO | MON_AFRAID)) == 0 &&
+              MIMIC_APPEARANCE_COUNT <= (MIMIC_APPEARANCE_MASK >> MIMIC_APPEARANCE_SHIFT) + 1,
+              "mimic appearance overlaps monster state flags");
+constexpr MimicAppearance mimic_appearance(const Monster& monster)
+{
+    uint8_t appearance = (monster.state & MIMIC_APPEARANCE_MASK) >> MIMIC_APPEARANCE_SHIFT;
+    return appearance < MIMIC_APPEARANCE_COUNT ? static_cast<MimicAppearance>(appearance) : MIMIC_SCROLL;
+}
+constexpr void set_mimic_appearance(Monster& monster, MimicAppearance appearance)
+{
+    if(appearance >= MIMIC_APPEARANCE_COUNT) appearance = MIMIC_SCROLL;
+    monster.state = static_cast<uint8_t>((monster.state & ~MIMIC_APPEARANCE_MASK) |
+        (static_cast<uint8_t>(appearance) << MIMIC_APPEARANCE_SHIFT));
+}
 enum MonsterEffect : uint8_t {
     MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
 };
@@ -145,17 +168,12 @@ constexpr ArmorDefinition armor_definition(uint8_t type)
     return type == ARMOR ? ArmorDefinition{4} : ArmorDefinition{0};
 }
 
-constexpr uint8_t armor_rating(const Item& item)
-{
-    return armor_definition(item.type).rating;
-}
-
 // Both equipment types store only enchant + MAX_EQUIPMENT_ENCHANT in value bits.
 static_assert(2 * MAX_EQUIPMENT_ENCHANT <= ITEM_VALUE_MASK,
               "enchantment exceeds the item value bits");
 constexpr int8_t equipment_enchant(const Item& item)
 {
-    if(item.type != SWORD && item.type != ARMOR) return 0;
+    if(!is_equipment(item.type)) return 0;
     uint8_t value = item.info & ITEM_VALUE_MASK;
     if(value > 2 * MAX_EQUIPMENT_ENCHANT) value = 2 * MAX_EQUIPMENT_ENCHANT;
     return static_cast<int8_t>(value - MAX_EQUIPMENT_ENCHANT);
@@ -163,7 +181,7 @@ constexpr int8_t equipment_enchant(const Item& item)
 
 constexpr void set_equipment_enchant(Item& item, int8_t enchant)
 {
-    if(item.type != SWORD && item.type != ARMOR) return;
+    if(!is_equipment(item.type)) return;
     if(enchant > MAX_EQUIPMENT_ENCHANT) enchant = MAX_EQUIPMENT_ENCHANT;
     if(enchant < -MAX_EQUIPMENT_ENCHANT) enchant = -MAX_EQUIPMENT_ENCHANT;
     uint8_t value = static_cast<uint8_t>(enchant + MAX_EQUIPMENT_ENCHANT);
@@ -223,6 +241,8 @@ constexpr bool wand_needs_direction(const Item& item)
     return wand_modifier(item) == WAND_NORMAL ||
            wand_modifier(item) == WAND_POWERFUL;
 }
+// Quantities, accessory magnitudes and wand charges only. Equipment callers
+// must use equipment_enchant/set_equipment_enchant; this is not a combat API.
 constexpr uint8_t item_value(const Item& item)
 {
     return is_wand(item.type) ? wand_charges(item) :

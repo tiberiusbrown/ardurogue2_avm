@@ -1,6 +1,7 @@
 #include "game.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
+#include "inventory_view.hpp"
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
@@ -36,6 +37,22 @@ void print_weapon_distributions()
 
 static void check_weapon_math()
 {
+    for(uint16_t seed = 1; seed <= 200; ++seed) {
+        for(int8_t enchant : {-5, 0, 5}) {
+            game.random_state = seed;
+            uint8_t expected = biased_range_roll(2, 6, enchant);
+            uint16_t state = game.random_state;
+            game.random_state = seed;
+            require(weapon_damage_roll(2, 6, enchant) == expected && game.random_state == state,
+                    "weapon wrapper changed the shared biased roll");
+            game.random_state = seed;
+            expected = biased_range_roll(3, 6, enchant);
+            state = game.random_state;
+            game.random_state = seed;
+            require(armor_absorption(6, enchant) == expected && game.random_state == state,
+                    "armor wrapper changed the shared biased roll");
+        }
+    }
     unsigned totals[11];
     for(int8_t enchant = -5; enchant <= 5; ++enchant)
         totals[enchant + 5] = weapon_sample(enchant, false);
@@ -100,6 +117,14 @@ static void check_weapon_math()
 
 static void check_equipment_encoding()
 {
+    for(unsigned type = 0; type <= 255; ++type) {
+        require(is_weapon(type) == (type == SWORD) && is_armor(type) == (type == ARMOR) &&
+                is_equipment(type) == (type == SWORD || type == ARMOR),
+                "equipment predicates classify unrelated item types");
+        if(is_equipment(type))
+            require(inventory_group(type) == (is_weapon(type) ? WEAPONS : ARMORS),
+                    "equipment does not use its generic inventory group");
+    }
     // The same info byte must decode and update identically for either type,
     // including unused codes, without escaping the cap or changing flags.
     for(unsigned info = 0; info <= 255; ++info) {
@@ -110,8 +135,12 @@ static void check_equipment_encoding()
             require(decoded == equipment_enchant(armor) &&
                     decoded >= -MAX_EQUIPMENT_ENCHANT && decoded <= MAX_EQUIPMENT_ENCHANT,
                     "equipment types decode enchantment differently or outside the cap");
-            require(armor_rating(armor) == 4 && armor_rating(sword) == 0,
+            require(armor_definition(armor.type).rating == 4 && armor_definition(sword.type).rating == 0,
                     "instance info changed inherent armor capability");
+            WeaponDefinition definition = weapon_definition(sword.type);
+            require(definition.minimum_damage == 2 && definition.maximum_damage == 6 &&
+                    definition.accuracy == 0,
+                    "instance info changed inherent weapon capability");
             set_equipment_enchant(sword, enchant);
             set_equipment_enchant(armor, enchant);
             int8_t expected = enchant < -MAX_EQUIPMENT_ENCHANT ? -MAX_EQUIPMENT_ENCHANT :
@@ -130,7 +159,7 @@ static void check_equipment_encoding()
                 item.info |= flags;
                 require(equipment_enchant(item) == enchant &&
                         (item.info & ~ITEM_VALUE_MASK) == flags &&
-                        armor_rating(item) == (type == ARMOR ? 4 : 0),
+                        armor_definition(item.type).rating == (is_armor(type) ? 4 : 0),
                         "equipment enchantment/flags changed inherent capability");
                 set_equipment_enchant(item, -128);
                 require(equipment_enchant(item) == -5 &&
@@ -139,7 +168,7 @@ static void check_equipment_encoding()
                 set_equipment_enchant(item, 127);
                 require(equipment_enchant(item) == 5 &&
                         (item.info & ~ITEM_VALUE_MASK) == flags &&
-                        armor_rating(item) == (type == ARMOR ? 4 : 0),
+                        armor_definition(item.type).rating == (is_armor(type) ? 4 : 0),
                         "positive enchant cap changed equipment capability or flags");
             }
         }
@@ -149,7 +178,7 @@ static void check_equipment_encoding()
     require(sword.minimum_damage == 2 && sword.maximum_damage == 6 && sword.accuracy == 0 &&
             unarmed.minimum_damage == 1 && unarmed.maximum_damage == 3 && unarmed.accuracy == 0,
             "weapon type definitions lost inherent damage or accuracy");
-    require(armor_rating({FOOD, 63}) == 0 && equipment_enchant({FOOD, 63}) == 0,
+    require(armor_definition(FOOD).rating == 0 && equipment_enchant({FOOD, 63}) == 0,
             "non-equipment acquired combat stats");
 }
 
@@ -164,6 +193,18 @@ static void equipment_fixture()
 
 static void check_equipment_actions()
 {
+    for(uint8_t type : {SWORD, ARMOR}) {
+        equipment_fixture();
+        game.inventory[0] = make_equipment(type, -2);
+        game.inventory[1] = make_equipment(type, -1);
+        require(use_inventory(0) && (is_weapon(type) ? game.weapon_slot : game.armor_slot) == 0,
+                "generic equipment did not use its designated slot");
+        action();
+        require(session.repeat_slot == 0 && equipment_enchant(game.inventory[0]) == -2,
+                "repeat action failed for negative non-cursed equipment");
+        require(use_inventory(1) && drop_inventory(0),
+                "negative non-cursed equipment was not replaceable/removable");
+    }
     for(uint8_t type : {SWORD, ARMOR}) {
         for(int8_t enchant : {-5, 0, 5}) {
             equipment_fixture();
@@ -180,7 +221,7 @@ static void check_equipment_actions()
             game.inventory[1] = {SCROLL_REMOVE_CURSE, 1};
             require(use_inventory(1, 0) && !item_is_cursed(game.inventory[0]) &&
                     equipment_enchant(game.inventory[0]) == enchant &&
-                    (type != ARMOR || armor_rating(game.inventory[0]) == 4),
+                    (!is_armor(type) || armor_definition(game.inventory[0].type).rating == 4),
                     "remove curse changed positive, zero or negative enchantment");
             game.inventory[0].info |= ITEM_CURSED;
             for(unsigned scroll = 0; scroll < 12; ++scroll) {
@@ -191,13 +232,13 @@ static void check_equipment_actions()
                         equipment_enchant(game.inventory[0]) == expected &&
                         item_is_cursed(game.inventory[0]) &&
                         item_is_identified(game.inventory[0]) &&
-                        (type != ARMOR || armor_rating(game.inventory[0]) == 4),
+                        (!is_armor(type) || armor_definition(game.inventory[0].type).rating == 4),
                         "enchant scroll changed capability/curse or failed to saturate");
             }
             game.inventory[1] = {SCROLL_REMOVE_CURSE, 1};
             require(use_inventory(1, 0) && !item_is_cursed(game.inventory[0]) &&
                     equipment_enchant(game.inventory[0]) == 5 &&
-                    (type != ARMOR || armor_rating(game.inventory[0]) == 4),
+                    (!is_armor(type) || armor_definition(game.inventory[0].type).rating == 4),
                     "remove curse changed equipment enchantment or rating");
             require(use_inventory(2), "remove curse did not permit equipment replacement");
         }
@@ -233,34 +274,64 @@ static void check_equipment_actions()
     game.inventory[0].info |= ITEM_CURSED;
     game.inventory[1] = {SCROLL_REMOVE_CURSE, 1};
     require(use_inventory(1, 0) && !item_is_cursed(game.inventory[0]) &&
-            equipment_enchant(game.inventory[0]) == -3 && armor_rating(game.inventory[0]) == 4,
+            equipment_enchant(game.inventory[0]) == -3 && armor_definition(game.inventory[0].type).rating == 4,
             "remove curse erased a negative enchantment");
 }
 
 static void check_generated_equipment()
 {
-    unsigned swords = 0, armors = 0;
-    for(uint16_t seed = 1; seed <= 40; ++seed) {
+    unsigned counts[2][5][2] = {}, depth_counts[FLOORS][5] = {};
+    unsigned appearances[MIMIC_APPEARANCE_COUNT] = {};
+    for(uint16_t seed = 1; seed <= 512; ++seed) {
         start_new(seed);
         for(uint8_t floor = 0; floor < FLOORS; ++floor) {
             game.floor = floor;
             make_floor();
+            for(const Monster& monster : game.monsters) {
+                if(monster.type != MIMIC) continue;
+                require((monster.state & ~MIMIC_APPEARANCE_MASK) == 0 &&
+                        (monster.state >> MIMIC_APPEARANCE_SHIFT) < MIMIC_APPEARANCE_COUNT,
+                        "generated mimic state is not a semantic appearance");
+                ++appearances[mimic_appearance(monster)];
+            }
             for(const GroundItem& ground : game.ground) {
                 const Item& item = ground.item;
-                if(item.type == SWORD) {
-                    ++swords;
-                    require(equipment_enchant(item) == floor / 4,
-                            "generated sword retained additive value semantics");
-                } else if(item.type == ARMOR) {
-                    ++armors;
-                    require(armor_rating(item) == 4 && equipment_enchant(item) == 0 &&
-                            (item.info & ITEM_VALUE_MASK) == MAX_EQUIPMENT_ENCHANT,
-                            "generated armor stored inherent stats in instance info");
-                }
+                if(!is_equipment(item.type)) continue;
+                int8_t enchant = equipment_enchant(item);
+                require(enchant >= -2 && enchant <= 2 && !item_is_identified(item) &&
+                        (item.info & ITEM_VALUE_MASK) == enchant + MAX_EQUIPMENT_ENCHANT &&
+                        (!is_armor(item.type) || armor_definition(item.type).rating == 4),
+                        "generated equipment violates instance state or type capability");
+                ++counts[is_weapon(item.type) ? 0 : 1][enchant + 2][item_is_cursed(item) ? 1 : 0];
+                ++depth_counts[floor][enchant + 2];
             }
         }
     }
-    require(swords && armors, "generation test did not encounter both equipment kinds");
+    const unsigned expected_percent[5] = {5, 10, 70, 10, 5};
+    for(const auto& equipment : counts) {
+        unsigned total = 0, cursed = 0;
+        for(const auto& bucket : equipment) {
+            total += bucket[0] + bucket[1];
+            cursed += bucket[1];
+        }
+        require(total > 10000, "equipment generation sample is too small");
+        require(cursed * 100 > total * 10 && cursed * 100 < total * 15,
+                "equipment curse probability differs from one eighth");
+        for(unsigned i = 0; i < 5; ++i) {
+            unsigned bucket = equipment[i][0] + equipment[i][1];
+            require(bucket * 100 > total * (expected_percent[i] - 2) &&
+                    bucket * 100 < total * (expected_percent[i] + 2),
+                    "equipment enchantment distribution differs from 5/10/70/10/5");
+            require(equipment[i][1] * 100 > bucket * 8 &&
+                    equipment[i][1] * 100 < bucket * 17,
+                    "equipment curse probability depends on enchantment");
+        }
+    }
+    for(const auto& depth : depth_counts)
+        for(unsigned count : depth)
+            require(count != 0, "equipment enchantment is deterministic or depth-derived");
+    for(unsigned count : appearances)
+        require(count != 0, "generation omitted a mimic appearance category");
 }
 
 void check_weapon_and_equipment_rules()

@@ -658,6 +658,16 @@ void check_potions()
     drink(STRENGTH);
     require(!game.weakened && game.strength == strength,
             "strength potion did not restore weakening");
+    game.strength = 11;
+    drink(STRENGTH);
+    require(game.strength == 12, "strength potion did not reach the intended cap");
+    for(unsigned i = 0; i < 20; ++i) drink(STRENGTH);
+    require(game.strength == 12, "strength potions exceeded base STR 12");
+    game.weakened = 3;
+    drink(STRENGTH);
+    require(!game.weakened && game.strength == 12,
+            "strength potion at the cap did not cure weakness separately");
+    game.strength = strength;
     drink(CONFUSION);
     require(game.confused, "confusion potion had no duration");
     drink(PARALYSIS);

@@ -229,7 +229,7 @@ static void check_item_status()
     check_status_item(sword, '.', "a sword -1.");
     Item armor = make_equipment(ARMOR, 2);
     armor.info |= ITEM_IDENTIFIED;
-    check_status_item(armor, '?', "the armor 4 +2?");
+    check_status_item(armor, '?', "the armor +2?");
     check_status_item({YENDOR_AMULET, 1}, '?', "the amulet?");
     other_known[RING_SEE_INVISIBLE] = false;
     check_status_item({RING_SEE_INVISIBLE, 1}, '?', "the diamond ring?");
@@ -312,20 +312,20 @@ static void check_cursed_equipment()
     using namespace rogue;
     const uint8_t types[] = {SWORD, ARMOR, RING_SEE_INVISIBLE, AMULET_SPEED};
     const char* labels[] = {
-        "cursed sword +3", "cursed armor 4 +3",
+        "cursed sword +3", "cursed armor +3",
         "cursed ring of see invisible", "cursed amulet of speed"
     };
     const char* messages[] = {
-        "a cursed sword +3.", "cursed armor 4 +3.",
+        "a cursed sword +3.", "cursed armor +3.",
         "a cursed ring of see invisible.", "a cursed amulet of speed."
     };
     const char* prompts[] = {
-        "the cursed sword +3?", "the cursed armor 4 +3?",
+        "the cursed sword +3?", "the cursed armor +3?",
         "the cursed ring of see invisible?", "the cursed amulet of speed?"
     };
     for(unsigned i = 0; i < 4; ++i) {
         Item item{types[i], ITEM_IDENTIFIED | ITEM_CURSED | 3};
-        if(item.type == SWORD || item.type == ARMOR) {
+        if(is_equipment(item.type)) {
             item = make_equipment(item.type, 3);
             item.info |= ITEM_IDENTIFIED | ITEM_CURSED;
         }
@@ -356,20 +356,20 @@ static void check_cursed_equipment()
     check_status_item(sword, '.', "a cursed sword.");
     Item armor = make_equipment(ARMOR, 0);
     armor.info |= ITEM_IDENTIFIED | ITEM_CURSED;
-    check_status_item(armor, '?', "the cursed armor 4?");
+    check_status_item(armor, '?', "the cursed armor?");
     for(uint8_t type : {SWORD, ARMOR}) {
         for(int8_t enchant : {-5, -2, 0, 2, 5}) {
             Item item = make_equipment(type, enchant);
             item.info |= ITEM_IDENTIFIED | ITEM_CURSED;
             char label[ITEM_TEXT_CAPACITY];
             char expected[ITEM_TEXT_CAPACITY];
-            const char* name = type == SWORD ? "cursed sword" : "cursed armor 4";
+            const char* name = is_weapon(type) ? "cursed sword" : "cursed armor";
             if(enchant) std::snprintf(expected, sizeof expected, "%s %+d", name, int(enchant));
             else std::snprintf(expected, sizeof expected, "%s", name);
             format_item(item, label);
             if(std::strcmp(label, expected)) std::exit(1);
             check_drawn_item(item);
-            std::string message = type == SWORD ? "a " : "";
+            std::string message = is_weapon(type) ? "a " : "";
             message += expected;
             message += '.';
             check_status_item(item, '.', message.c_str());
