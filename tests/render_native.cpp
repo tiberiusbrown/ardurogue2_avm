@@ -23,6 +23,56 @@ static uint32_t hash_bytes(uint32_t hash, const uint8_t* bytes, size_t size)
     return hash;
 }
 
+static uint16_t reference_wall_row(uint8_t y, int16_t left)
+{
+    using namespace rogue;
+    uint16_t bits = 0;
+    for(uint8_t sx = 0; sx < 13; ++sx) {
+        int x = static_cast<int>(left) + sx;
+        if(y >= MAP_H || x < 0 || x >= MAP_W ||
+           (game.walls[y * (MAP_W / 8) + (x >> 3)] & (1u << (x & 7))))
+            bits |= static_cast<uint16_t>(1u << sx);
+    }
+    return bits;
+}
+
+static bool check_packed_wall_rows()
+{
+    using namespace rogue;
+    uint32_t random = 0x4312;
+    for(unsigned pattern = 0; pattern < 324; ++pattern) {
+        for(uint8_t y = 0; y < MAP_H; ++y)
+            for(uint8_t byte = 0; byte < MAP_W / 8; ++byte) {
+                random = random * 1664525u + 1013904223u;
+                uint8_t bits = static_cast<uint8_t>(random >> 24);
+                if(pattern < 4)
+                    bits = pattern == 0 ? 0 : pattern == 1 ? 0xff :
+                        pattern == 2 ? 0x55 : 0xaa;
+                else if(pattern < 68)
+                    bits = byte == (pattern - 4) / 8
+                        ? static_cast<uint8_t>(1u << ((pattern - 4) & 7)) : 0;
+                game.walls[y * (MAP_W / 8) + byte] = bits;
+            }
+        // Every offset 0..7, two/three-byte runs, and clipping at both edges.
+        // Include the first/last map rows to catch source-row overreads.
+        for(uint8_t y = 0; y < MAP_H; ++y)
+            for(int16_t left = -14; left <= MAP_W + 1; ++left) {
+                uint16_t expected = reference_wall_row(y, left);
+                uint16_t actual = wall_row_bits(y, left);
+                if(actual != expected) {
+                    std::fprintf(stderr, "Wall row pattern %u y %u left %d: %04x != %04x\n",
+                                 pattern, unsigned(y), int(left), unsigned(actual), unsigned(expected));
+                    return false;
+                }
+            }
+    }
+    for(uint8_t y : {uint8_t(0), uint8_t(MAP_H - 1), MAP_H, uint8_t(255)})
+        for(int16_t left : {int16_t(-32768), int16_t(-13), int16_t(-6),
+                           int16_t(0), int16_t(57), int16_t(63), int16_t(32767)})
+            if(wall_row_bits(y, left) != reference_wall_row(y, left)) return false;
+    return true;
+}
+
 static bool check_shared_icons()
 {
     using namespace rogue;
@@ -81,6 +131,10 @@ static bool check_shared_icons()
 int main()
 {
     using namespace rogue;
+    if(!check_packed_wall_rows()) {
+        std::fprintf(stderr, "Packed wall row extraction failed\n");
+        return 1;
+    }
     if(!check_shared_icons()) {
         std::fprintf(stderr, "Shared item/mimic icons or independent appearance flags failed\n");
         return 1;

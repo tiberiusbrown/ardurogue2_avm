@@ -37,6 +37,41 @@ MonsterInfo monster_info(uint8_t type)
     return info;
 }
 
+uint16_t monster_flags(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].flags : 0;
+}
+
+uint8_t monster_strength(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].strength : 0;
+}
+
+uint8_t monster_dexterity(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].dexterity : 0;
+}
+
+uint8_t monster_speed(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].speed : 0;
+}
+
+uint8_t monster_armor(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].armor : 0;
+}
+
+uint8_t monster_health(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].health : 0;
+}
+
+uint8_t monster_xp(uint8_t type)
+{
+    return type <= LORD ? monster_table[type].xp : 0;
+}
+
 uint8_t monster_effect(const Monster& monster, MonsterEffect effect)
 {
     uint8_t packed = monster.effects[effect >> 1];
@@ -78,7 +113,7 @@ __attribute__((noinline)) static void age_monster_effects(Monster& monster)
                     monster_status(monster, F("moves normally again."));
                     break;
                 case MON_INVISIBLE:
-                    if(!(monster_info(monster.type).flags & MON_NATURAL_INVIS))
+                    if(!(monster_flags(monster.type) & MON_NATURAL_INVIS))
                         monster_status(monster, F("becomes visible again."));
                     break;
                 default: break;
@@ -103,9 +138,9 @@ uint8_t monster_at(Position pos)
     return NONE;
 }
 
-static bool can_monster_move(uint8_t x, uint8_t y)
+static bool can_monster_move(uint8_t x, uint8_t y, uint8_t door)
 {
-    if(blocked(x, y)) return false;
+    if(wall_at(x, y) || (door != NONE && !door_open(door))) return false;
     Position pos = {x, y};
     return pos != game.player && monster_at(pos) == NONE;
 }
@@ -257,17 +292,21 @@ __attribute__((noinline)) static void move_monster(
     }
     uint8_t nx = static_cast<uint8_t>(monster.pos.x + dx);
     uint8_t ny = static_cast<uint8_t>(monster.pos.y + dy);
-    if(dx && nx < MAP_W && (flags & MON_OPENER) &&
-       door_at({nx, monster.pos.y}) != NONE &&
-       !door_open(door_at({nx, monster.pos.y})))
-        open_door(door_at({nx, monster.pos.y}));
-    else if(dy && ny < MAP_H && (flags & MON_OPENER) &&
-            door_at({monster.pos.x, ny}) != NONE &&
-            !door_open(door_at({monster.pos.x, ny})))
-        open_door(door_at({monster.pos.x, ny}));
-    else if(dx && can_monster_move(nx, monster.pos.y))
+    // Opening either door still precedes movement, with horizontal priority.
+    // Reuse the indices in movement checks rather than searching via blocked().
+    uint8_t xdoor = dx && nx < MAP_W ? door_at({nx, monster.pos.y}) : NONE;
+    if((flags & MON_OPENER) && xdoor != NONE && !door_open(xdoor)) {
+        open_door(xdoor);
+        return;
+    }
+    uint8_t ydoor = dy && ny < MAP_H ? door_at({monster.pos.x, ny}) : NONE;
+    if((flags & MON_OPENER) && ydoor != NONE && !door_open(ydoor)) {
+        open_door(ydoor);
+        return;
+    }
+    if(dx && can_monster_move(nx, monster.pos.y, xdoor))
         monster.pos.x = nx;
-    else if(dy && can_monster_move(monster.pos.x, ny))
+    else if(dy && can_monster_move(monster.pos.x, ny, ydoor))
         monster.pos.y = ny;
 }
 
@@ -368,7 +407,7 @@ static void enemy_turn(uint8_t player_speed)
         Monster& monster = game.monsters[i];
         if(!monster.type)
             continue;
-        uint8_t speed = monster_info(monster.type).speed;
+        uint8_t speed = monster_speed(monster.type);
         if(monster_effect(monster, MON_SLOWED))
             speed = static_cast<uint8_t>(speed * 2);
         if(!speed) speed = 1;
@@ -435,11 +474,11 @@ void defeat_monster(uint8_t index)
     uint8_t killed_type = target.type;
     leave_yendor(target);
     target.type = NO_MONSTER;
-    MonsterInfo info = monster_info(killed_type);
-    game.score += static_cast<uint16_t>(5 + info.xp * 3);
+    uint8_t xp = monster_xp(killed_type);
+    game.score += static_cast<uint16_t>(5 + xp * 3);
     status(F("You defeat the"));
     status(static_cast<MonsterType>(killed_type), '.');
-    gain_xp(info.xp);
+    gain_xp(xp);
 }
 
 static void attack_monster(uint8_t index)
@@ -523,7 +562,7 @@ void apply_monster_potion(uint8_t type, uint8_t index)
 {
     Monster& target = game.monsters[index];
     target.state |= MON_AGGRO;
-    uint8_t maximum = monster_info(target.type).health;
+    uint8_t maximum = monster_health(target.type);
     switch(type) {
     case HEALING: {
         uint8_t old_hp = target.hp;
@@ -582,7 +621,7 @@ void apply_monster_potion(uint8_t type, uint8_t index)
         break;
     case INVISIBILITY:
         if(!monster_effect(target, MON_INVISIBLE) &&
-           !(monster_info(target.type).flags & MON_NATURAL_INVIS))
+           !(monster_flags(target.type) & MON_NATURAL_INVIS))
             monster_status(target, F("vanishes."));
         set_monster_effect(target, MON_INVISIBLE,
                            static_cast<uint8_t>(12 + roll(4)));

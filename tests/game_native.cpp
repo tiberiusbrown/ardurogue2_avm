@@ -328,6 +328,54 @@ void check_local_visibility()
     game.player = {old_x, old_y};
 }
 
+void check_light_masks()
+{
+    require(player_light_radius() == 6, "default player light radius changed");
+    for(uint8_t radius = 0; radius <= 6; ++radius) {
+        unsigned count = 0;
+        for(uint8_t sy = 0; sy < 13; ++sy) {
+            uint16_t mask = light_mask(radius, sy);
+            require(!(mask & ~0x1fffu), "light mask extends beyond viewport");
+            for(uint8_t sx = 0; sx < 13; ++sx) {
+                int dx = sx - 6, dy = sy - 6;
+                bool expected = dx * dx + dy * dy <= radius * radius;
+                bool actual = (mask & (1u << sx)) != 0;
+                require(actual == expected, "light mask differs from reference circle");
+                count += actual;
+            }
+            require(light_mask(7, sy) == light_mask(6, sy) &&
+                    light_mask(255, sy) == light_mask(6, sy),
+                    "light mask radius was not clamped");
+        }
+        if(radius == 0)
+            require(count == 1 && light_mask(0, 6) == (1u << 6),
+                    "radius zero does not show only the center");
+        if(radius == 1) require(count == 5, "radius one circle changed");
+        if(radius == 6) require(count == 113, "default circle changed");
+    }
+    require(light_mask(6, 13) == 0 && light_mask(6, 255) == 0,
+            "invalid light mask row is not empty");
+}
+
+void check_monster_accessors()
+{
+    for(unsigned type = 0; type <= 255; ++type) {
+        MonsterInfo info = monster_info(static_cast<uint8_t>(type));
+        require(monster_flags(type) == info.flags &&
+                monster_strength(type) == info.strength &&
+                monster_dexterity(type) == info.dexterity &&
+                monster_speed(type) == info.speed &&
+                monster_armor(type) == info.armor &&
+                monster_health(type) == info.health &&
+                monster_xp(type) == info.xp,
+                "specialized monster accessor differs from full info");
+        if(type == NO_MONSTER || type > LORD)
+            require(!info.flags && !info.strength && !info.dexterity &&
+                    !info.speed && !info.armor && !info.health && !info.xp,
+                    "invalid monster type has nonzero stats");
+    }
+}
+
 void check_circular_light_radius()
 {
     std::array<uint8_t, sizeof(game.walls)> saved_walls;
@@ -338,6 +386,15 @@ void check_circular_light_radius()
     game.door_count = 0;
     game.player = {20, 15};
     uint16_t opaque[13] = {};
+    for(uint8_t sy = 0; sy < 13; ++sy)
+        for(uint8_t sx = 0; sx < 13; ++sx) {
+            int dx = sx - 6, dy = sy - 6;
+            bool expected = dx * dx + dy * dy <= 36;
+            require(ray_visible(sx, sy, opaque) == expected &&
+                    can_see({static_cast<uint8_t>(20 + dx),
+                             static_cast<uint8_t>(15 + dy)}) == expected,
+                    "default visibility differs from previous circle");
+        }
     require(ray_visible(12, 6, opaque) && can_see({26, 15}),
             "cardinal tile at the light radius is hidden");
     require(ray_visible(11, 9, opaque) && can_see({25, 18}),
@@ -1567,6 +1624,29 @@ void check_enemy_abilities()
         end_turn();
     require(door_open(0), "door-opening enemy could not open a door");
 
+    for(uint8_t type : {uint8_t(GOBLIN), uint8_t(SNAKE)})
+        for(uint8_t open = 0; open < 4; ++open) {
+            arena(type, 12);
+            game.monsters[0].pos.y = 12;
+            game.speed = monster_speed(type); // Exactly one enemy action.
+            game.doors[0] = {{11, 12}};
+            game.doors[1] = {{12, 11}};
+            game.door_count = 2;
+            if(open & 1) open_door(0);
+            if(open & 2) open_door(1);
+            Position expected = {12, 12};
+            uint8_t expected_open = open;
+            if(type == GOBLIN && !(open & 1)) expected_open |= 1;
+            else if(type == GOBLIN && !(open & 2)) expected_open |= 2;
+            else if(open & 1) expected.x = 11;
+            else if(open & 2) expected.y = 11;
+            end_turn();
+            require(game.monsters[0].pos == expected &&
+                    door_open(0) == bool(expected_open & 1) &&
+                    door_open(1) == bool(expected_open & 2),
+                    "cached monster door lookup changed opening/movement priority");
+        }
+
     arena(TROLL, 18);
     game.invisible = 200;
     game.monsters[0].hp = 1;
@@ -2527,6 +2607,8 @@ int main(int argc, char** argv)
     require(wall_at(-1, 0) && wall_at(MAP_W, 0),
             "map bounds are not solid");
     check_local_visibility();
+    check_light_masks();
+    check_monster_accessors();
     check_circular_light_radius();
     check_wall_faces();
     check_exploration_resolution();

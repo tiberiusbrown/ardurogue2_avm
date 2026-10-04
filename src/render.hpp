@@ -8,6 +8,8 @@ namespace rogue {
 
 uint16_t item_icon(uint8_t type);
 uint16_t mimic_icon(MimicAppearance appearance);
+// Packed terrain occupancy for 13 screen columns, with opaque map clipping.
+uint16_t wall_row_bits(uint8_t y, int16_t left);
 void status_clear();
 void render_play();
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);

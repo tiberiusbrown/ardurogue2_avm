@@ -11,6 +11,7 @@ uint8_t item_at(Position pos);
 uint8_t ground_item_before(Position pos, uint8_t before);
 Item ground_item_info(uint8_t index);
 uint8_t player_max_hp();
+uint8_t player_light_radius();
 bool player_can_see_monster(uint8_t index);
 void end_turn();
 void move_player(int8_t dx, int8_t dy);

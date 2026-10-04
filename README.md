@@ -350,7 +350,7 @@ the existing `--armor-distributions` mode remains available for armor alone.
 
 The AVM build retains the 821-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. With the current SDK, the revamped build
-reports a complete maximum stack bound of 252 bytes and zero analysis gaps,
+reports a complete maximum stack bound of 248 bytes and zero analysis gaps,
 on the wand/dragon animation/rendering path. This fits the 256-byte VM stack
-with four bytes to spare; future changes should continue checking the linker
+with eight bytes to spare; future changes should continue checking the linker
 report.

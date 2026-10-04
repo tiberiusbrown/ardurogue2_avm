@@ -60,6 +60,11 @@ uint8_t player_max_hp()
     return static_cast<uint8_t>(maximum);
 }
 
+uint8_t player_light_radius()
+{
+    return 6;
+}
+
 bool player_is_invisible()
 {
     int8_t bonus = ring_bonus(RING_INVISIBILITY);
@@ -73,7 +78,7 @@ bool player_can_see_monster(uint8_t index)
     if(ring_bonus(RING_SEE_INVISIBLE) < 0 &&
        ((game.turns + index) & 1))
         return false;
-    return (!(monster_info(game.monsters[index].type).flags & MON_NATURAL_INVIS) &&
+    return (!(monster_flags(game.monsters[index].type) & MON_NATURAL_INVIS) &&
             !monster_effect(game.monsters[index], MON_INVISIBLE)) ||
            ring_bonus(RING_SEE_INVISIBLE) > 0;
 }

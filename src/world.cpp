@@ -282,7 +282,7 @@ void make_floor()
         } else if(pos == game.up || pos == game.down) {
             pos.x = static_cast<uint8_t>(room.x + 1);
         }
-        game.monsters[i] = {pos, type, monster_info(type).health,
+        game.monsters[i] = {pos, type, monster_health(type),
             0, {0, 0}, 0};
         if(type == MIMIC)
             set_mimic_appearance(game.monsters[i], static_cast<MimicAppearance>(
@@ -362,7 +362,7 @@ bool can_see(Position pos)
     int16_t x = game.player.x, y = game.player.y;
     int16_t dx = tx > x ? tx - x : x - tx;
     int16_t dy = ty > y ? ty - y : y - ty;
-    if(!in_light_radius(dx, dy))
+    if(!in_light_radius(dx, dy, clamp_light_radius(player_light_radius())))
         return false;
     int16_t sx = x < tx ? 1 : -1;
     int16_t sy = y < ty ? 1 : -1;
@@ -378,6 +378,27 @@ bool can_see(Position pos)
         if(blocked(x, y))
             return false;
     }
+}
+
+struct LightMasks { uint16_t rows[MAX_LIGHT_RADIUS + 1][13]; };
+
+constexpr LightMasks make_light_masks()
+{
+    LightMasks masks = {};
+    for(uint8_t radius = 0; radius <= MAX_LIGHT_RADIUS; ++radius)
+        for(uint8_t sy = 0; sy < 13; ++sy)
+            for(uint8_t sx = 0; sx < 13; ++sx)
+                if(in_light_radius(static_cast<int16_t>(sx) - 6,
+                                   static_cast<int16_t>(sy) - 6, radius))
+                    masks.rows[radius][sy] |= static_cast<uint16_t>(1u << sx);
+    return masks;
+}
+
+static constexpr LightMasks PROGMEM light_masks = make_light_masks();
+
+uint16_t light_mask(uint8_t radius, uint8_t sy)
+{
+    return sy < 13 ? light_masks.rows[clamp_light_radius(radius)][sy] : 0;
 }
 
 // Each local ray crosses at most five tiles before its target. Encode an
@@ -416,15 +437,18 @@ static constexpr RayPaths PROGMEM ray_paths = make_ray_paths();
 
 bool ray_visible(uint8_t tx, uint8_t ty, const uint16_t opaque[13])
 {
-    if(!in_light_radius(static_cast<int16_t>(tx) - LIGHT_RADIUS,
-                        static_cast<int16_t>(ty) - LIGHT_RADIUS))
+    if(tx >= 13 || !(light_mask(player_light_radius(), ty) & (1u << tx)))
         return false;
+    return ray_unblocked(tx, ty, opaque);
+}
+
+bool ray_unblocked(uint8_t tx, uint8_t ty, const uint16_t opaque[13])
+{
     uint8_t ray = static_cast<uint8_t>((ty << 3) + (ty << 2) + ty + tx);
     uint16_t offset = static_cast<uint16_t>((static_cast<uint16_t>(ray) << 2) + ray);
-    uint8_t steps[5];
-    memcpy_P(steps, ray_paths.steps + offset, sizeof steps);
+    // Read only traversed flash bytes instead of copying a ray onto the stack.
     for(uint8_t i = 0; i < 5; ++i) {
-        uint8_t tile = steps[i];
+        uint8_t tile = ray_paths.steps[offset + i];
         if(tile == 0xff)
             return true;
         if(opaque[tile >> 4] & (1u << (tile & 0x0f)))

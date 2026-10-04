@@ -681,7 +681,7 @@ static void polymorph_monster(uint8_t index)
     // A newly polymorphed mimic is already revealed; its default appearance
     // is scroll. Other forms must not retain the old mimic's appearance bits.
     target.state &= static_cast<uint8_t>(~MIMIC_APPEARANCE_MASK);
-    target.hp = monster_info(target.type).health;
+    target.hp = monster_health(target.type);
     target.stun = 0;
     target.effects[0] = target.effects[1] = 0;
 }

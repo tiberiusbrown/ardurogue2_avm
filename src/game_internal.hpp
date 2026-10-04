@@ -7,6 +7,13 @@ namespace rogue {
 
 // Shared only by gameplay implementation files and world generation.
 MonsterInfo monster_info(uint8_t type);
+uint16_t monster_flags(uint8_t type);
+uint8_t monster_strength(uint8_t type);
+uint8_t monster_dexterity(uint8_t type);
+uint8_t monster_speed(uint8_t type);
+uint8_t monster_armor(uint8_t type);
+uint8_t monster_health(uint8_t type);
+uint8_t monster_xp(uint8_t type);
 uint16_t next_random(uint16_t& state);
 uint8_t roll(uint8_t limit);
 int8_t ring_bonus(uint8_t type);

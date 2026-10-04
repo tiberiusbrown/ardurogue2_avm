@@ -22,6 +22,10 @@ struct RayResult {
 RayResult scan_ray(Position origin, int8_t dx, int8_t dy, uint8_t range);
 void make_floor();
 bool can_see(Position pos);
+// Clamps radius to MAX_LIGHT_RADIUS; invalid viewport rows are empty.
+uint16_t light_mask(uint8_t radius, uint8_t sy);
 bool ray_visible(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);
+// Requires viewport coordinates whose light-mask bit was already checked.
+bool ray_unblocked(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);
 
 } // namespace rogue

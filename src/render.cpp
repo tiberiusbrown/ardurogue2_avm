@@ -282,22 +282,39 @@ struct DungeonView {
     uint8_t first_sx, end_sx, first_sy, end_sy;
 };
 
+uint16_t wall_row_bits(uint8_t y, int16_t left)
+{
+    constexpr uint16_t opaque = 0x1fff;
+    if(y >= MAP_H || left <= -13 || left >= MAP_W)
+        return opaque;
+    uint8_t first = left < 0 ? static_cast<uint8_t>(-left) : 0;
+    uint8_t end = left + 13 > MAP_W
+        ? static_cast<uint8_t>(MAP_W - left) : 13;
+    uint8_t x = static_cast<uint8_t>(left + first);
+    uint8_t shift = x & 7;
+    uint8_t count = end - first;
+    const uint8_t* source = game.walls + static_cast<uint16_t>(y) * (MAP_W / 8) +
+        (x >> 3);
+    // The clipped run determines which bytes exist in this map row. Keep
+    // the third byte separate so extraction needs only a 16-bit temporary.
+    uint16_t bits = source[0];
+    if(shift + count > 8)
+        bits |= static_cast<uint16_t>(source[1]) << 8;
+    bits >>= shift;
+    if(shift + count > 16)
+        bits |= static_cast<uint16_t>(source[2]) << (16 - shift);
+    uint16_t run = static_cast<uint16_t>((1u << count) - 1);
+    uint16_t valid = static_cast<uint16_t>(run << first);
+    return static_cast<uint16_t>((opaque & ~valid) | ((bits & run) << first));
+}
+
 __attribute__((noinline)) static void build_view_walls(
     const DungeonView& view, uint16_t walls[13])
 {
-    const uint16_t valid_x = static_cast<uint16_t>(
-        ((1u << view.end_sx) - 1) & ~((1u << view.first_sx) - 1));
     for(uint8_t sy = 0; sy < 13; ++sy)
         walls[sy] = 0x1fff;
-    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
-        walls[sy] = static_cast<uint16_t>(0x1fff & ~valid_x);
-        uint16_t row = static_cast<uint16_t>((view.top + sy) * (MAP_W / 8));
-        uint8_t tx = static_cast<uint8_t>(view.left + view.first_sx);
-        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx, ++tx) {
-            if(game.walls[row + (tx >> 3)] & (1u << (tx & 7)))
-                walls[sy] |= static_cast<uint16_t>(1u << sx);
-        }
-    }
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy)
+        walls[sy] = wall_row_bits(static_cast<uint8_t>(view.top + sy), view.left);
     for(uint8_t i = 0; i < game.door_count; ++i) {
         Position door = door_position(i);
         uint8_t sx, sy;
@@ -307,7 +324,8 @@ __attribute__((noinline)) static void build_view_walls(
 }
 
 __attribute__((noinline)) static void reveal_view_floor(
-    const DungeonView& view, uint16_t sight[13], const uint16_t walls[13])
+    const DungeonView& view, uint16_t sight[13], const uint16_t walls[13],
+    uint8_t radius)
 {
     const Room* player_room = nullptr;
     for(const Room& room : game.rooms)
@@ -317,16 +335,16 @@ __attribute__((noinline)) static void reveal_view_floor(
             break;
         }
     for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
+        uint16_t lit = light_mask(radius, sy) >> view.first_sx;
         uint8_t ty = static_cast<uint8_t>(view.top + sy);
         uint8_t tx = static_cast<uint8_t>(view.left + view.first_sx);
-        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx, ++tx) {
-            if(!in_light_radius(static_cast<int16_t>(sx) - LIGHT_RADIUS,
-                                static_cast<int16_t>(sy) - LIGHT_RADIUS))
+        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx, ++tx, lit >>= 1) {
+            if(!(lit & 1u))
                 continue;
             bool visible = (player_room &&
                 tx >= player_room->x && tx < player_room->x + player_room->w &&
                 ty >= player_room->y && ty < player_room->y + player_room->h) ||
-                ray_visible(sx, sy, walls);
+                ray_unblocked(sx, sy, walls);
             if(visible) {
                 sight[sy] |= static_cast<uint16_t>(1u << sx);
                 explore({tx, ty});
@@ -336,14 +354,14 @@ __attribute__((noinline)) static void reveal_view_floor(
 }
 
 __attribute__((noinline)) static void reveal_view_walls(
-    const DungeonView& view, uint16_t sight[13], const uint16_t walls[13])
+    const DungeonView& view, uint16_t sight[13], const uint16_t walls[13],
+    uint8_t radius)
 {
     // A ray to the center of a corridor wall can cross an earlier wall.
     // Reveal walls touching visible, non-opaque floor within the circular
     // light radius, without extending visibility through closed doors.
     for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
         uint8_t ty = static_cast<uint8_t>(view.top + sy);
-        int16_t dy = static_cast<int16_t>(sy) - LIGHT_RADIUS;
         uint16_t floor_sight = sight[sy] & ~walls[sy];
         uint16_t adjacent = static_cast<uint16_t>((floor_sight << 1) |
                                                    (floor_sight >> 1));
@@ -351,13 +369,10 @@ __attribute__((noinline)) static void reveal_view_walls(
             adjacent |= sight[sy - 1] & ~walls[sy - 1];
         if(sy < 12)
             adjacent |= sight[sy + 1] & ~walls[sy + 1];
-        uint16_t nearby_walls = adjacent & walls[sy];
+        uint16_t nearby_walls = adjacent & walls[sy] & light_mask(radius, sy);
         for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx) {
             uint16_t bit = static_cast<uint16_t>(1u << sx);
             if(!(nearby_walls & bit))
-                continue;
-            int16_t dx = static_cast<int16_t>(sx) - LIGHT_RADIUS;
-            if(!in_light_radius(dx, dy))
                 continue;
             sight[sy] |= bit;
             explore({static_cast<uint8_t>(view.left + sx), ty});
@@ -447,9 +462,10 @@ __attribute__((noinline)) static void reveal_view(
 {
     // This frame unwinds before terrain and object drawing begin.
     uint16_t walls[13];
+    uint8_t radius = player_light_radius();
     build_view_walls(view, walls);
-    reveal_view_floor(view, sight, walls);
-    reveal_view_walls(view, sight, walls);
+    reveal_view_floor(view, sight, walls, radius);
+    reveal_view_walls(view, sight, walls, radius);
 }
 
 __attribute__((noinline)) static void render_dungeon_view()
