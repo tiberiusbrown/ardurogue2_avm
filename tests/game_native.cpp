@@ -168,7 +168,9 @@ void check_new_run_state()
     session = {0, DEATH, true};
     start_new(0x1234);
     require(game.best_score == 321 && game.score == 0 &&
-            game.hp == 18 && game.inventory[0].type == NO_ITEM &&
+            game.hp == 18 && game.strength == 5 && game.dexterity == 4 &&
+            game.magic_resistance == 2 && game.speed == 4 &&
+            game.inventory[0].type == NO_ITEM &&
             !session.ended && session.repeat_slot == NONE,
             "new run did not preserve best score while resetting run state");
 
@@ -553,6 +555,7 @@ void check_indirect_lord_death()
     game.door_count = 0;
     game.player = {10, 10};
     game.hp = game.max_hp = 240;
+    game.magic_resistance = 0;
     game.hunger = 255;
     game.inventory[0] = {RING_FIRE_IMMUNITY, 1};
     game.ring_slots[0] = 0;
@@ -643,17 +646,17 @@ void check_potions()
             game.inventory[0].type == HEALING &&
             item_value(game.inventory[0]) == 1,
             "healing or potion stack is wrong");
-    uint8_t strength = game.attack;
+    uint8_t strength = game.strength;
     drink(STRENGTH);
-    require(game.attack == strength + 1, "strength potion did not increase attack");
+    require(game.strength == strength + 1, "strength potion did not increase strength");
     uint8_t dexterity = game.dexterity;
     drink(DEXTERITY);
     require(game.dexterity == dexterity + 1, "dexterity potion did not increase accuracy");
     drink(POISON);
     require(game.weakened, "poison did not weaken the player");
-    strength = game.attack;
+    strength = game.strength;
     drink(STRENGTH);
-    require(!game.weakened && game.attack == strength,
+    require(!game.weakened && game.strength == strength,
             "strength potion did not restore weakening");
     drink(CONFUSION);
     require(game.confused, "confusion potion had no duration");
@@ -759,7 +762,7 @@ void reset_item_fixture()
     game.player = {3, 4};
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
-    game.defense = 0;
+    game.magic_resistance = 0;
     game.hp = game.max_hp;
     game.hunger = 255;
     status_text.clear();
@@ -866,9 +869,10 @@ void check_ground_item_exchange()
     game.ground[7] = {{3, 4}, {SWORD, 1}};
     game.inventory[3] = {ARMOR, 5};
     game.armor_slot = 3;
-    game.defense = 5;
+    game.magic_resistance = 5;
     require(swap_ground_item(7, 3) && game.armor_slot == NONE &&
-            game.defense == 0, "armor swap left its defense equipped");
+            player_armor_rating() == 0 && game.magic_resistance == 5,
+            "armor swap left armor equipped or changed MR");
 
     reset_item_fixture();
     fill_item_inventory();
@@ -981,7 +985,7 @@ void check_ground_item_drop()
     reset_item_fixture();
     game.inventory[0] = {ARMOR, static_cast<uint8_t>(3 | ITEM_CURSED)};
     game.armor_slot = 0;
-    game.defense = 3;
+    game.magic_resistance = 3;
     unchanged = game;
     require(drop_disposition(0) == DROP_INVALID &&
             !drop_inventory(0) && !drop_inventory(0, true) &&
@@ -991,9 +995,10 @@ void check_ground_item_drop()
     reset_item_fixture();
     game.inventory[0] = {ARMOR, 3};
     game.armor_slot = 0;
-    game.defense = 3;
+    game.magic_resistance = 3;
     require(drop_inventory(0) && game.armor_slot == NONE &&
-            game.defense == 0 && game.ground[0].item.type == ARMOR,
+            player_armor_rating() == 0 && game.magic_resistance == 3 &&
+            game.ground[0].item.type == ARMOR,
             "uncursed equipped armor did not drop cleanly");
 
     reset_item_fixture();
@@ -1390,7 +1395,7 @@ void check_enemy_roster()
         const Expected& e = expected[type];
         require(info.flags == e.flags && info.strength == e.str &&
                 info.dexterity == e.dex && info.speed == e.speed &&
-                info.defense == e.def && info.health == e.hp &&
+                info.armor == e.def && info.health == e.hp &&
                 info.xp == e.xp, "enemy stats differ from ArduRogue");
     }
     const uint32_t floor_types[FLOORS] = {
@@ -1461,6 +1466,7 @@ void check_enemy_abilities()
         game.door_count = 0;
         game.player = {10, 10};
         game.hp = game.max_hp = 240;
+        game.magic_resistance = 0;
         game.hunger = 255;
         game.monsters[0] = {{x, 10}, type, monster_info(type).health,
                             0, {0, 0}, 0};
@@ -1588,7 +1594,7 @@ void check_vampire_amulet()
         status_text.clear();
     };
     uint8_t monster_dexterity = monster_info(GOBLIN).dexterity;
-    uint8_t hit_range = static_cast<uint8_t>(12 * 3 + monster_dexterity + 1);
+    uint8_t hit_range = static_cast<uint8_t>(12 * 2 + monster_dexterity + 1);
     uint16_t hit_seed = 0, miss_seed = 0;
     for(uint16_t seed = 1; seed < 1024; ++seed) {
         uint16_t state = seed;
@@ -1639,6 +1645,7 @@ void wand_arena(uint8_t type, uint8_t charges = 2)
     game.door_count = 0;
     game.player = {10, 10};
     game.hp = game.max_hp = 240;
+    game.magic_resistance = 0;
     game.hunger = 255;
     game.inventory[0] = {type, charges};
     status_text.clear();
@@ -2392,8 +2399,16 @@ void check_unreliable_wand()
             "unreliable wall shot failed to spend one charge and turn");
 }
 
-int main()
+void check_combat_rules();
+void print_armor_distributions();
+
+int main(int argc, char** argv)
 {
+    if(argc == 2 && std::strcmp(argv[1], "--armor-distributions") == 0) {
+        print_armor_distributions();
+        return 0;
+    }
+    check_combat_rules();
     check_wand_encoding_and_scrolls();
     check_wand_identity_and_generation();
     check_wand_rays_and_charges();

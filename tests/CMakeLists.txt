@@ -6,8 +6,10 @@ enable_testing()
 
 add_executable(game_native
     game_native.cpp
+    combat_checks.cpp
     ../src/state.cpp
     ../src/combat.cpp
+    ../src/combat_math.cpp
     ../src/items.cpp
     ../src/world.cpp
     ../src/persistence.cpp
@@ -27,6 +29,7 @@ add_executable(ui_native
     ../src/ui.cpp
     ../src/state.cpp
     ../src/combat.cpp
+    ../src/combat_math.cpp
     ../src/items.cpp
     ../src/world.cpp
 )
@@ -40,9 +43,13 @@ add_executable(render_native
     ../src/status.cpp
     ../src/state.cpp
     ../src/combat.cpp
+    ../src/combat_math.cpp
     ../src/items.cpp
     ../src/world.cpp
 )
 target_compile_features(render_native PRIVATE cxx_std_17)
 target_include_directories(render_native PRIVATE shim ../src)
 add_test(NAME render_native COMMAND render_native)
+
+# Optional seeded balance diagnostic using the same production RNG/helpers.
+add_test(NAME combat_distributions COMMAND game_native --armor-distributions)

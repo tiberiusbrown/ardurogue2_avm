@@ -161,10 +161,8 @@ static void clear_equipment_slot(uint8_t slot)
 {
     if(game.weapon_slot == slot)
         game.weapon_slot = NONE;
-    if(game.armor_slot == slot) {
+    if(game.armor_slot == slot)
         game.armor_slot = NONE;
-        game.defense = 0;
-    }
     if(game.amulet_slot == slot)
         game.amulet_slot = NONE;
     if(game.ring_slots[0] == slot)
@@ -343,6 +341,9 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
                !is_wand(target.type)) {
                 status(F("Nothing happens."));
             } else {
+                // ARMOR still stores only an unsigned rating. This legacy
+                // upgrade raises that rating; signed distribution enchantment
+                // is a separate combat helper, pending future item storage.
                 uint8_t value = item_value(target);
                 if(is_wand(target.type)) {
                     set_item_value(target, value > 11 ? 15 : value + 4);
@@ -352,8 +353,6 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
                 } else if(value < ITEM_VALUE_MASK) {
                     set_item_value(target, value + 1);
                 }
-                if(target.type == ARMOR && game.armor_slot == target_slot)
-                    game.defense = item_value(target);
                 status(F("The")); status(target); status(F("glows blue."));
             }
         } else if(is_wand(target.type) && wand_afflicted(target)) {
@@ -489,8 +488,8 @@ __attribute__((noinline)) static bool apply_inventory(
             if(game.weakened) {
                 game.weakened = 0;
                 status(F("Your strength returns."));
-            } else if(game.attack < 250) {
-                ++game.attack;
+            } else if(game.strength < 250) {
+                ++game.strength;
                 status(F("You feel stronger."));
             }
             break;
@@ -561,7 +560,6 @@ __attribute__((noinline)) static bool apply_inventory(
     case ARMOR:
         session.repeat_slot = slot;
         game.armor_slot = slot;
-        game.defense = item_value(item);
         identify_item(slot);
         status(F("You equip"));
         status(item, '.');
@@ -778,7 +776,7 @@ static void cursed_wand_effect(uint8_t type)
     case WAND_TELEPORT: teleport_player(); break;
     case WAND_DIGGING:
         status(F("The wand digs into you!"));
-        hurt_player(static_cast<uint8_t>(12 + roll(12)));
+        player_take_magic_damage(static_cast<uint8_t>(12 + roll(12)), 12);
         break;
     case WAND_FIRE:
         animate_fire_burst(game.player);
@@ -786,12 +784,12 @@ static void cursed_wand_effect(uint8_t type)
         break;
     case WAND_STRIKING:
         status(F("The wand strikes you!"));
-        hurt_player(static_cast<uint8_t>(12 + roll(12)));
+        player_take_magic_damage(static_cast<uint8_t>(12 + roll(12)), 12);
         break;
     case WAND_ICE:
         status(F("The wand freezes you!"));
         game.slowed = static_cast<uint8_t>(8 + roll(8));
-        hurt_player(static_cast<uint8_t>(8 + roll(8)));
+        player_take_magic_damage(static_cast<uint8_t>(8 + roll(8)), 8);
         break;
     case WAND_POLYMORPH:
         status(F("Your form twists!"));

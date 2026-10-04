@@ -31,7 +31,8 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-constexpr uint8_t SAVE_VERSION = 16;
+// Same byte layout, new STR/MR semantics: old attack/defense saves are invalid.
+constexpr uint8_t SAVE_VERSION = 17;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -91,8 +92,10 @@ enum MonsterFlag : uint16_t {
 };
 struct MonsterInfo {
     uint16_t flags;
-    uint8_t strength, dexterity, speed, defense, health, xp;
+    uint8_t strength, dexterity, speed, armor, health, xp;
 };
+static_assert(sizeof(MonsterInfo) == 8 && offsetof(MonsterInfo, armor) == 5,
+              "monster combat table layout changed");
 
 struct Position {
     uint8_t x;
@@ -206,8 +209,8 @@ struct Game {
     uint16_t run_seed, random_state, score, best_score;
     uint8_t magic, version, valid, floor;
     Position player, up, down;
-    uint8_t hp, max_hp, level, xp, attack, dexterity, speed;
-    uint8_t defense, hunger, turns;
+    uint8_t hp, max_hp, level, xp, strength, dexterity, speed;
+    uint8_t magic_resistance, hunger, turns;
     uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
@@ -247,6 +250,8 @@ static_assert(offsetof(Game, doors) == 560 &&
               offsetof(Game, player) == 786 &&
               offsetof(Game, up) == 788 && offsetof(Game, down) == 790 &&
               offsetof(Game, hp) == 792 &&
+              offsetof(Game, strength) == 796 &&
+              offsetof(Game, magic_resistance) == 799 &&
               offsetof(Game, identified_items) == 815,
               "game save offsets changed");
 static_assert(POTION_COUNT == 10 && SCROLL_COUNT == 9 &&

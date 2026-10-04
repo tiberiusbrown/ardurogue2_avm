@@ -225,8 +225,8 @@ void gain_xp(uint8_t amount)
         ++game.level;
         game.max_hp = static_cast<uint8_t>(game.max_hp + 3);
         game.hp = player_max_hp();
-        if(game.level % 2 == 0)
-            ++game.attack;
+        if(game.level % 4 == 0 && game.magic_resistance < 127)
+            ++game.magic_resistance;
         status(F("You gained a level!"));
     }
     game.xp = static_cast<uint8_t>(total);
@@ -244,10 +244,10 @@ void start_new(uint16_t seed)
     game.random_state = game.run_seed;
     game.hp = game.max_hp = 18;
     game.level = 1;
-    game.attack = 2;
+    game.strength = 5;
     game.dexterity = 4;
     game.speed = 4;
-    game.defense = 0;
+    game.magic_resistance = 2;
     game.hunger = 220;
     game.weapon_slot = game.armor_slot = NONE;
     game.amulet_slot = NONE;

@@ -24,19 +24,19 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 16 stores one active floor in an 821-byte AVM `Game` (unchanged
-from version 15). It derives potion, scroll, ring, amulet, and wand appearances from
-the run seed instead of storing 42 mapping bytes. Six bytes store their
+Save version 17 stores one active floor in an 821-byte AVM `Game` (unchanged
+in size). The old attack and cached defense bytes now store strength and magic
+resistance at the same offsets, so version 16 and older saves are incompatible.
+It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
 discoveries. It stores monster potion effects,
-enemy aggression and disguises, player speed, and accessory slots; older saves
-are not compatible.
+enemy aggression and disguises, player speed, and accessory slots.
 
 The ten potions from ArduRogue are healing, strength, dexterity, experience,
 invisibility, harming, poison, confusion, paralysis, and slowing. Every new
 run assigns each type a different color. Potions of the same type keep that
 color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
-can increase attack. Confusion, paralysis, slowing, and invisibility wear off
+can increase strength. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
 
 The nine scrolls from ArduRogue identify or enchant an item, remove a curse,
@@ -47,17 +47,17 @@ stack in inventory.
 
 Rings and amulets are separate item types, with eight variants of each. Rings
 can be worn two at a time, and one amulet can be worn. Their effects include
-bonuses to combat, visibility, speed, defense, health, and experience, plus
+bonuses to combat, visibility, speed, physical protection, health, and experience, plus
 sustenance, regeneration, life drain, clarity, conservation, ironblood, and
 invisibility. Cursed accessories reverse applicable bonuses and cannot be
 removed once equipped. Fire immunity protects against dragon breath, while a
-cursed fire ring doubles its damage.
+cursed fire ring doubles its damage before magic resistance.
 Their unknown descriptions are independently permuted each run. Equipping
 weapons, armor, rings, or amulets identifies them; until then, item text hides
 equipment bonuses and the true types of jewelry.
 
 All fifteen regular enemy species and the Lord of Darkness use ArduRogue's strength,
-dexterity, speed, defense, health, XP, flags, and floor encounter weights.
+dexterity, speed, physical protection, health, XP, flags, and floor encounter weights.
 Bats wander until attacked, mimics appear as items and stay put until attacked,
 phantoms are invisible, and capable enemies open doors. Trolls and the Lord
 regenerate. Rattlesnakes and the Lord can poison; tarantulas, fallen angels,
@@ -99,6 +99,68 @@ experience have no effect on monsters. Status messages announce when these
 conditions begin, expire, or are cured.
 Identify, enchant, and remove curse scrolls open a second item selection.
 Canceling that selection still consumes the scroll, as in ArduRogue.
+
+### Combat rules
+
+New players start with 18 HP, STR 5, DEX 4, magic resistance (MR) 2, and
+speed 4. Level-ups add 3 maximum HP and restore health. Every fourth level
+adds 1 MR; `(level - 1) / 3` adds physical accuracy. Levels do not increase
+STR or raw damage. Speed still controls action frequency.
+
+Both sides use the same physical hit rule: roll `0..(2 * accuracy + evasion)`
+and hit if the roll is at least evasion. Each input caps at 84 so the RNG's
+byte-sized range never overflows. Monster DEX supplies accuracy and evasion.
+Player effective DEX is base DEX plus dexterity rings, clamped to 0..84;
+it supplies evasion and, with the level bonus and attack rings, accuracy.
+The generic sword adds no accuracy. Cursed attack rings reduce accuracy.
+DEX affects neither damage, absorption, nor MR.
+
+Effective STR is base STR plus strength rings minus weakness, clamped to
+1..255. Its damage modifier is -2 at STR 1–2, -1 at 3–4, 0 at 5–6, +1 at
+7–8, +2 at 9–10, and +3 at 11 or above. Player raw melee damage is
+`max(1, 2 + sword value + STR modifier + roll(3))`; an unequipped sword
+contributes zero. Attack rings do not add damage. Monster raw damage remains
+`strength + roll(3)`, halved upward while weakened.
+
+Armor is derived from current equipment on each hit, with no cached defense.
+Protection rings add to the equipped generic armor's unsigned rating (or zero
+when unarmored). Cursed protection lowers the rating; the result clamps to
+0..255. The resulting rating N absorbs `floor(N/2) + roll(ceil(N/2) + 1)`.
+Thus rating 6 blocks 3..6, and rating 8 blocks 4..8. Monster armor uses the
+previous defense table values unchanged. A landed physical attack always deals
+`max(1, raw - absorption)`. Protection is never a separate flat subtraction,
+and physical armor does not affect evasion or magic.
+
+`armor_absorption(rating, signed_enchant)` keeps this range fixed. At +k it
+keeps the highest of 1+k rolls; at -k it keeps the lowest. Effective enchantment
+caps at ±5 (at most six rolls). Each extra roll has diminishing returns;
+maximum absorption remains probabilistic. For rating 6, measured means at
++0/+1/+2/+3 are approximately 4.50/5.13/5.44/5.62. At +5 the chance of blocking
+6 is approximately 82.2%, and every value 3..6 remains possible.
+
+Signed armor enchantments are deliberately deferred from live item storage:
+`Item` remains two bytes, its six value bits still mean armor rating, and live
+armor calls the helper with enchantment zero. The existing Enchant scroll
+continues upgrading that unsigned rating; this legacy rating upgrade is distinct
+from the signed distribution modifier tested by the helper. No weapon or armor
+subtypes, packing redesign, encumbrance, or speed penalties are introduced.
+
+Magic bypasses physical armor, protection, and DEX. MR saves when
+`roll(resistance + power + 1) < resistance`; each input caps at 127 to keep
+the range safe. A save halves damage rounded upward; failure takes full damage.
+Dragon breath uses power 12. Wand fire/ice use power 8, and cursed striking and
+digging use power 12. Monster wand damage remains direct with no new monster
+MR field. `player_take_fire_damage` first handles fire rings: positive immunity
+prevents damage completely; cursed immunity doubles damage with saturation at
+255, then applies the normal MR save. Dragon breath and fire-wand splash use
+this same entry point. Starvation, potion harming, torment, life drain, and
+status effects retain their special behavior.
+
+The small integer helpers in `src/combat_math.hpp` depend only on the seeded
+RNG and can be reused by a native balance harness. These mechanics establish a
+measurable first pass; they do not claim final balance. For identical raw damage
+7, rating 8 flat armor previously dealt 1 HP; randomized armor now averages
+about 1.6 HP per landed hit. No broad monster-stat retuning is included.
 
 ### Controls
 
@@ -157,7 +219,8 @@ automatically before building this project.
 `src/model.hpp` defines the saved game layout. `src/game.hpp` exposes gameplay
 actions, and `src/game_internal.hpp` shares helpers between gameplay modules.
 `src/state.cpp`, `src/combat.cpp`, and `src/items.cpp` implement run state,
-combat and turns, and inventory behavior. `src/world.cpp` generates floors and
+combat and turns, and inventory behavior. `src/combat_math.cpp` contains the
+shared hit, STR, absorption, and MR arithmetic. `src/world.cpp` generates floors and
 handles map visibility. These modules compile into the native test program.
 `src/persistence.cpp` handles save policy, `src/status.cpp` formats messages,
 `src/render.cpp` draws the display, and `src/ui.cpp` handles controls and modes.
@@ -171,3 +234,18 @@ cmake -S tests -B build/native -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/native --config RelWithDebInfo
 ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
 ```
+
+The native suite includes deterministic range/overflow checks, signed enchantment
+sampling with 100,000 samples per distribution, diminishing returns and symmetry,
+paired-seed melee/ring/MR/fire checks, and save/layout tests. To inspect the armor
+distributions and compare randomized damage against flat armor:
+
+```sh
+build/native/game_native --armor-distributions
+```
+
+The AVM build retains the 821-byte saved layout and two-byte items, eight-byte
+monsters, and four-byte ground items. With the current SDK, baseline and revamped
+builds both report maximum provable stack usage of 252 bytes on the same
+wand/dragon animation/rendering path. The linker marks this bound incomplete;
+it is not a proof of every runtime path fitting the 256-byte VM stack.

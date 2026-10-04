@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model.hpp"
+#include "combat_math.hpp"
 
 namespace rogue {
 
@@ -21,6 +22,12 @@ void set_monster_effect(Monster& monster, MonsterEffect effect,
 void defeat_monster(uint8_t index);
 void damage_monster(uint8_t index, uint8_t damage, bool player_attack);
 void hurt_player(uint8_t damage);
+uint8_t player_strength();
+uint8_t player_dexterity();
+uint8_t player_accuracy();
+uint8_t player_armor_rating();
+void player_take_magic_damage(uint8_t damage, uint8_t power);
+void player_take_fire_damage(uint8_t damage, uint8_t power);
 void fire_burst_damage(Position center, bool player_attack,
                        uint8_t radius = 1);
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);

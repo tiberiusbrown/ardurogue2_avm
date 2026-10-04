@@ -117,6 +117,56 @@ void hurt_player(uint8_t damage)
         finish(DEATH);
 }
 
+uint8_t player_strength()
+{
+    int16_t value = static_cast<int16_t>(game.strength) +
+        ring_bonus(RING_STRENGTH) - game.weakened;
+    if(value < 1) value = 1;
+    if(value > 255) value = 255;
+    return static_cast<uint8_t>(value);
+}
+
+uint8_t player_dexterity()
+{
+    return clamp_combat_stat(static_cast<int16_t>(game.dexterity) +
+                             ring_bonus(RING_DEXTERITY));
+}
+
+uint8_t player_accuracy()
+{
+    // The generic sword contributes no accuracy; attack rings affect hits only.
+    uint8_t experience = game.level ? (game.level - 1) / 3 : 0;
+    return clamp_combat_stat(static_cast<int16_t>(player_dexterity()) +
+                             experience + ring_bonus(RING_ATTACK));
+}
+
+uint8_t player_armor_rating()
+{
+    // Items currently store rating only; live absorption uses enchantment 0.
+    uint8_t rating = game.armor_slot < INVENTORY &&
+        game.inventory[game.armor_slot].type == ARMOR
+        ? item_value(game.inventory[game.armor_slot]) : 0;
+    return effective_armor_rating(rating, ring_bonus(RING_PROTECTION));
+}
+
+void player_take_magic_damage(uint8_t damage, uint8_t power)
+{
+    if(damage)
+        hurt_player(magic_damage_after_save(damage,
+            magic_save(game.magic_resistance, power)));
+}
+
+void player_take_fire_damage(uint8_t damage, uint8_t power)
+{
+    int8_t fire = ring_bonus(RING_FIRE_IMMUNITY);
+    if(fire > 0) {
+        status(F("The flames do not affect you."));
+        return;
+    }
+    if(fire < 0) damage = saturating_double(damage);
+    player_take_magic_damage(damage, power);
+}
+
 static void leave_yendor(const Monster& monster)
 {
     if(monster.type == LORD)
@@ -159,13 +209,10 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
         center.y - game.player.y;
     if(player_attack && px <= radius && py <= radius) {
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
-        int8_t protection = ring_bonus(RING_FIRE_IMMUNITY);
-        if(protection > 0) damage = 0;
-        if(protection < 0) damage = static_cast<uint8_t>(damage * 2);
-        if(damage) {
-            hurt_player(damage);
+        uint8_t old_hp = game.hp;
+        player_take_fire_damage(damage, 8);
+        if(game.hp < old_hp)
             status(F("You are caught in the flames!"));
-        } else status(F("The flames do not affect you."));
     }
 }
 
@@ -249,27 +296,15 @@ static void advance_monster(uint8_t index)
             animate_ray(monster.pos, dx, dy, range);
             animate_fire_burst(game.player);
             uint8_t damage = static_cast<uint8_t>(8 + roll(8));
-            int8_t protection = ring_bonus(RING_FIRE_IMMUNITY);
-            if(protection > 0) damage = 0;
-            if(protection < 0) damage = static_cast<uint8_t>(damage * 2);
-            if(!damage)
-                status(F("The flames do not affect you."));
-            else
-                hurt_player(damage);
+            player_take_fire_damage(damage, 12);
             fire_burst_damage(game.player, false);
         } else if(range == 1 && pursuing && !confused && !afraid) {
-            uint8_t attacker_dex = info.dexterity;
-            uint8_t player_dex = game.dexterity;
-            if(roll(static_cast<uint8_t>(attacker_dex * 3 + player_dex + 1)) >=
-               player_dex) {
+            if(physical_attack_hits(info.dexterity, player_dexterity())) {
                 uint8_t raw = static_cast<uint8_t>(info.strength + roll(3));
                 if(monster_effect(monster, MON_WEAKENED))
                     raw = static_cast<uint8_t>((raw + 1) / 2);
-                int16_t defense = static_cast<int16_t>(game.defense) +
-                    ring_bonus(RING_PROTECTION);
-                if(defense < 0) defense = 0;
-                uint8_t damage = raw > defense
-                    ? static_cast<uint8_t>(raw - defense) : 1;
+                uint8_t damage = physical_damage_after_armor(raw,
+                    armor_absorption(player_armor_rating(), 0));
                 hurt_player(damage);
                 status(F("The"));
                 status(static_cast<MonsterType>(monster.type));
@@ -402,27 +437,17 @@ static void attack_monster(uint8_t index)
     Monster& target = game.monsters[index];
     target.state |= MON_AGGRO;
     MonsterInfo info = monster_info(target.type);
-    int16_t dexterity = static_cast<int16_t>(game.dexterity) +
-        ring_bonus(RING_DEXTERITY);
-    if(dexterity < 0) dexterity = 0;
-    int16_t hit_range = dexterity * 3 + info.dexterity + 1;
-    if(hit_range > 255) hit_range = 255;
-    uint8_t hit_range8 = static_cast<uint8_t>(hit_range);
-    if(roll(hit_range8) < info.dexterity) {
+    if(!physical_attack_hits(player_accuracy(), info.dexterity)) {
         status(F("You miss the"));
         status(static_cast<MonsterType>(target.type), '.');
         return;
     }
-    uint8_t bonus = game.weapon_slot != NONE
+    uint8_t bonus = game.weapon_slot < INVENTORY &&
+        game.inventory[game.weapon_slot].type == SWORD
         ? item_value(game.inventory[game.weapon_slot]) : 0;
-    int16_t strength = static_cast<int16_t>(game.attack) - game.weakened +
-        ring_bonus(RING_STRENGTH);
-    if(strength < 1) strength = 1;
-    int16_t damage_value = strength + bonus + ring_bonus(RING_ATTACK) +
-        roll(3) - info.defense;
-    if(damage_value < 1) damage_value = 1;
-    if(damage_value > 255) damage_value = 255;
-    uint8_t damage = static_cast<uint8_t>(damage_value);
+    uint8_t raw = physical_raw_damage(bonus, player_strength());
+    uint8_t damage = physical_damage_after_armor(raw,
+        armor_absorption(info.armor, 0));
     if(damage >= target.hp) {
         defeat_monster(index);
     } else {
