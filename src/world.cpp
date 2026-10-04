@@ -31,6 +31,36 @@ static uint8_t floor_roll(uint16_t& seed, uint8_t limit)
     return static_cast<uint8_t>(next_random(seed) % limit);
 }
 
+static uint8_t floor_equipment_roll(uint16_t& seed, uint8_t limit)
+{
+    // Mix each output word before reducing it: consecutive xorshift outputs
+    // otherwise correlate for rare subtype/enchantment/curse combinations.
+    // A 32-bit output mixer breaks those bit relationships without changing
+    // the underlying RNG or adding saved storage.
+    uint32_t value = next_random(seed);
+    value = (value ^ (value >> 16)) * 0x7feb352du;
+    value = (value ^ (value >> 15)) * 0x846ca68bu;
+    value ^= value >> 16;
+    return static_cast<uint8_t>(value % limit);
+}
+
+static uint8_t floor_weapon_type(uint16_t& seed)
+{
+    // Cumulative integer weights: 25, 20, 30, 15, 10.
+    uint8_t chance = floor_equipment_roll(seed, 100);
+    return chance < 25 ? DAGGER : chance < 45 ? SPEAR :
+        chance < 75 ? LONG_SWORD : chance < 90 ? MACE : TWO_HANDED_SWORD;
+}
+
+static uint8_t floor_armor_type(uint16_t& seed)
+{
+    // Cumulative integer weights: 25, 20, 20, 15, 12, 8.
+    uint8_t chance = floor_equipment_roll(seed, 100);
+    return chance < 25 ? LEATHER_ARMOR : chance < 45 ? RING_MAIL :
+        chance < 65 ? SCALE_MAIL : chance < 80 ? CHAIN_MAIL :
+        chance < 92 ? SPLINT_MAIL : PLATE_MAIL;
+}
+
 bool wall_at(int16_t x, int16_t y)
 {
     if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H)
@@ -261,6 +291,10 @@ void make_floor()
 
     // The ascent has fresh threats but no replenishing ordinary supplies.
     if(game.has_amulet) return;
+    // Keep equipment rolls out of terrain/encounter retry loops: those loops
+    // merge RNG sequences and can bias rare combinations in a small state space.
+    uint16_t equipment_seed = static_cast<uint16_t>(game.run_seed ^
+        static_cast<uint16_t>((game.floor + 1u) * 0x85ebu) ^ 0x51edu);
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
         const Room& room = game.rooms[(i * 7u + 3u) % ROOMS];
         uint8_t x = static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2));
@@ -270,7 +304,8 @@ void make_floor()
             ? static_cast<uint8_t>(HEALING + floor_roll(seed, POTION_COUNT)) :
               chance < 48 ? static_cast<uint8_t>(SCROLL_IDENTIFY +
                                                 floor_roll(seed, SCROLL_COUNT)) :
-              chance < 56 ? SWORD : chance < 64 ? ARMOR :
+              chance < 56 ? floor_weapon_type(equipment_seed) :
+              chance < 64 ? floor_armor_type(equipment_seed) :
               chance < 68 ? static_cast<uint8_t>(WAND_FORCE +
                                                  floor_roll(seed, WAND_COUNT)) :
               chance < 70
@@ -288,11 +323,11 @@ void make_floor()
         }
         if(is_equipment(type)) {
             // Enchantment and curse are independent of depth and of each other.
-            uint8_t chance = floor_roll(seed, 100);
+            uint8_t chance = floor_equipment_roll(equipment_seed, 100);
             int8_t enchant = chance < 5 ? -2 : chance < 15 ? -1 :
                 chance < 85 ? 0 : chance < 95 ? 1 : 2;
             Item equipment = make_equipment(type, enchant);
-            if(floor_roll(seed, 8) == 0) equipment.info |= ITEM_CURSED;
+            if(floor_equipment_roll(equipment_seed, 8) == 0) equipment.info |= ITEM_CURSED;
             info = equipment.info;
         }
         if(game.floor == FLOORS - 1 && i == 15)

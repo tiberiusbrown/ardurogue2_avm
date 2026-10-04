@@ -221,15 +221,15 @@ static void check_item_status()
     check_status_item({SCROLL_REMOVE_CURSE, 1}, '?', "the faded scroll?");
     other_known[SCROLL_REMOVE_CURSE] = true;
     check_status_item({SCROLL_REMOVE_CURSE, 1}, '?', "the scroll of remove curse?");
-    Item sword = make_equipment(SWORD, 2);
-    check_status_item(sword, '?', "the sword?");
+    Item sword = make_equipment(LONG_SWORD, 2);
+    check_status_item(sword, '?', "the long sword?");
     sword.info |= ITEM_IDENTIFIED;
-    check_status_item(sword, '?', "the sword +2?");
+    check_status_item(sword, '?', "the long sword +2?");
     set_equipment_enchant(sword, -1);
-    check_status_item(sword, '.', "a sword -1.");
-    Item armor = make_equipment(ARMOR, 2);
+    check_status_item(sword, '.', "a long sword -1.");
+    Item armor = make_equipment(CHAIN_MAIL, 2);
     armor.info |= ITEM_IDENTIFIED;
-    check_status_item(armor, '?', "the armor +2?");
+    check_status_item(armor, '?', "the chain mail +2?");
     check_status_item({YENDOR_AMULET, 1}, '?', "the amulet?");
     other_known[RING_SEE_INVISIBLE] = false;
     check_status_item({RING_SEE_INVISIBLE, 1}, '?', "the diamond ring?");
@@ -307,20 +307,60 @@ static void check_drawn_item(rogue::Item item)
     }
 }
 
+static void check_equipment_roster_text()
+{
+    using namespace rogue;
+    const uint8_t types[] = {DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD,
+        LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL};
+    const char* names[] = {"dagger", "spear", "long sword", "mace", "two-handed sword",
+        "leather armor", "ring mail", "scale mail", "chain mail", "splint mail", "plate mail"};
+    for(unsigned i = 0; i < sizeof types; ++i) {
+        for(int8_t enchant = -5; enchant <= 5; ++enchant) {
+            for(unsigned cursed = 0; cursed < 2; ++cursed) {
+                Item item = make_equipment(types[i], enchant);
+                if(cursed) item.info |= ITEM_CURSED;
+                char label[ITEM_TEXT_CAPACITY], expected[ITEM_TEXT_CAPACITY];
+                format_item(item, label);
+                if(std::strcmp(label, names[i])) std::exit(1);
+                check_drawn_item(item);
+                item.info |= ITEM_IDENTIFIED;
+                std::string name = cursed ? "cursed " : "";
+                name += names[i];
+                if(enchant) std::snprintf(expected, sizeof expected, "%s %+d", name.c_str(), int(enchant));
+                else std::snprintf(expected, sizeof expected, "%s", name.c_str());
+                format_item(item, label);
+                if(std::strcmp(label, expected)) {
+                    std::fprintf(stderr, "equipment label: %s != %s\n", label, expected);
+                    std::exit(1);
+                }
+                check_drawn_item(item);
+                std::string message = is_weapon(types[i]) ? "a " : "";
+                message += expected;
+                message += '.';
+                check_status_item(item, '.', message.c_str());
+                message = "the ";
+                message += expected;
+                message += '?';
+                check_status_item(item, '?', message.c_str());
+            }
+        }
+    }
+}
+
 static void check_cursed_equipment()
 {
     using namespace rogue;
-    const uint8_t types[] = {SWORD, ARMOR, RING_SEE_INVISIBLE, AMULET_SPEED};
+    const uint8_t types[] = {LONG_SWORD, CHAIN_MAIL, RING_SEE_INVISIBLE, AMULET_SPEED};
     const char* labels[] = {
-        "cursed sword +3", "cursed armor +3",
+        "cursed long sword +3", "cursed chain mail +3",
         "cursed ring of see invisible", "cursed amulet of speed"
     };
     const char* messages[] = {
-        "a cursed sword +3.", "cursed armor +3.",
+        "a cursed long sword +3.", "cursed chain mail +3.",
         "a cursed ring of see invisible.", "a cursed amulet of speed."
     };
     const char* prompts[] = {
-        "the cursed sword +3?", "the cursed armor +3?",
+        "the cursed long sword +3?", "the cursed chain mail +3?",
         "the cursed ring of see invisible?", "the cursed amulet of speed?"
     };
     for(unsigned i = 0; i < 4; ++i) {
@@ -351,19 +391,19 @@ static void check_cursed_equipment()
     check_status_item({AMULET_SPEED, ITEM_IDENTIFIED | ITEM_CURSED | 3}, '.',
                       "a cursed diamond amulet.");
     // A curse prefix still belongs to the item when its value is zero.
-    Item sword = make_equipment(SWORD, 0);
+    Item sword = make_equipment(LONG_SWORD, 0);
     sword.info |= ITEM_IDENTIFIED | ITEM_CURSED;
-    check_status_item(sword, '.', "a cursed sword.");
-    Item armor = make_equipment(ARMOR, 0);
+    check_status_item(sword, '.', "a cursed long sword.");
+    Item armor = make_equipment(CHAIN_MAIL, 0);
     armor.info |= ITEM_IDENTIFIED | ITEM_CURSED;
-    check_status_item(armor, '?', "the cursed armor?");
-    for(uint8_t type : {SWORD, ARMOR}) {
+    check_status_item(armor, '?', "the cursed chain mail?");
+    for(uint8_t type : {LONG_SWORD, CHAIN_MAIL}) {
         for(int8_t enchant : {-5, -2, 0, 2, 5}) {
             Item item = make_equipment(type, enchant);
             item.info |= ITEM_IDENTIFIED | ITEM_CURSED;
             char label[ITEM_TEXT_CAPACITY];
             char expected[ITEM_TEXT_CAPACITY];
-            const char* name = is_weapon(type) ? "cursed sword" : "cursed armor";
+            const char* name = is_weapon(type) ? "cursed long sword" : "cursed chain mail";
             if(enchant) std::snprintf(expected, sizeof expected, "%s %+d", name, int(enchant));
             else std::snprintf(expected, sizeof expected, "%s", name);
             format_item(item, label);
@@ -460,6 +500,7 @@ int main()
     }
     check_streaming_status();
     check_item_status();
+    check_equipment_roster_text();
     check_cursed_equipment();
     check_status_paging();
     std::puts("streaming status and item text passed");

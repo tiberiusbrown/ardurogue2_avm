@@ -24,11 +24,14 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 21 stores one active floor in an 821-byte AVM `Game` (unchanged
-in size). Mimic state now stores a semantic appearance category, and equipment
-generation uses independent enchantment and curse rolls. Version 20 and older saves are
-incompatible; no migration is attempted. The former attack and cached defense bytes store strength and magic
-resistance at the same offsets.
+Save version 22 stores one active floor in an 821-byte AVM `Game` (unchanged
+in size). Weapons and armor each occupy one contiguous `ItemType` range.
+Long sword keeps the former sword ID; inserting the other weapons and armor
+shifts the armor and subsequent item IDs. Long sword and chain mail preserve
+the former generic equipment baselines. Equipment generation selects weighted
+subtypes with independent enchantment and curse rolls. Version 21 and older
+saves are incompatible; no migration is attempted. The former attack and cached
+defense bytes store strength and magic resistance at the same offsets.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
 discoveries. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
@@ -114,16 +117,28 @@ Both sides use the same physical hit rule: roll `0..(2 * accuracy + evasion)`
 and hit if the roll is at least evasion. Each input caps at 84 so the RNG's
 byte-sized range never overflows. Monster DEX supplies accuracy and evasion.
 Player effective DEX is base DEX plus dexterity rings, clamped to 0..84;
-it supplies evasion and, with the level bonus and attack rings, accuracy.
-The generic sword adds no accuracy. Cursed attack rings reduce accuracy.
+it supplies evasion and, with the level bonus, weapon type accuracy modifier,
+and attack rings, accuracy. Long sword adds no accuracy. Cursed attack rings
+reduce accuracy. Weapon enchantment never changes accuracy.
 DEX affects neither damage, absorption, nor MR.
 
-The generic sword rolls inherent weapon damage in **2..6**; unarmed attacks
-roll **1..3**. `weapon_damage_roll(minimum, maximum, signed_enchant)` keeps
-that range fixed. At +k it keeps the highest of 1+k rolls; at -k it keeps the
-lowest. Effective enchantment caps at -5..+5 (at most six rolls). Each extra
+Five mundane weapons share a single weapon slot and icon:
+
+| Weapon | Damage | Accuracy | Generation weight |
+| --- | --- | --- | --- |
+| Dagger | 1..4 | +2 | 25 |
+| Spear | 2..5 | +1 | 20 |
+| Long sword | 2..6 | 0 | 30 |
+| Mace | 3..7 | -1 | 15 |
+| Two-handed sword | 4..8 | -2 | 10 |
+
+Long sword preserves the old generic sword's **2..6**, zero-accuracy baseline.
+Two-handed sword is a balance profile using the same slot, with no hand
+restrictions or additional abilities. Unarmed attacks roll **1..3**.
+`weapon_damage_roll(minimum, maximum, signed_enchant)` keeps that range fixed.
+At +k it keeps the highest of 1+k rolls; at -k it keeps the lowest. Effective enchantment caps at -5..+5 (at most six rolls). Each extra
 roll has diminishing returns, and both endpoints remain possible even at the
-cap. For the sword, expected means at +0/+1/+2/+3 are approximately
+cap. For the long sword, expected means at +0/+1/+2/+3 are approximately
 4.00/4.80/5.20/5.43. Neither enchantment nor curse state adds accuracy.
 
 Effective STR is base STR plus strength rings minus weakness, clamped to
@@ -135,9 +150,20 @@ weapon's roll distribution. Attack rings do not add damage. Monster raw damage
 remains `strength + roll(3)`, halved upward while weakened.
 
 Armor is derived from current equipment on each hit, with no cached defense.
-The generic `ARMOR` type has inherent rating 4, absorbing 2..4 before ring
-adjustments, regardless of its instance info or dungeon depth.
-Protection rings add to the equipped generic armor's unsigned rating (or zero
+Six mundane armor types share a single armor slot and icon:
+
+| Armor | Rating | Absorption | Generation weight |
+| --- | --- | --- | --- |
+| Leather armor | 1 | 0..1 | 25 |
+| Ring mail | 2 | 1..2 | 20 |
+| Scale mail | 3 | 1..3 | 20 |
+| Chain mail | 4 | 2..4 | 15 |
+| Splint mail | 5 | 2..5 | 12 |
+| Plate mail | 6 | 3..6 | 8 |
+
+Chain mail preserves the old generic armor's rating-4 baseline. Each type's
+rating is fixed regardless of enchantment, curse, instance info, or dungeon
+depth. Protection rings add to the equipped armor's unsigned rating (or zero
 when unarmored). Cursed protection lowers the rating; the result clamps to
 0..255. The resulting rating N absorbs `floor(N/2) + roll(ceil(N/2) + 1)`.
 Thus rating 6 blocks 3..6, and rating 8 blocks 4..8. Monster armor uses the
@@ -157,14 +183,15 @@ when protection rings adjust the effective rating. Unequipped armor supplies no
 enchantment. The neutral `biased_range_roll` primitive implements repeated
 rolls; `weapon_damage_roll` and `armor_absorption` are thin semantic wrappers.
 
-`Item` remains two bytes. Both swords and armor store only
+`Item` remains two bytes. All weapons and armor store only
 `enchant + MAX_EQUIPMENT_ENCHANT` (0..10) in the six value bits of `info`.
-Shared retrieval and modification logic keeps enchantment in -5..+5 for both
-types. The curse and identification bits remain independent. `weapon_definition`
-and `armor_definition` look up inherent damage, accuracy, and armor rating using
-`Item::type`; future equipment subtypes must extend those definitions, never
-derive capability from `info`. Definitions take the type directly, with no
-instance rating API. Use `equipment_enchant`, `set_equipment_enchant`,
+Shared retrieval and modification logic keeps enchantment in -5..+5 for all
+equipment types. The curse and identification bits remain independent.
+`weapon_definition` and `armor_definition` look up inherent damage, accuracy,
+and armor rating using
+`Item::type`, making those lookups the single source of inherent equipment
+stats. Never derive capability from `info`. Definitions take the type directly,
+with no instance rating API. Use `equipment_enchant`, `set_equipment_enchant`,
 and `make_equipment` for instance state rather than treating `item_value` as a
 combat scalar. The absorption helper still supports ratings 0..255 for monsters
 and effective ratings adjusted by rings.
@@ -173,20 +200,36 @@ Both generated weapons and armor use the same enchantment distribution:
 -2 at 5%, -1 at 10%, 0 at 70%, +1 at 10%, and +2 at 5%. A separate 1-in-8
 roll decides curse state, allowing curses at any enchantment and removable
 negative non-cursed equipment. Dungeon depth does not scale enchantment or
-inherent equipment capability. Armor always has its type's fixed rating 4.
+inherent equipment capability. After choosing the original weapon or armor
+loot category (each 8/72), generation independently selects a subtype with the
+weights above, totaling 100 per category. Other loot category probabilities
+stay unchanged, and there is no depth gating. A separate seeded equipment
+stream avoids bias from terrain and encounter retry loops; an output mixer
+reduces correlations between successive draws from the small RNG. Neither
+requires extra saved state.
 Enchant scrolls increase equipment enchantment up to +5, preserving inherent
 rating/range, identification, and curse state. Cursed gear can have positive,
 zero, or negative enchantment and cannot be dropped, exchanged, or replaced
 while equipped. Remove Curse clears the curse while preserving enchantment and
 armor rating. Identified item text displays signed enchantment after the type's
 name, with an independent curse prefix; ordinary labels do not expose a numeric
-armor rating. No weapon or armor subtypes, encumbrance, or speed
-penalties are introduced.
+armor rating. For example, labels include `dagger`, `long sword +2`,
+`cursed mace -1`, `plate mail`, and `cursed chain mail +1`. All subtypes appear
+under Weapons or Armor in inventory. No encumbrance or speed penalties are
+introduced.
+
+Equipment type defines capability; enchantment defines reliability within
+that capability. A dagger +5 still rolls only 1..4, while long sword +0 can
+roll up to 6. Leather armor +5 still blocks only 0..1, while chain mail -3
+blocks only 2..4 and plate mail +0 blocks 3..6. Enchant scrolls never change
+weapon accuracy, damage limits, or armor rating, and Remove Curse preserves
+type and enchantment.
 
 `is_weapon`, `is_armor`, and `is_equipment` govern inventory grouping, equipping,
 repeat actions, enchantment, formatting, and shared equipment icons. Adding
 equipment types should extend those predicates, definitions, generation choices,
-and name lookup rather than duplicating generic mechanics.
+and name lookup rather than duplicating generic mechanics. Keep each item
+group contiguous in `ItemType` so its predicate remains a simple range test.
 
 Mimics store one of five `MimicAppearance` categories: scroll, potion, amulet,
 ring, or wand. Explicit appearance bits are separate from aggression and fear.
@@ -288,9 +331,12 @@ ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
 The native suite includes deterministic range/overflow checks, signed weapon and
 armor enchantment sampling with 100,000 samples per distribution, diminishing
 returns and symmetry, paired-seed melee/ring/MR/fire checks, equipment encoding,
+all eleven equipment definitions, bounded rolls at every enchantment,
 scroll/curse and pickup/drop checks, generic predicates and grouping, strength
-potion caps, seeded generation distributions and curse independence across all
-depths, mimic appearance/flag checks and rendering comparisons, and save/layout tests.
+potion caps, generation distributions and curse independence across 4,096 seeds
+and all depths, subtype weighting and subtype/enchantment independence, all
+equipment names and shared icons, mimic appearance/flag checks and rendering
+comparisons, and save/layout tests.
 Assertions use integer totals with tolerances; decimal means are diagnostic
 output only. To inspect sword and armor distributions and compare randomized
 damage against flat armor:
@@ -304,7 +350,7 @@ the existing `--armor-distributions` mode remains available for armor alone.
 
 The AVM build retains the 821-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. With the current SDK, the revamped build
-reports a complete maximum stack bound of 254 bytes and zero analysis gaps,
+reports a complete maximum stack bound of 252 bytes and zero analysis gaps,
 on the wand/dragon animation/rendering path. This fits the 256-byte VM stack
-with two bytes to spare; future changes should continue checking the linker
+with four bytes to spare; future changes should continue checking the linker
 report.

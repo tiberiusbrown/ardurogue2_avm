@@ -15,3 +15,7 @@ and armor rating. `Item::info` stores only per-instance state such as signed
 enchantment, curse, and identification. Never derive inherent capability from
 `info` or pack ratings/tiers together with enchantment. Enchantment changes only
 the roll distribution within the type's fixed range.
+
+Keep all items of the same group contiguous in the `ItemType` enum so group
+predicates such as `is_weapon`, `is_armor`, `is_potion`, `is_ring`, `is_amulet`,
+`is_scroll`, and `is_wand` can use simple inclusive range tests.

@@ -335,8 +335,17 @@ struct StatusItemText {
 const char AVM_PROGMEM* equipment_name(uint8_t type)
 {
     switch(type) {
-    case SWORD: return F("sword");
-    case ARMOR: return F("armor");
+    case DAGGER: return F("dagger");
+    case SPEAR: return F("spear");
+    case LONG_SWORD: return F("long sword");
+    case MACE: return F("mace");
+    case TWO_HANDED_SWORD: return F("two-handed sword");
+    case LEATHER_ARMOR: return F("leather armor");
+    case RING_MAIL: return F("ring mail");
+    case SCALE_MAIL: return F("scale mail");
+    case CHAIN_MAIL: return F("chain mail");
+    case SPLINT_MAIL: return F("splint mail");
+    case PLATE_MAIL: return F("plate mail");
     default: return F("equipment");
     }
 }

@@ -164,7 +164,7 @@ void check_new_run_state()
     game.best_score = 321;
     game.score = 70;
     game.hp = 1;
-    game.inventory[0] = {SWORD, 3};
+    game.inventory[0] = {LONG_SWORD, 3};
     session = {0, DEATH, true};
     start_new(0x1234);
     require(game.best_score == 321 && game.score == 0 &&
@@ -194,12 +194,12 @@ void check_inventory_view()
             "empty inventory has selectable rows");
 
     game.inventory[0] = {HEALING, 2};
-    game.inventory[1] = {ARMOR, 1};
-    game.inventory[2] = {SWORD, 1};
+    game.inventory[1] = {CHAIN_MAIL, 1};
+    game.inventory[2] = {LONG_SWORD, 1};
     game.inventory[3] = {POISON, 1};
     game.inventory[4] = {RING_ATTACK, 1};
     game.inventory[5] = {FOOD, 1};
-    game.inventory[6] = {SWORD, 2};
+    game.inventory[6] = {LONG_SWORD, 2};
     game.inventory[7] = {AMULET_SPEED, 1};
     InventoryView view(game, nullptr);
     const uint8_t expected[] = {
@@ -239,9 +239,9 @@ void check_inventory_view()
 
     const uint8_t types[INVENTORY] = {
         WAND_FORCE, FOOD, SCROLL_IDENTIFY, HEALING,
-        RING_ATTACK, ARMOR, SWORD, AMULET_SPEED,
+        RING_ATTACK, CHAIN_MAIL, LONG_SWORD, AMULET_SPEED,
         YENDOR_AMULET, WAND_FIRE, SCROLL_FEAR, POISON,
-        RING_STRENGTH, ARMOR, SWORD, FOOD
+        RING_STRENGTH, CHAIN_MAIL, LONG_SWORD, FOOD
     };
     for(uint8_t slot = 0; slot < INVENTORY; ++slot)
         game.inventory[slot] = {types[slot], 1};
@@ -273,8 +273,8 @@ void check_stacked_ground_items()
 {
     std::memset(game.ground, 0, sizeof(game.ground));
     game.ground[1] = {{4, 5}, {FOOD, 1}};
-    game.ground[5] = {{4, 5}, {SWORD, 1}};
-    game.ground[9] = {{4, 5}, {ARMOR, 1}};
+    game.ground[5] = {{4, 5}, {LONG_SWORD, 1}};
+    game.ground[9] = {{4, 5}, {CHAIN_MAIL, 1}};
     game.ground[12] = {{6, 5}, {HEALING, 1}};
     uint8_t top = ground_item_before({4, 5}, GROUND_ITEMS);
     uint8_t middle = ground_item_before({4, 5}, top);
@@ -524,7 +524,7 @@ void check_rogue_progression()
     game.player = game.down;
     require(!take_stairs() && game.floor == FLOORS - 1,
             "final descending floor allowed deeper stairs");
-    game.inventory[0] = {SWORD, 1};
+    game.inventory[0] = {LONG_SWORD, 1};
     require(drop_disposition(0) == DROP_DISCARD_ALL,
             "Yendor spawn slot was reused before the Lord died");
     defeat_monster(MONSTERS - 1);
@@ -713,7 +713,7 @@ void check_repeat_inventory_action()
 {
     start_new(0x1234);
     std::memset(game.monsters, 0, sizeof(game.monsters));
-    game.inventory[1] = {SWORD, 1};
+    game.inventory[1] = {LONG_SWORD, 1};
     require(use_inventory(1) && session.repeat_slot == 1,
             "equipping a weapon did not record the repeat action");
 
@@ -780,16 +780,16 @@ void reset_item_fixture()
 
 void fill_item_inventory()
 {
-    for(Item& item : game.inventory) item = {SWORD, 1};
+    for(Item& item : game.inventory) item = {LONG_SWORD, 1};
 }
 
 void check_ground_item_exchange()
 {
     reset_item_fixture();
-    game.ground[5] = {{3, 4}, {ARMOR, 2}};
+    game.ground[5] = {{3, 4}, {CHAIN_MAIL, 2}};
     uint8_t old_turn = game.turns;
     require(take_item(5) == PICKUP_TAKEN &&
-            game.inventory[0].type == ARMOR &&
+            game.inventory[0].type == CHAIN_MAIL &&
             game.ground[5].item.type == NO_ITEM &&
             game.turns == static_cast<uint8_t>(old_turn + 1),
             "ordinary pickup failed");
@@ -844,9 +844,9 @@ void check_ground_item_exchange()
     reset_item_fixture();
     fill_item_inventory();
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
-        game.ground[i] = {{3, 4}, {ARMOR, 1}};
+        game.ground[i] = {{3, 4}, {CHAIN_MAIL, 1}};
     game.ground[5].item = {FOOD, 3};
-    game.inventory[2] = {SWORD, 4};
+    game.inventory[2] = {LONG_SWORD, 4};
     game.weapon_slot = 2;
     session.repeat_slot = 2;
     old_turn = game.turns;
@@ -854,7 +854,7 @@ void check_ground_item_exchange()
             game.turns == old_turn &&
             swap_ground_item(5, 2) &&
             game.inventory[2].type == FOOD &&
-            game.ground[5].item.type == SWORD &&
+            game.ground[5].item.type == LONG_SWORD &&
             game.ground[5].pos == Position{3, 4} &&
             game.weapon_slot == NONE && session.repeat_slot == NONE &&
             game.turns == static_cast<uint8_t>(old_turn + 1) &&
@@ -876,8 +876,8 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {{3, 4}, {SWORD, 1}};
-    game.inventory[3] = {ARMOR, 5};
+    game.ground[7] = {{3, 4}, {LONG_SWORD, 1}};
+    game.inventory[3] = {CHAIN_MAIL, 5};
     game.armor_slot = 3;
     game.magic_resistance = 5;
     require(swap_ground_item(7, 3) && game.armor_slot == NONE &&
@@ -886,7 +886,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {{3, 4}, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {LONG_SWORD, 1}};
     game.inventory[3] = {RING_ATTACK, 2};
     game.ring_slots[1] = 3;
     require(swap_ground_item(7, 3) && game.ring_slots[1] == NONE,
@@ -894,7 +894,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {{3, 4}, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {LONG_SWORD, 1}};
     game.inventory[3] = {AMULET_VITALITY, 2};
     game.amulet_slot = 3;
     game.hp = player_max_hp();
@@ -904,7 +904,7 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[7] = {{3, 4}, {SWORD, 1}};
+    game.ground[7] = {{3, 4}, {LONG_SWORD, 1}};
     game.inventory[3] = {RING_INVISIBILITY,
                          static_cast<uint8_t>(1 | ITEM_CURSED)};
     game.ring_slots[0] = 3;
@@ -930,15 +930,15 @@ void check_ground_item_exchange()
 void check_ground_item_drop()
 {
     reset_item_fixture();
-    game.inventory[0] = {SWORD, 2};
+    game.inventory[0] = {LONG_SWORD, 2};
     game.ground[0].item.type = NO_ITEM;
-    game.ground[1] = {{3, 4}, {ARMOR, 1}};
+    game.ground[1] = {{3, 4}, {CHAIN_MAIL, 1}};
     require(drop_disposition(0) == DROP_GROUND,
             "empty ground slot was unavailable");
     session.repeat_slot = 0;
     uint8_t old_turn = game.turns;
-    require(drop_inventory(0) && game.ground[0].item.type == SWORD &&
-            game.ground[1].item.type == ARMOR &&
+    require(drop_inventory(0) && game.ground[0].item.type == LONG_SWORD &&
+            game.ground[1].item.type == CHAIN_MAIL &&
             game.inventory[0].type == NO_ITEM &&
             session.repeat_slot == NONE &&
             game.turns == static_cast<uint8_t>(old_turn + 1),
@@ -949,7 +949,7 @@ void check_ground_item_drop()
     game.ground[2] = {{3, 4}, {FOOD, 60}};
     game.ground[3] = {{3, 4}, {FOOD, 60}};
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
-        if(i != 2 && i != 3) game.ground[i] = {{3, 4}, {ARMOR, 1}};
+        if(i != 2 && i != 3) game.ground[i] = {{3, 4}, {CHAIN_MAIL, 1}};
     require(drop_disposition(0) == DROP_DISCARD_REST &&
             !drop_inventory(0) && item_value(game.ground[2].item) == 60 &&
             item_value(game.inventory[0]) == 7,
@@ -977,9 +977,9 @@ void check_ground_item_drop()
             "drop did not fully merge into a ground stack");
 
     reset_item_fixture();
-    game.inventory[0] = {SWORD, 1};
+    game.inventory[0] = {LONG_SWORD, 1};
     for(GroundItem& ground : game.ground)
-        ground = {{3, 4}, {ARMOR, 1}};
+        ground = {{3, 4}, {CHAIN_MAIL, 1}};
     session.repeat_slot = 0;
     Game unchanged = game;
     require(drop_disposition(0) == DROP_DISCARD_ALL &&
@@ -993,7 +993,7 @@ void check_ground_item_drop()
             "confirmed full discard failed");
 
     reset_item_fixture();
-    game.inventory[0] = {ARMOR, static_cast<uint8_t>(3 | ITEM_CURSED)};
+    game.inventory[0] = {CHAIN_MAIL, static_cast<uint8_t>(3 | ITEM_CURSED)};
     game.armor_slot = 0;
     game.magic_resistance = 3;
     unchanged = game;
@@ -1003,12 +1003,12 @@ void check_ground_item_drop()
             "cursed equipped armor was removed");
 
     reset_item_fixture();
-    game.inventory[0] = {ARMOR, 3};
+    game.inventory[0] = {CHAIN_MAIL, 3};
     game.armor_slot = 0;
     game.magic_resistance = 3;
     require(drop_inventory(0) && game.armor_slot == NONE &&
             player_armor_rating() == 0 && game.magic_resistance == 3 &&
-            game.ground[0].item.type == ARMOR,
+            game.ground[0].item.type == CHAIN_MAIL,
             "uncursed equipped armor did not drop cleanly");
 
     reset_item_fixture();
@@ -1086,7 +1086,7 @@ void check_scrolls_and_identification()
     game.hunger = 255;
     game.invisible = 100;
     game.inventory[0] = {SCROLL_IDENTIFY, 2};
-    game.inventory[1] = make_equipment(SWORD, 3);
+    game.inventory[1] = make_equipment(LONG_SWORD, 3);
     require(use_inventory(0, 1) && item_type_identified(SCROLL_IDENTIFY) &&
             item_is_identified(game.inventory[1]) &&
             item_value(game.inventory[0]) == 1,

@@ -136,7 +136,8 @@ int main()
     // Inventory actions restore the play framebuffer once, after the final
     // selection, so status pagination has a dungeon background without an
     // intermediate display of the empty status area.
-    const uint8_t types[] = {SWORD, ARMOR, RING_STRENGTH, AMULET_SPEED,
+    const uint8_t types[] = {DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD,
+                             LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL, RING_STRENGTH, AMULET_SPEED,
                              SCROLL_IDENTIFY, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE};
     for(uint8_t type : types) {
         for(unsigned equipped = 0; equipped < 2; ++equipped) {
@@ -145,8 +146,8 @@ int main()
             std::memset(game.inventory, 0, sizeof game.inventory);
             game.inventory[0] = {type, 1};
             if(equipped) {
-                if(type == SWORD) game.weapon_slot = 0;
-                if(type == ARMOR) game.armor_slot = 0;
+                if(is_weapon(type)) game.weapon_slot = 0;
+                if(is_armor(type)) game.armor_slot = 0;
                 if(is_ring(type)) game.ring_slots[0] = 0;
                 if(is_amulet(type)) game.amulet_slot = 0;
             }

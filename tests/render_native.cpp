@@ -26,8 +26,12 @@ static uint32_t hash_bytes(uint32_t hash, const uint8_t* bytes, size_t size)
 static bool check_shared_icons()
 {
     using namespace rogue;
-    if(item_icon(SWORD) != 0x04f4 || item_icon(ARMOR) != 0x0f90 ||
+    if(item_icon(LONG_SWORD) != 0x04f4 || item_icon(CHAIN_MAIL) != 0x0f90 ||
        item_icon(NO_ITEM) != 0 || item_icon(255) != 0) return false;
+    for(unsigned type = 0; type <= 255; ++type) {
+        if(is_weapon(type) && item_icon(type) != 0x04f4) return false;
+        if(is_armor(type) && item_icon(type) != 0x0f90) return false;
+    }
     const uint8_t representatives[MIMIC_APPEARANCE_COUNT] = {
         SCROLL_IDENTIFY, HEALING, AMULET_SPEED, RING_STRENGTH, WAND_FORCE
     };
@@ -88,7 +92,7 @@ int main()
     };
     const uint32_t expected[] = {
         0xc0b79398u, 0xc7113a38u, 0x473d2b98u, 0x8bbf3a38u,
-        0xa7e28086u, 0xfbdd3b6bu, 0x172b6f06u, 0x7b1ab8b4u,
+        0x863529d4u, 0xfbdd3b6bu, 0x4d57b998u, 0x7b1ab8b4u,
         0x2db7c517u, 0x7af2648du, 0x3a284971u
     };
     bool failed = false;

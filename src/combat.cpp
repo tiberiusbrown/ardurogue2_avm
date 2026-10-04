@@ -134,7 +134,7 @@ uint8_t player_dexterity()
 
 uint8_t player_accuracy()
 {
-    // The generic sword contributes no accuracy; attack rings affect hits only.
+    // Type supplies accuracy; enchantment affects damage rolls only.
     uint8_t experience = game.level ? (game.level - 1) / 3 : 0;
     uint8_t type = game.weapon_slot < INVENTORY ? game.inventory[game.weapon_slot].type : NO_ITEM;
     return clamp_combat_stat(static_cast<int16_t>(player_dexterity()) +

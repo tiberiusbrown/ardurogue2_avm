@@ -9,7 +9,6 @@ namespace rogue {
 constexpr uint8_t MAX_PHYSICAL_STAT = 84;
 constexpr int8_t MAX_EQUIPMENT_ENCHANT = 5;
 constexpr int8_t MAX_ARMOR_ENCHANT = MAX_EQUIPMENT_ENCHANT;
-constexpr uint8_t SWORD_MIN_DAMAGE = 2, SWORD_MAX_DAMAGE = 6;
 constexpr uint8_t UNARMED_MIN_DAMAGE = 1, UNARMED_MAX_DAMAGE = 3;
 uint8_t clamp_combat_stat(int16_t value);
 bool physical_attack_hits(uint8_t accuracy, uint8_t evasion);

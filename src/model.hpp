@@ -32,13 +32,16 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-// Same byte layout, new mimic appearance and generation semantics.
-constexpr uint8_t SAVE_VERSION = 21;
+// Same byte layout, expanded mundane equipment types and generation semantics.
+constexpr uint8_t SAVE_VERSION = 22;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
     STRENGTH, DEXTERITY, PARALYSIS, SLOWING, EXPERIENCE,
-    INVISIBILITY, SWORD, ARMOR, YENDOR_AMULET,
+    INVISIBILITY,
+    LONG_SWORD, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD,
+    CHAIN_MAIL, LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, SPLINT_MAIL, PLATE_MAIL,
+    YENDOR_AMULET,
     RING_SEE_INVISIBLE, RING_STRENGTH, RING_DEXTERITY,
     RING_PROTECTION, RING_FIRE_IMMUNITY, RING_ATTACK,
     RING_SUSTENANCE, RING_INVISIBILITY,
@@ -56,8 +59,14 @@ constexpr uint8_t RING_COUNT = RING_INVISIBILITY - RING_SEE_INVISIBLE + 1;
 constexpr uint8_t AMULET_COUNT = AMULET_WISDOM - AMULET_SPEED + 1;
 constexpr uint8_t SCROLL_COUNT = SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1;
 constexpr uint8_t WAND_COUNT = WAND_POLYMORPH - WAND_FORCE + 1;
-constexpr bool is_weapon(uint8_t type) { return type == SWORD; }
-constexpr bool is_armor(uint8_t type) { return type == ARMOR; }
+constexpr bool is_weapon(uint8_t type)
+{
+    return type >= LONG_SWORD && type <= TWO_HANDED_SWORD;
+}
+constexpr bool is_armor(uint8_t type)
+{
+    return type >= CHAIN_MAIL && type <= PLATE_MAIL;
+}
 constexpr bool is_equipment(uint8_t type) { return is_weapon(type) || is_armor(type); }
 constexpr bool is_potion(uint8_t type)
 {
@@ -155,20 +164,33 @@ constexpr uint8_t ITEM_CURSED = 0x40;
 constexpr uint8_t ITEM_IDENTIFIED = 0x80;
 
 // Inherent capability belongs to type definitions, never to instance info.
-// Extend these lookups when actual equipment subtypes are introduced.
 struct WeaponDefinition { uint8_t minimum_damage, maximum_damage; int8_t accuracy; };
 struct ArmorDefinition { uint8_t rating; };
 constexpr WeaponDefinition weapon_definition(uint8_t type)
 {
-    return type == SWORD ? WeaponDefinition{SWORD_MIN_DAMAGE, SWORD_MAX_DAMAGE, 0} :
-        WeaponDefinition{UNARMED_MIN_DAMAGE, UNARMED_MAX_DAMAGE, 0};
+    switch(type) {
+    case DAGGER: return {1, 4, 2};
+    case SPEAR: return {2, 5, 1};
+    case LONG_SWORD: return {2, 6, 0};
+    case MACE: return {3, 7, -1};
+    case TWO_HANDED_SWORD: return {4, 8, -2};
+    default: return {UNARMED_MIN_DAMAGE, UNARMED_MAX_DAMAGE, 0};
+    }
 }
 constexpr ArmorDefinition armor_definition(uint8_t type)
 {
-    return type == ARMOR ? ArmorDefinition{4} : ArmorDefinition{0};
+    switch(type) {
+    case LEATHER_ARMOR: return {1};
+    case RING_MAIL: return {2};
+    case SCALE_MAIL: return {3};
+    case CHAIN_MAIL: return {4};
+    case SPLINT_MAIL: return {5};
+    case PLATE_MAIL: return {6};
+    default: return {0};
+    }
 }
 
-// Both equipment types store only enchant + MAX_EQUIPMENT_ENCHANT in value bits.
+// All equipment stores only enchant + MAX_EQUIPMENT_ENCHANT in value bits.
 static_assert(2 * MAX_EQUIPMENT_ENCHANT <= ITEM_VALUE_MASK,
               "enchantment exceeds the item value bits");
 constexpr int8_t equipment_enchant(const Item& item)
