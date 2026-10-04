@@ -302,6 +302,50 @@ static void check_drawn_item(rogue::Item item)
     }
 }
 
+static void check_cursed_equipment()
+{
+    using namespace rogue;
+    const uint8_t types[] = {SWORD, ARMOR, RING_SEE_INVISIBLE, AMULET_SPEED};
+    const char* labels[] = {
+        "cursed sword +3", "cursed armor +3",
+        "cursed ring of see invisible", "cursed amulet of speed"
+    };
+    const char* messages[] = {
+        "a cursed sword +3.", "cursed armor +3.",
+        "a cursed ring of see invisible.", "a cursed amulet of speed."
+    };
+    const char* prompts[] = {
+        "the cursed sword +3?", "the cursed armor +3?",
+        "the cursed ring of see invisible?", "the cursed amulet of speed?"
+    };
+    for(unsigned i = 0; i < 4; ++i) {
+        Item item{types[i], ITEM_IDENTIFIED | ITEM_CURSED | 3};
+        other_known[item.type] = true;
+        char text[ITEM_TEXT_CAPACITY];
+        format_item(item, text);
+        if(std::strcmp(text, labels[i])) {
+            std::fprintf(stderr, "wrong cursed equipment label: %s\n", text);
+            std::exit(1);
+        }
+        check_drawn_item(item);
+        check_status_item(item, '.', messages[i]);
+        check_status_item(item, '?', prompts[i]);
+
+        // Learning a jewelry type from another item must not reveal this curse.
+        item.info &= static_cast<uint8_t>(~ITEM_IDENTIFIED);
+        format_item(item, text);
+        if(std::strstr(text, "cursed")) std::exit(1);
+        check_drawn_item(item);
+    }
+    other_known[AMULET_SPEED] = false;
+    check_status_item({AMULET_SPEED, ITEM_CURSED | 3}, '.', "a diamond amulet.");
+    check_status_item({AMULET_SPEED, ITEM_IDENTIFIED | ITEM_CURSED | 3}, '.',
+                      "a cursed diamond amulet.");
+    // A curse prefix still belongs to the item when its value is zero.
+    check_status_item({SWORD, ITEM_IDENTIFIED | ITEM_CURSED}, '.', "a cursed sword.");
+    check_status_item({ARMOR, ITEM_IDENTIFIED | ITEM_CURSED}, '?', "the cursed armor?");
+}
+
 int main()
 {
     using namespace rogue;
@@ -385,6 +429,7 @@ int main()
     }
     check_streaming_status();
     check_item_status();
+    check_cursed_equipment();
     check_status_paging();
     std::puts("streaming status and item text passed");
     return 0;

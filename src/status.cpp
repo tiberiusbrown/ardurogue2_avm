@@ -359,6 +359,8 @@ template<typename Output>
 void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
 {
     bool known = item_type_identified(item.type);
+    bool cursed = !is_wand(item.type) && item_is_identified(item) &&
+        item_is_cursed(item);
     if(is_potion(item.type) || is_scroll(item.type)) {
         const char AVM_PROGMEM* first_word = known
             ? (is_scroll(item.type) ? F("scroll") : F("potion"))
@@ -390,7 +392,9 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         const char AVM_PROGMEM* first_word = known
             ? F("ring") : jewel_descriptors[item_appearance(item.type)];
         if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) text.word(article_for(first_word));
+        else if(style == STATUS_ITEM)
+            text.word(cursed ? F("a") : article_for(first_word));
+        if(cursed) text.word(F("cursed"));
         if(known) {
             text.word(first_word);
             text.word(F("of"));
@@ -405,7 +409,9 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         const char AVM_PROGMEM* first_word = known
             ? F("amulet") : jewel_descriptors[item_appearance(item.type)];
         if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) text.word(article_for(first_word));
+        else if(style == STATUS_ITEM)
+            text.word(cursed ? F("a") : article_for(first_word));
+        if(cursed) text.word(F("cursed"));
         if(known) {
             text.word(first_word);
             text.word(F("of"));
@@ -456,10 +462,12 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
     case SWORD:
         if(style == PROMPT_ITEM) text.word(F("the"));
         else if(style == STATUS_ITEM) text.word(F("a"));
+        if(cursed) text.word(F("cursed"));
         text.final_word(F("sword"), has_bonus ? 0 : suffix);
         break;
     case ARMOR:
         if(style == PROMPT_ITEM) text.word(F("the"));
+        if(cursed) text.word(F("cursed"));
         text.final_word(F("armor"), has_bonus ? 0 : suffix);
         break;
     case YENDOR_AMULET:

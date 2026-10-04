@@ -12,6 +12,10 @@ uint8_t avm_test_buttons[16] = {};
 uint8_t avm_test_button_count = 0;
 uint8_t avm_test_button_index = 0;
 
+static unsigned play_renders = 0;
+static unsigned full_renders = 0;
+static unsigned inventory_renders = 0;
+
 namespace rogue {
 Game game = {};
 const char* status_word(const char*) { return nullptr; }
@@ -27,10 +31,13 @@ void status(MonsterType, char) {}
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
 void status_clear() {}
-void render_play() {}
-void render_inventory(const char*, const InventoryView&, uint8_t, uint8_t) {}
+void render_play() { ++play_renders; }
+void render_inventory(const char*, const InventoryView&, uint8_t, uint8_t)
+{
+    ++inventory_renders;
+}
 void render_yesno_prompt(const char*, const Item*) {}
-void render() {}
+void render() { ++full_renders; }
 void animate_ray(Position, int8_t, int8_t, uint8_t) {}
 void animate_fire_burst(Position) {}
 void animate_spreading_rays(Position, const uint8_t[4]) {}
@@ -107,6 +114,7 @@ int main()
         avm_test_buttons[1] = AVM_BUTTON_A;
         avm_test_button_count = 2;
         avm_test_button_index = 0;
+        play_renders = full_renders = 0;
         turns = game.turns;
         dispatch_input(AVM_BUTTON_A);
         bool needs_direction = modifier == WAND_NORMAL ||
@@ -116,6 +124,8 @@ int main()
                 game.turns == static_cast<uint8_t>(turns +
                                                   (needs_direction ? 0 : 1)),
                 "wand selection UI targeted a modifier incorrectly");
+        require(play_renders == 1 && full_renders == 0,
+                "wand selection displayed an intermediate dungeon frame");
         if(needs_direction) {
             dispatch_input(AVM_BUTTON_B);
             require(ui.mode == PLAY && item_value(game.inventory[0]) == 2 &&
@@ -123,6 +133,48 @@ int main()
                     "canceling a normal or powerful wand spent resources");
         }
     }
-    std::puts("wand UI flow passed");
+    // Inventory actions restore the play framebuffer once, after the final
+    // selection, so status pagination has a dungeon background without an
+    // intermediate display of the empty status area.
+    const uint8_t types[] = {SWORD, ARMOR, RING_STRENGTH, AMULET_SPEED,
+                             SCROLL_IDENTIFY, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE};
+    for(uint8_t type : types) {
+        for(unsigned equipped = 0; equipped < 2; ++equipped) {
+            start_new(0x4312);
+            std::memset(game.monsters, 0, sizeof game.monsters);
+            std::memset(game.inventory, 0, sizeof game.inventory);
+            game.inventory[0] = {type, 1};
+            if(equipped) {
+                if(type == SWORD) game.weapon_slot = 0;
+                if(type == ARMOR) game.armor_slot = 0;
+                if(is_ring(type)) game.ring_slots[0] = 0;
+                if(is_amulet(type)) game.amulet_slot = 0;
+            }
+            ui.mode = MENU;
+            ui.selection = 1;
+            ui.previous_buttons = 0;
+            bool target_scroll = type == SCROLL_IDENTIFY || type == SCROLL_ENCHANT ||
+                                 type == SCROLL_REMOVE_CURSE;
+            avm_test_buttons[0] = 0;
+            avm_test_buttons[1] = AVM_BUTTON_A;
+            avm_test_buttons[2] = 0;
+            avm_test_buttons[3] = AVM_BUTTON_A;
+            avm_test_button_count = target_scroll ? 4 : 2;
+            avm_test_button_index = 0;
+            play_renders = full_renders = inventory_renders = 0;
+            turns = game.turns;
+            dispatch_input(AVM_BUTTON_A);
+            require(play_renders == 1 && full_renders == 0 &&
+                    inventory_renders == (target_scroll ? 2u : 1u),
+                    "item selection redrew or displayed the dungeon before its final choice");
+            require(ui.mode == PLAY && game.turns == static_cast<uint8_t>(turns + 1),
+                    "item selection changed the turn or left the inventory open");
+            if(is_amulet(type)) require(game.amulet_slot == (equipped ? NONE : 0),
+                                        "amulet selection failed to toggle equipment");
+            if(is_ring(type)) require(game.ring_slots[0] == (equipped ? NONE : 0),
+                                      "ring selection failed to toggle equipment");
+        }
+    }
+    std::puts("equipment, scroll, and wand UI flow passed");
     return 0;
 }

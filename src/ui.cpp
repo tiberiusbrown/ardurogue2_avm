@@ -285,11 +285,11 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                 ui.mode = PLAY;
                 uint8_t slot = choose_item(F("Use which item?"), nullptr);
                 if(slot != NONE) {
-                    status_clear();
-                    render();
                     uint8_t type = game.inventory[slot].type;
                     uint8_t target = NONE;
                     if(is_wand(type)) {
+                        status_clear();
+                        render_play();
                         ui.selection = slot;
                         if(wand_needs_direction(game.inventory[slot]))
                             ui.mode = WAND_DIRECTION;
@@ -303,7 +303,9 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                         target = choose_item(F("Uncurse which item?"), nullptr);
                     if(!is_wand(type) && ui.mode != WAND_DIRECTION) {
                         status_clear();
-                        render();
+                        // Restore the dungeon once after the last modal choice.
+                        // The main loop displays the completed action and turn.
+                        render_play();
                         use_inventory(slot, target);
                     }
                 } else status_clear();
