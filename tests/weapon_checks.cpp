@@ -110,45 +110,45 @@ static void check_equipment_encoding()
             require(decoded == equipment_enchant(armor) &&
                     decoded >= -MAX_EQUIPMENT_ENCHANT && decoded <= MAX_EQUIPMENT_ENCHANT,
                     "equipment types decode enchantment differently or outside the cap");
+            require(armor_rating(armor) == 4 && armor_rating(sword) == 0,
+                    "instance info changed inherent armor capability");
             set_equipment_enchant(sword, enchant);
             set_equipment_enchant(armor, enchant);
             int8_t expected = enchant < -MAX_EQUIPMENT_ENCHANT ? -MAX_EQUIPMENT_ENCHANT :
                 enchant > MAX_EQUIPMENT_ENCHANT ? MAX_EQUIPMENT_ENCHANT : enchant;
             require(sword.info == armor.info && equipment_enchant(sword) == expected &&
+                    (sword.info & ITEM_VALUE_MASK) == expected + MAX_EQUIPMENT_ENCHANT &&
                     (sword.info & ~ITEM_VALUE_MASK) == (info & ~ITEM_VALUE_MASK),
                     "equipment types update enchantment differently or change flags");
         }
     }
     for(uint8_t type : {SWORD, ARMOR}) {
-        for(uint8_t rating = 1; rating <= MAX_ITEM_ARMOR_RATING; ++rating) {
-            for(int8_t enchant = -5; enchant <= 5; ++enchant) {
-                for(uint8_t flags : {uint8_t(0), ITEM_CURSED, ITEM_IDENTIFIED,
-                                     uint8_t(ITEM_CURSED | ITEM_IDENTIFIED)}) {
-                    Item item = make_equipment(type, enchant, rating);
-                    item.info |= flags;
-                    require(equipment_enchant(item) == enchant &&
-                            (item.info & ~ITEM_VALUE_MASK) == flags &&
-                            (type != ARMOR || armor_rating(item) == rating),
-                            "equipment rating/enchantment/flags overlap");
-                    set_equipment_enchant(item, -128);
-                    require(equipment_enchant(item) == -5 &&
-                            (item.info & ~ITEM_VALUE_MASK) == flags &&
-                            (type != ARMOR || armor_rating(item) == rating),
-                            "negative enchant cap changed armor rating or flags");
-                    set_equipment_enchant(item, 127);
-                    require(equipment_enchant(item) == 5 &&
-                            (item.info & ~ITEM_VALUE_MASK) == flags,
-                            "positive enchant cap changed equipment flags");
-                    if(type == ARMOR) {
-                        set_armor_rating(item, 255);
-                        require(armor_rating(item) == MAX_ITEM_ARMOR_RATING &&
-                                equipment_enchant(item) == 5,
-                                "armor rating setter changed enchantment or overflowed");
-                    }
-                }
+        for(int8_t enchant = -5; enchant <= 5; ++enchant) {
+            for(uint8_t flags : {uint8_t(0), ITEM_CURSED, ITEM_IDENTIFIED,
+                                 uint8_t(ITEM_CURSED | ITEM_IDENTIFIED)}) {
+                Item item = make_equipment(type, enchant);
+                item.info |= flags;
+                require(equipment_enchant(item) == enchant &&
+                        (item.info & ~ITEM_VALUE_MASK) == flags &&
+                        armor_rating(item) == (type == ARMOR ? 4 : 0),
+                        "equipment enchantment/flags changed inherent capability");
+                set_equipment_enchant(item, -128);
+                require(equipment_enchant(item) == -5 &&
+                        (item.info & ~ITEM_VALUE_MASK) == flags,
+                        "negative enchant cap changed equipment flags");
+                set_equipment_enchant(item, 127);
+                require(equipment_enchant(item) == 5 &&
+                        (item.info & ~ITEM_VALUE_MASK) == flags &&
+                        armor_rating(item) == (type == ARMOR ? 4 : 0),
+                        "positive enchant cap changed equipment capability or flags");
             }
         }
     }
+    WeaponDefinition sword = weapon_definition(SWORD);
+    WeaponDefinition unarmed = weapon_definition(NO_ITEM);
+    require(sword.minimum_damage == 2 && sword.maximum_damage == 6 && sword.accuracy == 0 &&
+            unarmed.minimum_damage == 1 && unarmed.maximum_damage == 3 && unarmed.accuracy == 0,
+            "weapon type definitions lost inherent damage or accuracy");
     require(armor_rating({FOOD, 63}) == 0 && equipment_enchant({FOOD, 63}) == 0,
             "non-equipment acquired combat stats");
 }
@@ -167,15 +167,15 @@ static void check_equipment_actions()
     for(uint8_t type : {SWORD, ARMOR}) {
         for(int8_t enchant : {-5, 0, 5}) {
             equipment_fixture();
-            game.inventory[0] = make_equipment(type, enchant, 4);
+            game.inventory[0] = make_equipment(type, enchant);
             game.inventory[0].info |= ITEM_CURSED;
             require(use_inventory(0) && item_is_cursed(game.inventory[0]) &&
                     equipment_enchant(game.inventory[0]) == enchant,
                     "equipping cursed gear changed enchantment");
-            game.inventory[2] = make_equipment(type, 0, 2);
+            game.inventory[2] = make_equipment(type, 0);
             require(!use_inventory(2) && !drop_inventory(0),
                     "cursed gear could be replaced or dropped");
-            game.ground[0] = {game.player, make_equipment(type, -2, 1)};
+            game.ground[0] = {game.player, make_equipment(type, -2)};
             require(!swap_ground_item(0, 0), "cursed gear could be exchanged");
             game.inventory[1] = {SCROLL_REMOVE_CURSE, 1};
             require(use_inventory(1, 0) && !item_is_cursed(game.inventory[0]) &&
@@ -216,7 +216,7 @@ static void check_equipment_actions()
     for(uint8_t type : {SWORD, ARMOR}) {
         for(int8_t enchant : {-5, 0, 5}) {
             equipment_fixture();
-            Item item = make_equipment(type, enchant, 4);
+            Item item = make_equipment(type, enchant);
             item.info |= ITEM_CURSED | ITEM_IDENTIFIED;
             game.inventory[0] = item; // Cursed gear is removable before equipping.
             require(drop_inventory(0) && game.ground[0].item.type == type &&
@@ -229,7 +229,7 @@ static void check_equipment_actions()
 
     // The same item can be cursed with negative enchantment or uncursed with it.
     equipment_fixture();
-    game.inventory[0] = make_equipment(ARMOR, -3, 4);
+    game.inventory[0] = make_equipment(ARMOR, -3);
     game.inventory[0].info |= ITEM_CURSED;
     game.inventory[1] = {SCROLL_REMOVE_CURSE, 1};
     require(use_inventory(1, 0) && !item_is_cursed(game.inventory[0]) &&
@@ -253,9 +253,9 @@ static void check_generated_equipment()
                             "generated sword retained additive value semantics");
                 } else if(item.type == ARMOR) {
                     ++armors;
-                    require(armor_rating(item) == 1 + floor / 4 &&
-                            equipment_enchant(item) == 0,
-                            "generated armor lost its inherent depth rating");
+                    require(armor_rating(item) == 4 && equipment_enchant(item) == 0 &&
+                            (item.info & ITEM_VALUE_MASK) == MAX_EQUIPMENT_ENCHANT,
+                            "generated armor stored inherent stats in instance info");
                 }
             }
         }

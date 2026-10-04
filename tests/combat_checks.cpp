@@ -159,7 +159,7 @@ static void check_player_pipeline()
             player_accuracy() == 4 + (game.level - 1) / 3,
             "levels changed damage or failed to grant modest accuracy/MR");
     combat_fixture();
-    game.inventory[0] = make_equipment(ARMOR, 0, 4);
+    game.inventory[0] = make_equipment(ARMOR, 0);
     game.armor_slot = 0;
     game.inventory[1] = {RING_PROTECTION, 2};
     game.ring_slots[0] = 1;
@@ -212,7 +212,7 @@ static void check_player_pipeline()
         require(game.hp == 240 - expected, "magic damage entry point ignored MR");
         game.hp = 240;
         game.dexterity = game.strength = 255;
-        game.inventory[0] = make_equipment(ARMOR, 5, MAX_ITEM_ARMOR_RATING);
+        game.inventory[0] = make_equipment(ARMOR, 5);
         game.armor_slot = 0;
         game.inventory[1] = {RING_PROTECTION, 63};
         game.inventory[2] = {RING_FIRE_IMMUNITY, 1};
@@ -246,7 +246,7 @@ static void check_player_pipeline()
     // changes only with STR/sword. These helpers are the live melee pipeline.
     for(uint16_t seed = 1; seed <= 200; ++seed) {
         combat_fixture();
-        game.inventory[0] = make_equipment(ARMOR, 0, 4);
+        game.inventory[0] = make_equipment(ARMOR, 0);
         game.armor_slot = 0;
         game.random_state = seed;
         uint8_t block = armor_absorption(player_armor_rating(), 0);
@@ -352,7 +352,7 @@ static void check_live_melee()
             session.ended = false;
             game.random_state = seed;
             if(variant == 1) {
-                game.inventory[0] = make_equipment(ARMOR, 5, MAX_ITEM_ARMOR_RATING);
+                game.inventory[0] = make_equipment(ARMOR, 5);
                 game.inventory[1] = {RING_PROTECTION, 63};
                 game.ring_slots[0] = 1;
                 game.armor_slot = 0;
@@ -366,7 +366,7 @@ static void check_live_melee()
                 game.magic_resistance = 127;
             }
             if(variant >= 4) {
-                game.inventory[0] = make_equipment(ARMOR, variant == 4 ? 5 : -5, 4);
+                game.inventory[0] = make_equipment(ARMOR, variant == 4 ? 5 : -5);
                 game.armor_slot = 0;
                 require(player_armor_rating() == 4 &&
                         player_armor_enchant() == (variant == 4 ? 5 : -5),

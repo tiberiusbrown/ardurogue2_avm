@@ -136,8 +136,9 @@ uint8_t player_accuracy()
 {
     // The generic sword contributes no accuracy; attack rings affect hits only.
     uint8_t experience = game.level ? (game.level - 1) / 3 : 0;
+    uint8_t type = game.weapon_slot < INVENTORY ? game.inventory[game.weapon_slot].type : NO_ITEM;
     return clamp_combat_stat(static_cast<int16_t>(player_dexterity()) +
-                             experience + ring_bonus(RING_ATTACK));
+                             experience + ring_bonus(RING_ATTACK) + weapon_definition(type).accuracy);
 }
 
 uint8_t player_armor_rating()
@@ -453,9 +454,9 @@ static void attack_monster(uint8_t index)
     }
     bool armed = game.weapon_slot < INVENTORY &&
         game.inventory[game.weapon_slot].type == SWORD;
+    WeaponDefinition weapon = weapon_definition(armed ? game.inventory[game.weapon_slot].type : NO_ITEM);
     uint8_t weapon_roll = weapon_damage_roll(
-        armed ? SWORD_MIN_DAMAGE : UNARMED_MIN_DAMAGE,
-        armed ? SWORD_MAX_DAMAGE : UNARMED_MAX_DAMAGE,
+        weapon.minimum_damage, weapon.maximum_damage,
         armed ? equipment_enchant(game.inventory[game.weapon_slot]) : 0);
     uint8_t raw = physical_raw_damage(weapon_roll, player_strength());
     uint8_t damage = physical_damage_after_armor(raw,

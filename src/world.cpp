@@ -278,9 +278,7 @@ void make_floor()
                                        floor_roll(seed, RING_COUNT))
                 : static_cast<uint8_t>(AMULET_SPEED +
                                        floor_roll(seed, AMULET_COUNT));
-        uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) :
-            type == SWORD || type == ARMOR
-            ? static_cast<uint8_t>(1 + game.floor / 4) : 1;
+        uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) : 1;
         if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
             info |= ITEM_CURSED;
         if(is_wand(type)) {
@@ -289,9 +287,8 @@ void make_floor()
             info = wand.info;
         }
         if(type == SWORD || type == ARMOR) {
-            // Keep existing depth progression: swords start at +0, armor
-            // retains its original rating and starts with enchantment zero.
-            Item equipment = make_equipment(type, type == SWORD ? info - 1 : 0, info);
+            // Depth changes sword enchantment, never inherent equipment stats.
+            Item equipment = make_equipment(type, type == SWORD ? game.floor / 4 : 0);
             info = equipment.info;
         }
         if(game.floor == FLOORS - 1 && i == 15)

@@ -24,10 +24,10 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 19 stores one active floor in an 821-byte AVM `Game` (unchanged
-in size). Equipment value bits now separate inherent capability from signed
-enchantment using a shared encoding, so version 18 and older saves are incompatible; no migration is
-attempted. The former attack and cached defense bytes store strength and magic
+Save version 20 stores one active floor in an 821-byte AVM `Game` (unchanged
+in size). Equipment inherent stats now come solely from type definitions, and
+value bits store only signed enchantment. Version 19 and older saves are
+incompatible; no migration is attempted. The former attack and cached defense bytes store strength and magic
 resistance at the same offsets.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
 discoveries. It stores monster potion effects,
@@ -134,6 +134,8 @@ weapon's roll distribution. Attack rings do not add damage. Monster raw damage
 remains `strength + roll(3)`, halved upward while weakened.
 
 Armor is derived from current equipment on each hit, with no cached defense.
+The generic `ARMOR` type has inherent rating 4, absorbing 2..4 before ring
+adjustments, regardless of its instance info or dungeon depth.
 Protection rings add to the equipped generic armor's unsigned rating (or zero
 when unarmored). Cursed protection lowers the rating; the result clamps to
 0..255. The resulting rating N absorbs `floor(N/2) + roll(ceil(N/2) + 1)`.
@@ -153,20 +155,20 @@ Live armor absorption uses the equipped armor's signed enchantment, including
 when protection rings adjust the effective rating. Unequipped armor supplies no
 enchantment. Armor and weapon rolls share the same repeated-roll helper.
 
-`Item` remains two bytes. Both swords and armor encode enchantment as
-`enchant + MAX_EQUIPMENT_ENCHANT` in the remainder modulo
-`2 * MAX_EQUIPMENT_ENCHANT + 1` (currently 11). Shared retrieval and modification
-logic keeps enchantment in -5..+5 for both types. Armor additionally stores
-`rating - 1` in the quotient, supporting inherent ratings 1..5; swords use zero
-for that quotient. The curse and identification bits remain
-independent. Use `armor_rating`, `equipment_enchant`, `set_armor_rating`,
-`set_equipment_enchant`, and `make_equipment` for equipment rather than treating
-`item_value` as a combat scalar. This temporary numeric encoding introduces no
-equipment subtype or tier bits. The absorption helper still supports ratings
-0..255 for monsters and effective ratings adjusted by rings.
+`Item` remains two bytes. Both swords and armor store only
+`enchant + MAX_EQUIPMENT_ENCHANT` (0..10) in the six value bits of `info`.
+Shared retrieval and modification logic keeps enchantment in -5..+5 for both
+types. The curse and identification bits remain independent. `weapon_definition`
+and `armor_definition` look up inherent damage, accuracy, and armor rating using
+`Item::type`; future equipment subtypes must extend those definitions, never
+derive capability from `info`. `armor_rating` reads the type definition and has
+no instance rating setter. Use `equipment_enchant`, `set_equipment_enchant`,
+and `make_equipment` for instance state rather than treating `item_value` as a
+combat scalar. The absorption helper still supports ratings 0..255 for monsters
+and effective ratings adjusted by rings.
 
-Depth progression generates swords at enchantment +0..+3 and armor at inherent
-rating 1..4 with enchantment zero. Equipment supports negative enchantments,
+Depth progression generates swords at enchantment +0..+3. Armor starts with
+enchantment zero and always has its type's fixed rating 4. Equipment supports negative enchantments,
 but generation does not introduce new curse or negative-enchantment rolls.
 Enchant scrolls increase equipment enchantment up to +5, preserving inherent
 rating/range, identification, and curse state. Cursed gear can have positive,
