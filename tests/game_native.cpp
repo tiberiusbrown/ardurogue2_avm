@@ -1457,6 +1457,70 @@ void check_enemy_roster()
             "fresh generation was affected by the prior kill");
 }
 
+void check_passive_bats()
+{
+    auto arena = [](uint16_t seed) {
+        start_new(seed);
+        std::memset(game.walls, 0, sizeof(game.walls));
+        std::memset(game.monsters, 0, sizeof(game.monsters));
+        game.door_count = 0;
+        game.player = {10, 10};
+        game.hunger = 255;
+        // Give the bat exactly one action, independent of fractional scheduling.
+        game.speed = monster_info(BAT).speed;
+        game.monsters[0] = {{13, 10}, BAT, 1, 0, {0, 0}, 0};
+        status_text.clear();
+    };
+    unsigned directions = 0;
+    for(uint16_t seed = 1; seed <= 128; ++seed) {
+        arena(seed);
+        Position before = game.monsters[0].pos;
+        end_turn();
+        Position after = game.monsters[0].pos;
+        require((after.x == before.x && (after.y + 1 == before.y ||
+                 after.y == before.y + 1)) ||
+                (after.y == before.y && (after.x + 1 == before.x ||
+                 after.x == before.x + 1)),
+                "passive bat skipped its action or did not move one cardinal tile");
+        directions |= after.x > before.x ? 1 : after.x < before.x ? 2 :
+                      after.y > before.y ? 4 : 8;
+        require(!(game.monsters[0].state & MON_AGGRO),
+                "wandering made a passive bat aggressive");
+    }
+    require(directions == 15, "passive bats did not wander in all four directions");
+
+    for(uint16_t seed = 1; seed <= 128; ++seed) {
+        // Block each possible direction with a different obstacle. In particular,
+        // trying the player's tile must wait rather than move or attack.
+        arena(seed);
+        game.player = {12, 10};
+        uint8_t hp = game.hp;
+        uint16_t wall = 10 * MAP_W + 14;
+        game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
+        game.doors[0] = {{13, 11}};
+        game.door_count = 1;
+        game.monsters[1] = {{13, 9}, MIMIC, monster_info(MIMIC).health,
+                             0, {0, 0}, 0};
+        end_turn();
+        require(game.monsters[0].pos == Position{13, 10} && game.hp == hp &&
+                !door_open(0) && !(game.monsters[0].state & MON_AGGRO) &&
+                status_text.find("hits you") == std::string::npos,
+                "passive bat attacked the player or crossed a blocked tile");
+    }
+
+    arena(0x4312);
+    game.monsters[0].stun = 2;
+    end_turn();
+    require(game.monsters[0].pos == Position{13, 10} && game.monsters[0].stun == 1,
+            "paralyzed passive bat wandered");
+
+    arena(0x4312);
+    game.monsters[0].state |= MON_AGGRO;
+    end_turn();
+    require(game.monsters[0].pos == Position{12, 10},
+            "aggressive bat stopped pursuing the player");
+}
+
 void check_enemy_abilities()
 {
     auto arena = [](uint8_t type, uint8_t x) {
@@ -2425,6 +2489,7 @@ int main(int argc, char** argv)
     check_inventory_view();
     check_stacked_ground_items();
     check_enemy_roster();
+    check_passive_bats();
     check_enemy_abilities();
     check_vampire_amulet();
     check_confused_wall_bump();

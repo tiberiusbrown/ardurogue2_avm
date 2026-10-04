@@ -339,7 +339,11 @@ static void advance_monster(uint8_t index)
                     status(F("You are paralyzed!"));
                 }
             }
-        } else if(afraid || confused || (pursuing && range <= 8) || roll(4) == 0) {
+        } else if(afraid || confused || (pursuing && range <= 8) ||
+                  (monster.type == BAT && !(monster.state & MON_AGGRO)) ||
+                  roll(4) == 0) {
+            // Passive bats try one random direction each turn, as in ArduRogue.
+            // Movement rejects occupied tiles, including the player's tile.
             move_monster(monster, info.flags, afraid, confused, pursuing, range);
         }
     }
