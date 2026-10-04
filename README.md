@@ -24,9 +24,11 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 17 stores one active floor in an 821-byte AVM `Game` (unchanged
-in size). The old attack and cached defense bytes now store strength and magic
-resistance at the same offsets, so version 16 and older saves are incompatible.
+Save version 19 stores one active floor in an 821-byte AVM `Game` (unchanged
+in size). Equipment value bits now separate inherent capability from signed
+enchantment using a shared encoding, so version 18 and older saves are incompatible; no migration is
+attempted. The former attack and cached defense bytes store strength and magic
+resistance at the same offsets.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
 discoveries. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
@@ -115,12 +117,21 @@ it supplies evasion and, with the level bonus and attack rings, accuracy.
 The generic sword adds no accuracy. Cursed attack rings reduce accuracy.
 DEX affects neither damage, absorption, nor MR.
 
+The generic sword rolls inherent weapon damage in **2..6**; unarmed attacks
+roll **1..3**. `weapon_damage_roll(minimum, maximum, signed_enchant)` keeps
+that range fixed. At +k it keeps the highest of 1+k rolls; at -k it keeps the
+lowest. Effective enchantment caps at -5..+5 (at most six rolls). Each extra
+roll has diminishing returns, and both endpoints remain possible even at the
+cap. For the sword, expected means at +0/+1/+2/+3 are approximately
+4.00/4.80/5.20/5.43. Neither enchantment nor curse state adds accuracy.
+
 Effective STR is base STR plus strength rings minus weakness, clamped to
-1..255. Its damage modifier is -2 at STR 1–2, -1 at 3–4, 0 at 5–6, +1 at
-7–8, +2 at 9–10, and +3 at 11 or above. Player raw melee damage is
-`max(1, 2 + sword value + STR modifier + roll(3))`; an unequipped sword
-contributes zero. Attack rings do not add damage. Monster raw damage remains
-`strength + roll(3)`, halved upward while weakened.
+1..255. Its damage modifier is -2 at STR 1-2, -1 at 3-4, 0 at 5-6, +1 at
+7-8, +2 at 9-10, and +3 at 11 or above. After a successful accuracy roll,
+player raw melee damage is `max(1, weapon roll + STR modifier)`, followed by
+monster armor absorption and the landed-hit minimum. STR does not change the
+weapon's roll distribution. Attack rings do not add damage. Monster raw damage
+remains `strength + roll(3)`, halved upward while weakened.
 
 Armor is derived from current equipment on each hit, with no cached defense.
 Protection rings add to the equipped generic armor's unsigned rating (or zero
@@ -133,17 +144,37 @@ and physical armor does not affect evasion or magic.
 
 `armor_absorption(rating, signed_enchant)` keeps this range fixed. At +k it
 keeps the highest of 1+k rolls; at -k it keeps the lowest. Effective enchantment
-caps at ±5 (at most six rolls). Each extra roll has diminishing returns;
+caps at -5..+5 (at most six rolls). Each extra roll has diminishing returns;
 maximum absorption remains probabilistic. For rating 6, measured means at
 +0/+1/+2/+3 are approximately 4.50/5.13/5.44/5.62. At +5 the chance of blocking
 6 is approximately 82.2%, and every value 3..6 remains possible.
 
-Signed armor enchantments are deliberately deferred from live item storage:
-`Item` remains two bytes, its six value bits still mean armor rating, and live
-armor calls the helper with enchantment zero. The existing Enchant scroll
-continues upgrading that unsigned rating; this legacy rating upgrade is distinct
-from the signed distribution modifier tested by the helper. No weapon or armor
-subtypes, packing redesign, encumbrance, or speed penalties are introduced.
+Live armor absorption uses the equipped armor's signed enchantment, including
+when protection rings adjust the effective rating. Unequipped armor supplies no
+enchantment. Armor and weapon rolls share the same repeated-roll helper.
+
+`Item` remains two bytes. Both swords and armor encode enchantment as
+`enchant + MAX_EQUIPMENT_ENCHANT` in the remainder modulo
+`2 * MAX_EQUIPMENT_ENCHANT + 1` (currently 11). Shared retrieval and modification
+logic keeps enchantment in -5..+5 for both types. Armor additionally stores
+`rating - 1` in the quotient, supporting inherent ratings 1..5; swords use zero
+for that quotient. The curse and identification bits remain
+independent. Use `armor_rating`, `equipment_enchant`, `set_armor_rating`,
+`set_equipment_enchant`, and `make_equipment` for equipment rather than treating
+`item_value` as a combat scalar. This temporary numeric encoding introduces no
+equipment subtype or tier bits. The absorption helper still supports ratings
+0..255 for monsters and effective ratings adjusted by rings.
+
+Depth progression generates swords at enchantment +0..+3 and armor at inherent
+rating 1..4 with enchantment zero. Equipment supports negative enchantments,
+but generation does not introduce new curse or negative-enchantment rolls.
+Enchant scrolls increase equipment enchantment up to +5, preserving inherent
+rating/range, identification, and curse state. Cursed gear can have positive,
+zero, or negative enchantment and cannot be dropped, exchanged, or replaced
+while equipped. Remove Curse clears the curse while preserving enchantment and
+armor rating. Identified item text displays signed enchantment and, for armor,
+the separate inherent rating. No weapon or armor subtypes, encumbrance, or speed
+penalties are introduced.
 
 Magic bypasses physical armor, protection, and DEX. MR saves when
 `roll(resistance + power + 1) < resistance`; each input caps at 127 to keep
@@ -220,7 +251,7 @@ automatically before building this project.
 actions, and `src/game_internal.hpp` shares helpers between gameplay modules.
 `src/state.cpp`, `src/combat.cpp`, and `src/items.cpp` implement run state,
 combat and turns, and inventory behavior. `src/combat_math.cpp` contains the
-shared hit, STR, absorption, and MR arithmetic. `src/world.cpp` generates floors and
+shared hit, weapon-roll, STR, absorption, and MR arithmetic. `src/world.cpp` generates floors and
 handles map visibility. These modules compile into the native test program.
 `src/persistence.cpp` handles save policy, `src/status.cpp` formats messages,
 `src/render.cpp` draws the display, and `src/ui.cpp` handles controls and modes.
@@ -235,17 +266,24 @@ cmake --build build/native --config RelWithDebInfo
 ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
 ```
 
-The native suite includes deterministic range/overflow checks, signed enchantment
-sampling with 100,000 samples per distribution, diminishing returns and symmetry,
-paired-seed melee/ring/MR/fire checks, and save/layout tests. To inspect the armor
-distributions and compare randomized damage against flat armor:
+The native suite includes deterministic range/overflow checks, signed weapon and
+armor enchantment sampling with 100,000 samples per distribution, diminishing
+returns and symmetry, paired-seed melee/ring/MR/fire checks, equipment encoding,
+scroll/curse and pickup/drop checks, depth generation, and save/layout tests.
+Assertions use integer totals with tolerances; decimal means are diagnostic
+output only. To inspect sword and armor distributions and compare randomized
+damage against flat armor:
 
 ```sh
-build/native/game_native --armor-distributions
+ctest --test-dir build/native -C RelWithDebInfo -V -R combat_distributions
 ```
 
+The native executable also accepts `--combat-distributions` for this report;
+the existing `--armor-distributions` mode remains available for armor alone.
+
 The AVM build retains the 821-byte saved layout and two-byte items, eight-byte
-monsters, and four-byte ground items. With the current SDK, baseline and revamped
-builds both report maximum provable stack usage of 252 bytes on the same
-wand/dragon animation/rendering path. The linker marks this bound incomplete;
-it is not a proof of every runtime path fitting the 256-byte VM stack.
+monsters, and four-byte ground items. With the current SDK, the revamped build
+reports a complete maximum stack bound of 254 bytes and zero analysis gaps,
+on the wand/dragon animation/rendering path. This fits the 256-byte VM stack
+with two bytes to spare; future changes should continue checking the linker
+report.

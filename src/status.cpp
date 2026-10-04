@@ -122,39 +122,13 @@ void status_final_words(const char AVM_PROGMEM* words, char suffix)
     }
 }
 
-void status_formatted_number(uint8_t value, bool bonus)
+void status_formatted_number(uint8_t value, char sign)
 {
-    uint8_t x = status_x, y = status_y;
-    char suffix = pending_suffix;
-    // At most '+255' and NUL, reused for suffix measurement and drawing.
-    // Emit here to avoid keeping a number buffer live across status_word().
+    // At most '+255' or '-255', followed by NUL.
     char buf[5];
-    buf[0] = suffix;
-    buf[1] = 0;
-    int16_t width = suffix ? text_width(buf) : 0;
-    uint8_t n = 0;
-    if(bonus) buf[n++] = '+';
-    if(value >= 100) buf[n++] = static_cast<char>('0' + value / 100);
-    if(value >= 10) buf[n++] = static_cast<char>('0' + value / 10 % 10);
-    buf[n++] = static_cast<char>('0' + value % 10);
-    buf[n] = 0;
-    width += text_width(buf);
-    if(x != 67) {
-        int16_t space_width = avm_draw_text_P(128, 0, F(" ")).x - 128;
-        if(x + space_width + width > 128) status_next_line(x, y);
-        else x = static_cast<uint8_t>(x + space_width);
-    }
-    ui.repeat_suppressed = true;
-    x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
-    if(suffix) {
-        buf[0] = suffix;
-        buf[1] = 0;
-        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
-    }
-    status_x = x;
-    status_y = y;
-    pending_suffix = 0;
-    pending_capitalize = false;
+    snprintf(buf, sizeof buf, sign ? F("%+d") : F("%d"),
+             sign == '-' ? -static_cast<int>(value) : static_cast<int>(value));
+    status_word(buf);
 }
 
 const char AVM_PROGMEM* monster_name(uint8_t type)
@@ -263,17 +237,17 @@ struct BufferedItemText {
         length = static_cast<uint8_t>(strlen(out));
     }
 
-    void bonus(uint8_t value)
+    void bonus(int8_t value)
     {
         if(length) append(F(" "));
         snprintf_P(out + length, ITEM_TEXT_CAPACITY - length,
-                   F("+%u"), value);
+                   F("%+d"), static_cast<int>(value));
         length = static_cast<uint8_t>(strlen(out));
     }
 
     void words(const char AVM_PROGMEM* words) { word(words); }
     void final_word(const char AVM_PROGMEM* words, char) { word(words); }
-    void final_bonus(uint8_t value, char) { bonus(value); }
+    void final_bonus(int8_t value, char) { bonus(value); }
     void final_number(uint8_t value, char) { number(value); }
 };
 
@@ -309,15 +283,15 @@ struct DrawItemText {
         x = avm_draw_textf_P(x, y, F("%u"), value).x;
     }
 
-    void bonus(uint8_t value)
+    void bonus(int8_t value)
     {
         space();
-        x = avm_draw_textf_P(x, y, F("+%u"), value).x;
+        x = avm_draw_textf_P(x, y, F("%+d"), static_cast<int>(value)).x;
     }
 
     void words(const char AVM_PROGMEM* words) { word(words); }
     void final_word(const char AVM_PROGMEM* words, char) { word(words); }
-    void final_bonus(uint8_t value, char) { bonus(value); }
+    void final_bonus(int8_t value, char) { bonus(value); }
     void final_number(uint8_t value, char) { number(value); }
 };
 
@@ -342,8 +316,11 @@ struct StatusItemText {
         status_final_words(words, suffix);
     }
     void number(uint8_t value) { status_formatted_number(value, false); }
-    void bonus(uint8_t value) { status_formatted_number(value, true); }
-    void final_bonus(uint8_t value, char suffix)
+    void bonus(int8_t value) {
+        status_formatted_number(static_cast<uint8_t>(value < 0 ? -value : value),
+                                value < 0 ? '-' : '+');
+    }
+    void final_bonus(int8_t value, char suffix)
     {
         status_suffix(suffix);
         bonus(value);
@@ -446,7 +423,8 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         return;
     }
     bool has_bonus = (item.type == SWORD || item.type == ARMOR) &&
-        item_is_identified(item) && item_value(item);
+        item_is_identified(item) && equipment_enchant(item);
+    bool has_rating = item.type == ARMOR && item_is_identified(item);
     switch(item.type) {
     case FOOD:
         if(item_value(item) > 1) {
@@ -468,7 +446,7 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
     case ARMOR:
         if(style == PROMPT_ITEM) text.word(F("the"));
         if(cursed) text.word(F("cursed"));
-        text.final_word(F("armor"), has_bonus ? 0 : suffix);
+        text.final_word(F("armor"), has_rating ? 0 : suffix);
         break;
     case YENDOR_AMULET:
         if(style != INVENTORY_ITEM) text.word(F("the"));
@@ -479,7 +457,8 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         text.final_word(F("item"), suffix);
         break;
     }
-    if(has_bonus) text.final_bonus(item_value(item), suffix);
+    if(has_rating) text.final_number(armor_rating(item), has_bonus ? 0 : suffix);
+    if(has_bonus) text.final_bonus(equipment_enchant(item), suffix);
 }
 
 } // namespace

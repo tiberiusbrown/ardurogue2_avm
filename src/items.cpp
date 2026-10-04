@@ -341,11 +341,12 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
                !is_wand(target.type)) {
                 status(F("Nothing happens."));
             } else {
-                // ARMOR still stores only an unsigned rating. This legacy
-                // upgrade raises that rating; signed distribution enchantment
-                // is a separate combat helper, pending future item storage.
                 uint8_t value = item_value(target);
-                if(is_wand(target.type)) {
+                if(target.type == SWORD || target.type == ARMOR) {
+                    int8_t enchant = equipment_enchant(target);
+                    if(enchant < MAX_EQUIPMENT_ENCHANT)
+                        set_equipment_enchant(target, static_cast<int8_t>(enchant + 1));
+                } else if(is_wand(target.type)) {
                     set_item_value(target, value > 11 ? 15 : value + 4);
                 } else if(item_is_cursed(target) &&
                    (is_ring(target.type) || is_amulet(target.type))) {
@@ -551,6 +552,11 @@ __attribute__((noinline)) static bool apply_inventory(
         break;
     }
     case SWORD:
+        if(game.weapon_slot != slot && game.weapon_slot < INVENTORY &&
+           item_is_cursed(game.inventory[game.weapon_slot])) {
+            status(F("The cursed item cannot be removed."));
+            return false;
+        }
         session.repeat_slot = slot;
         game.weapon_slot = slot;
         identify_item(slot);
@@ -558,6 +564,11 @@ __attribute__((noinline)) static bool apply_inventory(
         status(item, '.');
         break;
     case ARMOR:
+        if(game.armor_slot != slot && game.armor_slot < INVENTORY &&
+           item_is_cursed(game.inventory[game.armor_slot])) {
+            status(F("The cursed item cannot be removed."));
+            return false;
+        }
         session.repeat_slot = slot;
         game.armor_slot = slot;
         identify_item(slot);
@@ -951,7 +962,7 @@ __attribute__((noinline)) static bool apply_drop(uint8_t slot, bool discard)
     uint8_t ground_slot = reusable_ground_slot();
     Item dropped = item;
     uint8_t remaining = stackable(item.type)
-        ? merge_ground(item, item_value(item)) : item_value(item);
+        ? merge_ground(item, item_value(item)) : 1;
     if(remaining && ground_slot != NONE) {
         Item ground_item = stackable(item.type) ? clean_stack(item) : item;
         if(stackable(item.type)) set_item_value(ground_item, remaining);

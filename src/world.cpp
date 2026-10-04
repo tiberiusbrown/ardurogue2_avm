@@ -288,6 +288,12 @@ void make_floor()
             set_wand_modifier(wand, floor_wand_modifier(seed));
             info = wand.info;
         }
+        if(type == SWORD || type == ARMOR) {
+            // Keep existing depth progression: swords start at +0, armor
+            // retains its original rating and starts with enchantment zero.
+            Item equipment = make_equipment(type, type == SWORD ? info - 1 : 0, info);
+            info = equipment.info;
+        }
         if(game.floor == FLOORS - 1 && i == 15)
             continue;
         game.ground[i] = {{x, y}, {type, info}};

@@ -26,6 +26,7 @@ uint8_t player_strength();
 uint8_t player_dexterity();
 uint8_t player_accuracy();
 uint8_t player_armor_rating();
+int8_t player_armor_enchant();
 void player_take_magic_damage(uint8_t damage, uint8_t power);
 void player_take_fire_damage(uint8_t damage, uint8_t power);
 void fire_burst_damage(Position center, bool player_attack,

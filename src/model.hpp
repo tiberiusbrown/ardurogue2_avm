@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "combat_math.hpp"
 
 #if defined(__AVM__)
 #include <avm/pgmspace.h>
@@ -31,8 +32,8 @@ constexpr uint8_t GROUND_ITEMS = 16;
 constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
-// Same byte layout, new STR/MR semantics: old attack/defense saves are invalid.
-constexpr uint8_t SAVE_VERSION = 17;
+// Same byte layout, new equipment value semantics: old saves are invalid.
+constexpr uint8_t SAVE_VERSION = 19;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD, HEALING, CONFUSION, POISON, HARMING,
@@ -129,6 +130,60 @@ struct Item { uint8_t type, info; };
 constexpr uint8_t ITEM_VALUE_MASK = 0x3f;
 constexpr uint8_t ITEM_CURSED = 0x40;
 constexpr uint8_t ITEM_IDENTIFIED = 0x80;
+
+// Both equipment types store enchant + MAX_EQUIPMENT_ENCHANT as the
+// remainder modulo EQUIPMENT_ENCHANT_STATES. Armor's quotient stores rating - 1.
+// Five ratings * eleven enchantments fit the existing six value bits.
+// This is a temporary numeric encoding, not future equipment subtype bits.
+constexpr uint8_t MAX_ITEM_ARMOR_RATING = 5;
+constexpr uint8_t EQUIPMENT_ENCHANT_STATES = 2 * MAX_EQUIPMENT_ENCHANT + 1;
+static_assert(MAX_ITEM_ARMOR_RATING * EQUIPMENT_ENCHANT_STATES <=
+              ITEM_VALUE_MASK + 1, "armor encoding exceeds the item value bits");
+
+constexpr uint8_t armor_rating(const Item& item)
+{
+    if(item.type != ARMOR) return 0;
+    uint8_t rating = static_cast<uint8_t>((item.info & ITEM_VALUE_MASK) /
+                                        EQUIPMENT_ENCHANT_STATES + 1);
+    return rating > MAX_ITEM_ARMOR_RATING ? MAX_ITEM_ARMOR_RATING : rating;
+}
+
+constexpr int8_t equipment_enchant(const Item& item)
+{
+    if(item.type != SWORD && item.type != ARMOR) return 0;
+    return static_cast<int8_t>((item.info & ITEM_VALUE_MASK) %
+        EQUIPMENT_ENCHANT_STATES - MAX_EQUIPMENT_ENCHANT);
+}
+
+constexpr void set_equipment_enchant(Item& item, int8_t enchant)
+{
+    if(item.type != SWORD && item.type != ARMOR) return;
+    if(enchant > MAX_EQUIPMENT_ENCHANT) enchant = MAX_EQUIPMENT_ENCHANT;
+    if(enchant < -MAX_EQUIPMENT_ENCHANT) enchant = -MAX_EQUIPMENT_ENCHANT;
+    uint8_t rating_code = (item.info & ITEM_VALUE_MASK) / EQUIPMENT_ENCHANT_STATES;
+    if(rating_code >= MAX_ITEM_ARMOR_RATING) rating_code = MAX_ITEM_ARMOR_RATING - 1;
+    uint8_t value = static_cast<uint8_t>(rating_code * EQUIPMENT_ENCHANT_STATES +
+        enchant + MAX_EQUIPMENT_ENCHANT);
+    item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) | value);
+}
+
+constexpr void set_armor_rating(Item& item, uint8_t rating)
+{
+    if(item.type != ARMOR) return;
+    if(rating < 1) rating = 1;
+    if(rating > MAX_ITEM_ARMOR_RATING) rating = MAX_ITEM_ARMOR_RATING;
+    int8_t enchant = equipment_enchant(item);
+    item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) |
+        ((rating - 1) * EQUIPMENT_ENCHANT_STATES + enchant + MAX_EQUIPMENT_ENCHANT));
+}
+
+constexpr Item make_equipment(uint8_t type, int8_t enchant, uint8_t rating = 1)
+{
+    Item item{type, 0};
+    if(type == ARMOR) set_armor_rating(item, rating);
+    set_equipment_enchant(item, enchant);
+    return item;
+}
 enum WandModifier : uint8_t {
     WAND_NORMAL, WAND_CURSED, WAND_UNRELIABLE,
     WAND_SPREADING, WAND_POWERFUL, WAND_OVERPOWERED

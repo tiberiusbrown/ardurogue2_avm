@@ -142,11 +142,16 @@ uint8_t player_accuracy()
 
 uint8_t player_armor_rating()
 {
-    // Items currently store rating only; live absorption uses enchantment 0.
-    uint8_t rating = game.armor_slot < INVENTORY &&
-        game.inventory[game.armor_slot].type == ARMOR
-        ? item_value(game.inventory[game.armor_slot]) : 0;
+    uint8_t rating = game.armor_slot < INVENTORY
+        ? armor_rating(game.inventory[game.armor_slot]) : 0;
     return effective_armor_rating(rating, ring_bonus(RING_PROTECTION));
+}
+
+int8_t player_armor_enchant()
+{
+    return game.armor_slot < INVENTORY &&
+        game.inventory[game.armor_slot].type == ARMOR
+        ? equipment_enchant(game.inventory[game.armor_slot]) : 0;
 }
 
 void player_take_magic_damage(uint8_t damage, uint8_t power)
@@ -304,7 +309,7 @@ static void advance_monster(uint8_t index)
                 if(monster_effect(monster, MON_WEAKENED))
                     raw = static_cast<uint8_t>((raw + 1) / 2);
                 uint8_t damage = physical_damage_after_armor(raw,
-                    armor_absorption(player_armor_rating(), 0));
+                    armor_absorption(player_armor_rating(), player_armor_enchant()));
                 hurt_player(damage);
                 status(F("The"));
                 status(static_cast<MonsterType>(monster.type));
@@ -446,10 +451,13 @@ static void attack_monster(uint8_t index)
         status(static_cast<MonsterType>(target.type), '.');
         return;
     }
-    uint8_t bonus = game.weapon_slot < INVENTORY &&
-        game.inventory[game.weapon_slot].type == SWORD
-        ? item_value(game.inventory[game.weapon_slot]) : 0;
-    uint8_t raw = physical_raw_damage(bonus, player_strength());
+    bool armed = game.weapon_slot < INVENTORY &&
+        game.inventory[game.weapon_slot].type == SWORD;
+    uint8_t weapon_roll = weapon_damage_roll(
+        armed ? SWORD_MIN_DAMAGE : UNARMED_MIN_DAMAGE,
+        armed ? SWORD_MAX_DAMAGE : UNARMED_MAX_DAMAGE,
+        armed ? equipment_enchant(game.inventory[game.weapon_slot]) : 0);
+    uint8_t raw = physical_raw_damage(weapon_roll, player_strength());
     uint8_t damage = physical_damage_after_armor(raw,
         armor_absorption(info.armor, 0));
     if(damage >= target.hp) {

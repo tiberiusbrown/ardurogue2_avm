@@ -7,6 +7,7 @@ enable_testing()
 add_executable(game_native
     game_native.cpp
     combat_checks.cpp
+    weapon_checks.cpp
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
@@ -52,4 +53,4 @@ target_include_directories(render_native PRIVATE shim ../src)
 add_test(NAME render_native COMMAND render_native)
 
 # Optional seeded balance diagnostic using the same production RNG/helpers.
-add_test(NAME combat_distributions COMMAND game_native --armor-distributions)
+add_test(NAME combat_distributions COMMAND game_native --combat-distributions)

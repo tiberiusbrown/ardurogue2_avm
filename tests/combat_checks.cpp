@@ -159,13 +159,13 @@ static void check_player_pipeline()
             player_accuracy() == 4 + (game.level - 1) / 3,
             "levels changed damage or failed to grant modest accuracy/MR");
     combat_fixture();
-    game.inventory[0] = {ARMOR, 6};
+    game.inventory[0] = make_equipment(ARMOR, 0, 4);
     game.armor_slot = 0;
     game.inventory[1] = {RING_PROTECTION, 2};
     game.ring_slots[0] = 1;
-    require(player_armor_rating() == 8, "positive protection did not add rating");
+    require(player_armor_rating() == 6, "positive protection did not add rating");
     game.inventory[1].info |= ITEM_CURSED;
-    require(player_armor_rating() == 4, "cursed protection did not lower rating");
+    require(player_armor_rating() == 2, "cursed protection did not lower rating");
     game.armor_slot = NONE;
     require(player_armor_rating() == 0, "cursed protection underflowed rating");
     game.inventory[1].info &= ~ITEM_CURSED;
@@ -212,7 +212,7 @@ static void check_player_pipeline()
         require(game.hp == 240 - expected, "magic damage entry point ignored MR");
         game.hp = 240;
         game.dexterity = game.strength = 255;
-        game.inventory[0] = {ARMOR, 63};
+        game.inventory[0] = make_equipment(ARMOR, 5, MAX_ITEM_ARMOR_RATING);
         game.armor_slot = 0;
         game.inventory[1] = {RING_PROTECTION, 63};
         game.inventory[2] = {RING_FIRE_IMMUNITY, 1};
@@ -246,7 +246,7 @@ static void check_player_pipeline()
     // changes only with STR/sword. These helpers are the live melee pipeline.
     for(uint16_t seed = 1; seed <= 200; ++seed) {
         combat_fixture();
-        game.inventory[0] = {ARMOR, 6};
+        game.inventory[0] = make_equipment(ARMOR, 0, 4);
         game.armor_slot = 0;
         game.random_state = seed;
         uint8_t block = armor_absorption(player_armor_rating(), 0);
@@ -278,15 +278,35 @@ static void check_player_pipeline()
 
 static void check_live_melee()
 {
+    // With zero-armor targets, the live unarmed path must expose 1..3,
+    // and the -2 STR modifier must clamp every landed unarmed hit to 1.
+    unsigned unarmed_outcomes[4] = {};
+    for(uint16_t seed = 1; seed <= 1000; ++seed) {
+        uint8_t damage[2];
+        for(unsigned variant = 0; variant < 2; ++variant) {
+            combat_fixture();
+            game.monsters[0] = {{11, 10}, BAT, 100, 255, {0, 0}, 0};
+            game.random_state = seed;
+            if(variant) game.strength = 1;
+            move_player(1, 0);
+            damage[variant] = static_cast<uint8_t>(100 - game.monsters[0].hp);
+        }
+        require(damage[0] <= 3 && damage[1] == (damage[0] ? 1 : 0),
+                "live unarmed range or weak-STR minimum changed");
+        ++unarmed_outcomes[damage[0]];
+    }
+    require(unarmed_outcomes[1] && unarmed_outcomes[2] && unarmed_outcomes[3],
+            "live unarmed damage did not expose its full inherent range");
+
     combat_fixture();
-    game.inventory[0] = {SWORD, 2};
+    game.inventory[0] = make_equipment(SWORD, 2);
     game.weapon_slot = 0;
     game.monsters[0] = {{11, 10}, ORC, 100, 255, {0, 0}, 0};
     Game fixture = game;
-    unsigned hits[4] = {}, total_damage[4] = {};
+    unsigned hits[6] = {}, total_damage[6] = {};
     for(uint16_t seed = 1; seed <= 1000; ++seed) {
-        uint8_t damage[4];
-        for(unsigned variant = 0; variant < 4; ++variant) {
+        uint8_t damage[6];
+        for(unsigned variant = 0; variant < 6; ++variant) {
             game = fixture;
             session.ended = false;
             game.random_state = seed;
@@ -296,6 +316,8 @@ static void check_live_melee()
                 game.inventory[1] = {RING_ATTACK, 4};
                 game.ring_slots[0] = 1;
             }
+            if(variant == 4) set_equipment_enchant(game.inventory[0], 5);
+            if(variant == 5) set_equipment_enchant(game.inventory[0], -5);
             move_player(1, 0);
             damage[variant] = static_cast<uint8_t>(100 - game.monsters[0].hp);
             hits[variant] += damage[variant] != 0;
@@ -303,6 +325,9 @@ static void check_live_melee()
         }
         require((damage[0] != 0) == (damage[1] != 0),
                 "live melee STR changed whether the player hit");
+        require((damage[0] != 0) == (damage[4] != 0) &&
+                (damage[0] != 0) == (damage[5] != 0),
+                "weapon enchantment changed physical accuracy");
         if(damage[0])
             require(damage[1] > damage[0], "live melee STR failed to increase damage");
         if(damage[0] && damage[2])
@@ -312,19 +337,24 @@ static void check_live_melee()
     }
     require(hits[2] > hits[0] && hits[3] > hits[0] &&
             total_damage[1] > total_damage[0], "live player combat stats failed");
+    require(total_damage[4] > total_damage[0] && total_damage[0] > total_damage[5],
+            "live melee ignored signed weapon enchantment");
 
     combat_fixture();
     game.monsters[0] = {{11, 10}, GOBLIN, 100, 0, {0, 0}, 0};
     fixture = game;
     unsigned unarmored_hits = 0, evasive_hits = 0;
+    unsigned high_enchant_damage = 0, low_enchant_damage = 0;
     for(uint16_t seed = 1; seed <= 1000; ++seed) {
-        uint8_t damage[4];
-        for(unsigned variant = 0; variant < 4; ++variant) {
+        uint8_t damage[6];
+        for(unsigned variant = 0; variant < 6; ++variant) {
             game = fixture;
             session.ended = false;
             game.random_state = seed;
             if(variant == 1) {
-                game.inventory[0] = {ARMOR, 63};
+                game.inventory[0] = make_equipment(ARMOR, 5, MAX_ITEM_ARMOR_RATING);
+                game.inventory[1] = {RING_PROTECTION, 63};
+                game.ring_slots[0] = 1;
                 game.armor_slot = 0;
             }
             if(variant == 2) {
@@ -335,18 +365,32 @@ static void check_live_melee()
                 game.strength = 255;
                 game.magic_resistance = 127;
             }
+            if(variant >= 4) {
+                game.inventory[0] = make_equipment(ARMOR, variant == 4 ? 5 : -5, 4);
+                game.armor_slot = 0;
+                require(player_armor_rating() == 4 &&
+                        player_armor_enchant() == (variant == 4 ? 5 : -5),
+                        "live armor confused inherent rating with enchantment");
+            }
             end_turn();
             damage[variant] = static_cast<uint8_t>(240 - game.hp);
         }
         unarmored_hits += damage[0] != 0;
         evasive_hits += damage[2] != 0;
         require(damage[0] == damage[3], "STR or MR changed incoming melee damage");
+        require((damage[4] != 0) == (damage[0] != 0) &&
+                (damage[5] != 0) == (damage[0] != 0),
+                "armor enchantment changed physical evasion");
+        high_enchant_damage += damage[4];
+        low_enchant_damage += damage[5];
         require(damage[1] == (damage[0] ? 1 : 0),
                 "live armor changed evasion or failed landed-hit minimum");
         if(damage[0] && damage[2])
             require(damage[0] == damage[2], "DEX ring changed incoming damage on a hit");
     }
     require(evasive_hits < unarmored_hits, "live DEX ring failed to improve evasion");
+    require(high_enchant_damage < low_enchant_damage,
+            "live monster damage ignored signed armor enchantment");
 }
 
 void check_combat_rules()

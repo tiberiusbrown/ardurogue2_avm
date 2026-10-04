@@ -1076,13 +1076,13 @@ void check_scrolls_and_identification()
     game.hunger = 255;
     game.invisible = 100;
     game.inventory[0] = {SCROLL_IDENTIFY, 2};
-    game.inventory[1] = {SWORD, 3};
+    game.inventory[1] = make_equipment(SWORD, 3);
     require(use_inventory(0, 1) && item_type_identified(SCROLL_IDENTIFY) &&
             item_is_identified(game.inventory[1]) &&
             item_value(game.inventory[0]) == 1,
             "identify scroll did not reveal target or consume one scroll");
     game.inventory[0] = {SCROLL_ENCHANT, 1};
-    require(use_inventory(0, 1) && item_value(game.inventory[1]) == 4 &&
+    require(use_inventory(0, 1) && equipment_enchant(game.inventory[1]) == 4 &&
             game.inventory[0].type == NO_ITEM,
             "enchant scroll did not improve target or get consumed");
     game.inventory[0] = {SCROLL_REMOVE_CURSE, 1};
@@ -2465,14 +2465,22 @@ void check_unreliable_wand()
 
 void check_combat_rules();
 void print_armor_distributions();
+void print_weapon_distributions();
+void check_weapon_and_equipment_rules();
 
 int main(int argc, char** argv)
 {
+    if(argc == 2 && std::strcmp(argv[1], "--combat-distributions") == 0) {
+        print_weapon_distributions();
+        print_armor_distributions();
+        return 0;
+    }
     if(argc == 2 && std::strcmp(argv[1], "--armor-distributions") == 0) {
         print_armor_distributions();
         return 0;
     }
     check_combat_rules();
+    check_weapon_and_equipment_rules();
     check_wand_encoding_and_scrolls();
     check_wand_identity_and_generation();
     check_wand_rays_and_charges();
