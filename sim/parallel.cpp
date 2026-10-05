@@ -109,13 +109,14 @@ std::string header(void (*write)(std::ostream&)) {
 void merge(const fs::path& file, std::ostream& output, const std::string& expected) {
     std::ifstream input(file); std::string first;
     if(!input || !std::getline(input,first) || first!=expected) throw std::runtime_error("invalid worker CSV: "+file.string());
-    output<<input.rdbuf();
+    // A sparse stream may contain only its header. Inserting an empty streambuf
+    // sets failbit on the destination, although there is no I/O error.
+    if(input.peek()!=std::char_traits<char>::eof()) output<<input.rdbuf();
     if(input.bad() || !output) throw std::runtime_error("worker CSV merge failed: "+file.string());
 }
 }
 BatchCounts parallel_batch(const std::string& executable, uint64_t start,
-    uint64_t count, unsigned jobs, const Options& options, std::ostream& runs,
-    std::ostream* floors, std::ostream* items, std::ostream* monsters) {
+    uint64_t count, unsigned jobs, const Options& options, const std::array<std::ostream*,7>& outputs) {
     if(options.trace) throw std::runtime_error("parallel batches cannot trace multiple seeds");
     jobs=static_cast<unsigned>(std::min<uint64_t>(jobs,count));
     Scratch scratch;
@@ -128,6 +129,8 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
         std::vector<std::string> args{executable,"--seeds",std::to_string(first)+":"+std::to_string(last),
             "--output",directory.string(),"--max-actions",std::to_string(options.max_actions)};
         if(!options.telemetry) args.push_back("--no-telemetry");
+        args.insert(args.end(),{"--experiment",options.experiment_id,"--variant",options.variant});
+        for(const auto& rule:options.intervention_rules) args.insert(args.end(),{"--intervention",rule});
         directories.push_back(directory);
         workers.push_back(std::make_unique<Process>(args,directory/"worker.log"));
     }
@@ -147,12 +150,11 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
             auto outcome=line.substr(first,line.find(',',first)-first);
             result.escaped+=outcome=="escaped"; result.deaths+=outcome=="death";
             result.stuck+=outcome=="SIM_STUCK" || outcome=="SIM_ERROR";
-            runs<<line<<'\n';
+            *outputs[0]<<line<<'\n';
         }
         if(input.bad()) throw std::runtime_error("worker runs read failed");
-        if(floors) merge(directory/"floors.csv",*floors,header(write_floors_header));
-        if(items) merge(directory/"items.csv",*items,header(write_items_header));
-        if(monsters) merge(directory/"monsters.csv",*monsters,header(write_monsters_header));
+        for(size_t s=1;s<csv_streams.size();++s) if(outputs[s])
+            merge(directory/csv_streams[s].name,*outputs[s],header(csv_streams[s].header));
     }
     if(next!=start+count) throw std::runtime_error("worker seed count mismatch");
     return result;

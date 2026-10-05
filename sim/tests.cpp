@@ -12,7 +12,7 @@ void check_v2_policy();
 namespace {
 void check(bool c,const char* message) { if(!c) throw std::runtime_error(message); }
 std::string all_metrics(const RunMetrics& r) {
-    std::ostringstream o; write_run(o,r); write_floors(o,r); write_items(o,r); write_monsters(o,r); return o.str();
+    std::ostringstream o; for(const auto& stream:csv_streams) stream.rows(o,r); return o.str();
 }
 void arena() {
     game={}; session={NONE,DEATH,false}; game.run_seed=game.random_state=123;
@@ -187,11 +187,52 @@ void competence() {
     check(leaves>0 && deep>0 && wins>0 && kills && food && healing && equipment,"agent competence regression");
     std::cout << "fixed seeds 1..32: left floor 0=" << leaves << " deep=" << deep << " escapes=" << wins << '\n';
 }
+class RngExperiment final:public Experiment {
+public:
+    void apply(Game& g,ExperimentContext,std::vector<Intervention>&) const override { ++g.random_state; }
+};
+void experiments() {
+    OmniscientAgent agent; Options o;
+    auto ordinary=run(4,agent,o); auto final=game;
+    o.experiment=std::make_shared<RuleExperiment>();
+    auto noop=run(4,agent,o);
+    check(all_metrics(ordinary)==all_metrics(noop) && std::memcmp(&final,&game,sizeof game)==0,"no-op experiment changed normal run");
+    o.experiment=std::make_shared<RngExperiment>(); bool rejected=false;
+    try { run(4,agent,o); } catch(const std::runtime_error&) { rejected=true; }
+    check(rejected,"experiment gameplay RNG mutation not rejected");
+    arena(); game.floor=2;
+    game.ground[0]={{3,6},{HEALING,4}}; game.ground[1]={{8,7},{HEALING,3}};
+    game.ground[2]={{9,7},make_equipment(DAGGER,-1)};
+    game.monsters[0]={{4,6},SNAKE,1,6,{255,255},MON_AGGRO};
+    auto exp=std::make_shared<RuleExperiment>();
+    exp->rules={parse_rule("replace-item:HEALING:FOOD:floor=2:direction=descent:max=1"),
+        parse_rule("replace-item:DAGGER:SPEAR:info=preserve"),parse_rule("replace-monster:SNAKE:MIMIC")};
+    Collector c; c.experiment=exp; CollectScope scope(c); auto rng=game.random_state;
+    after_floor_generation(); c.enter_floor(); c.close_floor(false);
+    check(game.random_state==rng,"replacement consumed gameplay RNG");
+    check(game.ground[0].pos==Position{3,6} && game.ground[0].item.type==FOOD && game.ground[0].item.info==1,
+        "replacement failed position/default info invariant");
+    check(game.ground[1].item.type==HEALING && game.ground[2].item.info==make_equipment(DAGGER,-1).info,
+        "replacement cap or compatible encoding failed");
+    check(game.monsters[0].pos==Position{4,6} && game.monsters[0].hp==monster_health(MIMIC) &&
+        game.monsters[0].stun==0 && game.monsters[0].effects[0]==0 && game.monsters[0].effects[1]==0 &&
+        mimic_appearance(game.monsters[0])==MIMIC_SCROLL,"monster initialization invariant failed");
+    check(c.data.items[FOOD].generated==1 && c.data.items[HEALING].generated==3 &&
+        c.data.monsters[MIMIC].generated==1 && c.data.monsters[SNAKE].generated==0,"intervention occurred after generation scan");
+    check(c.data.interventions.size()==3 && c.data.interventions[0].count==1 && c.data.interventions[0].visit==1,
+        "intervention ledger does not reconcile");
+    exp->rules={parse_rule("remove-item:HEALING"),parse_rule("remove-monster:MIMIC")};
+    exp->apply(game,{123,2},c.data.interventions);
+    check(!game.ground[1].item.type && !game.monsters[0].type,"removal failed");
+    bool incompatible=false;
+    try { parse_rule("replace-item:DAGGER:FOOD:info=preserve"); } catch(const std::runtime_error&) { incompatible=true; }
+    check(incompatible,"incompatible instance info preservation accepted");
+}
 }
 int main() {
     try {
         static_assert(sizeof(Game)==774 && SAVE_VERSION==23,"native saved layout changed");
-        check_v2_policy(); determinism(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence();
+        check_v2_policy(); determinism(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

@@ -108,6 +108,7 @@ bool dispatch(const Action& a) {
 }
 RunMetrics run(uint16_t seed, Agent& agent, const Options& options) {
     Collector c; c.data.seed = seed; c.data.agent = agent.name(); c.enabled = options.telemetry; c.trace = options.trace;
+    c.experiment=options.experiment; c.data.experiment=options.experiment_id; c.data.variant=options.variant;
     CollectScope sink(c);
     // start_new preserves best_score; isolate that cross-run frontend history.
     game = {}; session = {NONE,DEATH,false}; agent.reset();
@@ -117,6 +118,7 @@ RunMetrics run(uint16_t seed, Agent& agent, const Options& options) {
 }
 RunMetrics run_started(uint16_t seed, Agent& agent, const Options& options) {
     Collector c; c.data.seed = seed; c.data.agent = agent.name(); c.enabled = options.telemetry; c.trace = options.trace;
+    c.experiment=options.experiment; c.data.experiment=options.experiment_id; c.data.variant=options.variant;
     CollectScope sink(c); agent.reset(); c.enter_floor();
     return execute(c,agent,options);
 }

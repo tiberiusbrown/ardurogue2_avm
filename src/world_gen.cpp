@@ -603,6 +603,10 @@ void make_floor()
     populate_items(floor_seed(SUPPLIES), floor_seed(EQUIPMENT));
     game.player = game.has_amulet ? game.down : game.up;
     memset(game.explored, 0, sizeof game.explored);
+// Controlled host experiments see complete population, before exposure scans.
+#if defined(ARDUROGUE2_SIM)
+    sim::after_floor_generation();
+#endif
     SIM_EVENT(sim::EventKind::FloorEntered);
 #if defined(__AVM__)
     end_generation_render();

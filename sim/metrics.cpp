@@ -2,15 +2,51 @@
 #include "agent.hpp"
 #include "game.hpp"
 #include "world.hpp"
+#include "world_gen.hpp"
+#include "game_internal.hpp"
 #include "trace.hpp"
 #include <algorithm>
 #include <ostream>
+#include <stdexcept>
 
 namespace sim {
 namespace {
 Collector* collector = nullptr;
 Cause cause = Cause::Other;
 uint8_t cause_type = 0;
+template<class T> struct Field { const char* name; uint64_t T::* member; };
+const Field<ItemMetrics> item_fields[] = {
+    {"generated",&ItemMetrics::generated},{"reached",&ItemMetrics::reached},
+    {"picked_up",&ItemMetrics::picked_up},{"used",&ItemMetrics::used},{"consumed",&ItemMetrics::consumed},
+    {"equipped",&ItemMetrics::equipped},{"dropped",&ItemMetrics::dropped},{"discarded",&ItemMetrics::discarded},
+    {"carried",&ItemMetrics::carried},{"charges_used",&ItemMetrics::charges_used},
+    {"potions_drunk",&ItemMetrics::drunk},{"potions_thrown",&ItemMetrics::thrown},
+    {"scrolls_read",&ItemMetrics::scrolls_read},{"turns_equipped",&ItemMetrics::turns_equipped},
+    {"wands_picked_up",&ItemMetrics::wands_picked_up},{"wands_activated",&ItemMetrics::wands_activated}};
+const Field<MonsterMetrics> monster_fields[] = {
+    {"generated",&MonsterMetrics::generated},{"encountered",&MonsterMetrics::encountered},
+    {"engaged",&MonsterMetrics::engaged},{"killed",&MonsterMetrics::killed},
+    {"player_attacks",&MonsterMetrics::player_attacks},{"damage_to_monster",&MonsterMetrics::damage_taken},
+    {"monster_attacks",&MonsterMetrics::attacks},{"monster_hits",&MonsterMetrics::hits},
+    {"damage_to_player",&MonsterMetrics::player_damage},{"deaths_caused",&MonsterMetrics::deaths},
+    {"poison",&MonsterMetrics::poison},{"confusion",&MonsterMetrics::confusion},
+    {"paralysis",&MonsterMetrics::paralysis},{"fire",&MonsterMetrics::fire}};
+template<class T, size_t N> void field_header(std::ostream& o,const Field<T> (&fields)[N]) {
+    for(const auto& f:fields) o<<','<<f.name;
+    o<<'\n';
+}
+template<class T, size_t N> void field_values(std::ostream& o,const T& metric,const Field<T> (&fields)[N]) {
+    for(const auto& f:fields) o<<','<<metric.*(f.member);
+    o<<'\n';
+}
+template<class T, size_t N> bool active(const T& metric,const Field<T> (&fields)[N]) {
+    for(const auto& f:fields) if(metric.*(f.member)) return true;
+    return false;
+}
+void key(std::ostream& o,const RunMetrics& r) { o<<r.seed<<','<<r.effective_seed<<','<<r.agent; }
+void visit_key(std::ostream& o,const RunMetrics& r,const FloorMetrics& f) {
+    key(o,r); o<<','<<f.visit<<','<<f.floor<<','<<(f.ascent ? "ascent" : "descent");
+}
 uint16_t units(rogue::Item i) {
     return i.type == rogue::FOOD || rogue::is_potion(i.type) || rogue::is_scroll(i.type) ? rogue::item_value(i) : 1;
 }
@@ -28,6 +64,12 @@ CollectScope::CollectScope(Collector& c) : previous(collector) { collector = &c;
 CollectScope::~CollectScope() { collector = previous; }
 void event(EventKind kind, uint8_t index, uint8_t type, uint16_t amount, uint8_t detail) {
     if(collector) collector->handle(kind,index,type,amount,detail);
+}
+void after_floor_generation() {
+    if(!collector || !collector->experiment) return;
+    auto rng=rogue::game.random_state;
+    collector->experiment->apply(rogue::game,{rogue::game.run_seed,collector->data.floors_entered+1},collector->data.interventions);
+    if(rogue::game.random_state!=rng) throw std::runtime_error("experiment consumed gameplay RNG");
 }
 const char* item_name(uint8_t type) {
     static const char* names[] = {"NO_ITEM","FOOD","HEALING","CONFUSION","POISON","HARMING",
@@ -70,6 +112,28 @@ void Collector::enter_floor() {
     reached.fill(false); encountered.fill(false); engaged.fill(false);
     FloorMetrics f; f.floor = g.floor; f.visit = data.floors_entered;
     f.ascent = g.has_amulet; f.entry_hp = f.exit_hp = g.hp; f.entry_level = f.exit_level = g.level;
+    f.entry_max_hp=rogue::player_max_hp(); f.entry_strength=rogue::player_strength();
+    f.entry_dexterity=rogue::player_dexterity();
+    // Exactly end_turn's effective enemy-turn budget (no separate speed model).
+    int speed=int(g.speed)-rogue::amulet_bonus(rogue::AMULET_SPEED);
+    if(g.slowed) speed*=2;
+    f.entry_speed=uint8_t(std::max(1,speed)); f.entry_hunger=g.hunger;
+    f.entry_armor_rating=rogue::player_armor_rating(); f.entry_armor_enchant=rogue::player_armor_enchant();
+    if(g.weapon_slot<rogue::INVENTORY) {
+        auto i=g.inventory[g.weapon_slot]; f.entry_weapon_type=i.type; f.entry_weapon_enchant=rogue::equipment_enchant(i);
+    }
+    if(g.armor_slot<rogue::INVENTORY) f.entry_armor_type=g.inventory[g.armor_slot].type;
+    for(auto i:g.inventory) {
+        if(i.type==rogue::FOOD) f.entry_food_units+=rogue::item_value(i);
+        if(i.type==rogue::HEALING) f.entry_healing_units+=rogue::item_value(i);
+    }
+    const auto& d=rogue::generation::diagnostics;
+    const char* archetypes[]={"CHAMBERS","WARREN","FORTRESS","RUINS"};
+    f.archetype=archetypes[rogue::generation::archetype(rogue::generation::floor_seed(rogue::generation::LAYOUT))];
+    f.floor_tiles=d.floor_tiles; f.major_features=d.major_features; f.corridors=d.corridors;
+    f.loops=d.loops; f.open_connections=d.open_connections;
+    std::copy(std::begin(d.families),std::end(d.families),f.families.begin());
+    entry_items=data.items; entry_monsters=data.monsters;
     data.floors.push_back(f);
     if(!enabled) return;
     for(size_t s=0; s<rogue::INVENTORY; ++s) {
@@ -86,6 +150,10 @@ void Collector::enter_floor() {
 void Collector::close_floor(bool exited) {
     if(data.floors.empty() || data.floors.back().exited) return;
     auto& f = data.floors.back();
+    for(size_t i=0;i<data.items.size();++i) for(const auto& field:item_fields)
+        f.items[i].*(field.member)=data.items[i].*(field.member)-entry_items[i].*(field.member);
+    for(size_t i=0;i<data.monsters.size();++i) for(const auto& field:monster_fields)
+        f.monsters[i].*(field.member)=data.monsters[i].*(field.member)-entry_monsters[i].*(field.member);
     f.exit_hp = rogue::game.hp; f.exit_level = rogue::game.level;
     if(exited) { f.exited = true; ++data.floors_exited; }
 }
@@ -210,13 +278,15 @@ void write_runs_header(std::ostream& o) {
     o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash\n";
 }
 void write_floors_header(std::ostream& o) {
-    o << "seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited\n";
+    o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,archetype,floor_tiles,major_features,corridors,loops,open_connections";
+    for(int i=0;i<16;++i) o<<",feature_family_"<<i;
+    o<<'\n';
 }
 void write_items_header(std::ostream& o) {
-    o << "seed,agent,item_type,item,generated,reached,picked_up,used,consumed,equipped,dropped,discarded,carried,charges_used,potions_drunk,potions_thrown,scrolls_read,turns_equipped,wands_picked_up,wands_activated\n";
+    o << "seed,effective_seed,agent,item_type,item"; field_header(o,item_fields);
 }
 void write_monsters_header(std::ostream& o) {
-    o << "seed,agent,monster_type,monster,generated,encountered,engaged,killed,player_attacks,damage_taken,attacks,hits,player_damage,deaths,poison,confusion,paralysis,fire\n";
+    o << "seed,effective_seed,agent,monster_type,monster"; field_header(o,monster_fields);
 }
 void write_run(std::ostream& o, const RunMetrics& r) {
     o << r.seed << ',' << r.effective_seed << ',' << r.agent << ',' << r.result << ',' << r.actions << ',' << r.turns
@@ -225,28 +295,56 @@ void write_run(std::ostream& o, const RunMetrics& r) {
       << csv(r.reason) << ',' << csv(r.death_cause) << ',' << r.action_hash << '\n';
 }
 void write_floors(std::ostream& o, const RunMetrics& r) {
-    for(const auto& f : r.floors) o << r.seed << ',' << r.agent << ',' << f.visit << ',' << f.floor << ','
-      << (f.ascent ? "ascent" : "descent") << ',' << f.entry_hp << ',' << f.exit_hp << ',' << f.entry_level << ','
+    for(const auto& f : r.floors) { visit_key(o,r,f); o << ',' << f.entry_hp << ',' << f.exit_hp << ',' << f.entry_level << ','
       << f.exit_level << ',' << f.actions << ',' << f.turns << ',' << f.kills << ',' << f.damage_taken << ','
-      << f.damage_dealt << ',' << f.pickups << ',' << f.consumables << ',' << f.exited << '\n';
+      << f.damage_dealt << ',' << f.pickups << ',' << f.consumables << ',' << f.exited
+      << ',' << f.entry_max_hp << ',' << f.entry_strength << ',' << f.entry_dexterity << ',' << f.entry_speed
+      << ',' << f.entry_hunger << ',' << f.entry_armor_rating << ',' << f.entry_food_units << ',' << f.entry_healing_units
+      << ',' << f.entry_weapon_type << ',' << f.entry_weapon_enchant << ',' << f.entry_armor_type << ',' << f.entry_armor_enchant
+      << ',' << f.archetype << ',' << f.floor_tiles << ',' << f.major_features << ',' << f.corridors << ',' << f.loops << ',' << f.open_connections;
+      for(auto family:f.families) o<<','<<int(family);
+      o<<'\n';
+    }
 }
 void write_items(std::ostream& o, const RunMetrics& r) {
     for(size_t i = 1; i < r.items.size(); ++i) {
-        const auto& m = r.items[i];
-        o << r.seed << ',' << r.agent << ',' << i << ',' << item_name(static_cast<uint8_t>(i)) << ',' << m.generated
-          << ',' << m.reached << ',' << m.picked_up << ',' << m.used << ',' << m.consumed << ',' << m.equipped << ','
-          << m.dropped << ',' << m.discarded << ',' << m.carried << ',' << m.charges_used << ',' << m.drunk << ','
-          << m.thrown << ',' << m.scrolls_read << ',' << m.turns_equipped << ','
-          << m.wands_picked_up << ',' << m.wands_activated << '\n';
+        key(o,r); o<<','<<i<<','<<item_name(uint8_t(i)); field_values(o,r.items[i],item_fields);
     }
 }
 void write_monsters(std::ostream& o, const RunMetrics& r) {
     for(size_t i = 1; i < r.monsters.size(); ++i) {
-        const auto& m = r.monsters[i];
-        o << r.seed << ',' << r.agent << ',' << i << ',' << monster_name(static_cast<uint8_t>(i)) << ',' << m.generated
-          << ',' << m.encountered << ',' << m.engaged << ',' << m.killed << ',' << m.player_attacks << ',' << m.damage_taken
-          << ',' << m.attacks << ',' << m.hits << ',' << m.player_damage << ',' << m.deaths << ',' << m.poison << ','
-          << m.confusion << ',' << m.paralysis << ',' << m.fire << '\n';
+        key(o,r); o<<','<<i<<','<<monster_name(uint8_t(i)); field_values(o,r.monsters[i],monster_fields);
     }
 }
+void write_visit_items_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,item_type,item"; field_header(o,item_fields);
+}
+void write_visit_monsters_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,monster_type,monster"; field_header(o,monster_fields);
+}
+void write_visit_items(std::ostream& o,const RunMetrics& r) {
+    for(const auto& f:r.floors) for(size_t i=1;i<f.items.size();++i) if(active(f.items[i],item_fields)) {
+        visit_key(o,r,f); o<<','<<i<<','<<item_name(uint8_t(i)); field_values(o,f.items[i],item_fields);
+    }
+}
+void write_visit_monsters(std::ostream& o,const RunMetrics& r) {
+    for(const auto& f:r.floors) for(size_t i=1;i<f.monsters.size();++i) if(active(f.monsters[i],monster_fields)) {
+        visit_key(o,r,f); o<<','<<i<<','<<monster_name(uint8_t(i)); field_values(o,f.monsters[i],monster_fields);
+    }
+}
+void write_interventions_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,experiment,variant,operation,from_type,to_type,count\n";
+}
+void write_interventions(std::ostream& o,const RunMetrics& r) {
+    for(const auto& i:r.interventions) {
+        key(o,r); o<<','<<i.visit<<','<<i.floor<<','<<(i.ascent ? "ascent" : "descent")<<','
+            <<csv(r.experiment)<<','<<csv(r.variant)<<','<<i.operation<<','<<i.from<<','<<i.to<<','<<i.count<<'\n';
+    }
+}
+const std::array<CsvStream,7> csv_streams{{
+    {"runs.csv",write_runs_header,write_run},{"floors.csv",write_floors_header,write_floors},
+    {"items.csv",write_items_header,write_items},{"monsters.csv",write_monsters_header,write_monsters},
+    {"visit_items.csv",write_visit_items_header,write_visit_items},
+    {"visit_monsters.csv",write_visit_monsters_header,write_visit_monsters},
+    {"interventions.csv",write_interventions_header,write_interventions}}};
 }

@@ -1,0 +1,5 @@
+#pragma once
+#define SIM_GIT_SHA "@SIM_GIT_SHA@"
+#define SIM_GIT_DIRTY "@SIM_GIT_DIRTY@"
+#define SIM_BUILD_TYPE "@SIM_BUILD_TYPE@"
+#define SIM_COMPILER "@SIM_COMPILER_ID@"

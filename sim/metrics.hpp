@@ -1,6 +1,7 @@
 #pragma once
 #include "model.hpp"
 #include "sim_hooks.hpp"
+#include "experiment.hpp"
 #include <array>
 #include <string>
 #include <vector>
@@ -22,6 +23,14 @@ struct FloorMetrics {
     int floor=0, visit=0;
     bool ascent=false, exited=false;
     int entry_hp=0, exit_hp=0, entry_level=0, exit_level=0;
+    int entry_max_hp=0, entry_strength=0, entry_dexterity=0, entry_speed=0,
+        entry_hunger=0, entry_armor_rating=0, entry_food_units=0, entry_healing_units=0,
+        entry_weapon_type=0, entry_weapon_enchant=0, entry_armor_type=0, entry_armor_enchant=0;
+    std::string archetype;
+    int floor_tiles=0, major_features=0, corridors=0, loops=0, open_connections=0;
+    std::array<uint8_t,16> families{};
+    std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> items{};
+    std::array<MonsterMetrics, rogue::LORD+1> monsters{};
     uint64_t turns=0, actions=0, kills=0, damage_taken=0, damage_dealt=0,
         pickups=0, consumables=0;
 };
@@ -35,6 +44,8 @@ struct RunMetrics {
     std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> items{};
     std::array<MonsterMetrics, rogue::LORD+1> monsters{};
     std::vector<FloorMetrics> floors;
+    std::vector<Intervention> interventions;
+    std::string experiment="baseline", variant="control";
 };
 struct Collector {
     RunMetrics data;
@@ -47,6 +58,9 @@ struct Collector {
     std::array<size_t, rogue::INVENTORY> inventory_wands{};
     std::array<size_t, rogue::GROUND_ITEMS> ground_wands{};
     std::vector<uint8_t> wand_flags{0};
+    std::shared_ptr<const Experiment> experiment;
+    std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> entry_items{};
+    std::array<MonsterMetrics, rogue::LORD+1> entry_monsters{};
     uint8_t pickup_slot=rogue::NONE, drop_slot=rogue::NONE;
     size_t new_wand();
     void prepare_action(const struct Action&);
@@ -65,6 +79,19 @@ void write_run(std::ostream&, const RunMetrics&);
 void write_floors(std::ostream&, const RunMetrics&);
 void write_items(std::ostream&, const RunMetrics&);
 void write_monsters(std::ostream&, const RunMetrics&);
+void write_visit_items_header(std::ostream&);
+void write_visit_monsters_header(std::ostream&);
+void write_interventions_header(std::ostream&);
+void write_visit_items(std::ostream&, const RunMetrics&);
+void write_visit_monsters(std::ostream&, const RunMetrics&);
+void write_interventions(std::ostream&, const RunMetrics&);
+struct CsvStream {
+    const char* name;
+    void (*header)(std::ostream&);
+    void (*rows)(std::ostream&, const RunMetrics&);
+};
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=2;
+extern const std::array<CsvStream,7> csv_streams;
 // The production hooks have one non-owning, scoped sink. Execution is serial.
 class CollectScope {
     Collector* previous;

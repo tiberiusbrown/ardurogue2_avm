@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Exercise the public executable, seed selection and all CSV streams."""
 import csv
+from collections import defaultdict
 import io
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -25,6 +27,10 @@ def main():
                  ("--start-seed", "65535", "--count", "2"), ("--jobs", "0"), ("--jobs", "65"),
                  ("--jobs",), ("--seed",), ("--unknown",)):
         invoke(*args, valid=False)
+    for args in (("--all-seeds", "--seed", "4"), ("--seeds", "0:65535"),
+                 ("--intervention", "replace-item:DAGGER:FOOD:info=preserve"),
+                 ("--intervention", "replace-monster:BAT:INVALID")):
+        invoke(*args, valid=False)
     stuck = list(csv.DictReader(io.StringIO(invoke("--seed", "4", "--max-actions", "1").stdout)))[0]
     assert stuck["result"] == "SIM_STUCK" and stuck["stuck"] == "1"
     zero = list(csv.DictReader(io.StringIO(invoke("--seed", "0").stdout)))[0]
@@ -41,20 +47,61 @@ def main():
         invoke("--count", "8", "--start-seed", "1", "--output", str(second))
         invoke("--seeds", "1:8", "--jobs", "3", "--output", str(concurrent))
         rows = {}
-        for name in ("runs", "floors", "items", "monsters"):
+        streams = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions")
+        for name in streams:
             path = first / f"{name}.csv"
             assert path.read_bytes() == (second / path.name).read_bytes(), name
             assert path.read_bytes() == (concurrent / path.name).read_bytes(), f"parallel {name}"
             with path.open(newline="") as f:
                 rows[name] = list(csv.DictReader(f))
-            assert rows[name] and all(r["agent"] == "omniscient-v2" for r in rows[name])
-            assert set(r["seed"] for r in rows[name]) == set(map(str, range(1, 9)))
+            assert all(r["agent"] == "omniscient-v2" for r in rows[name])
+            if name != "interventions":
+                assert rows[name] and set(r["seed"] for r in rows[name]) == set(map(str, range(1, 9)))
         assert len(rows["runs"]) == 8
         for run in rows["runs"]:
             visits = [f for f in rows["floors"] if f["seed"] == run["seed"]]
             assert sum(int(f["actions"]) for f in visits) == int(run["actions"])
             assert sum(int(f["turns"]) for f in visits) == int(run["turns"])
             assert len(visits) == int(run["floors_entered"])
+        for category, type_key in (("items", "item_type"), ("monsters", "monster_type")):
+            counters = [k for k in rows[category][0] if k not in ("seed", "effective_seed", "agent", type_key, "item", "monster", "carried")]
+            totals = defaultdict(lambda: defaultdict(int))
+            for row in rows["visit_" + category]:
+                for k in counters:
+                    totals[(row["effective_seed"], row[type_key])][k] += int(row[k])
+            for row in rows[category]:
+                for k in counters:
+                    assert totals[(row["effective_seed"], row[type_key])][k] == int(row[k]), (category, k, row)
+        manifest = json.loads((first / "manifest.json").read_text())
+        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 2
+        assert manifest["effective_seed_count"] == 8 and manifest["variant"] == "control"
+        for row in rows["floors"]:
+            assert int(row["entry_max_hp"]) >= int(row["entry_hp"]) and int(row["floor_tiles"]) > 0
+            assert row["archetype"] in ("CHAMBERS", "WARREN", "FORTRESS", "RUINS")
+        rule = "replace-item:HEALING:FOOD:floor=0:direction=descent:max=2"
+        treatment = Path(scratch) / "treatment serial"
+        parallel_treatment = Path(scratch) / "treatment parallel"
+        common = ("--seeds", "1:8", "--experiment", "proof", "--variant", "treatment", "--intervention", rule)
+        invoke(*common, "--output", str(treatment))
+        invoke(*common, "--jobs", "3", "--output", str(parallel_treatment))
+        for name in streams:
+            assert (treatment / (name + ".csv")).read_bytes() == (parallel_treatment / (name + ".csv")).read_bytes(), name
+        with (treatment / "interventions.csv").open(newline="") as file:
+            ledger = list(csv.DictReader(file))
+        assert ledger and all(r["experiment"] == "proof" and r["variant"] == "treatment" and 0 < int(r["count"]) <= 2 for r in ledger)
+        # Population cap and pre-scan ordering reconcile from ledger to visits.
+        with (treatment / "visit_items.csv").open(newline="") as file:
+            changed = list(csv.DictReader(file))
+        for record in ledger:
+            seed = record["seed"]
+            before = {r["item"]: int(r["generated"]) for r in rows["visit_items"] if r["seed"] == seed and r["visit"] == "1"}
+            after = {r["item"]: int(r["generated"]) for r in changed if r["seed"] == seed and r["visit"] == "1"}
+            assert before.get("HEALING", 0) - after.get("HEALING", 0) == int(record["count"])
+            assert after.get("FOOD", 0) - before.get("FOOD", 0) == int(record["count"])
+        invoke("--seeds", "1:8", "--output", str(first), valid=False)
+    census = invoke("--all-seeds", "--jobs", "8", "--max-actions", "1", "--no-telemetry")
+    seeds = [int(r["effective_seed"]) for r in csv.DictReader(io.StringIO(census.stdout))]
+    assert seeds == list(range(1, 65536))
     print("simulator CLI checks passed")
 
 

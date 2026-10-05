@@ -1,5 +1,9 @@
 # Native balancing simulator
 
+For manifests, adjusted visit factors, paired A/B experiments and controlled
+content interventions, see [BALANCE.md](BALANCE.md). Demonstration results are in
+[BALANCE_RESULTS.md](BALANCE_RESULTS.md).
+
 `ardurogue2_sim` runs the production rules directly, from `start_new(seed)` to
 `session.ended`. It has no AVM, input handling, renderer, framebuffer, timers,
 sleep or animation dependencies. All generated data and save state remain in
@@ -11,9 +15,9 @@ A C++17 host compiler and CMake 3.20 or newer suffice. No AVM SDK is needed.
 Configure from the game repository root, rather than the enclosing SDK tree:
 
 ```sh
-cmake -S . -B build/sim-native -DCMAKE_BUILD_TYPE=Release
-cmake --build build/sim-native --config Release --parallel
-ctest --test-dir build/sim-native -C Release --output-on-failure
+cmake -S . -B build/sim-native -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/sim-native --config RelWithDebInfo --parallel
+ctest --test-dir build/sim-native -C RelWithDebInfo --output-on-failure
 ```
 
 The executable is under `build/sim-native/sim/` (and the configuration
@@ -21,7 +25,7 @@ subdirectory for a multi-configuration generator). On Windows this project
 also works with Clang supplied by Visual Studio, from a developer command prompt:
 
 ```sh
-cmake -S . -B build/sim-clang -G Ninja -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build/sim-clang -G Ninja -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/sim-clang --parallel
 ctest --test-dir build/sim-clang --output-on-failure
 ```
@@ -41,7 +45,8 @@ build/sim-native/sim/ardurogue2_sim --seed 4 --max-actions 5 --trace
 Ranges are inclusive. Seeds must fit the production 16-bit API; batches never
 wrap. Production maps seed zero to `0xace1`, so CSV records both the requested
 `seed` and `effective_seed`. Without `--output`, stdout contains `runs.csv`.
-With `--output`, the directory receives all four CSV files. Trace is restricted
+With `--output`, the directory receives seven CSV files and `manifest.json` (see
+`BALANCE.md` for schemas). Trace is restricted
 to one seed and goes to stderr, keeping CSV parseable. `--no-telemetry` disables
 aggregate collection for isolation diagnostics; run/floor action and turn
 counts, safety checks and tracing continue to work.
@@ -49,7 +54,7 @@ counts, safety checks and tracing continue to work.
 `--jobs N` runs a batch in 1..64 separate worker processes (default 1), capped
 at the number of seeds. Production `Game` and `session` are global, so processes
 isolate them and each seed's RNG. Contiguous seed chunks merge in ascending
-seed order; all four CSVs are byte-identical to serial execution. Workers use
+seed order; all seven CSVs are byte-identical to serial execution. Workers use
 temporary directories, which the parent removes after joining them. Only the
 parent writes final output. Tracing still requires one seed and runs serially.
 Windows workers start without visible console windows; POSIX uses `posix_spawnp`.
@@ -71,7 +76,7 @@ batches return zero even when an individual seed hits a simulator limit.
 | `sim/omniscient_agent.cpp` | Deterministic policy and cardinal BFS |
 | `sim/simulator.hpp`, `sim/simulator.cpp` | Production API dispatch, lifecycle, safety and action digest |
 | `sim/frontend.cpp` | Native `Game` definition; no-op status and animation frontend |
-| `sim/metrics.hpp`, `sim/metrics.cpp` | Host collectors, death attribution and four CSV writers |
+| `sim/metrics.hpp`, `sim/metrics.cpp` | Host collectors, death attribution, typed visits and table-driven CSV writers |
 | `sim/trace.hpp`, `sim/trace.cpp` | Human-readable action and gameplay event trace |
 | `sim/tests.cpp` | Determinism, RNG isolation, mechanics dispatch, policy, telemetry, safety, competence |
 | `sim/policy_checks.cpp` | Constructed fire, tactical wand, retreat and inventory cases |
@@ -271,7 +276,7 @@ and [RESULTS.md](RESULTS.md) for the historical v1 validation. CTest verifies:
 * doors/occupancy, current-tile pickup, full-pack swap and cursed removability;
 * ring and food swap loop regressions, overkill accounting and death causes;
 * action/path/rejection/inventory safety and RNG-mutation/agent-error detection;
-* CLI validation, both batch syntaxes and byte-identical four-stream CSV output.
+* CLI validation, both batch syntaxes and byte-identical seven-stream CSV output.
 * all fire modifiers, immunity and exhaustive byte-coordinate square coverage;
 * tactical wand emergencies, modifier groups, afflicted/trivial declines and
   polymorph decisions independent of RNG state;

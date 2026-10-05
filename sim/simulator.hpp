@@ -9,6 +9,9 @@ struct Options {
     unsigned max_rejected = 32, max_identical = 32, max_path_failures = 32;
     bool telemetry = true;
     std::ostream* trace = nullptr;
+    std::shared_ptr<const Experiment> experiment;
+    std::vector<std::string> intervention_rules;
+    std::string experiment_id="baseline", variant="control";
 };
 bool dispatch(const Action&);
 RunMetrics run(uint16_t seed, Agent&, const Options& = {});
