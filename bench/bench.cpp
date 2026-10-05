@@ -1,40 +1,51 @@
 #include "bench.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
+#include "inventory_view.hpp"
 #include "world.hpp"
 #include <string.h>
 
 using namespace rogue;
 
 // One manifest drives compiled entry points and the profiler's case list.
-// Name, description, UI preparation, final button, terrain, inventory item.
+// Name, description, UI preparation, final button, terrain, inventory item,
+// unmeasured DOWN/UP presses within the inventory modal.
 #define TURN_BENCHMARKS(X) \
-    X(move_room, "Move in a lit room", play, RIGHT, room, NO_ITEM) \
-    X(move_corridor, "Move along a branching corridor", play, RIGHT, corridor, NO_ITEM) \
-    X(move_map_edge, "Move with viewport clipping at map corner", play, RIGHT, edge, NO_ITEM) \
-    X(move_dense, "Move on an explored maze with 12 active enemies", play, RIGHT, dense, NO_ITEM) \
-    X(wait, "Wait one turn", wait, A, room, NO_ITEM) \
-    X(wait_dense, "Wait with 12 enemies, doors and ground items", wait, A, dense, NO_ITEM) \
-    X(attack_hit, "Bump attack that hits a surviving goblin", play, RIGHT, room, NO_ITEM) \
-    X(attack_miss, "Bump attack that misses a goblin", play, RIGHT, room, NO_ITEM) \
-    X(attack_kill, "Bump attack that kills and awards XP", play, RIGHT, room, NO_ITEM) \
-    X(open_door, "Open a closed door without moving", play, RIGHT, corridor, NO_ITEM) \
-    X(eat_food, "Confirm eating food", use, A, room, FOOD) \
-    X(drink_healing, "Confirm drinking a healing potion", use, A, room, HEALING) \
-    X(equip_weapon, "Confirm equipping a long sword", use, A, room, LONG_SWORD) \
-    X(equip_armor, "Confirm equipping chain mail", use, A, room, CHAIN_MAIL) \
-    X(equip_ring, "Confirm equipping a dexterity ring", use, A, room, RING_DEXTERITY) \
-    X(equip_cursed_amulet, "Equip an unidentified amulet of speed and discover its curse", use, A, room, AMULET_SPEED) \
-    X(scroll_mapping, "Confirm a mapping scroll and reveal the map", use, A, room, SCROLL_MAPPING) \
-    X(scroll_teleport, "Confirm a teleport scroll", use, A, room, SCROLL_TELEPORT) \
-    X(drop_food, "Confirm dropping food", drop, A, room, FOOD) \
-    X(wand_digging, "Submit digging direction; carve blocked terrain", wand, RIGHT, corridor, WAND_DIGGING) \
-    X(pickup_food, "Confirm pickup after stepping onto food", pickup, A, room, NO_ITEM)
+    X(move_room, "Move in a lit room", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(move_corridor, "Move along a branching corridor", play, RIGHT, corridor, NO_ITEM, 0, 0) \
+    X(move_map_edge, "Move with viewport clipping at map corner", play, RIGHT, edge, NO_ITEM, 0, 0) \
+    X(move_dense, "Move on an explored maze with 12 active enemies", play, RIGHT, dense, NO_ITEM, 0, 0) \
+    X(wait, "Wait one turn", wait, A, room, NO_ITEM, 0, 0) \
+    X(wait_dense, "Wait with 12 enemies, doors and ground items", wait, A, dense, NO_ITEM, 0, 0) \
+    X(attack_hit, "Bump attack that hits a surviving goblin", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(attack_miss, "Bump attack that misses a goblin", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(attack_kill, "Bump attack that kills and awards XP", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(open_door, "Open a closed door without moving", play, RIGHT, corridor, NO_ITEM, 0, 0) \
+    X(eat_food, "Confirm eating food", use, A, room, FOOD, 0, 0) \
+    X(drink_healing, "Confirm drinking a healing potion", use, A, room, HEALING, 0, 0) \
+    X(equip_weapon, "Confirm equipping a long sword", use, A, room, LONG_SWORD, 0, 0) \
+    X(equip_armor, "Confirm equipping chain mail", use, A, room, CHAIN_MAIL, 0, 0) \
+    X(equip_ring, "Confirm equipping a dexterity ring", use, A, room, RING_DEXTERITY, 0, 0) \
+    X(equip_cursed_amulet, "Equip an unidentified amulet of speed and discover its curse", use, A, room, AMULET_SPEED, 0, 0) \
+    X(scroll_mapping, "Confirm a mapping scroll and reveal the map", use, A, room, SCROLL_MAPPING, 0, 0) \
+    X(scroll_teleport, "Confirm a teleport scroll", use, A, room, SCROLL_TELEPORT, 0, 0) \
+    X(drop_food, "Confirm dropping food", drop, A, room, FOOD, 0, 0) \
+    X(wand_digging, "Submit digging direction; carve blocked terrain", wand, RIGHT, corridor, WAND_DIGGING, 0, 0) \
+    X(pickup_food, "Confirm pickup after stepping onto food", pickup, A, room, NO_ITEM, 0, 0) \
+    X(inventory_open_full, "Open a full pack spanning all nine groups", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_down_full, "Scroll down across the last group in a full mixed pack", browse, DOWN, room, NO_ITEM, 14, 0) \
+    X(inventory_up_full, "Scroll up near the bottom of a full mixed pack", browse, UP, room, NO_ITEM, 15, 5) \
+    X(inventory_open_wands, "Open a full pack of identified wands with long names", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_down_wands, "Scroll down to the last of 16 identified wands", browse, DOWN, room, NO_ITEM, 14, 0) \
+    X(inventory_up_wands, "Scroll up through seven visible long wand names", browse, UP, room, NO_ITEM, 15, 6) \
+    X(inventory_open_singletons, "Open all nine groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_down_singletons, "Scroll down across the last of nine singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
+    X(inventory_up_singletons, "Scroll up across singleton group headers near the bottom", browse, UP, room, NO_ITEM, 8, 3)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
 enum class Case : uint8_t {
-#define CASE_ENUM(name, description, setup, button, terrain, item) name,
+#define CASE_ENUM(name, description, setup, button, terrain, item, down, up) name,
     TURN_BENCHMARKS(CASE_ENUM)
 #undef CASE_ENUM
     count
@@ -49,6 +60,53 @@ void add_monster(uint8_t index, Position pos, uint8_t type = GOBLIN, uint8_t hp 
 void add_ground(uint8_t index, Position pos)
 {
     game.ground[index] = {pos, {FOOD, 1}};
+}
+
+void add_inventory(uint8_t slot, ItemType type)
+{
+    Item item = is_equipment(type) ? make_equipment(type, -3) : Item{type, 15};
+    item.info |= ITEM_IDENTIFIED;
+    if(is_equipment(type)) item.info |= ITEM_CURSED;
+    if(is_wand(type)) {
+        set_wand_charges(item, static_cast<uint8_t>(15 - slot % 6));
+        set_wand_modifier(item, slot % 2 ? WAND_UNRELIABLE : WAND_OVERPOWERED);
+    }
+    game.inventory[slot] = item;
+}
+
+// Deliberately interleave groups so late rows repeatedly scan the whole pack.
+void prepare_full_inventory()
+{
+    add_inventory(0, WAND_TELEPORT);
+    add_inventory(1, FOOD);
+    add_inventory(2, SCROLL_MASS_CONFUSE);
+    add_inventory(3, INVISIBILITY);
+    add_inventory(4, RING_SEE_INVISIBLE);
+    add_inventory(5, PLATE_MAIL);
+    add_inventory(6, TWO_HANDED_SWORD);
+    add_inventory(7, AMULET_REGENERATION);
+    add_inventory(8, YENDOR_AMULET);
+    add_inventory(9, WAND_POLYMORPH);
+    add_inventory(10, SCROLL_REMOVE_CURSE);
+    add_inventory(11, EXPERIENCE);
+    add_inventory(12, RING_INVISIBILITY);
+    add_inventory(13, SPLINT_MAIL);
+    add_inventory(14, LONG_SWORD);
+    add_inventory(15, FOOD);
+}
+
+void prepare_singleton_inventory()
+{
+    // Nine is the maximum group count. Empty leading slots increase scanning.
+    add_inventory(7, YENDOR_AMULET);
+    add_inventory(8, FOOD);
+    add_inventory(9, SCROLL_MASS_CONFUSE);
+    add_inventory(10, INVISIBILITY);
+    add_inventory(11, WAND_POLYMORPH);
+    add_inventory(12, AMULET_REGENERATION);
+    add_inventory(13, RING_SEE_INVISIBLE);
+    add_inventory(14, PLATE_MAIL);
+    add_inventory(15, TWO_HANDED_SWORD);
 }
 
 // Preparation runs once, before the initial render and any measured input.
@@ -123,6 +181,22 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         }
     }
     switch(scenario) {
+    case Case::inventory_open_full:
+    case Case::inventory_down_full:
+    case Case::inventory_up_full:
+        prepare_full_inventory();
+        break;
+    case Case::inventory_open_wands:
+    case Case::inventory_down_wands:
+    case Case::inventory_up_wands:
+        for(uint8_t slot = 0; slot < INVENTORY; ++slot)
+            add_inventory(slot, static_cast<ItemType>(WAND_FORCE + (slot + 1) % WAND_COUNT));
+        break;
+    case Case::inventory_open_singletons:
+    case Case::inventory_down_singletons:
+    case Case::inventory_up_singletons:
+        prepare_singleton_inventory();
+        break;
     case Case::attack_hit:
     case Case::attack_miss:
     case Case::attack_kill: {
@@ -171,7 +245,7 @@ __attribute__((noinline)) void bench_select()
 }
 }
 
-#define CASE_ENTRY(name, description, setup, button, terrain, item) \
+#define CASE_ENTRY(name, description, setup, button, terrain, item, down, up) \
     extern "C" __attribute__((noinline)) void bench_##name() \
     { prepare(Case::name, Terrain::terrain, item); }
 TURN_BENCHMARKS(CASE_ENTRY)
@@ -182,7 +256,7 @@ uint8_t bench_count() { return static_cast<uint8_t>(Case::count); }
 void bench_setup()
 {
     switch(static_cast<Case>(bench_case)) {
-#define CASE_DISPATCH(name, description, setup, button, terrain, item) \
+#define CASE_DISPATCH(name, description, setup, button, terrain, item, down, up) \
     case Case::name: bench_##name(); return;
     TURN_BENCHMARKS(CASE_DISPATCH)
 #undef CASE_DISPATCH

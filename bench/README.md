@@ -10,8 +10,10 @@ record earlier measurements against the former 150 ms limit.
 The next round implemented shared ray prefixes and row-based exploration
 separately, benchmarking each; see the [second-round results](RESULTS-100MS.md).
 Removing persistent room metadata then saved 48 RAM bytes and simplified
-visibility; see the [room metadata results](RESULTS-ROOMS.md). All 21 cases meet
-the current 100 ms limit. The runner defaults to this limit.
+visibility; see the [room metadata results](RESULTS-ROOMS.md). The original 21
+cases met the current 100 ms limit. Nine inventory browsing stress cases now
+extend the suite to 30 cases; over-budget results remain baselines for future
+optimization. The runner defaults to the same limit.
 
 `profile_turns.py` uses Python 3's standard library and the installed SDK's
 `avm-lldb`. The separate `ardurogue2-bench.elf` links [bench.cpp](bench.cpp) with
@@ -25,7 +27,7 @@ The normal `ardurogue2.elf` and root `.arduboy` do not include the benchmark cod
 
 ## Run
 
-Build the game and run all 21 cases once:
+Build the game and run all 30 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
@@ -60,6 +62,8 @@ and execution, while `--timeout` bounds host debugger runtime.
 Every invocation creates a unique directory under `--output`. It retains
 pre/post named state snapshots (`before.json`/`after.json`), debugger transcripts, controller
 frame captures, generated `.lldb` command files, and `.avmp` source profiles.
+Inventory browsing also captures `before.pgm`; both of its frames use logical
+display orientation for highlight and scrolling validation.
 `summary.json`, `summary.csv`, and `summary.md` contain exact cycle counts and timings,
 pass/over status, exact cycle boundaries, and profiler launch identities.
 Profiles contain ELF/interpreter hashes and source/instruction hotspots for
@@ -98,18 +102,26 @@ Each window measures the complete response between consecutive player inputs.
 It starts at the coherent AVM boundary where the action button is submitted
 and includes interrupt wakeup/polling, input dispatch, player movement/combat/
 item effects, monster turns, status updates, every intermediate render,
-the final `render()`/display transfer, and return to the main input loop's
-`avm_idle()` call. No post-render idle interval is included. The stop PC must
-match the ready main-loop PC, the profile must contain the final renderer, its
-cycle totals must reconcile, and the post-state must prove the intended action.
+the final renderer/display transfer, and return to the next `avm_idle()` call.
+Gameplay actions return to the main input loop; inventory opening and scrolling
+return to the inventory modal's input loop. No post-render idle interval is
+included. The stop PC must match the expected input boundary, the profile must
+contain the appropriate final renderer, its cycle totals must reconcile, and
+the post-state must prove the intended action.
 A deadline, fault, incomplete turn or unexpected modal stop cannot pass the goal.
 
-Menu navigation and choosing a slot happen before the measured window. Item
+Menu navigation and preliminary slot navigation happen before the measured window. Item
 use/drop starts with the inventory A confirmation; digging starts with
 the direction; pickup starts with the yes/no A confirmation. The pickup approach
 step and its rendered question belong to the preceding input response and
 are outside the pickup-confirmation measurement. Movement cases avoid
-tiles that request a further decision.
+tiles that request a further decision. Inventory opening starts with the menu's
+A confirmation. Inventory scrolling starts with one UP or DOWN input after the
+manifest's preliminary DOWN and UP presses have positioned the selection.
+Browsing must leave the captured game state and every inventory item unchanged
+and consume no game turn. The runner checks the selection highlight and, for
+scrolling, the shift of overlapping rendered rows in the logical frame captures.
+This avoids depending on optimized modal locals being available in DWARF.
 
 Each measured response receives exactly one submitted input. No acknowledgement
 presses are injected during it. Scenarios avoid status pagination that would
@@ -133,6 +145,16 @@ the mapping check reads the explored array using its actual `sizeof`.
   show it equipped with its type and curse revealed. The confirmation response
   includes the curse warning and completes without a pagination acknowledgement.
 - Wands: digging through blocked terrain without animation.
+- Inventory browsing: opening, scrolling down near the end, and scrolling up
+  from the top of a scrolled viewport for each of these layouts:
+  - A full 16-slot pack with all nine groups interleaved (25 rows including
+    headers), identified equipment and accessories, and long consumable names.
+  - A full 16-slot group containing all seven identified wand types, alternating
+    overpowered and unreliable modifiers, and 10–15 charges. Scrolled views
+    render seven item names rather than spending a row on the group header.
+  - All nine groups with one item each (18 rows). The nine items occupy the last
+    nine slots in reverse group order, maximizing headers and scanning past
+    empty leading slots. Scrolling crosses group headers near the bottom.
 
 These are controlled scenarios, not a statistical claim about all
 possible floors or turns. Each case starts from a fixed state/RNG and produces

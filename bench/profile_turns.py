@@ -21,6 +21,13 @@ import tempfile
 
 CLOCK_HZ = 16_000_000
 DEFAULT_GOAL_MS = 100.0
+INVENTORY_RANGES = (("LONG_SWORD", "TWO_HANDED_SWORD", "WEAPONS"),
+                    ("CHAIN_MAIL", "PLATE_MAIL", "ARMORS"),
+                    ("RING_SEE_INVISIBLE", "RING_INVISIBILITY", "RINGS"),
+                    ("AMULET_SPEED", "AMULET_WISDOM", "AMULETS"),
+                    ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
+                    ("HEALING", "INVISIBILITY", "POTIONS"),
+                    ("SCROLL_IDENTIFY", "SCROLL_MASS_POISON", "SCROLLS"))
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,8 @@ class Benchmark:
     setup: str
     button: str
     item: str
+    down: int
+    up: int
     index: int
 
 
@@ -40,13 +49,16 @@ def require(condition, message):
 
 def read_benchmarks(path):
     source = path.read_text(encoding="utf-8")
-    entries = re.findall(r'^\s*X\((\w+),\s*"([^"\n]+)",\s*(\w+),\s*(\w+),\s*(\w+),\s*(\w+)\)', source, re.M)
+    entries = re.findall(r'^\s*X\((\w+),\s*"([^"\n]+)",\s*(\w+),\s*(\w+),\s*(\w+),\s*(\w+),\s*(\d+),\s*(\d+)\)', source, re.M)
     require(entries and len(entries) == len(re.findall(r'^\s*X\(', source, re.M)) and
             len({entry[0] for entry in entries}) == len(entries), "invalid compiled benchmark manifest")
-    cases = tuple(Benchmark(name, description, setup, button, item, index)
-                  for index, (name, description, setup, button, terrain, item) in enumerate(entries))
-    require(all(case.setup in ("play", "wait", "use", "drop", "wand", "pickup") and
-                case.button in ("RIGHT", "A") for case in cases), "unsupported benchmark input preparation")
+    cases = tuple(Benchmark(name, description, setup, button, item, int(down), int(up), index)
+                  for index, (name, description, setup, button, terrain, item, down, up) in enumerate(entries))
+    require(all((case.setup == "browse" and case.button in ("A", "DOWN", "UP") and
+                 (case.button != "A" or not (case.down or case.up))) or
+                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup") and
+                 case.button in ("RIGHT", "A") and not (case.down or case.up))
+                for case in cases), "unsupported benchmark input preparation")
     return cases
 
 
@@ -97,6 +109,22 @@ def state_fields(case):
         fields["amulet_empty"] = "rogue::game.amulet_slot == rogue::NONE"
     if case.name == "wand_digging":
         fields["charges"] = "rogue::game.inventory[0].info & rogue::WAND_CHARGE_MASK"
+    if case.setup == "browse":
+        fields["pack_size"] = "rogue::INVENTORY"
+        fields["visible_rows"] = "rogue::INVENTORY_VISIBLE_ROWS"
+        fields["group_count"] = "rogue::InventoryGroup::INVENTORY_GROUPS"
+        # Read enum bounds separately: AVM LLDB cannot interpret nested selects.
+        for index, (first, last, group) in enumerate(INVENTORY_RANGES):
+            fields[f"group_first_{index}"] = "rogue::ItemType::" + first
+            fields[f"group_last_{index}"] = "rogue::ItemType::" + last
+            fields[f"group_id_{index}"] = "rogue::InventoryGroup::" + group
+        fields["food_type"] = "rogue::ItemType::FOOD"
+        fields["food_group"] = "rogue::InventoryGroup::FOODS"
+        fields["quest_group"] = "rogue::InventoryGroup::QUEST_ITEMS"
+        for slot in range(16):
+            item = f"rogue::game.inventory[{slot}]"
+            fields[f"pack_type_{slot}"] = item + ".type"
+            fields[f"pack_info_{slot}"] = item + ".info"
     return fields
 
 
@@ -124,11 +152,19 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
     ]
     if case.setup == "wait":
         commands += press("B")
-    if case.setup in ("use", "drop", "wand"):
+    if case.setup in ("use", "drop", "wand", "browse"):
         commands += press("B")
         selection = 2 if case.setup == "drop" else 1
         for _ in range(selection):
             commands += press("DOWN")
+    if case.setup == "browse":
+        commands += ["breakpoint disable 3",
+                     f"breakpoint set --file ui.cpp --line {contract['item_idle']}"]
+        if case.button != "A":
+            commands += press("A")
+            for button, count in (("DOWN", case.down), ("UP", case.up)):
+                for _ in range(count):
+                    commands += press(button)
     if case.setup in ("use", "drop", "pickup", "wand"):
         line = contract["yesno_idle"] if case.setup == "pickup" else contract["item_idle"]
         commands += [
@@ -140,7 +176,9 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         if case.setup == "wand":
             commands += press("A")  # Confirm slot; stop after direction prompt is ready.
     commands += [
-        *snapshot(), "avm time",
+        *snapshot(),
+        *([f"avm display save {quote(folder / 'before.pgm')} --mode logical"] if case.setup == "browse" else []),
+        "avm time",
         "avm profile start" + (" --native" if native else ""),
         "avm button set " + case.button, run, "avm time", "avm profile stop",
         f"avm profile save {quote(folder / 'turn.avmp')}", "avm profile report --top 12",
@@ -149,7 +187,7 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         f"memory read --binary --outfile {quote(folder / 'explored.bin')} --size 1 "
         "--count `sizeof(rogue::game.explored)` `(unsigned int)&rogue::game.explored + 0x01000000`",
         "thread backtrace",
-        f"avm display save {quote(folder / 'frame.pgm')} --mode controller",
+        f"avm display save {quote(folder / 'frame.pgm')} --mode " + ("logical" if case.setup == "browse" else "controller"),
     ]
     return "\n".join(commands) + "\n"
 
@@ -160,8 +198,13 @@ def records_from(output):
 
 
 def validate_outcome(case, before, after, explored):
-    require(after["turns"] == (before["turns"] + 1) % 256, "expected one completed game turn")
+    expected_turns = before["turns"] if case.setup == "browse" else (before["turns"] + 1) % 256
+    require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup == "browse"
+            else "expected one completed game turn")
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
+    if case.setup == "browse":
+        require(before == after, "inventory browsing changed game state")
+        return
     position_before = (before["x"], before["y"])
     position_after = (after["x"], after["y"])
     if case.item != "NO_ITEM":
@@ -205,6 +248,75 @@ def validate_outcome(case, before, after, explored):
         require(after["ground_type"] == 0 and after["food"], "food was not picked up")
 
 
+def read_frame(path):
+    # avm display save emits a binary 128x64 grayscale PGM without comments.
+    magic, size, maximum, pixels = path.read_bytes().split(b"\n", 3)
+    require((magic, size, maximum) == (b"P5", b"128 64", b"255") and len(pixels) == 128 * 64,
+            "invalid display frame capture")
+    return pixels
+
+
+def inventory_row(frame, row, selected):
+    pixels = frame[(12 + row * 7) * 128:(19 + row * 7) * 128]
+    # Remove the selection's inverse colors before comparing scrolled content.
+    return bytes(255 - value if selected and index % 128 >= 7 else value
+                 for index, value in enumerate(pixels))
+
+
+def validate_browsing(case, before, before_frame, after_frame):
+    # Reconstruct grouped rows from the named inventory fields captured by LLDB.
+    def group_for(slot):
+        item_type = before[f"pack_type_{slot}"]
+        return next((before[f"group_id_{index}"] for index in range(len(INVENTORY_RANGES))
+                     if before[f"group_first_{index}"] <= item_type <= before[f"group_last_{index}"]),
+                    before["food_group"] if item_type == before["food_type"] else before["quest_group"])
+
+    rows = []
+    for group in range(before["group_count"]):
+        slots = [slot for slot in range(before["pack_size"]) if before[f"pack_type_{slot}"] and
+                 group_for(slot) == group]
+        if slots:
+            rows += [before["pack_size"] + group, *slots]
+    items = [slot for slot in rows if slot < before["pack_size"]]
+    require(items, "inventory browsing fixture is empty")
+    selected, top = 0, 0
+
+    def advance(step):
+        nonlocal selected, top
+        selected = max(0, min(len(items) - 1, selected + step))
+        row = rows.index(items[selected])
+        top = min(max(0, len(rows) - before["visible_rows"]),
+                  min(top, row) if row < top + before["visible_rows"]
+                  else row - before["visible_rows"] + 1)
+
+    for step, count in ((1, case.down), (-1, case.up)):
+        for _ in range(count):
+            advance(step)
+    before_top = top
+    before_row = rows.index(items[selected]) - top
+    if case.button != "A":
+        advance(1 if case.button == "DOWN" else -1)
+        require(top != before_top, "inventory benchmark did not scroll the viewport")
+    after_row = rows.index(items[selected]) - top
+
+    def check_highlight(frame, expected):
+        highlighted = [row for row in range(before["visible_rows"])
+                       if all(frame[y * 128 + 7] == 255 for y in range(12 + row * 7, 19 + row * 7))]
+        require(highlighted == [expected], "inventory selection highlight is on the wrong row")
+
+    check_highlight(after_frame, after_row)
+    require(before_frame != after_frame, "inventory input did not redraw a changed view")
+    if case.button != "A":
+        check_highlight(before_frame, before_row)
+        # Visible rows shared by both viewports must move by the expected amount.
+        for row in range(before["visible_rows"]):
+            old_row = row + top - before_top
+            if 0 <= old_row < before["visible_rows"]:
+                require(inventory_row(after_frame, row, row == after_row) ==
+                        inventory_row(before_frame, old_row, old_row == before_row),
+                        "inventory viewport did not scroll to the intended grouped rows")
+
+
 def validate_sample(case, contract, folder, output):
     values = [int(value) for value in re.findall(r"\(unsigned int\) \$\d+ = (\d+)", output)]
     fields = list(state_fields(case))
@@ -220,7 +332,12 @@ def validate_sample(case, contract, folder, output):
     times = [record for record in records if "seconds_since_reset" in record]
     require(len(times) == 3, "missing ready/start/end clock records")
     ready, start, end = times
-    require(end["pc"] == ready["pc"], "stopped before final render returned to main input loop")
+    if case.setup == "browse":
+        modal_pcs = re.findall(r'^Breakpoint 4:.*address = (0x[0-9a-fA-F]+)', output, re.M)
+        require(len(modal_pcs) == 1 and end["pc"] == int(modal_pcs[0], 16),
+                "stopped before inventory display returned to the modal input loop")
+    else:
+        require(end["pc"] == ready["pc"], "stopped before final render returned to main input loop")
     profile = json.loads((folder / "turn.avmp").read_text(encoding="utf-8"))
     window = profile["window"]
     cycles = int(window["end_cycle"]) - int(window["start_cycle"])
@@ -231,7 +348,8 @@ def validate_sample(case, contract, folder, output):
             int(window["end_cycle"]) == end["cycles"] and cycles > 0 and
             sum(int(row["cycles"]) for row in profile["pcs"]) == cycles,
             "profile and input-to-ready clock interval do not reconcile")
-    require(any(row["linkage"] == "_ZN5rogue6renderEv" for row in profile["pcs"]),
+    renderer = "_ZN5rogue16render_inventoryE" if case.setup == "browse" else "_ZN5rogue6renderEv"
+    require(any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
             "the measured turn did not execute the final render")
     require(not any("rogue::animate_" in row["function"] or
                     row["linkage"] == "_ZN5rogue10make_floorEv" or
@@ -244,6 +362,8 @@ def validate_sample(case, contract, folder, output):
     require(len(buttons) == 1 and buttons[0]["cycle"] == start["cycles"] and buttons[0]["pressed_mask"] != 0,
             "a measured turn must contain exactly one submitted input")
     validate_outcome(case, before, after, (folder / "explored.bin").read_bytes())
+    if case.setup == "browse":
+        validate_browsing(case, before, read_frame(folder / "before.pgm"), read_frame(folder / "frame.pgm"))
     for name, state in (("before", before), ("after", after)):
         (folder / (name + ".json")).write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     return {"cycles": cycles, "ms": cycles * 1000 / CLOCK_HZ,
