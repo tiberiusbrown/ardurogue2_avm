@@ -41,6 +41,7 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
         ++r.actions;
         if(!r.floors.empty()) ++r.floors.back().actions;
         hash_action(r,a);
+        c.prepare_action(a);
         bool accepted = dispatch(a);
         if(options.trace && !accepted) *options.trace << "  action rejected\n";
         bool swapped = accepted && (a.kind == ActionKind::Swap || a.kind == ActionKind::Take) &&

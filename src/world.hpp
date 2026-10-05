@@ -20,6 +20,14 @@ struct RayResult {
     bool blocker;
 };
 RayResult scan_ray(Position origin, int8_t dx, int8_t dy, uint8_t range);
+// Shared pure geometry for production burst effects and headless planning.
+constexpr bool square_contains(Position center, Position pos, uint8_t radius)
+{
+    uint8_t dx = pos.x > center.x ? pos.x - center.x : center.x - pos.x;
+    uint8_t dy = pos.y > center.y ? pos.y - center.y : center.y - pos.y;
+    return dx <= radius && dy <= radius;
+}
+constexpr uint8_t wand_fire_radius(bool powerful) { return powerful ? 2 : 1; }
 void make_floor();
 bool can_see(Position pos);
 // Clamps radius to MAX_LIGHT_RADIUS; invalid viewport rows are empty.

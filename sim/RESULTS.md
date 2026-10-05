@@ -1,5 +1,8 @@
 # Milestone 1 validation
 
+This is the historical `omniscient-v1` baseline. The frozen current reference
+and v1/v2 comparison are documented in [V2_RESULTS.md](V2_RESULTS.md).
+
 Validated October 5, 2026 on Windows x64 with Visual Studio Clang 22.1.3,
 Release, agent `omniscient-v1`. The pre-instrumentation repository revision was
 `ed709dabc1a7ace3145aea8236ff177f0853753d`. No gameplay rules or save fields were

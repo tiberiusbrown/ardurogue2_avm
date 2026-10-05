@@ -243,11 +243,7 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
         Monster& target = game.monsters[i];
         if(!target.type || target.type == DRAGON)
             continue;
-        uint8_t dx = target.pos.x > center.x ? target.pos.x - center.x :
-            center.x - target.pos.x;
-        uint8_t dy = target.pos.y > center.y ? target.pos.y - center.y :
-            center.y - target.pos.y;
-        if(dx > radius || dy > radius)
+        if(!square_contains(center, target.pos, radius))
             continue;
 #if defined(ARDUROGUE2_SIM)
         if(player_attack) SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
@@ -255,11 +251,7 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
         damage_monster(i, damage, player_attack);
     }
-    uint8_t px = game.player.x > center.x ? game.player.x - center.x :
-        center.x - game.player.x;
-    uint8_t py = game.player.y > center.y ? game.player.y - center.y :
-        center.y - game.player.y;
-    if(player_attack && px <= radius && py <= radius) {
+    if(player_attack && square_contains(center, game.player, radius)) {
 #if defined(ARDUROGUE2_SIM)
         sim::DamageScope damage_source(sim::Cause::Fire);
 #endif

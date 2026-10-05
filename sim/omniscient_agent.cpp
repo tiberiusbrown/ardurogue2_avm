@@ -78,9 +78,12 @@ int value(Item i) {
         case WAND_STRIKING: return 70 + 8*wand_charges(i);
         case WAND_ICE: return 65 + 6*wand_charges(i);
         case WAND_FIRE: return 55 + 5*wand_charges(i);
-        case WAND_FORCE: return 30 + 3*wand_charges(i);
-        case WAND_TELEPORT: return 35 + 3*wand_charges(i);
-        case WAND_POLYMORPH: return 20 + 3*wand_charges(i);
+        case WAND_FORCE: return 45 + 4*wand_charges(i);
+        case WAND_TELEPORT: return 65 + 5*wand_charges(i);
+        case WAND_POLYMORPH: return 30 + 3*wand_charges(i);
+        // Digging carves terrain but does not move/control anyone. This frozen
+        // oracle deliberately gives speculative shortcuts no tactical value.
+        case WAND_DIGGING: return 0;
         default: return 0;
         }
     }
@@ -102,7 +105,8 @@ int value(Item i) {
     case SCROLL_MASS_POISON: return 75;
     case SCROLL_FEAR: return 60;
     case SCROLL_TELEPORT: return 45;
-    case SCROLL_REMOVE_CURSE: return 20;
+    // The oracle never acquires afflicted gear/wands, so this is not useful.
+    case SCROLL_REMOVE_CURSE: return 0;
     default: return 0;
     }
 }
@@ -138,6 +142,184 @@ Action pickup(int index) {
     // this deterministic removable slot through the production swap API.
     if(i.type != YENDOR_AMULET && !fits(i)) a.slot = static_cast<uint8_t>(replacement(i));
     return a;
+}
+
+bool controlled(const Monster& m) {
+    return m.stun || (m.state & MON_AFRAID) || monster_effect(m,MON_CONFUSED);
+}
+bool hostile(const Monster& m) {
+    uint16_t flags = monster_flags(m.type);
+    return ((flags & MON_MEAN) || (m.state & MON_AGGRO)) &&
+        (!player_is_invisible() || (flags & MON_SEE_INVIS));
+}
+// A deliberately rough danger preference, not a roll or a combat simulation.
+int offensive_pressure(const Monster& m) {
+    auto info = monster_info(m.type);
+    int pressure = std::max(1,int(info.strength)+1-player_armor_rating()/2);
+    if(monster_effect(m,MON_WEAKENED)) pressure = (pressure+1)/2;
+    if(info.flags & MON_FIRE_BREATH) pressure += ring_bonus(RING_FIRE_IMMUNITY) > 0 ? 0 : 4;
+    if((info.flags & MON_PARALYZE_HIT) && amulet_bonus(AMULET_IRONBLOOD) <= 0) pressure += 2;
+    if((info.flags & MON_CONFUSE_HIT) && amulet_bonus(AMULET_CLARITY) <= 0) pressure += 2;
+    int cost = std::max(1,int(game.speed)-amulet_bonus(AMULET_SPEED))*(game.slowed ? 2 : 1);
+    int speed = std::max(1,int(info.speed)*(monster_effect(m,MON_SLOWED) ? 2 : 1));
+    if(cost > speed) pressure += pressure/2;
+    return pressure;
+}
+struct Danger {
+    int adjacent=0, nearby=0, pressure=0;
+    bool emergency=false;
+};
+Danger danger() {
+    Danger result;
+    for(const auto& m : game.monsters) if(m.type && hostile(m)) {
+        int d = distance(m.pos,game.player);
+        if(d <= 4 && can_see(m.pos)) ++result.nearby;
+        if(controlled(m)) continue;
+        if(d <= 2 && can_see(m.pos)) result.pressure += offensive_pressure(m)*(d == 1 ? 2 : 1);
+        if(d == 1) ++result.adjacent;
+    }
+    // Nearby monsters matter, but do not burn escape resources on a lone weak
+    // healthy encounter. Low HP, multiple attackers and status impairments do.
+    result.emergency = result.pressure > 0 &&
+        (game.hp <= result.pressure+3 ||
+         (result.adjacent > 0 && game.hp*100 <= player_max_hp()*35 && result.pressure >= 10) ||
+         (result.adjacent >= 2 && game.hp*3 <= player_max_hp()*2) ||
+         ((game.confused || game.weakened || game.slowed) && result.adjacent && game.hp*2 < player_max_hp()));
+    return result;
+}
+bool fire_safe(Item wand, int d) {
+    if(wand_afflicted(wand) || !wand_charges(wand)) return false;
+    if(ring_bonus(RING_FIRE_IMMUNITY) > 0) return true;
+    int rays = wand_spreads(wand) ? 4 : 1;
+    for(int n = 0; n < rays; ++n) {
+        int direction = rays == 4 ? n : d;
+        auto ray = scan_ray(game.player,dxs[direction],dys[direction],6);
+        if(square_contains(ray.end,game.player,wand_fire_radius(wand_powerful(wand)))) return false;
+    }
+    return true;
+}
+uint16_t affected_monsters(Item wand, int d) {
+    uint16_t mask = 0;
+    int rays = wand_spreads(wand) ? 4 : 1;
+    for(int n = 0; n < rays; ++n) {
+        int direction = rays == 4 ? n : d;
+        auto ray = scan_ray(game.player,dxs[direction],dys[direction],6);
+        bool area = wand_powerful(wand) && (wand.type == WAND_TELEPORT || wand.type == WAND_POLYMORPH);
+        if(area) {
+            for(int i = 0; i < MONSTERS; ++i) if(game.monsters[i].type && square_contains(ray.end,game.monsters[i].pos,1))
+                mask |= static_cast<uint16_t>(1u << i);
+        } else if(ray.monster != NONE) mask |= static_cast<uint16_t>(1u << ray.monster);
+    }
+    return mask;
+}
+Action wand_action(int s, int d, const char* goal, Position target) {
+    Action a; a.kind = ActionKind::Wand; a.slot = static_cast<uint8_t>(s);
+    if(wand_needs_direction(game.inventory[s])) { a.dx = dxs[d]; a.dy = dys[d]; }
+    a.goal = goal; a.destination = target; return a;
+}
+bool emergency_wand(uint8_t type, Action& choice) {
+    int best_score = 0;
+    for(int s = 0; s < INVENTORY; ++s) {
+        Item wand = game.inventory[s];
+        if(wand.type != type || wand_afflicted(wand) || !wand_charges(wand)) continue;
+        for(int d = 0; d < (wand_spreads(wand) ? 1 : 4); ++d) {
+            uint16_t mask = affected_monsters(wand,d);
+            int score = 0; Position target{NONE,NONE}; bool unsuitable = false;
+            for(int i = 0; i < MONSTERS; ++i) if(mask & (1u << i)) {
+                const auto& m = game.monsters[i];
+                if(type == WAND_POLYMORPH && (m.type < INCUBUS || m.type == LORD || m.hp < monster_health(m.type)/2)) {
+                    unsuitable = true; break;
+                }
+                if(!hostile(m) || controlled(m) || distance(m.pos,game.player) > 2) continue;
+                if(type == WAND_POLYMORPH && game.hp*100 > player_max_hp()*35 && game.hp > offensive_pressure(m)*2) continue;
+                if(type == WAND_FORCE) {
+                    int direction = d;
+                    if(wand_spreads(wand)) {
+                        direction = m.pos.x == game.player.x ? (m.pos.y < game.player.y ? 0 : 2) :
+                            (m.pos.x > game.player.x ? 1 : 3);
+                    }
+                    auto pushed = scan_ray(m.pos,dxs[direction],dys[direction],wand_powerful(wand) ? 16 : 8);
+                    auto end = pushed.monster != NONE ? pushed.before : pushed.end;
+                    if(!pushed.blocker && pushed.monster == NONE && distance(end,game.player) < distance(m.pos,game.player)+2) continue;
+                }
+                score += offensive_pressure(m)*(distance(m.pos,game.player) == 1 ? 2 : 1);
+                if(target.x == NONE) target = m.pos;
+            }
+            if(!unsuitable && score > best_score) {
+                best_score = score;
+                choice = wand_action(s,d,type == WAND_TELEPORT ? "emergency teleport enemy" :
+                    type == WAND_FORCE ? "emergency force enemy away" : "emergency polymorph threat",target);
+            }
+        }
+    }
+    return best_score > 0;
+}
+int retreat_pressure(Position p) {
+    int pressure = 0;
+    for(const auto& m : game.monsters) if(m.type && hostile(m) && !controlled(m)) {
+        int d = distance(m.pos,p);
+        if(d <= 4) pressure += offensive_pressure(m)*(d <= 1 ? 6 : d == 2 ? 3 : 1);
+    }
+    return pressure;
+}
+bool retreat(Position previous, Action& choice) {
+    if(game.confused) return false; // Directional movement can be randomized.
+    Position goal = game.has_amulet ? game.up : game.down;
+    int current = retreat_pressure(game.player), best_score = 0;
+    for(int d = 0; d < 4; ++d) {
+        Position p{static_cast<uint8_t>(game.player.x+dxs[d]),static_cast<uint8_t>(game.player.y+dys[d])};
+        // A closed door costs a turn without moving; an occupied cell attacks.
+        if(p == previous || blocked(p.x,p.y) || monster_at(p) != NONE) continue;
+        int exits = 0;
+        for(int n = 0; n < 4; ++n) {
+            Position next{static_cast<uint8_t>(p.x+dxs[n]),static_cast<uint8_t>(p.y+dys[n])};
+            if(!blocked(next.x,next.y) && monster_at(next) == NONE) ++exits;
+        }
+        if(exits < 2) continue;
+        int reduction = current-retreat_pressure(p);
+        if(reduction < 6) continue;
+        int score = reduction+3*exits+distance(game.player,goal)-distance(p,goal);
+        if(score > best_score) {
+            best_score = score; choice.kind = ActionKind::Move; choice.dx = dxs[d]; choice.dy = dys[d];
+            choice.destination = p; choice.goal = "emergency retreat to safer space";
+        }
+    }
+    return best_score > 0;
+}
+bool emergency_control(Action& choice) {
+    // Hard control first. Production ray/visibility checks still decide hits.
+    for(uint8_t type : {uint8_t(PARALYSIS),uint8_t(CONFUSION)}) {
+        int s = find(type); if(s < 0) continue;
+        for(int d = 0; d < 4; ++d) {
+            auto ray = scan_ray(game.player,dxs[d],dys[d],6);
+            if(ray.monster == NONE || ray.steps > 2) continue;
+            const auto& m = game.monsters[ray.monster];
+            if(!hostile(m) || controlled(m)) continue;
+            choice.kind = ActionKind::Throw; choice.slot = static_cast<uint8_t>(s);
+            choice.dx = dxs[d]; choice.dy = dys[d]; choice.destination = m.pos;
+            choice.goal = "emergency control"; return true;
+        }
+    }
+    for(uint8_t type : {uint8_t(SCROLL_MASS_CONFUSE),uint8_t(SCROLL_FEAR)}) {
+        int s = find(type); if(s < 0) continue;
+        for(int i = 0; i < MONSTERS; ++i) {
+            const auto& m = game.monsters[i];
+            if(m.type && hostile(m) && !controlled(m) && distance(m.pos,game.player) <= 2 &&
+               player_can_see_monster(static_cast<uint8_t>(i)) && can_see(m.pos)) {
+                choice = use(s,"emergency visible control"); return true;
+            }
+        }
+    }
+    // Invisibility is useful control only if every immediate threat lacks sight.
+    int invisible = find(INVISIBILITY); bool usable_invisibility = invisible >= 0 && !player_is_invisible();
+    for(const auto& m : game.monsters) if(m.type && distance(m.pos,game.player) <= 3 && hostile(m) &&
+        (monster_flags(m.type) & MON_SEE_INVIS)) usable_invisibility = false;
+    if(usable_invisibility) { choice = use(invisible,"emergency invisibility"); return true; }
+    int teleport = find(SCROLL_TELEPORT);
+    if(teleport >= 0) { choice = use(teleport,"emergency teleport player"); return true; }
+    for(uint8_t type : {uint8_t(WAND_TELEPORT),uint8_t(WAND_FORCE),uint8_t(WAND_POLYMORPH)})
+        if(emergency_wand(type,choice)) return true;
+    return false;
 }
 }
 
@@ -180,9 +362,29 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         if(d == 1 && (adjacent < 0 || m.hp < game.monsters[adjacent].hp)) adjacent = i;
     }
     int healing = find(HEALING);
+    Danger risk = danger();
+    if(retreat_floor != game.floor) { retreat_floor = game.floor; retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
+    // Track current hostile identities, not a distance/visibility threshold.
+    // Stepping beyond sight or around a corner must not renew the same retreat.
+    bool encounter_alive = false;
+    for(int i=0; i<MONSTERS; ++i) if((retreat_threats & (1u<<i)) &&
+        game.monsters[i].type && hostile(game.monsters[i])) encounter_alive = true;
+    if(!encounter_alive) { retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
     if(healing >= 0 && (game.hp*100 <= player_max_hp()*(adjacent >= 0 ? 65 : 45) ||
                       (game.weakened && game.hp < player_max_hp())))
         return use(healing,"heal and restore strength");
+    if(risk.emergency) {
+        int experience = find(EXPERIENCE);
+        if(experience >= 0 && game.level <= 12) return use(experience,"emergency experience recovery");
+        Action choice;
+        if(emergency_control(choice)) return choice;
+        // Bounded retreat avoids ping-pong, indefinite kiting and stalling.
+        if(retreat_steps < 3 && retreat(retreat_origin,choice)) {
+            for(int i=0; i<MONSTERS; ++i) if(game.monsters[i].type && hostile(game.monsters[i]) &&
+                distance(game.monsters[i].pos,game.player)<=4) retreat_threats |= static_cast<uint16_t>(1u<<i);
+            retreat_origin = game.player; ++retreat_steps; return choice;
+        }
+    }
     int food = find(FOOD);
     if(food >= 0 && game.hunger < (adjacent >= 0 ? 15 : 100)) return use(food,"eat before starvation");
     // Equipping even in danger is worthwhile for an obvious weapon/armor gain.
@@ -228,8 +430,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
             int s = find(type); if(s < 0) continue;
             Item i = game.inventory[s];
             if(is_wand(type) && (wand_afflicted(i) || !wand_charges(i))) continue;
-            if(type == WAND_FIRE && (m.type == DRAGON ||
-                (ray.steps <= (wand_powerful(i) ? 2 : 1) && ring_bonus(RING_FIRE_IMMUNITY) <= 0))) continue;
+            if(type == WAND_FIRE && (m.type == DRAGON || !fire_safe(i,d))) continue;
             Action a; a.kind = is_wand(type) ? ActionKind::Wand : ActionKind::Throw;
             a.slot = static_cast<uint8_t>(s); a.dx = dxs[d]; a.dy = dys[d];
             if(is_wand(type) && !wand_needs_direction(i)) a.dx = a.dy = 0;

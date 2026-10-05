@@ -10,7 +10,8 @@ namespace sim {
 struct ItemMetrics {
     uint64_t generated=0, reached=0, picked_up=0, used=0, consumed=0,
         equipped=0, dropped=0, discarded=0, carried=0,
-        charges_used=0, drunk=0, thrown=0, scrolls_read=0, turns_equipped=0;
+        charges_used=0, drunk=0, thrown=0, scrolls_read=0, turns_equipped=0,
+        wands_picked_up=0, wands_activated=0;
 };
 struct MonsterMetrics {
     uint64_t generated=0, encountered=0, engaged=0, killed=0,
@@ -41,6 +42,14 @@ struct Collector {
     std::ostream* trace=nullptr;
     std::array<bool, rogue::GROUND_ITEMS> reached{};
     std::array<bool, rogue::MONSTERS> encountered{}, engaged{};
+    // Host-only object identity survives ground swaps/drop/repick. This counts
+    // distinct wands, separately from pickup transactions and charge uses.
+    std::array<size_t, rogue::INVENTORY> inventory_wands{};
+    std::array<size_t, rogue::GROUND_ITEMS> ground_wands{};
+    std::vector<uint8_t> wand_flags{0};
+    uint8_t pickup_slot=rogue::NONE, drop_slot=rogue::NONE;
+    size_t new_wand();
+    void prepare_action(const struct Action&);
     void enter_floor();
     void close_floor(bool exited);
     void observe();

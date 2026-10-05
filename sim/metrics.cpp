@@ -1,4 +1,5 @@
 #include "metrics.hpp"
+#include "agent.hpp"
 #include "game.hpp"
 #include "world.hpp"
 #include "trace.hpp"
@@ -47,6 +48,20 @@ const char* monster_name(uint8_t type) {
         "PHANTOM","ORC","TARANTULA","HOBGOBLIN","MIMIC","INCUBUS","TROLL","GRIFFIN","DRAGON","ANGEL","LORD"};
     return type <= rogue::LORD ? names[type] : "INVALID";
 }
+size_t Collector::new_wand() {
+    wand_flags.push_back(0); return wand_flags.size()-1;
+}
+void Collector::prepare_action(const Action& a) {
+    pickup_slot = drop_slot = rogue::NONE;
+    if(!enabled) return;
+    if(a.kind == ActionKind::Take || a.kind == ActionKind::Swap) {
+        pickup_slot = a.slot;
+        if(a.kind == ActionKind::Take)
+            for(uint8_t s=0; s<rogue::INVENTORY; ++s)
+                if(!rogue::game.inventory[s].type) { pickup_slot=s; break; }
+    }
+    if(a.kind == ActionKind::Drop) drop_slot = a.slot;
+}
 void Collector::enter_floor() {
     const auto& g = rogue::game;
     close_floor(true);
@@ -57,7 +72,15 @@ void Collector::enter_floor() {
     f.ascent = g.has_amulet; f.entry_hp = f.exit_hp = g.hp; f.entry_level = f.exit_level = g.level;
     data.floors.push_back(f);
     if(!enabled) return;
-    for(const auto& i : g.ground) if(i.item.type) data.items[i.item.type].generated += units(i.item);
+    for(size_t s=0; s<rogue::INVENTORY; ++s) {
+        if(!rogue::is_wand(g.inventory[s].type)) inventory_wands[s]=0;
+        else if(!inventory_wands[s]) inventory_wands[s]=new_wand();
+    }
+    for(size_t s=0; s<rogue::GROUND_ITEMS; ++s) {
+        const auto& i=g.ground[s];
+        ground_wands[s]=rogue::is_wand(i.item.type) ? new_wand() : 0;
+        if(i.item.type) data.items[i.item.type].generated += units(i.item);
+    }
     for(const auto& m : g.monsters) if(m.type) ++data.monsters[m.type].generated;
 }
 void Collector::close_floor(bool exited) {
@@ -127,9 +150,37 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(detail == uint8_t(Special::Paralysis)) ++data.monsters[type].paralysis;
         if(detail == uint8_t(Special::Fire)) ++data.monsters[type].fire;
         break;
-    case EventKind::GeneratedItem: data.items[type].generated += amount; if(index < rogue::GROUND_ITEMS) reached[index] = false; break;
-    case EventKind::Pickup: data.items[type].picked_up += amount; if(f) f->pickups += amount; if(index < rogue::GROUND_ITEMS) reached[index] = false; break;
-    case EventKind::Dropped: data.items[type].dropped += amount; if(index < rogue::GROUND_ITEMS) reached[index] = false; break;
+    case EventKind::GeneratedItem:
+        data.items[type].generated += amount;
+        if(index < rogue::GROUND_ITEMS) {
+            reached[index] = false; ground_wands[index] = rogue::is_wand(type) ? new_wand() : 0;
+        }
+        break;
+    case EventKind::Pickup:
+        data.items[type].picked_up += amount; if(f) f->pickups += amount;
+        if(index < rogue::GROUND_ITEMS) {
+            reached[index] = false;
+            bool swapped = rogue::game.ground[index].item.type != rogue::NO_ITEM;
+            size_t incoming = ground_wands[index];
+            if(rogue::is_wand(type)) {
+                if(!incoming) incoming = new_wand();
+                if(!(wand_flags[incoming]&1)) { ++data.items[type].wands_picked_up; wand_flags[incoming]|=1; }
+            }
+            size_t outgoing = swapped && pickup_slot < rogue::INVENTORY ? inventory_wands[pickup_slot] : 0;
+            if(pickup_slot < rogue::INVENTORY && (rogue::is_wand(type) || swapped))
+                inventory_wands[pickup_slot] = rogue::is_wand(type) ? incoming : 0;
+            ground_wands[index] = outgoing;
+        }
+        break;
+    case EventKind::Dropped:
+        data.items[type].dropped += amount;
+        if(index < rogue::GROUND_ITEMS) {
+            reached[index] = false;
+            if(drop_slot < rogue::INVENTORY)
+                ground_wands[index] = rogue::is_wand(type) && amount ? inventory_wands[drop_slot] : 0;
+        }
+        if(drop_slot < rogue::INVENTORY) inventory_wands[drop_slot] = 0;
+        break;
     case EventKind::Discarded: data.items[type].discarded += amount; break;
     case EventKind::Equipped: ++data.items[type].equipped; break;
     case EventKind::ItemUsed:
@@ -143,7 +194,14 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         ++data.items[type].used; ++data.items[type].thrown;
         if(f) ++f->consumables;
         break;
-    case EventKind::ChargeUsed: ++data.items[type].used; ++data.items[type].charges_used; break;
+    case EventKind::ChargeUsed:
+        ++data.items[type].used; ++data.items[type].charges_used;
+        if(index < rogue::INVENTORY) {
+            size_t& id = inventory_wands[index];
+            if(!id) id = new_wand();
+            if(!(wand_flags[id]&2)) { ++data.items[type].wands_activated; wand_flags[id]|=2; }
+        }
+        break;
     case EventKind::MonsterChanged: if(index < rogue::MONSTERS) encountered[index] = engaged[index] = false; break;
     default: break;
     }
@@ -155,7 +213,7 @@ void write_floors_header(std::ostream& o) {
     o << "seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited\n";
 }
 void write_items_header(std::ostream& o) {
-    o << "seed,agent,item_type,item,generated,reached,picked_up,used,consumed,equipped,dropped,discarded,carried,charges_used,potions_drunk,potions_thrown,scrolls_read,turns_equipped\n";
+    o << "seed,agent,item_type,item,generated,reached,picked_up,used,consumed,equipped,dropped,discarded,carried,charges_used,potions_drunk,potions_thrown,scrolls_read,turns_equipped,wands_picked_up,wands_activated\n";
 }
 void write_monsters_header(std::ostream& o) {
     o << "seed,agent,monster_type,monster,generated,encountered,engaged,killed,player_attacks,damage_taken,attacks,hits,player_damage,deaths,poison,confusion,paralysis,fire\n";
@@ -178,7 +236,8 @@ void write_items(std::ostream& o, const RunMetrics& r) {
         o << r.seed << ',' << r.agent << ',' << i << ',' << item_name(static_cast<uint8_t>(i)) << ',' << m.generated
           << ',' << m.reached << ',' << m.picked_up << ',' << m.used << ',' << m.consumed << ',' << m.equipped << ','
           << m.dropped << ',' << m.discarded << ',' << m.carried << ',' << m.charges_used << ',' << m.drunk << ','
-          << m.thrown << ',' << m.scrolls_read << ',' << m.turns_equipped << '\n';
+          << m.thrown << ',' << m.scrolls_read << ',' << m.turns_equipped << ','
+          << m.wands_picked_up << ',' << m.wands_activated << '\n';
     }
 }
 void write_monsters(std::ostream& o, const RunMetrics& r) {

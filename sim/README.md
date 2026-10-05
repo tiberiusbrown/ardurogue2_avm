@@ -1,4 +1,4 @@
-# Native balancing simulator, milestone 1
+# Native balancing simulator
 
 `ardurogue2_sim` runs the production rules directly, from `start_new(seed)` to
 `session.ended`. It has no AVM, input handling, renderer, framebuffer, timers,
@@ -33,6 +33,7 @@ on Windows:
 build/sim-native/sim/ardurogue2_sim --seed 4
 build/sim-native/sim/ardurogue2_sim --seed 0x4 --trace --output build/escape-4
 build/sim-native/sim/ardurogue2_sim --seeds 1:10000 --output build/balance
+build/sim-native/sim/ardurogue2_sim --seeds 1:10000 --jobs 8 --output build/balance
 build/sim-native/sim/ardurogue2_sim --count 10000 --start-seed 1 --output build/balance
 build/sim-native/sim/ardurogue2_sim --seed 4 --max-actions 5 --trace
 ```
@@ -45,8 +46,16 @@ to one seed and goes to stderr, keeping CSV parseable. `--no-telemetry` disables
 aggregate collection for isolation diagnostics; run/floor action and turn
 counts, safety checks and tracing continue to work.
 
-Batch execution is serial and resets both the agent and cross-run best-score
-history. A failed simulation yields its own `SIM_STUCK` or `SIM_ERROR` row and
+`--jobs N` runs a batch in 1..64 separate worker processes (default 1), capped
+at the number of seeds. Production `Game` and `session` are global, so processes
+isolate them and each seed's RNG. Contiguous seed chunks merge in ascending
+seed order; all four CSVs are byte-identical to serial execution. Workers use
+temporary directories, which the parent removes after joining them. Only the
+parent writes final output. Tracing still requires one seed and runs serially.
+Windows workers start without visible console windows; POSIX uses `posix_spawnp`.
+
+Each seed resets both the agent and cross-run best-score history. A failed
+simulation yields its own `SIM_STUCK` or `SIM_ERROR` row and
 the batch continues. These results are never counted as deaths. Invalid CLI
 arguments and output failures return a nonzero process exit code; completed
 batches return zero even when an individual seed hits a simulator limit.
@@ -57,6 +66,7 @@ batches return zero even when an individual seed hits a simulator limit.
 | --- | --- |
 | `sim/CMakeLists.txt` | Separate host library/executable and simulator tests; defines only `ARDUROGUE2_SIM` on simulator targets |
 | `sim/main.cpp` | Seed selection, output files, compact batch summary |
+| `sim/parallel.hpp`, `sim/parallel.cpp` | Isolated batch workers and deterministic CSV merging |
 | `sim/agent.hpp` | `Agent`, read-only decision context, mechanical `Action`, typed diagnostics, BFS interface |
 | `sim/omniscient_agent.cpp` | Deterministic policy and cardinal BFS |
 | `sim/simulator.hpp`, `sim/simulator.cpp` | Production API dispatch, lifecycle, safety and action digest |
@@ -64,6 +74,7 @@ batches return zero even when an individual seed hits a simulator limit.
 | `sim/metrics.hpp`, `sim/metrics.cpp` | Host collectors, death attribution and four CSV writers |
 | `sim/trace.hpp`, `sim/trace.cpp` | Human-readable action and gameplay event trace |
 | `sim/tests.cpp` | Determinism, RNG isolation, mechanics dispatch, policy, telemetry, safety, competence |
+| `sim/policy_checks.cpp` | Constructed fire, tactical wand, retreat and inventory cases |
 | `sim/test_cli.py` | Executable/CSV/seed-range integration tests |
 | `sim/check_zero_cost.py` | Compare ordinary optimized AVM IR with the pre-hook revision |
 | `src/sim_hooks.hpp` | Entirely gated event declarations, attribution scopes, zero-cost macro |
@@ -93,14 +104,22 @@ collectors. The current context exposes the full read-only world for the
 omniscient policy; a future restricted observation layer can sit at that
 interface. No normal-information agent or experimental management is included.
 
-## Omniscient policy
+## Frozen omniscient-v2 policy
+
+`omniscient-v2` is the frozen balance-reference policy. Future game-content
+comparisons must use exactly this version for both baseline and candidate.
+Any policy change that can materially alter outcomes requires a new agent
+version and a new fixed-seed baseline. See [V2_RESULTS.md](V2_RESULTS.md) for
+validation, limitations and the comparison with the historical v1 results.
 
 The policy uses fixed integer preferences and deterministic array/direction
 tie breaking. It never reads future RNG outcomes, calls `roll()` or advances
 `next_random()`. The runner checks the complete game state before and after
 every decision and reports `SIM_ERROR` on any mutation, including RNG changes.
 
-Priorities are paralysis recovery; healing/strength recovery and food;
+Priorities are paralysis recovery; healing/strength recovery; emergency
+experience recovery, hard control, fear, invisibility, player teleport, enemy
+teleport/force/polymorph and bounded retreat; food;
 equipment upgrades; experience potions; ranged control/damage; adjacent melee;
 permanent stat potions and targeted enchantment; useful loot; nearby early
 combat experience; descent or the Lord; Yendor pickup; ascent and escape.
@@ -116,9 +135,39 @@ Healing is used at lower HP thresholds, experience can restore HP through
 production leveling, and food is eaten before hunger becomes dangerous.
 Paralysis, weakness, confusion and slowing potions control dangerous monsters;
 striking/ice/fire wands and harming potions deal ranged damage. Fire is avoided
-against dragons and when the target burst would catch the player without
-immunity. Useful visible mass scrolls and emergency fear/teleport are supported.
+against dragons and whenever any burst would catch the player without fire
+immunity, including non-target rays of spreading/overpowered wands. Planning
+uses production `scan_ray`, modifier predicates and shared square/radius helpers.
+Afflicted wands are rejected, including unreliable directions.
+Useful visible mass scrolls and emergency fear/teleport are supported.
 The agent deliberately collects supplies rather than racing downstairs.
+
+Emergency danger is a small integer heuristic using current HP, armor, monster
+strength/speed/special attacks, player speed/status/immunities and uncontrolled
+hostile pressure within two tiles. Healthy trivial encounters retain ordinary
+combat. Teleport scores the actual current ray/area group; force checks the
+production push path for useful distance or collision stun. Polymorph is a
+last-resort severe-emergency tool: late types only, Lord excluded, and no
+nearly defeated or trivial monster in the affected group. Production polymorph
+moves one type up/down, heals the new form and clears statuses; the policy
+never predicts that random outcome.
+
+Retreat considers empty, passable, open cardinal cells, current threat distance,
+connectivity and progress toward the stairs. It avoids dead ends and immediate
+reversal, and permits at most three retreats per tracked hostile group. That budget
+persists through temporarily safe steps, distance changes and lost sight. It
+resets when the tracked hostiles are defeated/no longer hostile or the floor
+changes. Monsters still act after production movement, so a scored
+step is not a guarantee of safety. With no useful alternative, melee proceeds.
+
+`omniscient-v2 intentionally assigns WAND_DIGGING no tactical value`.
+Digging carves/explores six cells per ray, opens doors and uses three lanes when
+powerful; it does not move the player or control monsters. This oracle does not
+spend emergency turns on speculative shortcuts. Its acquisition value is zero.
+Force/teleport/polymorph acquisition and retention values now reflect their
+tactical support. Remove-curse scrolls also have zero value because this oracle
+avoids acquiring afflicted equipment/wands. Equipment scoring otherwise remains
+unchanged.
 
 BFS plans over the full map with closed doors treated as traversable estimates;
 production movement opens them and consumes the real turn. BFS also supports
@@ -153,7 +202,7 @@ initial return to its up stairs occur within the original final-floor visit.
 * `items.csv`: every item type, generated/reached/picked-up units, successful
   uses, actual consumed units, equip operations, dropped/discarded units, final
   carried units, wand charges, potions drunk/thrown, scrolls read and equipped
-  turns. Stacks count physical units; equipment and wands count individual
+  turns, plus distinct `wands_picked_up` and `wands_activated`. Stacks count physical units; equipment and wands count individual
   objects. Potion conservation can make uses exceed consumed units. Wand
   consumption records the object crumbling, separately from charges spent.
 * `monsters.csv`: every monster type, generation, encountered/engaged instances,
@@ -168,6 +217,10 @@ record transactions; an object legitimately dropped and picked up again can
 appear more than once. Generated supply counts include each fresh floor's
 population and the Lord's Yendor drop, never player drops. Ascent generates
 fresh monsters through production generation and no ordinary supplies.
+Distinct wand counts use host-only identities preserved across swap/drop/repick
+transactions and inventory/floor slot reuse. Thus activation/generated and
+activation/picked-up percentages describe physical objects, rather than charges
+or repeat pickups. The agent never sees these identities or counts.
 
 Damage is capped to the recipient's HP before each effect; overkill is excluded.
 Player attacks include melee and targeted potion/scroll/wand effects, including
@@ -207,8 +260,8 @@ death path and remain `death`. Limit termination never calls `finish(DEATH)`.
 
 ## Verification
 
-See [RESULTS.md](RESULTS.md) for the fixed batch, reproducible traces, compiler
-proof and commands/results from this implementation. CTest verifies:
+See [V2_RESULTS.md](V2_RESULTS.md) for the current fixed batch and trace audit,
+and [RESULTS.md](RESULTS.md) for the historical v1 validation. CTest verifies:
 
 * identical complete metrics, full trace, final state and action digest on repeat;
 * trace on/off and telemetry on/off preserving all gameplay and RNG;
@@ -219,6 +272,13 @@ proof and commands/results from this implementation. CTest verifies:
 * ring and food swap loop regressions, overkill accounting and death causes;
 * action/path/rejection/inventory safety and RNG-mutation/agent-error detection;
 * CLI validation, both batch syntaxes and byte-identical four-stream CSV output.
+* all fire modifiers, immunity and exhaustive byte-coordinate square coverage;
+* tactical wand emergencies, modifier groups, afflicted/trivial declines and
+  polymorph decisions independent of RNG state;
+* safer production retreat, bounded encounters across danger thresholds,
+  reasonable melee, tactical inventory retention and distinct wand identities;
+* serial/parallel byte equality, seed zero, uneven chunks, excess workers,
+  tracing, telemetry-disabled output and simulator-limit propagation.
 
 Existing correctness, generation snapshot/stream-isolation, visibility, UI,
 rendering, item formatting and combat distribution tests remain enabled.

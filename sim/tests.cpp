@@ -8,6 +8,7 @@
 
 using namespace rogue;
 using namespace sim;
+void check_v2_policy();
 namespace {
 void check(bool c,const char* message) { if(!c) throw std::runtime_error(message); }
 std::string all_metrics(const RunMetrics& r) {
@@ -107,6 +108,28 @@ void hooks() {
     check(c.data.death_cause=="DRAGON" && c.data.monsters[DRAGON].deaths==1 &&
         c.data.monsters[DRAGON].player_damage==2,"death attribution/actual damage wrong");
 }
+void wand_identity() {
+    arena();
+    game.ground[0]={game.player,{WAND_TELEPORT,5}};
+    game.ground[1]={game.player,{WAND_FORCE,5}};
+    Collector c; CollectScope sink(c); c.enter_floor();
+    auto perform = [&](Action a) { c.prepare_action(a); check(dispatch(a),"wand identity fixture rejected"); };
+    Action take; take.kind=ActionKind::Take; take.target=0; perform(take);
+    Action activate; activate.kind=ActionKind::Wand; activate.slot=0; activate.dx=1; perform(activate);
+    Action drop; drop.kind=ActionKind::Drop; drop.slot=0; perform(drop);
+    perform(take); perform(activate);
+    Action swap; swap.kind=ActionKind::Swap; swap.slot=0; swap.target=1;
+    perform(swap); perform(activate); perform(swap); perform(activate);
+    const auto& t=c.data.items[WAND_TELEPORT]; const auto& f=c.data.items[WAND_FORCE];
+    check(t.generated==1 && t.picked_up==3 && t.wands_picked_up==1 && t.wands_activated==1 && t.charges_used==3,
+        "teleport drop/repick/swap counted multiple physical wands");
+    check(f.generated==1 && f.wands_picked_up==1 && f.wands_activated==1 && f.charges_used==1,
+        "force swap lost physical wand identity");
+    // Empty inventory slots and fresh floor ground slots must get fresh IDs.
+    game.inventory[0]={}; game.ground[0]={game.player,{WAND_TELEPORT,1}};
+    c.enter_floor(); perform(take); perform(activate);
+    check(t.wands_picked_up==2 && t.wands_activated==2,"slot reuse conflated a fresh wand");
+}
 class InvalidAgent final:public Agent {
 public:
     const char* name() const override { return "test-invalid"; }
@@ -168,7 +191,7 @@ void competence() {
 int main() {
     try {
         static_assert(sizeof(Game)==774 && SAVE_VERSION==23,"native saved layout changed");
-        determinism(); policy_regressions(); path_and_dispatch(); hooks(); safety(); competence();
+        check_v2_policy(); determinism(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

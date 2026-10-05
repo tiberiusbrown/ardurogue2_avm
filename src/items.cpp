@@ -699,9 +699,7 @@ static void force_monster(uint8_t index, int8_t dx, int8_t dy,
 
 static bool in_wand_area(Position pos, Position center)
 {
-    int16_t dx = static_cast<int16_t>(pos.x) - center.x;
-    int16_t dy = static_cast<int16_t>(pos.y) - center.y;
-    return dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1;
+    return square_contains(center, pos, 1);
 }
 
 static void polymorph_monster(uint8_t index)
@@ -872,7 +870,7 @@ __attribute__((noinline)) static void resolve_all_fire_rays(bool powerful)
                            wand_directions[i * 2 + 1], 6).end;
     animate_fire_bursts(ends, 4, powerful);
     for(uint8_t i = 0; i < 4 && !session.ended; ++i)
-        fire_burst_damage(ends[i], true, powerful ? 2 : 1);
+        fire_burst_damage(ends[i], true, wand_fire_radius(powerful));
 }
 
 __attribute__((noinline)) static void resolve_all_other_rays(
@@ -899,7 +897,7 @@ __attribute__((noinline)) static void single_wand_ray(
     if(type == WAND_FIRE) {
         if(powerful) animate_fire_bursts(&ray.end, 1, true);
         else animate_fire_burst(ray.end);
-        fire_burst_damage(ray.end, true, powerful ? 2 : 1);
+        fire_burst_damage(ray.end, true, wand_fire_radius(powerful));
     } else resolve_wand_ray(type, ray.end, ray.monster, dx, dy, powerful);
 }
 

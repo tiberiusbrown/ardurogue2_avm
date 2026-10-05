@@ -22,23 +22,32 @@ def main():
     assert "result=escaped" in traced.stderr
     for args in (("--seed", "65536"), ("--count", "0"), ("--seeds", "5:1"),
                  ("--count", "2", "--trace"), ("--seed", "1", "--count", "2"),
-                 ("--start-seed", "65535", "--count", "2"), ("--seed",), ("--unknown",)):
+                 ("--start-seed", "65535", "--count", "2"), ("--jobs", "0"), ("--jobs", "65"),
+                 ("--jobs",), ("--seed",), ("--unknown",)):
         invoke(*args, valid=False)
     stuck = list(csv.DictReader(io.StringIO(invoke("--seed", "4", "--max-actions", "1").stdout)))[0]
     assert stuck["result"] == "SIM_STUCK" and stuck["stuck"] == "1"
     zero = list(csv.DictReader(io.StringIO(invoke("--seed", "0").stdout)))[0]
     assert zero["seed"] == "0" and zero["effective_seed"] == str(0xACE1)
+    serial=invoke("--seeds","0:8")
+    parallel=invoke("--seeds","0:8","--jobs","3")
+    assert (serial.stdout,serial.stderr)==(parallel.stdout,parallel.stderr)
+    assert invoke("--seed","4","--jobs","8","--trace").stdout==quiet.stdout
+    limited=invoke("--seeds","1:5","--max-actions","1","--no-telemetry")
+    assert limited.stdout==invoke("--seeds","1:5","--jobs","3","--max-actions","1","--no-telemetry").stdout
     with tempfile.TemporaryDirectory(prefix="ardurogue2-sim-cli-") as scratch:
-        first, second = Path(scratch) / "range", Path(scratch) / "count"
+        first, second, concurrent = Path(scratch) / "range", Path(scratch) / "count", Path(scratch) / "parallel output"
         invoke("--seeds", "1:8", "--output", str(first))
         invoke("--count", "8", "--start-seed", "1", "--output", str(second))
+        invoke("--seeds", "1:8", "--jobs", "3", "--output", str(concurrent))
         rows = {}
         for name in ("runs", "floors", "items", "monsters"):
             path = first / f"{name}.csv"
             assert path.read_bytes() == (second / path.name).read_bytes(), name
+            assert path.read_bytes() == (concurrent / path.name).read_bytes(), f"parallel {name}"
             with path.open(newline="") as f:
                 rows[name] = list(csv.DictReader(f))
-            assert rows[name] and all(r["agent"] == "omniscient-v1" for r in rows[name])
+            assert rows[name] and all(r["agent"] == "omniscient-v2" for r in rows[name])
             assert set(r["seed"] for r in rows[name]) == set(map(str, range(1, 9)))
         assert len(rows["runs"]) == 8
         for run in rows["runs"]:
