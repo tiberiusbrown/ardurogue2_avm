@@ -15,6 +15,8 @@ uint8_t avm_test_button_index = 0;
 static unsigned play_renders = 0;
 static unsigned full_renders = 0;
 static unsigned inventory_renders = 0;
+static unsigned deferred_renders = 0;
+static bool play_render_pending = false;
 
 namespace rogue {
 Game game = {};
@@ -31,13 +33,15 @@ void status(MonsterType, char) {}
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
 void status_clear() {}
-void render_play() { ++play_renders; }
+void defer_play_render() { ++deferred_renders; play_render_pending = true; }
+void render_play() { ++play_renders; play_render_pending = false; }
+void restore_play_render() { if(play_render_pending) render_play(); }
 void render_inventory(const char*, const InventoryView&, uint8_t, uint8_t)
 {
     ++inventory_renders;
 }
-void render_yesno_prompt(const char*, const Item*) {}
-void render() { ++full_renders; }
+void render_yesno_prompt(const char*, const Item*) { restore_play_render(); }
+void render() { ++full_renders; play_render_pending = false; }
 void animate_ray(Position, int8_t, int8_t, uint8_t) {}
 void animate_fire_burst(Position) {}
 void animate_spreading_rays(Position, const uint8_t[4]) {}
@@ -114,7 +118,7 @@ int main()
         avm_test_buttons[1] = AVM_BUTTON_A;
         avm_test_button_count = 2;
         avm_test_button_index = 0;
-        play_renders = full_renders = 0;
+        play_renders = full_renders = deferred_renders = 0;
         turns = game.turns;
         dispatch_input(AVM_BUTTON_A);
         bool needs_direction = modifier == WAND_NORMAL ||
@@ -124,8 +128,8 @@ int main()
                 game.turns == static_cast<uint8_t>(turns +
                                                   (needs_direction ? 0 : 1)),
                 "wand selection UI targeted a modifier incorrectly");
-        require(play_renders == 1 && full_renders == 0,
-                "wand selection displayed an intermediate dungeon frame");
+        require(play_renders == 0 && full_renders == 0 && deferred_renders == 1,
+                "wand selection eagerly restored the dungeon");
         if(needs_direction) {
             dispatch_input(AVM_BUTTON_B);
             require(ui.mode == PLAY && item_value(game.inventory[0]) == 2 &&
@@ -133,9 +137,8 @@ int main()
                     "canceling a normal or powerful wand spent resources");
         }
     }
-    // Inventory actions restore the play framebuffer once, after the final
-    // selection, so status pagination has a dungeon background without an
-    // intermediate display of the empty status area.
+    // Item actions defer their background until a page/prompt actually needs
+    // it; the main loop can otherwise render only the completed turn.
     const uint8_t types[] = {DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD,
                              LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL, RING_STRENGTH, AMULET_SPEED,
                              SCROLL_IDENTIFY, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE};
@@ -162,12 +165,12 @@ int main()
             avm_test_buttons[3] = AVM_BUTTON_A;
             avm_test_button_count = target_scroll ? 4 : 2;
             avm_test_button_index = 0;
-            play_renders = full_renders = inventory_renders = 0;
+            play_renders = full_renders = inventory_renders = deferred_renders = 0;
             turns = game.turns;
             dispatch_input(AVM_BUTTON_A);
-            require(play_renders == 1 && full_renders == 0 &&
+            require(play_renders == 0 && full_renders == 0 && deferred_renders == 1 &&
                     inventory_renders == (target_scroll ? 2u : 1u),
-                    "item selection redrew or displayed the dungeon before its final choice");
+                    "item selection eagerly restored or displayed the dungeon");
             require(ui.mode == PLAY && game.turns == static_cast<uint8_t>(turns + 1),
                     "item selection changed the turn or left the inventory open");
             if(is_amulet(type)) require(game.amulet_slot == (equipped ? NONE : 0),

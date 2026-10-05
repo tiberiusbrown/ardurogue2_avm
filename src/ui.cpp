@@ -249,7 +249,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                         direction == AVM_BUTTON_D ? 1 : 0;
             ui.mode = PLAY;
             status_clear();
-            render();
+            defer_play_render();
             if(wand_direction) {
                 ui.dirty = true;
                 return direction == AVM_BUTTON_U ? INPUT_WAND_UP :
@@ -289,7 +289,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                     uint8_t target = NONE;
                     if(is_wand(type)) {
                         status_clear();
-                        render_play();
+                        defer_play_render();
                         ui.selection = slot;
                         if(wand_needs_direction(game.inventory[slot]))
                             ui.mode = WAND_DIRECTION;
@@ -303,9 +303,9 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                         target = choose_item(F("Uncurse which item?"), nullptr);
                     if(!is_wand(type) && ui.mode != WAND_DIRECTION) {
                         status_clear();
-                        // Restore the dungeon once after the last modal choice.
-                        // The main loop displays the completed action and turn.
-                        render_play();
+                        // Pagination restores the background if needed; the
+                        // main loop otherwise draws only the completed turn.
+                        defer_play_render();
                         use_inventory(slot, target);
                     }
                 } else status_clear();
@@ -316,7 +316,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                 uint8_t slot = choose_item(F("Drop which item?"), nullptr);
                 if(slot != NONE) {
                     status_clear();
-                    render();
+                    defer_play_render();
                     DropDisposition disposition = drop_disposition(slot);
                     if(disposition == DROP_DISCARD_ALL ||
                        disposition == DROP_DISCARD_REST) {

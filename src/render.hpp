@@ -11,6 +11,9 @@ uint16_t mimic_icon(MimicAppearance appearance);
 // Packed terrain occupancy for 13 screen columns, with opaque map clipping.
 uint16_t wall_row_bits(uint8_t y, int16_t left);
 void status_clear();
+// Restore a modal's dungeon background only if it must be displayed mid-turn.
+void defer_play_render();
+void restore_play_render();
 void render_play();
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_fire_burst(Position center);

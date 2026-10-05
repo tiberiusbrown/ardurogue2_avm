@@ -354,8 +354,10 @@ The native executable also accepts `--combat-distributions` for this report;
 the existing `--armor-distributions` mode remains available for armor alone.
 
 The AVM build retains the 821-byte saved layout and two-byte items, eight-byte
-monsters, and four-byte ground items. With the current SDK, the revamped build
-reports a complete maximum stack bound of 248 bytes and zero analysis gaps,
-on the wand/dragon animation/rendering path. This fits the 256-byte VM stack
-with eight bytes to spare; future changes should continue checking the linker
-report.
+monsters, and four-byte ground items. With the current SDK, the build reports a
+complete maximum stack bound of 247 bytes and zero analysis gaps, on the
+wand/teleport/status pagination/rendering path. This fits the 256-byte VM stack
+with nine bytes to spare; future changes should continue checking the linker
+report. The saved and ordinary data sections total 923 of 1,024 bytes. The
+renderer reuses transient row scratch outside the saved layout to keep
+pagination within the stack limit.

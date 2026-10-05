@@ -17,6 +17,7 @@ void (*avm_test_text_hook)(int16_t, int16_t, const char*) = nullptr;
 namespace rogue {
 Ui ui = {};
 void status_clear() { reset_status_position(); }
+void restore_play_render() {}
 bool known[WAND_COUNT] = {};
 bool other_known[256] = {};
 bool item_type_identified(uint8_t type)

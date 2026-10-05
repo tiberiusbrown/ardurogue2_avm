@@ -3,10 +3,13 @@
 The initial goal is **no more than 150 ms** (2,400,000 emulated AVR cycles at
 16 MHz) from submitting an action's input to the completed view being ready
 for the next input. Each benchmark runs once because emulated time is deterministic.
-It is an initial performance target, not a claim that the current game meets it.
+The target applies to the controlled scenarios listed below.
 
 The [baseline](BASELINE.md) records one measurement for each of the 21 cases:
 9 cases meet the goal and 12 exceed it.
+After deferring redundant rendering and batching terrain rows, all 21 cases
+meet the goal; see the [optimization results](RESULTS.md) for timings and
+correctness comparisons.
 
 `profile_turns.py` uses Python 3's standard library and the installed SDK's
 `avm-lldb`. The separate `ardurogue2-bench.elf` links [bench.cpp](bench.cpp) with

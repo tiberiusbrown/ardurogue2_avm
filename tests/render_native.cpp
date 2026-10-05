@@ -1,6 +1,7 @@
 #include "app_state.hpp"
 #include "game.hpp"
 #include "render.hpp"
+#include "status.hpp"
 #include "world.hpp"
 
 #include <cstdio>
@@ -128,6 +129,180 @@ static bool check_shared_icons()
     return true;
 }
 
+static void reference_pixel(uint8_t frame[1024], int x, int y)
+{
+    if(x >= 0 && x < 64 && y >= 0 && y < 64)
+        frame[(y >> 3) * 128 + x] |= static_cast<uint8_t>(1u << (y & 7));
+}
+
+// Independent per-tile oracle: Bresenham visibility and the original wall
+// drawing rules, rather than packed rows or batched framebuffer writes.
+static void reference_terrain(uint8_t frame[1024])
+{
+    using namespace rogue;
+    bool visible[13][13] = {};
+    int left = int(game.player.x) - 6, top = int(game.player.y) - 6;
+    for(int sy = 0; sy < 13; ++sy)
+        for(int sx = 0; sx < 13; ++sx) {
+            int x = left + sx, y = top + sy;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
+            visible[sy][sx] = can_see({uint8_t(x), uint8_t(y)});
+        }
+    for(int sy = 0; sy < 13; ++sy)
+        for(int sx = 0; sx < 13; ++sx) {
+            int x = left + sx, y = top + sy;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
+            if(wall_at(x, y) && in_light_radius(sx - 6, sy - 6, 6)) {
+                const int dx[] = {-1, 1, 0, 0}, dy[] = {0, 0, -1, 1};
+                for(unsigned n = 0; n < 4; ++n) {
+                    int nx = sx + dx[n], ny = sy + dy[n];
+                    if(nx >= 0 && nx < 13 && ny >= 0 && ny < 13 &&
+                       visible[ny][nx] && !wall_at(left + nx, top + ny))
+                        visible[sy][sx] = true;
+                }
+            }
+            if(visible[sy][sx]) explore({uint8_t(x), uint8_t(y)});
+        }
+    for(int sy = 0; sy < 13; ++sy)
+        for(int sx = 0; sx < 13; ++sx) {
+            int x = left + sx, y = top + sy;
+            if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
+            if(!visible[sy][sx] && !explored({uint8_t(x), uint8_t(y)})) continue;
+            if(wall_at(x, y)) {
+                if(!wall_exposed(uint8_t(x), uint8_t(y))) continue;
+                for(int row = 0; row < 4; ++row)
+                    for(int col = 0; col < 4; ++col)
+                        reference_pixel(frame, sx * 5 + col, sy * 5 + row);
+                if(sx < 12 && x + 1 < MAP_W && wall_at(x + 1, y) &&
+                   wall_exposed(uint8_t(x + 1), uint8_t(y)) &&
+                   explored({uint8_t(x + 1), uint8_t(y)}))
+                    for(int row = 0; row < 4; ++row)
+                        reference_pixel(frame, sx * 5 + 4, sy * 5 + row);
+                if(sy < 12 && y + 1 < MAP_H && wall_at(x, y + 1) &&
+                   wall_exposed(uint8_t(x), uint8_t(y + 1)) &&
+                   explored({uint8_t(x), uint8_t(y + 1)}))
+                    for(int col = 0; col < 4; ++col)
+                        reference_pixel(frame, sx * 5 + col, sy * 5 + 4);
+            } else if(visible[sy][sx])
+                reference_pixel(frame, sx * 5 + 2, sy * 5 + 2);
+        }
+}
+
+static bool check_terrain_rows()
+{
+    using namespace rogue;
+    const Position positions[] = {{0, 0}, {63, 0}, {0, 31}, {63, 31},
+        {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12},
+        {13, 13}, {57, 25}, {58, 26}};
+    uint32_t random = 0x4312;
+    for(unsigned pattern = 0; pattern < 20; ++pattern) {
+        start_new(0x4312);
+        std::memset(game.rooms, 0, sizeof game.rooms);
+        std::memset(game.monsters, 0, sizeof game.monsters);
+        std::memset(game.ground, 0, sizeof game.ground);
+        game.door_count = 0;
+        game.up = game.down = {NONE, NONE};
+        for(unsigned i = 0; i < sizeof game.walls; ++i) {
+            random = random * 1664525u + 1013904223u;
+            game.walls[i] = pattern == 0 ? 0 : pattern == 1 ? 0xff :
+                pattern == 2 ? 0x55 : pattern == 3 ? 0xaa : uint8_t(random >> 24);
+            random = random * 1664525u + 1013904223u;
+            game.explored[i] = pattern % 3 == 0 ? 0 :
+                pattern % 3 == 1 ? 0xff : uint8_t(random >> 24);
+        }
+        Game initial = game;
+        for(Position pos : positions) {
+            game = initial;
+            game.player = pos;
+            carve(pos.x, pos.y);
+            uint8_t before[sizeof game.explored], expected[sizeof game.explored];
+            std::memcpy(before, game.explored, sizeof before);
+            uint8_t frame[1024] = {};
+            reference_terrain(frame);
+            std::memcpy(expected, game.explored, sizeof expected);
+            std::memcpy(game.explored, before, sizeof before);
+            render_play();
+            if(std::memcmp(expected, game.explored, sizeof expected)) {
+                std::fprintf(stderr, "Exploration changed in terrain pattern %u at %u,%u\n",
+                             pattern, unsigned(pos.x), unsigned(pos.y));
+                return false;
+            }
+            for(int y = 0; y < 64; ++y)
+                for(int x = 0; x < 64; ++x) {
+                    // The player icon overwrites this terrain tile.
+                    if(x >= 30 && x < 34 && y >= 30 && y < 34) continue;
+                    unsigned index = (y >> 3) * 128 + x;
+                    uint8_t bit = static_cast<uint8_t>(1u << (y & 7));
+                    if((frame[index] & bit) != (__avm_framebuffer[index] & bit)) {
+                        std::fprintf(stderr, "Terrain pattern %u at %u,%u differs at pixel %d,%d\n",
+                                     pattern, unsigned(pos.x), unsigned(pos.y), x, y);
+                        return false;
+                    }
+                }
+        }
+    }
+    return true;
+}
+
+static uint8_t page_background[1024];
+static unsigned restored_pages;
+static bool page_background_ok;
+
+static void capture_restored_page(int16_t x, int16_t, const char* text)
+{
+    if(x == 128 || std::strcmp(text, "[more]")) return;
+    for(unsigned row = 0; row < 8; ++row)
+        for(unsigned col = 0; col < 65; ++col)
+            if(__avm_framebuffer[row * 128 + col] != page_background[row * 128 + col])
+                page_background_ok = false;
+    ++restored_pages;
+    // A subsequent page must retain this already-rendered dungeon background.
+    __avm_framebuffer[0] ^= 0x80;
+    page_background[0] ^= 0x80;
+}
+
+static bool check_deferred_pages()
+{
+    using namespace rogue;
+    start_new(0x4312);
+    ui = {};
+    ui.mode = PLAY;
+    render_play();
+    std::memcpy(page_background, __avm_framebuffer, sizeof page_background);
+    std::memset(__avm_framebuffer, 0xa5, sizeof __avm_framebuffer);
+    status_clear();
+    defer_play_render();
+    restored_pages = 0;
+    page_background_ok = true;
+    avm_test_text_hook = capture_restored_page;
+    for(uint8_t i = 0; i < 16; ++i) avm_test_buttons[i] = i & 1 ? AVM_BUTTON_A : 0;
+    avm_test_button_count = 16;
+    avm_test_button_index = 0;
+    for(unsigned i = 0; i < 24; ++i) status_word("alpha");
+    avm_test_text_hook = nullptr;
+    avm_test_button_count = 0;
+    __avm_framebuffer[0] ^= 0x40;
+    page_background[0] ^= 0x40;
+    restore_play_render();
+    if(restored_pages != 2 || !page_background_ok ||
+       __avm_framebuffer[0] != page_background[0]) return false;
+    // Page clearing must affect only the status rectangle.
+    for(int y = 23; y < 64; ++y)
+        for(int x = 65; x < 128; ++x)
+            if(__avm_framebuffer[(y >> 3) * 128 + x] & (1u << (y & 7))) return false;
+
+    render_play();
+    std::memcpy(page_background, __avm_framebuffer, sizeof page_background);
+    std::memset(__avm_framebuffer, 0xa5, sizeof __avm_framebuffer);
+    status_clear();
+    defer_play_render();
+    render_yesno_prompt(F("Confirm?"), nullptr);
+    for(unsigned row = 0; row < 8; ++row)
+        if(std::memcmp(__avm_framebuffer + row * 128,
+                       page_background + row * 128, 65)) return false;
+    return true;
+}
+
 int main()
 {
     using namespace rogue;
@@ -137,6 +312,10 @@ int main()
     }
     if(!check_shared_icons()) {
         std::fprintf(stderr, "Shared item/mimic icons or independent appearance flags failed\n");
+        return 1;
+    }
+    if(!check_terrain_rows() || !check_deferred_pages()) {
+        std::fprintf(stderr, "Terrain rows or deferred page/prompt restoration failed\n");
         return 1;
     }
     // Baseline snapshots cover viewport clipping, rooms, corridors and doors.

@@ -26,6 +26,7 @@ void status_next_line(uint8_t& x, uint8_t& y)
     y = static_cast<uint8_t>(y + 7);
     if(y <= 56)
         return;
+    restore_play_render();
     int16_t more_width = avm_draw_text_P(128, 0, F("[more]")).x - 128;
     avm_draw_text_P(static_cast<int16_t>(128 - more_width), 63, F("[more]"));
     avm_display(false);
