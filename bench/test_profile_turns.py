@@ -71,8 +71,8 @@ class TurnBenchmarks(unittest.TestCase):
         after = dict(before, x=33, turns=1)
         profile = {
             "window": {"complete": True, "stop_reason": "breakpoint", "partial_cycles": "0",
-                       "discontinuities": "0", "start_cycle": "100", "end_cycle": "2400100"},
-            "pcs": [{"linkage": "_ZN5rogue6renderEv", "function": "rogue::render()", "cycles": "2400000"}],
+                       "discontinuities": "0", "start_cycle": "100", "end_cycle": "1600100"},
+            "pcs": [{"linkage": "_ZN5rogue6renderEv", "function": "rogue::render()", "cycles": "1600000"}],
             "identity": {}, "end_display_hash": "fixture",
         }
         records = [
@@ -80,7 +80,7 @@ class TurnBenchmarks(unittest.TestCase):
             {"seconds_since_reset": 0, "cycles": 100, "pc": 1916},
             {"cycle": 100, "pressed_mask": 2},
             {"requested_cycles": 160000000, "reason": "breakpoint"},
-            {"seconds_since_reset": 0, "cycles": 2400100, "pc": 1916},
+            {"seconds_since_reset": 0, "cycles": 1600100, "pc": 1916},
         ]
         return case, before, after, profile, records
 
@@ -92,11 +92,12 @@ class TurnBenchmarks(unittest.TestCase):
         output += "\n" + "\n".join(json.dumps(record) for record in records)
         return turns.validate_sample(case, self.contract, folder, output)
 
-    def test_exact_150ms_cycle_conversion(self):
+    def test_exact_100ms_cycle_conversion(self):
         with tempfile.TemporaryDirectory() as raw:
             folder = Path(raw)
             sample = self.validate(folder, *self.sample())
-            self.assertEqual(sample["cycles"], 2400000)
+            self.assertEqual(sample["cycles"], 1600000)
+            self.assertEqual(sample["ms"], 100.0)
             self.assertEqual(sample["ms"], turns.DEFAULT_GOAL_MS)
             self.assertEqual(json.loads((folder / "after.json").read_text())["x"], 33)
 

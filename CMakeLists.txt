@@ -62,7 +62,7 @@ set(ARDUROGUE2_SOURCES
     main state combat combat_math items world persistence status render ui)
 set(ARDUROGUE2_HEADERS
     model game game_internal world app_state persistence status render ui
-    inventory_view combat_math)
+    inventory_view combat_math ray_sight_generated)
 set(ARDUROGUE2_HEADER_FILES)
 foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
     list(APPEND ARDUROGUE2_HEADER_FILES
@@ -158,6 +158,6 @@ if(Python3_Interpreter_FOUND)
             --output "${ARDUROGUE2_BUILD_DIR}/turn-benchmarks"
         DEPENDS ardurogue2_bench
         USES_TERMINAL
-        COMMENT "Profiling complete turns against the initial 150 ms goal"
+        COMMENT "Profiling complete turns against the 100 ms limit"
         VERBATIM)
 endif()

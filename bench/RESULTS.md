@@ -7,12 +7,15 @@ writes. The main loop still renders the completed turn. Status pagination
 restores the dungeon only for its first page when needed; later pages clear
 just the status rectangle with the existing filled-rectangle operation.
 
-**All 21 cases pass the 150 ms goal**, compared with 9 passes and 12 failures
-before these changes. The slowest case is now dense waiting at 118.145 ms,
-leaving 31.855 ms to the limit. Each case runs once because emulated timing
+**All 21 cases passed the historical 150 ms goal**, compared with 9 passes and 12 failures
+before these changes. The slowest case in this round was dense waiting at 118.145 ms,
+leaving 31.855 ms to that limit. Each case runs once because emulated timing
 is deterministic. Workloads, measurement boundaries, scenario source, and
 interpreter firmware are unchanged. Generation, animation, and pagination
 acknowledgement time remain outside these controlled benchmark scenarios.
+
+The current [documented limit](README.md) is 100 ms. The later
+[visibility and exploration changes](RESULTS-100MS.md) bring all 21 cases below it.
 
 | Benchmark | Before ms | After ms | After cycles | Reduction |
 | --- | ---: | ---: | ---: | ---: |
@@ -53,7 +56,7 @@ Validation:
   stack bound is 247/256 bytes with zero analysis gaps; the benchmark bound is
   245/256 bytes. Production `.saved` is still 821 bytes, and `.data` is 102
   bytes (923/1,024 bytes total). Rendering scratch is transient and unsaved.
-- The root `ardurogue2.arduboy` package is rebuilt. Changes are uncommitted.
+- The root `ardurogue2.arduboy` package is rebuilt.
 
 Build identities:
 

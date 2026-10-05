@@ -20,7 +20,7 @@ import sys
 import tempfile
 
 CLOCK_HZ = 16_000_000
-DEFAULT_GOAL_MS = 150.0
+DEFAULT_GOAL_MS = 100.0
 
 
 @dataclass(frozen=True)
@@ -264,7 +264,7 @@ def write_summary(folder, cases, goal_ms, elf, contract):
         writer.writerow(("benchmark", "cycles", "ms", "goal_ms", "meets_goal"))
         for case in cases:
             writer.writerow((case["name"], case["cycles"], case["ms"], goal_ms, case["meets_goal"]))
-    lines = [f"# Turn benchmarks: {goal_ms:g} ms initial goal", "",
+    lines = [f"# Turn benchmarks: {goal_ms:g} ms limit", "",
              "Elapsed emulated time at 16 MHz, from submitted button to the main input wait after final render/display.", "",
              "| Benchmark | Cycles | ms | Goal |", "| --- | ---: | ---: | --- |"]
     for case in cases:

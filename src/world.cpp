@@ -435,6 +435,9 @@ constexpr RayPaths make_ray_paths()
 
 static constexpr RayPaths PROGMEM ray_paths = make_ray_paths();
 
+// Fixed shared-prefix branches; the generator preserves Bresenham tie rules.
+#include "ray_sight_generated.hpp"
+
 bool ray_visible(uint8_t tx, uint8_t ty, const uint16_t opaque[13])
 {
     if(tx >= 13 || !(light_mask(player_light_radius(), ty) & (1u << tx)))

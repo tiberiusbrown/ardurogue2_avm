@@ -27,5 +27,8 @@ uint16_t light_mask(uint8_t radius, uint8_t sy);
 bool ray_visible(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);
 // Requires viewport coordinates whose light-mask bit was already checked.
 bool ray_unblocked(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);
+// Writes the radius-six ray visibility masks, sharing identical path prefixes.
+// Does not apply room visibility or viewport clipping.
+void ray_sight(const uint16_t opaque[13], uint16_t sight[13]);
 
 } // namespace rogue

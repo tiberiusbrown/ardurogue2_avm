@@ -1,15 +1,15 @@
 # Complete-turn latency benchmarks
 
-The initial goal is **no more than 150 ms** (2,400,000 emulated AVR cycles at
+The limit is **no more than 100 ms** (1,600,000 emulated AVR cycles at
 16 MHz) from submitting an action's input to the completed view being ready
 for the next input. Each benchmark runs once because emulated time is deterministic.
 The target applies to the controlled scenarios listed below.
 
-The [baseline](BASELINE.md) records one measurement for each of the 21 cases:
-9 cases meet the goal and 12 exceed it.
-After deferring redundant rendering and batching terrain rows, all 21 cases
-meet the goal; see the [optimization results](RESULTS.md) for timings and
-correctness comparisons.
+The [baseline](BASELINE.md) and [first optimization results](RESULTS.md)
+record earlier measurements against the former 150 ms limit.
+The next round implemented shared ray prefixes and row-based exploration
+separately, benchmarking each. All 21 cases meet the current 100 ms limit;
+see the [second-round results](RESULTS-100MS.md). The runner defaults to this limit.
 
 `profile_turns.py` uses Python 3's standard library and the installed SDK's
 `avm-lldb`. The separate `ardurogue2-bench.elf` links [bench.cpp](bench.cpp) with

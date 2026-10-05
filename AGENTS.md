@@ -32,7 +32,7 @@ cmake --build build --config RelWithDebInfo --target ardurogue2 ardurogue2_bench
 python bench/profile_turns.py --elf build/ardurogue2-bench.elf --sdk-root <sdk> --check --output build/turn-benchmarks
 ```
 
-All cases must take at most **150 ms** in their worst sample, from submitted
+All cases must take at most **100 ms** in their worst sample, from submitted
 input through computation and final rendering to readiness for the next input;
 generation and animation are excluded. Use the saved avm-lldb profiles to
 optimize failures while preserving gameplay and benchmark coverage. Run

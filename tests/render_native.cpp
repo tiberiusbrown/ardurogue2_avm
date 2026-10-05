@@ -142,11 +142,22 @@ static void reference_terrain(uint8_t frame[1024])
     using namespace rogue;
     bool visible[13][13] = {};
     int left = int(game.player.x) - 6, top = int(game.player.y) - 6;
+    const Room* player_room = nullptr;
+    for(const Room& room : game.rooms)
+        if(game.player.x >= room.x && game.player.x < room.x + room.w &&
+           game.player.y >= room.y && game.player.y < room.y + room.h) {
+            player_room = &room;
+            break;
+        }
     for(int sy = 0; sy < 13; ++sy)
         for(int sx = 0; sx < 13; ++sx) {
             int x = left + sx, y = top + sy;
             if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
-            visible[sy][sx] = can_see({uint8_t(x), uint8_t(y)});
+            bool room = player_room && x >= player_room->x &&
+                x < player_room->x + player_room->w && y >= player_room->y &&
+                y < player_room->y + player_room->h;
+            visible[sy][sx] = in_light_radius(sx - 6, sy - 6, 6) &&
+                (room || can_see({uint8_t(x), uint8_t(y)}));
         }
     for(int sy = 0; sy < 13; ++sy)
         for(int sx = 0; sx < 13; ++sx) {
@@ -193,15 +204,26 @@ static bool check_terrain_rows()
     using namespace rogue;
     const Position positions[] = {{0, 0}, {63, 0}, {0, 31}, {63, 31},
         {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12},
-        {13, 13}, {57, 25}, {58, 26}};
+        {13, 13}, {57, 25}, {58, 26}, {1, 1}, {2, 2}, {3, 3}, {4, 4},
+        {5, 5}, {59, 27}, {60, 28}, {61, 29}, {62, 30}};
     uint32_t random = 0x4312;
-    for(unsigned pattern = 0; pattern < 20; ++pattern) {
+    for(unsigned pattern = 0; pattern < 24; ++pattern) {
         start_new(0x4312);
         std::memset(game.rooms, 0, sizeof game.rooms);
         std::memset(game.monsters, 0, sizeof game.monsters);
         std::memset(game.ground, 0, sizeof game.ground);
         game.door_count = 0;
         game.up = game.down = {NONE, NONE};
+        if(pattern == 20) game.rooms[0] = {0, 0, MAP_W, MAP_H};
+        if(pattern == 21) {
+            game.rooms[0] = {0, 0, 10, 10};
+            game.rooms[1] = {54, 22, 10, 10};
+        }
+        if(pattern == 22) game.rooms[0] = {5, 5, 10, 10};
+        if(pattern == 23) {
+            game.rooms[0] = {0, 0, 10, 10};
+            game.rooms[1] = {0, 0, MAP_W, MAP_H};
+        }
         for(unsigned i = 0; i < sizeof game.walls; ++i) {
             random = random * 1664525u + 1013904223u;
             game.walls[i] = pattern == 0 ? 0 : pattern == 1 ? 0xff :

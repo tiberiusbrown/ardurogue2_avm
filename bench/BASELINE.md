@@ -5,11 +5,14 @@ intermediate/final rendering, and return to the main input wait. Generation
 and animated actions are excluded. Scenarios are compiled in `bench.cpp`;
 no save files or saved-layout fixtures are created.
 
-Initial goal: **150 ms / 2,400,000 cycles**. **9 of 21 cases meet the goal; 12
+Historical goal: **150 ms / 2,400,000 cycles**. **9 of 21 cases meet that goal; 12
 exceed it.** Each case runs once (21 profiles total). Times below are exact
 emulated input-to-ready latencies.
 
-| Benchmark | Cycles | Elapsed ms | 150 ms goal |
+The current [documented limit](README.md) is 100 ms; the pass/over labels below
+retain the threshold used for this historical run.
+
+| Benchmark | Cycles | Elapsed ms | Historical 150 ms goal |
 | --- | ---: | ---: | --- |
 | move_room | 1,627,623 | 101.726 | PASS |
 | move_corridor | 2,182,164 | 136.385 | PASS |

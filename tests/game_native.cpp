@@ -314,18 +314,46 @@ void check_local_visibility()
                     if(blocked(static_cast<int16_t>(x) + sx - 6,
                                static_cast<int16_t>(y) + sy - 6))
                         opaque[sy] |= static_cast<uint16_t>(1u << sx);
+            uint16_t sight[13];
+            ray_sight(opaque, sight);
             for(uint8_t sy = 0; sy < 13; ++sy)
                 for(uint8_t sx = 0; sx < 13; ++sx) {
                     int16_t tx = static_cast<int16_t>(x) + sx - 6;
                     int16_t ty = static_cast<int16_t>(y) + sy - 6;
                     if(tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H)
                         require(ray_visible(sx, sy, opaque) ==
-                                can_see({static_cast<uint8_t>(tx), static_cast<uint8_t>(ty)}),
-                                "local visibility differs from world ray");
+                                can_see({static_cast<uint8_t>(tx), static_cast<uint8_t>(ty)}) &&
+                                bool(sight[sy] & (1u << sx)) == ray_visible(sx, sy, opaque),
+                                "local/shared visibility differs from world ray");
                 }
         }
     require(samples == 24, "too few visibility samples");
     game.player = {old_x, old_y};
+}
+
+void check_shared_rays()
+{
+    uint32_t random = 0x62f341u;
+    for(unsigned pattern = 0; pattern < 1024; ++pattern) {
+        uint16_t opaque[13] = {}, sight[13];
+        if(pattern == 1)
+            for(uint16_t& row : opaque) row = 0x1fff;
+        else if(pattern >= 2 && pattern < 171)
+            opaque[(pattern - 2) / 13] = static_cast<uint16_t>(1u << ((pattern - 2) % 13));
+        else if(pattern >= 171)
+            for(uint16_t& row : opaque) {
+                random = random * 1664525u + 1013904223u;
+                row = static_cast<uint16_t>((random >> 16) & 0x1fff);
+            }
+        for(uint16_t& row : sight) row = 0xffff;
+        ray_sight(opaque, sight);
+        for(uint8_t y = 0; y < 13; ++y) {
+            require(!(sight[y] & ~0x1fffu), "shared ray output exceeds viewport");
+            for(uint8_t x = 0; x < 13; ++x)
+                require(bool(sight[y] & (1u << x)) == ray_visible(x, y, opaque),
+                        "shared ray differs for a blocker pattern");
+        }
+    }
 }
 
 void check_light_masks()
@@ -2610,6 +2638,7 @@ int main(int argc, char** argv)
             "map bounds are not solid");
     check_local_visibility();
     check_light_masks();
+    check_shared_rays();
     check_monster_accessors();
     check_circular_light_radius();
     check_wall_faces();
