@@ -15,6 +15,10 @@ void status_clear();
 void defer_play_render();
 void restore_play_render();
 void render_play();
+// Loading occupies the dungeon pane; the ordinary stats/status stay visible.
+void begin_generation_render();
+void update_generation_render(uint8_t percent = 255);
+void end_generation_render();
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_fire_burst(Position center);
 void animate_spreading_rays(Position origin, const uint8_t steps[4]);

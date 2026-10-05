@@ -100,6 +100,7 @@ static Position select_tile(uint16_t seed, uint8_t preference, bool monster)
     for(uint8_t pass = 0; pass < 3; ++pass) {
         uint16_t index = start;
         for(uint16_t n = 0; n < 2048; ++n, index = (index + stride) & 2047) {
+            if(!(n & 63)) progress();
             Position pos = {static_cast<uint8_t>(index & 63), static_cast<uint8_t>(index >> 6)};
             if(wall_at(pos.x, pos.y) || pos == game.up || pos == game.down ||
                door_at(pos) != NONE || monster_at(pos) != NONE) continue;

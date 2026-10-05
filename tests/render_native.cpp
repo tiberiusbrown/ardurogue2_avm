@@ -12,6 +12,8 @@ uint8_t __avm_framebuffer[1024] = {};
 void (*avm_test_text_hook)(int16_t, int16_t, const char*) = nullptr;
 uint8_t avm_test_buttons[16] = {};
 uint8_t avm_test_button_count = 0, avm_test_button_index = 0;
+unsigned avm_test_displays = 0;
+uint16_t avm_test_millis = 0;
 namespace rogue {
 Game game = {};
 Ui ui = {};
@@ -311,9 +313,67 @@ static bool check_deferred_pages()
     return true;
 }
 
+static bool loading_text_in_pane, loading_stats_visible;
+
+static void capture_loading_text(int16_t x, int16_t y, const char* text)
+{
+    if(!std::strcmp(text, "Generating..."))
+        loading_text_in_pane = x >= 0 && x + 4 * std::strlen(text) <= 64 && y < 64;
+    if(x == 67 && y == 7 && text[0] == 'D') loading_stats_visible = true;
+}
+
+static bool check_generation_loading()
+{
+    using namespace rogue;
+    start_new(0x4312);
+    // The animation must be safe even while explored contains BFS scratch
+    // and door coordinates contain the generator's temporary priority bits.
+    std::memset(game.explored, 0xa5, sizeof game.explored);
+    game.doors[0].pos.y = 255;
+    Game before = game;
+    ui = {};
+    ui.mode = TITLE;
+    avm_test_millis = 65500;
+    avm_test_displays = 0;
+    loading_text_in_pane = loading_stats_visible = false;
+    avm_test_text_hook = capture_loading_text;
+    begin_generation_render();
+    avm_test_text_hook = nullptr;
+    if(avm_test_displays != 1 || !loading_text_in_pane || !loading_stats_visible) return false;
+    // Retained pixels elsewhere in the dungeon pane must survive updates too.
+    __avm_framebuffer[2] |= 4;
+    __avm_framebuffer[7 * 128 + 2] |= 16;
+    uint8_t frame[1024];
+    std::memcpy(frame, __avm_framebuffer, sizeof frame);
+    avm_test_millis = static_cast<uint16_t>(65500 + 149);
+    update_generation_render(55);
+    if(avm_test_displays != 1 || std::memcmp(frame, __avm_framebuffer, sizeof frame)) return false;
+    ++avm_test_millis;
+    for(unsigned step = 0; step < 8; ++step) {
+        update_generation_render();
+        if(avm_test_displays != step + 2) return false;
+        bool animated = false;
+        for(unsigned row = 0; row < 8; ++row) {
+            animated |= std::memcmp(frame + row * 128, __avm_framebuffer + row * 128, 64) != 0;
+            if(std::memcmp(frame + row * 128 + 64, __avm_framebuffer + row * 128 + 64, 64)) return false;
+        }
+        if(!(__avm_framebuffer[2] & 4) || !(__avm_framebuffer[7 * 128 + 2] & 16)) return false;
+        if(!animated || std::memcmp(&before, &game, sizeof game)) return false;
+        std::memcpy(frame, __avm_framebuffer, sizeof frame);
+        avm_test_millis = static_cast<uint16_t>(avm_test_millis + 150);
+    }
+    end_generation_render();
+    return !std::memcmp(&before, &game, sizeof game) && ui.dirty &&
+        !ui.held_direction && !ui.selection && ui.repeat_suppressed;
+}
+
 int main()
 {
     using namespace rogue;
+    if(!check_generation_loading()) {
+        std::fprintf(stderr, "Generation loading cadence, pane bounds or scratch isolation failed\n");
+        return 1;
+    }
     if(!check_packed_wall_rows()) {
         std::fprintf(stderr, "Packed wall row extraction failed\n");
         return 1;
@@ -333,7 +393,7 @@ int main()
     };
     const uint32_t expected[] = {
         0xc0b79398u, 0xc7113a38u, 0x473d2b98u, 0x8bbf3a38u,
-        0x0d37258eu, 0x53d53fe8u, 0x37850c9cu, 0x67e10dcdu,
+        0x0b000368u, 0xc421c3bfu, 0x37850c9cu, 0xdc749961u,
         0x4b46c42bu, 0xd975e0abu, 0x0d861207u
     };
     bool failed = false;

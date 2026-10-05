@@ -2,6 +2,10 @@
 
 #include "model.hpp"
 
+#if defined(__AVM__)
+namespace rogue { void update_generation_render(uint8_t percent); }
+#endif
+
 namespace rogue::generation {
 
 enum Archetype : uint8_t { CHAMBERS, WARREN, FORTRESS, RUINS, ARCHETYPES };
@@ -15,10 +19,22 @@ uint16_t floor_seed(Purpose purpose);
 Archetype archetype(uint16_t layout_seed);
 void generate_layout(uint16_t seed);
 void add_secondary_connections(uint16_t seed);
+void trim_dangling_passages();
 void finalize_doors(uint16_t seed);
 void choose_stairs(uint16_t seed);
 void populate_monsters(uint16_t seed);
 void populate_items(uint16_t seed, uint16_t equipment_seed);
+
+// Yield visual progress during bounded chunks of generation work. The host
+// generator has no frontend, timer, or dependency on AVM drawing APIs.
+inline void progress(uint8_t percent = 255)
+{
+#if defined(__AVM__)
+    update_generation_render(percent);
+#else
+    (void)percent;
+#endif
+}
 
 // Computed only during generation. No classifications survive in Game.
 enum Geometry : uint8_t {

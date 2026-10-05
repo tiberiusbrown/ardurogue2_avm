@@ -3,6 +3,9 @@
 #include "world.hpp"
 #include "game_internal.hpp"
 #include <string.h>
+#if defined(__AVM__)
+#include "render.hpp"
+#endif
 
 namespace rogue::generation {
 
@@ -216,6 +219,7 @@ static __attribute__((noinline)) bool socket(Feature& f, Position at, uint8_t di
     uint8_t found = 0;
     int8_t sx = 0, sy = 0;
     for(int8_t y = 0; y < f.h; ++y) {
+        if(!(y & 3)) progress();
         uint16_t row = base_row(f, y), sockets;
         if(base_dir == 0) sockets = static_cast<uint16_t>(row & (row >> 1) & ~(row << 1) & ~(row << 2));
         else if(base_dir == 2) sockets = static_cast<uint16_t>(row & (row << 1) & ~(row >> 1) & ~(row >> 2));
@@ -267,21 +271,25 @@ static __attribute__((noinline)) bool valid(const Feature& f, bool relaxed)
         }
         return true;
     }
-    for(int8_t y = -1; y <= height(f); ++y)
+    for(int8_t y = -1; y <= height(f); ++y) {
+        if(!(y & 3)) progress();
         for(int8_t x = -1; x <= width(f); ++x)
             if(mask(f, x, y, true, relaxed) && !wall_at(f.x + x, f.y + y)) return false;
+    }
     return true;
 }
 
 static uint16_t stamp(const Feature& f)
 {
     uint16_t count = 0;
-    for(int8_t y = 0; y < height(f); ++y)
+    for(int8_t y = 0; y < height(f); ++y) {
+        if(!(y & 3)) progress();
         for(int8_t x = 0; x < width(f); ++x)
             if(mask(f, x, y, false, false)) {
                 carve(static_cast<uint8_t>(f.x + x), static_cast<uint8_t>(f.y + y));
                 ++count;
             }
+    }
 #if !defined(__AVM__)
     ++diagnostics.families[f.family];
     if(f.family >= SHORT_PASSAGE && f.family <= BENT_PASSAGE) ++diagnostics.corridors;
@@ -296,6 +304,7 @@ static __attribute__((noinline)) bool attachment(Position& at, uint8_t& dir, uin
     uint16_t stride = next_random(seed) | 1;
     (void)random(seed, 4); // Preserve the layout stream's per-search advance.
     for(uint16_t n = 0; n < 2048; ++n, index = (index + stride) & 2047) {
+        if(!(n & 63)) progress();
         at = tile(index);
         if(at.x <= 1 || at.y <= 1 || at.x >= MAP_W - 2 || at.y >= MAP_H - 2) continue;
         uint8_t row = local_row(at, 0);
@@ -343,6 +352,7 @@ __attribute__((noinline)) void generate_layout(uint16_t seed)
     // Late attempts favor small attachable rooms instead of returning a tiny
     // floor after a run of unlucky large-room placements. No retries recurse.
     for(uint16_t attempt = 0; attempt < 1800 && coverage < target; ++attempt) {
+        progress(static_cast<uint8_t>(coverage * 55u / target));
 #if !defined(__AVM__)
         diagnostics.attempts = static_cast<uint16_t>(attempt + 1);
 #endif
@@ -420,7 +430,9 @@ static __attribute__((noinline)) bool short_route(Position a, Position b, Positi
     memset(game.explored, 0, sizeof game.explored);
     scratch_row(0, static_cast<uint8_t>(a.y - y), 1ul << (a.x - x));
     for(uint8_t step = 0; step < limit; ++step) {
+        progress();
         for(uint8_t row = 0; row < 23; ++row) {
+            if(!(row & 3)) progress();
             uint32_t reached = scratch_row(0, row);
             uint32_t next = reached | (reached << 1) | (reached >> 1);
             if(row) next |= scratch_row(0, row - 1);
@@ -443,6 +455,7 @@ __attribute__((noinline)) void add_secondary_connections(uint16_t seed)
     // A complete permutation considers every tile once. Each opportunity has
     // two orientations and a maximum connector length of three tiles.
     for(uint16_t n = 0; n < 2048 && made < goal; ++n, index = (index + stride) & 2047) {
+        if(!(n & 31)) progress();
         Position at = tile(index);
         if(at.x < 2 || at.y < 2 || at.x > MAP_W - 3 || at.y > MAP_H - 3 || !wall_at(at.x, at.y)) continue;
         for(uint8_t dir = 0; dir < 4 && made < goal; ++dir) {
@@ -471,6 +484,33 @@ __attribute__((noinline)) void add_secondary_connections(uint16_t seed)
 #if !defined(__AVM__)
     diagnostics.loops = made;
 #endif
+}
+
+__attribute__((noinline)) void trim_dangling_passages()
+{
+    // Peel corridor leaves back to a room or surviving junction. Removing a
+    // leaf cannot disconnect the remaining floor, and chamber interiors and
+    // completed loops have at least two neighbors and survive this pass.
+    // Each newly exposed leaf is followed immediately, so one scan suffices
+    // even for bent passages and branches whose roots precede their tips.
+    for(uint16_t index = 0; index < MAP_W * MAP_H; ++index) {
+        if(!(index & 31)) progress();
+        Position pos = tile(index);
+        while(!wall_at(pos.x, pos.y) && neighbors(pos) <= 1) {
+            Position next = pos;
+            for(uint8_t dir = 0; dir < 4; ++dir) {
+                Position candidate = {static_cast<uint8_t>(pos.x + dx(dir)),
+                                      static_cast<uint8_t>(pos.y + dy(dir))};
+                if(!wall_at(candidate.x, candidate.y)) { next = candidate; break; }
+            }
+            uint16_t bit = static_cast<uint16_t>(pos.y * MAP_W + pos.x);
+            game.walls[bit >> 3] |= static_cast<uint8_t>(1u << (bit & 7));
+#if !defined(__AVM__)
+            --diagnostics.floor_tiles;
+#endif
+            pos = next;
+        }
+    }
 }
 
 static bool throat(Position pos)
@@ -507,6 +547,7 @@ static Position farthest(Position from, uint16_t& seed, bool first)
     Position best = from;
     uint16_t distance = 0;
     for(uint16_t n = 0; n < 2048; ++n, index = (index + stride) & 2047) {
+        if(!(n & 63)) progress();
         Position pos = tile(index);
         if(wall_at(pos.x, pos.y) || !roomy(pos) || door_at(pos) != NONE) continue;
         uint16_t d = distance_squared(from, pos);
@@ -533,6 +574,9 @@ namespace rogue {
 
 void make_floor()
 {
+#if defined(__AVM__)
+    begin_generation_render();
+#endif
     memset(game.walls, 0xff, sizeof game.walls);
     memset(game.explored, 0, sizeof game.explored);
     memset(game.doors, 0, sizeof game.doors);
@@ -544,13 +588,23 @@ void make_floor()
 #endif
     using namespace generation;
     generate_layout(floor_seed(LAYOUT));
+    progress(55);
     add_secondary_connections(floor_seed(LOOPS));
+    progress(75);
+    trim_dangling_passages();
+    progress(80);
     finalize_doors(floor_seed(DOOR_SELECTION));
+    progress(82);
     choose_stairs(floor_seed(STAIRS));
+    progress(87);
     populate_monsters(floor_seed(ENCOUNTERS));
+    progress(94);
     populate_items(floor_seed(SUPPLIES), floor_seed(EQUIPMENT));
     game.player = game.has_amulet ? game.down : game.up;
     memset(game.explored, 0, sizeof game.explored);
+#if defined(__AVM__)
+    end_generation_render();
+#endif
 }
 
 } // namespace rogue

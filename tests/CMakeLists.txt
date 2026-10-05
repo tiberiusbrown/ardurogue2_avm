@@ -59,6 +59,7 @@ add_executable(render_native
     ../src/world_gen_population.cpp
 )
 target_compile_features(render_native PRIVATE cxx_std_17)
+target_compile_definitions(render_native PRIVATE AVM_TEST_LOADING)
 target_include_directories(render_native PRIVATE shim ../src)
 add_test(NAME render_native COMMAND render_native)
 

@@ -36,7 +36,13 @@ inline AvmTextCursor avm_draw_textf_P(int16_t x, int16_t y, const char* format,
     if(avm_test_text_hook) avm_test_text_hook(x, y, text);
     return {static_cast<int16_t>(x + strlen(text) * 4)};
 }
+#if defined(AVM_TEST_LOADING)
+extern unsigned avm_test_displays;
+extern uint16_t avm_test_millis;
+inline void avm_display(bool) { ++avm_test_displays; }
+#else
 inline void avm_display(bool) {}
+#endif
 extern uint8_t avm_test_buttons[16];
 extern uint8_t avm_test_button_count;
 extern uint8_t avm_test_button_index;
@@ -45,7 +51,11 @@ inline uint8_t avm_buttons() {
         ? avm_test_buttons[avm_test_button_index++] : 0;
 }
 inline void avm_idle() {}
+#if defined(AVM_TEST_LOADING)
+inline uint16_t avm_millis() { return avm_test_millis; }
+#else
 inline uint16_t avm_millis() { return 0; }
+#endif
 inline uint16_t avm_generate_random_seed() { return 0x4312; }
 
 extern uint8_t __avm_framebuffer[1024];

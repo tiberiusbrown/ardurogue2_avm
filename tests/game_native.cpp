@@ -165,8 +165,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x450009a6u, 0x8bae91f2u}, {0x28888a11u, 0x90b34d04u},
-        {0x596635e2u, 0xcc0eeef3u}, {0x9f98d485u, 0x9cb42fc0u}
+        {0xcfea7fdcu, 0xf3c78df8u}, {0x630b2ec8u, 0xf8c71261u},
+        {0xc076a16du, 0xf85500e5u}, {0x1ceb4681u, 0x270ace4au}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)

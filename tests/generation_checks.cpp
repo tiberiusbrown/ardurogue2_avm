@@ -105,6 +105,7 @@ void validate(Metrics& m)
         }
     }
     require(write == tiles, "floor has inaccessible pockets");
+    require(dead == 0, "floor has a corridor leading nowhere");
     require(tiles >= 300 && tiles <= 1050, "pathological floor coverage");
     require(diagnostics.major_features >= 5, "growth produced too few chambers");
     require(game.up != game.down && !wall_at(game.up.x, game.up.y) && !wall_at(game.down.x, game.down.y), "invalid stairs");
@@ -221,11 +222,45 @@ void check_loop_topology()
         add_secondary_connections(floor_seed(LOOPS));
         require(cycle_rank() == before + diagnostics.loops,
             "loop pass opened decorative holes instead of independent routes");
+        trim_dangling_passages();
+        require(cycle_rank() == before + diagnostics.loops,
+            "corridor pruning removed a completed loop");
     }
+}
+
+void check_passage_trimming()
+{
+    game = {};
+    std::memset(game.walls, 0xff, sizeof game.walls);
+    for(uint8_t y = 8; y <= 12; ++y)
+        for(uint8_t x = 8; x <= 32; ++x)
+            if(x <= 12 || x >= 28 || y == 10) carve(x, y);
+    // A terminal chamber and a small attached loop must both remain intact.
+    for(uint8_t y = 10; y <= 11; ++y)
+        for(uint8_t x = 5; x <= 6; ++x) carve(x, y);
+    carve(7, 10);
+    Game expected = game;
+    for(uint8_t y = 5; y < 10; ++y) carve(18, y);
+    for(uint8_t x = 15; x <= 21; ++x) carve(x, 5);
+    for(uint8_t y = 13; y <= 22; ++y) carve(10, y);
+    diagnostics.floor_tiles = 0;
+    for(uint8_t y = 0; y < MAP_H; ++y)
+        for(uint8_t x = 0; x < MAP_W; ++x)
+            diagnostics.floor_tiles += !wall_at(x, y);
+    trim_dangling_passages();
+    require(!std::memcmp(&expected, &game, sizeof game),
+        "branch pruning removed a chamber/loop/through passage or left a dangling branch");
+    unsigned cells = 0;
+    for(uint8_t y = 0; y < MAP_H; ++y)
+        for(uint8_t x = 0; x < MAP_W; ++x) cells += !wall_at(x, y);
+    require(cells == diagnostics.floor_tiles, "trimmed coverage diagnostics are inaccurate");
+    trim_dangling_passages();
+    require(!std::memcmp(&expected, &game, sizeof game), "passage pruning is not idempotent");
 }
 
 void bulk(unsigned seeds)
 {
+    check_passage_trimming();
     require(check_feature_masks(), "carve/clearance transformation mismatch");
     require(seeds >= 1 && seeds <= 65536, "seed count must be 1..65536");
     Metrics metrics[ARCHETYPES];

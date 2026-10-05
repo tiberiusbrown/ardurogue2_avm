@@ -549,6 +549,64 @@ __attribute__((noinline)) void render_play()
     render_stats();
 }
 
+__attribute__((noinline)) void update_generation_render(uint8_t percent)
+{
+    // Input is paused during make_floor, so reuse its repeat timer and menu
+    // fields instead of allocating permanent loading state or map scratch.
+    if(percent <= 100) ui.selection = percent;
+    uint16_t now = avm_millis();
+    if(static_cast<int16_t>(now - ui.next_repeat_ms) < 0) return;
+    ui.next_repeat_ms = static_cast<uint16_t>(now + 150);
+
+    static const uint8_t PROGMEM orbit[] = {
+        30, 6, 40, 10, 44, 20, 40, 30, 30, 34, 20, 30, 16, 20, 20, 10
+    };
+    // Keep the display buffer intact between displays. Only repaint the two
+    // moving regions; labels, divider, stats and status retain their pixels.
+    avm_draw_filled_rect_black(16, 6, 32, 32);
+    icon(PLAYER_ICON, 30, 20);
+    for(uint8_t trail = 0; trail < 3; ++trail) {
+        uint8_t at = static_cast<uint8_t>(((ui.held_direction - trail) & 7) * 2);
+        avm_draw_filled_rect_white(orbit[at], orbit[at + 1],
+                                  static_cast<uint8_t>(4 - trail),
+                                  static_cast<uint8_t>(4 - trail));
+    }
+    avm_draw_filled_rect_black(8, 53, 48, 4);
+    avm_draw_filled_rect_white(8, 53, static_cast<uint8_t>(ui.selection * 48u / 100), 4);
+    // A moving glint keeps the bar alive even within a long generation phase.
+    uint8_t glint = static_cast<uint8_t>(ui.held_direction * 3u % 44);
+    avm_draw_filled_rect_white(static_cast<int16_t>(8 + glint), 54, 4, 2);
+    ++ui.held_direction;
+    avm_display(false);
+}
+
+__attribute__((noinline)) void begin_generation_render()
+{
+    play_render_pending = false;
+    avm_draw_filled_rect_black(0, 0, 128, 64);
+    for(uint8_t y = 0; y < 64; ++y) pixel(64, y);
+    render_stats();
+    status_clear();
+    status(F("Preparing a new floor."));
+    avm_draw_text_P(6, 46, F("Generating..."));
+    avm_draw_filled_rect_white(7, 52, 50, 6);
+    ui.selection = 0;
+    ui.held_direction = 0;
+    ui.next_repeat_ms = avm_millis();
+    update_generation_render(0);
+}
+
+void end_generation_render()
+{
+    ui.next_repeat_ms = avm_millis();
+    update_generation_render(100);
+    status_clear();
+    ui.selection = 0;
+    ui.held_direction = 0;
+    ui.repeat_suppressed = true;
+    ui.dirty = true;
+}
+
 // Avoid carrying all screen renderers' locals into render_play's frame.
 __attribute__((noinline)) static void render_title()
 {
