@@ -77,7 +77,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  sizeof(Game) == 822 && sizeof(Item) == 2,
+                  sizeof(Game) == 774 && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -157,6 +157,53 @@ void check_startup_save_state()
     game.best_score = 321;
     require(!restore_startup_save(false) && game.best_score == 0,
             "missing save was not cleared");
+}
+
+void check_floor_generation_snapshots()
+{
+    // Hash fields individually: the saved layout and native tail padding may
+    // change without changing generated terrain, occupants, or RNG behavior.
+    const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
+    const uint32_t expected[4][2] = {
+        {0xb87c8685u, 0xdf403ec4u}, {0xa91ac4aau, 0x991d3d18u},
+        {0x84aa534du, 0x7705c46eu}, {0xa082a514u, 0x44c044b9u}
+    };
+    bool matched = true;
+    for(unsigned sample = 0; sample < 4; ++sample)
+        for(uint8_t ascent = 0; ascent < 2; ++ascent) {
+            uint32_t hash = 2166136261u;
+            auto append = [&](const void* data, size_t size) {
+                const uint8_t* bytes = static_cast<const uint8_t*>(data);
+                for(size_t i = 0; i < size; ++i)
+                    hash = (hash ^ bytes[i]) * 16777619u;
+            };
+            for(uint8_t floor = 0; floor < FLOORS; ++floor) {
+                game = {};
+                game.run_seed = seeds[sample];
+                game.random_state = 0x51ad;
+                game.floor = floor;
+                game.has_amulet = ascent;
+                make_floor();
+                require(game.random_state == 0x51ad,
+                        "floor generation consumed combat randomness");
+                append(game.walls, sizeof game.walls);
+                append(game.explored, sizeof game.explored);
+                append(game.doors, sizeof game.doors);
+                append(&game.door_count, sizeof game.door_count);
+                append(game.monsters, sizeof game.monsters);
+                append(game.ground, sizeof game.ground);
+                append(&game.player, sizeof game.player);
+                append(&game.up, sizeof game.up);
+                append(&game.down, sizeof game.down);
+            }
+            if(hash != expected[sample][ascent]) {
+                std::fprintf(stderr, "Floor generation seed %04x ascent %u: %08x != %08x\n",
+                             unsigned(seeds[sample]), unsigned(ascent), unsigned(hash),
+                             unsigned(expected[sample][ascent]));
+                matched = false;
+            }
+        }
+    require(matched, "floor generation snapshot changed");
 }
 
 void check_new_run_state()
@@ -1220,10 +1267,10 @@ void check_mapping_active_floor()
     std::memset(game.monsters, 0, sizeof(game.monsters));
     game.inventory[0] = {SCROLL_MAPPING, 1};
     require(use_inventory(0), "mapping scroll could not be read");
-    for(const Room& room : game.rooms)
-        require(explored({static_cast<uint8_t>(room.x + 1),
-                          static_cast<uint8_t>(room.y + 1)}),
-                "mapping scroll did not reveal every room");
+    for(uint8_t y = 0; y < MAP_H; ++y)
+        for(uint8_t x = 0; x < MAP_W; ++x)
+            if(!wall_at(x, y))
+                require(explored({x, y}), "mapping scroll did not reveal every floor tile");
     make_floor();
     for(uint8_t byte : game.explored)
         require(byte == 0, "exploration survived floor generation");
@@ -2612,6 +2659,7 @@ int main(int argc, char** argv)
     check_spreading_and_overpowered_wands();
     check_unreliable_wand();
     check_startup_save_state();
+    check_floor_generation_snapshots();
     check_new_run_state();
     check_position_value_and_boundaries();
     check_inventory_view();

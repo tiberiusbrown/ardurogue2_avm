@@ -343,33 +343,12 @@ __attribute__((noinline)) static void reveal_view_floor(
 {
     uint16_t valid = static_cast<uint16_t>(((1u << view.end_sx) - 1) &
                                           ~((1u << view.first_sx) - 1));
-    uint16_t room_columns = 0;
-    uint8_t room_first_sy = 0, room_end_sy = 0;
-    for(const Room& room : game.rooms)
-        if(game.player.x >= room.x && game.player.x < room.x + room.w &&
-           game.player.y >= room.y && game.player.y < room.y + room.h) {
-            int16_t first_x = static_cast<int16_t>(room.x) - view.left;
-            int16_t end_x = static_cast<int16_t>(room.x + room.w) - view.left;
-            if(first_x < view.first_sx) first_x = view.first_sx;
-            if(end_x > view.end_sx) end_x = view.end_sx;
-            room_columns = static_cast<uint16_t>(((1u << end_x) - 1) &
-                                                ~((1u << first_x) - 1));
-            int16_t first_y = static_cast<int16_t>(room.y) - view.top;
-            int16_t end_y = static_cast<int16_t>(room.y + room.h) - view.top;
-            room_first_sy = static_cast<uint8_t>(first_y < view.first_sy
-                                                    ? view.first_sy : first_y);
-            room_end_sy = static_cast<uint8_t>(end_y > view.end_sy
-                                                  ? view.end_sy : end_y);
-            break;
-        }
     for(uint8_t sy = 0; sy < 13; ++sy) {
         if(sy < view.first_sy || sy >= view.end_sy) {
             sight[sy] = 0;
             continue;
         }
-        uint16_t room = sy >= room_first_sy && sy < room_end_sy ? room_columns : 0;
-        sight[sy] = static_cast<uint16_t>((sight[sy] | room) & valid &
-                                         light_mask(radius, sy));
+        sight[sy] &= static_cast<uint16_t>(valid & light_mask(radius, sy));
     }
 }
 

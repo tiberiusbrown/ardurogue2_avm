@@ -27,14 +27,15 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 22 stores one active floor in an 821-byte AVM `Game` (unchanged
-in size). Weapons and armor each occupy one contiguous `ItemType` range.
+Save version 23 stores one active floor in a 773-byte AVM `Game`. Room
+descriptors now exist only during floor generation, freeing 48 saved/RAM bytes.
+Version 22 and older saves are incompatible; no migration is attempted.
+Weapons and armor each occupy one contiguous `ItemType` range.
 Long sword keeps the former sword ID; inserting the other weapons and armor
 shifts the armor and subsequent item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
-subtypes with independent enchantment and curse rolls. Version 21 and older
-saves are incompatible; no migration is attempted. The former attack and cached
-defense bytes store strength and magic resistance at the same offsets.
+subtypes with independent enchantment and curse rolls. The former attack and
+cached defense fields store strength and magic resistance.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
 discoveries. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
@@ -359,11 +360,12 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
-The AVM build retains the 821-byte saved layout and two-byte items, eight-byte
+The AVM build uses a 773-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. With the current SDK, the build reports a
 complete maximum stack bound of 238 bytes and zero analysis gaps, on the
 wand/teleport/status pagination/terrain drawing path. This fits the 256-byte VM stack
 with eighteen bytes to spare; future changes should continue checking the linker
-report. The saved and ordinary data sections total 923 of 1,024 bytes. The
+report. The saved and ordinary data sections total 875 of 1,024 bytes. The
 renderer reuses transient row scratch outside the saved layout to keep
-pagination within the stack limit.
+pagination within the stack limit. Floor generation keeps its 48-byte room
+array on the stack; rendering uses line of sight without room metadata.

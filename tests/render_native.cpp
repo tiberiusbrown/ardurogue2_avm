@@ -90,7 +90,6 @@ static bool check_shared_icons()
     uint8_t disguised[sizeof __avm_framebuffer], revealed[sizeof __avm_framebuffer];
     start_new(0x4312);
     std::memset(game.walls, 0, sizeof game.walls);
-    std::memset(game.rooms, 0, sizeof game.rooms);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.ground, 0, sizeof game.ground);
     game.door_count = 0;
@@ -142,22 +141,11 @@ static void reference_terrain(uint8_t frame[1024])
     using namespace rogue;
     bool visible[13][13] = {};
     int left = int(game.player.x) - 6, top = int(game.player.y) - 6;
-    const Room* player_room = nullptr;
-    for(const Room& room : game.rooms)
-        if(game.player.x >= room.x && game.player.x < room.x + room.w &&
-           game.player.y >= room.y && game.player.y < room.y + room.h) {
-            player_room = &room;
-            break;
-        }
     for(int sy = 0; sy < 13; ++sy)
         for(int sx = 0; sx < 13; ++sx) {
             int x = left + sx, y = top + sy;
             if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
-            bool room = player_room && x >= player_room->x &&
-                x < player_room->x + player_room->w && y >= player_room->y &&
-                y < player_room->y + player_room->h;
-            visible[sy][sx] = in_light_radius(sx - 6, sy - 6, 6) &&
-                (room || can_see({uint8_t(x), uint8_t(y)}));
+            visible[sy][sx] = can_see({uint8_t(x), uint8_t(y)});
         }
     for(int sy = 0; sy < 13; ++sy)
         for(int sx = 0; sx < 13; ++sx) {
@@ -209,21 +197,10 @@ static bool check_terrain_rows()
     uint32_t random = 0x4312;
     for(unsigned pattern = 0; pattern < 24; ++pattern) {
         start_new(0x4312);
-        std::memset(game.rooms, 0, sizeof game.rooms);
         std::memset(game.monsters, 0, sizeof game.monsters);
         std::memset(game.ground, 0, sizeof game.ground);
         game.door_count = 0;
         game.up = game.down = {NONE, NONE};
-        if(pattern == 20) game.rooms[0] = {0, 0, MAP_W, MAP_H};
-        if(pattern == 21) {
-            game.rooms[0] = {0, 0, 10, 10};
-            game.rooms[1] = {54, 22, 10, 10};
-        }
-        if(pattern == 22) game.rooms[0] = {5, 5, 10, 10};
-        if(pattern == 23) {
-            game.rooms[0] = {0, 0, 10, 10};
-            game.rooms[1] = {0, 0, MAP_W, MAP_H};
-        }
         for(unsigned i = 0; i < sizeof game.walls; ++i) {
             random = random * 1664525u + 1013904223u;
             game.walls[i] = pattern == 0 ? 0 : pattern == 1 ? 0xff :
@@ -232,6 +209,15 @@ static bool check_terrain_rows()
             game.explored[i] = pattern % 3 == 0 ? 0 :
                 pattern % 3 == 1 ? 0xff : uint8_t(random >> 24);
         }
+        // Room cases contain open rectangles, as the floor generator creates.
+        if(pattern == 20) std::memset(game.walls, 0, sizeof game.walls);
+        for(uint8_t y = 0; y < MAP_H; ++y)
+            for(uint8_t x = 0; x < MAP_W; ++x)
+                if((pattern == 21 && ((x < 10 && y < 10) || (x >= 54 && y >= 22))) ||
+                   (pattern == 22 && x >= 5 && x < 15 && y >= 5 && y < 15) ||
+                   (pattern == 23 && ((x < 10 && y < 10) ||
+                                     (x >= 5 && x < 15 && y >= 5 && y < 15))))
+                    carve(x, y);
         Game initial = game;
         for(Position pos : positions) {
             game = initial;
@@ -361,7 +347,6 @@ int main()
             // immediately reveal the items and monsters beyond it.
             std::memset(game.walls, 0xff, sizeof game.walls);
             std::memset(game.explored, i == 10 ? 0xff : 0, sizeof game.explored);
-            std::memset(game.rooms, 0, sizeof game.rooms);
             std::memset(game.monsters, 0, sizeof game.monsters);
             std::memset(game.ground, 0, sizeof game.ground);
             for(uint8_t x = 4; x < 17; ++x) carve(x, 10);

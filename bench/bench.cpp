@@ -74,13 +74,11 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
 
     switch(terrain) {
     case Terrain::room:
-        game.rooms[0] = {26, 10, 13, 13};
         for(uint8_t y = 11; y < 22; ++y)
             for(uint8_t x = 27; x < 38; ++x) carve(x, y);
         break;
     case Terrain::edge:
         game.player = {0, 0};
-        game.rooms[0] = {0, 0, 9, 9};
         for(uint8_t y = 0; y < 9; ++y)
             for(uint8_t x = 0; x < 9; ++x) carve(x, y);
         break;

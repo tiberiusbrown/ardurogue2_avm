@@ -8,8 +8,10 @@ The target applies to the controlled scenarios listed below.
 The [baseline](BASELINE.md) and [first optimization results](RESULTS.md)
 record earlier measurements against the former 150 ms limit.
 The next round implemented shared ray prefixes and row-based exploration
-separately, benchmarking each. All 21 cases meet the current 100 ms limit;
-see the [second-round results](RESULTS-100MS.md). The runner defaults to this limit.
+separately, benchmarking each; see the [second-round results](RESULTS-100MS.md).
+Removing persistent room metadata then saved 48 RAM bytes and simplified
+visibility; see the [room metadata results](RESULTS-ROOMS.md). All 21 cases meet
+the current 100 ms limit. The runner defaults to this limit.
 
 `profile_turns.py` uses Python 3's standard library and the installed SDK's
 `avm-lldb`. The separate `ardurogue2-bench.elf` links [bench.cpp](bench.cpp) with

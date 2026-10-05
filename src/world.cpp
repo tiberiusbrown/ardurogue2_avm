@@ -184,19 +184,26 @@ bool blocked(int16_t x, int16_t y)
     return door != NONE && !door_open(door);
 }
 
+namespace {
+
+constexpr uint8_t ROOMS = 12;
+struct Room { uint8_t x, y, w, h; };
+
 bool in_room(uint8_t x, uint8_t y, const Room& room)
 {
     return x >= room.x && x < room.x + room.w &&
            y >= room.y && y < room.y + room.h;
 }
 
-bool in_any_room(uint8_t x, uint8_t y)
+bool in_any_room(uint8_t x, uint8_t y, const Room (&rooms)[ROOMS])
 {
     for(uint8_t i = 0; i < ROOMS; ++i)
-        if(in_room(x, y, game.rooms[i]))
+        if(in_room(x, y, rooms[i]))
             return true;
     return false;
 }
+
+} // namespace
 
 void tunnel(uint8_t ax, uint8_t ay, uint8_t bx, uint8_t by)
 {
@@ -215,9 +222,10 @@ void tunnel(uint8_t ax, uint8_t ay, uint8_t bx, uint8_t by)
 
 void make_floor()
 {
+    // Each descriptor is fully initialized before use and discarded afterward.
+    Room rooms[ROOMS];
     memset(game.walls, 0xff, sizeof(game.walls));
     memset(game.explored, 0, sizeof(game.explored));
-    memset(game.rooms, 0, sizeof(game.rooms));
     memset(game.doors, 0, sizeof(game.doors));
     memset(game.monsters, 0, sizeof(game.monsters));
     memset(game.ground, 0, sizeof(game.ground));
@@ -228,7 +236,7 @@ void make_floor()
         (game.has_amulet ? 0xa5c3u : 0u));
 
     for(uint8_t i = 0; i < ROOMS; ++i) {
-        Room& room = game.rooms[i];
+        Room& room = rooms[i];
         room.w = static_cast<uint8_t>(5 + floor_roll(seed, 6));
         room.h = static_cast<uint8_t>(4 + floor_roll(seed, 4));
         room.x = static_cast<uint8_t>((i % 4) * 16 + 2 +
@@ -242,8 +250,8 @@ void make_floor()
 
     for(uint8_t i = 1; i < ROOMS; ++i) {
         uint8_t parent = i >= 4 && floor_roll(seed, 2) ? i - 4 : i - 1;
-        const Room& a = game.rooms[parent];
-        const Room& b = game.rooms[i];
+        const Room& a = rooms[parent];
+        const Room& b = rooms[i];
         uint8_t ax = static_cast<uint8_t>(a.x + a.w / 2);
         uint8_t ay = static_cast<uint8_t>(a.y + a.h / 2);
         uint8_t bx = static_cast<uint8_t>(b.x + b.w / 2);
@@ -251,15 +259,15 @@ void make_floor()
         tunnel(ax, ay, bx, by);
 
         uint8_t dx = static_cast<uint8_t>((static_cast<uint16_t>(ax) + bx) / 2);
-        if(game.door_count < DOORS && !in_any_room(dx, ay) &&
+        if(game.door_count < DOORS && !in_any_room(dx, ay, rooms) &&
            door_at({dx, ay}) == NONE && floor_roll(seed, 3) != 0) {
             uint8_t id = game.door_count++;
             game.doors[id] = {{dx, ay}};
         }
     }
 
-    const Room& first = game.rooms[0];
-    const Room& last = game.rooms[ROOMS - 1];
+    const Room& first = rooms[0];
+    const Room& last = rooms[ROOMS - 1];
     game.up = {static_cast<uint8_t>(first.x + first.w / 2),
                static_cast<uint8_t>(first.y + first.h / 2)};
     game.down = {static_cast<uint8_t>(last.x + last.w / 2),
@@ -267,7 +275,7 @@ void make_floor()
     game.player = game.has_amulet ? game.down : game.up;
 
     for(uint8_t i = 0; i < MONSTERS; ++i) {
-        const Room& room = game.rooms[i];
+        const Room& room = rooms[i];
         Position pos = {
             static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2)),
             static_cast<uint8_t>(room.y + 1 + floor_roll(seed, room.h - 2))};
@@ -296,7 +304,7 @@ void make_floor()
     uint16_t equipment_seed = static_cast<uint16_t>(game.run_seed ^
         static_cast<uint16_t>((game.floor + 1u) * 0x85ebu) ^ 0x51edu);
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
-        const Room& room = game.rooms[(i * 7u + 3u) % ROOMS];
+        const Room& room = rooms[(i * 7u + 3u) % ROOMS];
         uint8_t x = static_cast<uint8_t>(room.x + 1 + floor_roll(seed, room.w - 2));
         uint8_t y = static_cast<uint8_t>(room.y + 1 + floor_roll(seed, room.h - 2));
         uint8_t chance = floor_roll(seed, 72);
