@@ -4,15 +4,25 @@
 #include "persistence.hpp"
 #include "render.hpp"
 #include "ui.hpp"
+#if defined(ARDUROGUE2_BENCH)
+#include "../bench/bench.hpp"
+#endif
 
 using namespace rogue;
 
 extern "C" int main()
 {
     avm_set_text_font(AVM_FONT_BR5D);
+#if defined(ARDUROGUE2_BENCH)
+    bench_select();
+    bench_setup();
+    ui = {};
+    ui.mode = PLAY;
+#else
     ui.has_save = load_saved_game();
     ui.mode = TITLE;
     session.repeat_slot = NONE;
+#endif
     ui.dirty = true;
     render();
 

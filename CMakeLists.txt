@@ -69,9 +69,7 @@ foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_HEADER}.hpp")
 endforeach()
 
-foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
-    set(ARDUROGUE2_OBJECT "${ARDUROGUE2_BUILD_DIR}/${ARDUROGUE2_SOURCE}.o")
-    list(APPEND ARDUROGUE2_OBJECTS "${ARDUROGUE2_OBJECT}")
+function(ardurogue2_compile ARDUROGUE2_SOURCE_FILE ARDUROGUE2_OBJECT)
     add_custom_command(
         OUTPUT "${ARDUROGUE2_OBJECT}"
         COMMAND "${AVM_CLANG}"
@@ -81,13 +79,22 @@ foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
             -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit
             -ffunction-sections -fdata-sections -Wall -Wextra -Werror
             -isystem "${AVM_SYSROOT}/include"
-            -c "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
+            -I "${CMAKE_CURRENT_SOURCE_DIR}/src"
+            ${ARGN}
+            -c "${ARDUROGUE2_SOURCE_FILE}"
             -o "${ARDUROGUE2_OBJECT}"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
-            ${ARDUROGUE2_HEADER_FILES}
-        COMMENT "Compiling ${ARDUROGUE2_SOURCE}.cpp with the AVM SDK"
+        DEPENDS "${ARDUROGUE2_SOURCE_FILE}" ${ARDUROGUE2_HEADER_FILES}
+            "${CMAKE_CURRENT_SOURCE_DIR}/bench/bench.hpp"
+        COMMENT "Compiling ${ARDUROGUE2_SOURCE_FILE} with the AVM SDK"
         VERBATIM
     )
+endfunction()
+
+foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
+    set(ARDUROGUE2_OBJECT "${ARDUROGUE2_BUILD_DIR}/${ARDUROGUE2_SOURCE}.o")
+    list(APPEND ARDUROGUE2_OBJECTS "${ARDUROGUE2_OBJECT}")
+    ardurogue2_compile("${CMAKE_CURRENT_SOURCE_DIR}/src/${ARDUROGUE2_SOURCE}.cpp"
+        "${ARDUROGUE2_OBJECT}")
 endforeach()
 
 add_custom_command(
@@ -116,15 +123,40 @@ add_custom_command(
 
 add_custom_target(ardurogue2 DEPENDS "${ARDUROGUE2_IMAGE}")
 
+set(ARDUROGUE2_BENCH_DIR "${ARDUROGUE2_BUILD_DIR}/bench")
+file(MAKE_DIRECTORY "${ARDUROGUE2_BENCH_DIR}")
+ardurogue2_compile("${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+    "${ARDUROGUE2_BENCH_DIR}/main.o" -DARDUROGUE2_BENCH)
+ardurogue2_compile("${CMAKE_CURRENT_SOURCE_DIR}/bench/bench.cpp"
+    "${ARDUROGUE2_BENCH_DIR}/bench.o" -fno-eliminate-unused-debug-types)
+set(ARDUROGUE2_BENCH_OBJECTS ${ARDUROGUE2_OBJECTS})
+list(REMOVE_ITEM ARDUROGUE2_BENCH_OBJECTS "${ARDUROGUE2_BUILD_DIR}/main.o")
+list(APPEND ARDUROGUE2_BENCH_OBJECTS
+    "${ARDUROGUE2_BENCH_DIR}/main.o" "${ARDUROGUE2_BENCH_DIR}/bench.o")
+set(ARDUROGUE2_BENCH_ELF "${ARDUROGUE2_BUILD_DIR}/ardurogue2-bench.elf")
+add_custom_command(
+    OUTPUT "${ARDUROGUE2_BENCH_ELF}"
+    COMMAND "${AVM_LD}" -flavor gnu --entry=_start --gc-sections --lto-O2
+        --avm-print-stack-usage --avm-print-stack-gaps
+        -o "${ARDUROGUE2_BENCH_ELF}"
+        "${AVM_SYSROOT}/lib/crt0.o" ${ARDUROGUE2_BENCH_OBJECTS}
+        "${AVM_SYSROOT}/lib/libavm.a" "${AVM_SYSROOT}/lib/libavm-builtins.a"
+    DEPENDS ${ARDUROGUE2_BENCH_OBJECTS} "${AVM_LD}"
+        "${AVM_SYSROOT}/lib/crt0.o" "${AVM_SYSROOT}/lib/libavm.a"
+        "${AVM_SYSROOT}/lib/libavm-builtins.a"
+    COMMENT "Linking compiled turn benchmarks"
+    VERBATIM)
+add_custom_target(ardurogue2_bench DEPENDS "${ARDUROGUE2_BENCH_ELF}")
+
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
     add_custom_target(ardurogue2_turn_benchmarks
         COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/bench/profile_turns.py"
-            --elf "${ARDUROGUE2_ELF}"
+            --elf "${ARDUROGUE2_BENCH_ELF}"
             --lldb "${AVM_SDK_BIN}/avm-lldb${AVM_HOST_EXE_SUFFIX}"
             --output "${ARDUROGUE2_BUILD_DIR}/turn-benchmarks"
-        DEPENDS ardurogue2
+        DEPENDS ardurogue2_bench
         USES_TERMINAL
         COMMENT "Profiling complete turns against the initial 150 ms goal"
         VERBATIM)

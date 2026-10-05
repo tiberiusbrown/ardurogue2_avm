@@ -1,8 +1,9 @@
-# Initial turn baseline (2026-10-04)
+# Compiled turn baseline (2026-10-04)
 
-Measured the complete response to one submitted input: player action, monster
-turns, status updates, intermediate rendering, final rendering/display, and
-return to the main input wait. Generation and animated actions are excluded.
+Measured one submitted input through player and monster actions, status updates,
+intermediate/final rendering, and return to the main input wait. Generation
+and animated actions are excluded. Scenarios are compiled in `bench.cpp`;
+no save files or saved-layout fixtures are created.
 
 Initial goal: **150 ms / 2,400,000 cycles**. **9 of 21 cases meet the goal; 12
 exceed it.** Three fresh-emulator samples per case (63 profiles total) produced
@@ -10,51 +11,50 @@ identical cycle counts within each case. Times below are both median and worst.
 
 | Benchmark | Cycles | Median/worst ms | 150 ms goal |
 | --- | ---: | ---: | --- |
-| move_room | 1,629,319 | 101.832 | PASS |
-| move_corridor | 2,184,353 | 136.522 | PASS |
-| move_map_edge | 590,955 | 36.935 | PASS |
-| move_dense | 2,683,759 | 167.735 | OVER |
-| wait | 1,471,661 | 91.979 | PASS |
-| wait_dense | 2,757,763 | 172.360 | OVER |
-| attack_hit | 1,564,594 | 97.787 | PASS |
-| attack_miss | 1,652,097 | 103.256 | PASS |
-| attack_kill | 1,551,022 | 96.939 | PASS |
-| open_door | 2,278,556 | 142.410 | PASS |
-| eat_food | 2,896,960 | 181.060 | OVER |
-| drink_healing | 3,041,713 | 190.107 | OVER |
-| equip_weapon | 2,931,305 | 183.207 | OVER |
-| equip_armor | 2,916,292 | 182.268 | OVER |
-| equip_ring | 2,975,331 | 185.958 | OVER |
-| equip_cursed_amulet | 3,147,315 | 196.707 | OVER |
-| scroll_mapping | 4,001,952 | 250.122 | OVER |
-| scroll_teleport | 3,463,343 | 216.459 | OVER |
-| drop_food | 2,971,331 | 185.708 | OVER |
-| wand_digging | 4,473,983 | 279.624 | OVER |
-| pickup_food | 1,763,476 | 110.217 | PASS |
+| move_room | 1,627,623 | 101.726 | PASS |
+| move_corridor | 2,182,164 | 136.385 | PASS |
+| move_map_edge | 586,920 | 36.682 | PASS |
+| move_dense | 2,687,031 | 167.939 | OVER |
+| wait | 1,471,637 | 91.977 | PASS |
+| wait_dense | 2,757,739 | 172.359 | OVER |
+| attack_hit | 1,565,736 | 97.859 | PASS |
+| attack_miss | 1,653,306 | 103.332 | PASS |
+| attack_kill | 1,552,163 | 97.010 | PASS |
+| open_door | 2,266,958 | 141.685 | PASS |
+| eat_food | 2,896,929 | 181.058 | OVER |
+| drink_healing | 3,041,682 | 190.105 | OVER |
+| equip_weapon | 2,931,274 | 183.205 | OVER |
+| equip_armor | 2,916,261 | 182.266 | OVER |
+| equip_ring | 2,975,300 | 185.956 | OVER |
+| equip_cursed_amulet | 3,147,284 | 196.705 | OVER |
+| scroll_mapping | 4,001,921 | 250.120 | OVER |
+| scroll_teleport | 3,463,312 | 216.457 | OVER |
+| drop_food | 2,971,300 | 185.706 | OVER |
+| wand_digging | 4,473,939 | 279.621 | OVER |
+| pickup_food | 1,763,430 | 110.214 | PASS |
 
-The largest non-animated cases are digging (279.624 ms), mapping (250.122 ms),
-and teleportation (216.459 ms). Equipment/consumable confirmations take roughly
-181-190 ms; these include restoring the view after the item picker, applying the
-item, advancing enemies, status work, and the final view. Dense movement/waiting
-take 168-172 ms. No gameplay optimizations were made for these measurements.
+The largest non-animated cases are digging (279.621 ms), mapping (250.120 ms),
+and teleportation (216.457 ms). Discovering and equipping the unknown cursed
+amulet takes 196.705 ms, including its warning and final view, without a
+pagination acknowledgement. No gameplay optimizations were made for this run.
 
-Equipping an unknown cursed amulet of speed, revealing its type and curse,
-and displaying the warning takes 196.707 ms. Both the type knowledge bit and
-instance identification bit start clear and become set; the amulet remains
-cursed and equipped. This response reaches the final main input wait with
-one confirmation input and no pagination acknowledgement.
+Build: `-g -std=c++17 -O2 -flto`, installed AVM SDK, Windows host, 16 MHz
+emulated AVR clock. The benchmark links the gameplay objects with the normal
+input-loop body and a compiled scenario startup; only the benchmark ELF adds
+the one-byte case selector. Setup code is outside every measured interval.
+The different startup can change LTO/code layout, so this compiled baseline
+replaces the previous serialized-fixture baseline for comparisons.
 
-Build: production `-g -std=c++17 -O2 -flto`, installed AVM SDK, Windows host,
-16 MHz emulated AVR clock. Saved `Game` layout is 821 bytes, save version 22.
-Game source commit: `e5e6caf93c01c9cdd0b323452b4862671c1ebc04`.
+Source base commit: `19870c40fcfb064eeb57fd0c3bba4e2552b29811` with the
+compiled benchmark changes in this working tree.
 
-ELF SHA-256: `1ddfb6a2147328c061d58aa372876100464f44f120511d46606940de4f94eee9`.
+Benchmark ELF SHA-256: `619e6bf520d1ccc520cd1a1786a2ab253c4e577db76b1effdfcdcd0df88bcbb0`.
+
+Scenario source SHA-256: `c9e2062e36cc915cb49d289986974b6b52eb049b7507ba0ffdaa1e4030fe0ec3`.
 
 Interpreter SHA-256: `659cd6ebf0d8c7b315bb0ec5bf58f2dc533b25410f7d4035cca6144368abc754`.
 
-Raw results and per-case `.lldb`/`.avmp` files are retained under
-[the local run directory](../../../build/ardurogue2-perf-validation/turn-benchmarks/20261005T000349Z-whc1blms/summary.md).
-The three added curse-discovery samples are in
-[their local run directory](../../../build/ardurogue2-perf-validation/turn-benchmarks/20261005T001208Z-yj5s4m18/summary.md).
-This path is a local build artifact; it is not included in the source patch.
-See [README.md](README.md) to reproduce the run or compare profiles.
+Raw results and per-case `.lldb`/`.avmp` files are retained in
+[the local run directory](../build/turn-benchmarks/20261005T004152Z-gmmk7qr1/summary.md).
+This is an ignored local build artifact. See [README.md](README.md) to reproduce
+the run or compare profiles.

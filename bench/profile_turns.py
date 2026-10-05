@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Profile complete input-to-render turns in an unmodified AVM game ELF.
+"""Profile input-to-render turns prepared by the compiled bench.cpp scenarios.
 
-Uses avm-lldb's command interface, not its optional Python bindings. Every
-sample launches a fresh emulator and installs the same saved-layout fixture.
+Uses avm-lldb's command interface, not its optional Python bindings. No save
+files, serialization offsets, or save-version parsing are used.
 """
 
 import argparse
@@ -20,57 +20,18 @@ import subprocess
 import sys
 import tempfile
 
-
 CLOCK_HZ = 16_000_000
 DEFAULT_GOAL_MS = 150.0
-GAME_SIZE = 821
-GAME_ADDRESS = 0x01000100
-# Saved-layout offsets, checked against the ELF's DWARF before using a result.
-OFFSETS = {
-    "walls": 0, "explored": 256, "rooms": 512, "doors": 560,
-    "monsters": 582, "ground": 678, "inventory": 742,
-    "run_seed": 774, "random_state": 776, "magic": 782, "version": 783,
-    "valid": 784, "floor": 785, "player": 786, "up": 788, "down": 790,
-    "hp": 792, "max_hp": 793, "dexterity": 797, "turns": 801,
-    "door_count": 809, "weapon_slot": 810, "armor_slot": 811,
-    "amulet_slot": 812, "ring_slots": 813, "identified_items": 815,
-}
 
 
 @dataclass(frozen=True)
 class Benchmark:
     name: str
     description: str
-    terrain: str = "room"
-    setup: str = "play"
-    button: str = "RIGHT"
-    item: str = ""
-    turns: int = 1
-
-
-BENCHMARKS = (
-    Benchmark("move_room", "Move in a lit room"),
-    Benchmark("move_corridor", "Move along a branching corridor", "corridor"),
-    Benchmark("move_map_edge", "Move with viewport clipping at map corner", "edge"),
-    Benchmark("move_dense", "Move on an explored maze with 12 active enemies", "dense"),
-    Benchmark("wait", "Wait one turn", setup="wait", button="A"),
-    Benchmark("wait_dense", "Wait with 12 enemies, doors and ground items", "dense", "wait", "A"),
-    Benchmark("attack_hit", "Bump attack that hits a surviving goblin"),
-    Benchmark("attack_miss", "Bump attack that misses a goblin"),
-    Benchmark("attack_kill", "Bump attack that kills and awards XP"),
-    Benchmark("open_door", "Open a closed door without moving", "corridor"),
-    Benchmark("eat_food", "Confirm eating food", setup="use", button="A", item="FOOD"),
-    Benchmark("drink_healing", "Confirm drinking a healing potion", setup="use", button="A", item="HEALING"),
-    Benchmark("equip_weapon", "Confirm equipping a long sword", setup="use", button="A", item="LONG_SWORD"),
-    Benchmark("equip_armor", "Confirm equipping chain mail", setup="use", button="A", item="CHAIN_MAIL"),
-    Benchmark("equip_ring", "Confirm equipping a dexterity ring", setup="use", button="A", item="RING_DEXTERITY"),
-    Benchmark("equip_cursed_amulet", "Equip an unidentified amulet of speed and discover its curse", setup="use", button="A", item="AMULET_SPEED"),
-    Benchmark("scroll_mapping", "Confirm a mapping scroll and reveal the map", setup="use", button="A", item="SCROLL_MAPPING"),
-    Benchmark("scroll_teleport", "Confirm a teleport scroll", setup="use", button="A", item="SCROLL_TELEPORT"),
-    Benchmark("drop_food", "Confirm dropping food", setup="drop", button="A", item="FOOD"),
-    Benchmark("wand_digging", "Submit digging direction; carve blocked terrain", "corridor", "wand", "RIGHT", "WAND_DIGGING"),
-    Benchmark("pickup_food", "Confirm pickup after stepping onto food", setup="pickup", button="A"),
-)
+    setup: str
+    button: str
+    item: str
+    index: int
 
 
 def require(condition, message):
@@ -78,22 +39,22 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def enum_values(source, name):
-    body = re.search(r"enum " + name + r"\s*:\s*uint8_t\s*\{(.*?)\}", source, re.S)
-    require(body, f"cannot find {name} in source")
-    text = re.sub(r"//[^\n]*|/\*.*?\*/", "", body[1], flags=re.S)
-    names = [value.strip() for value in text.split(",") if value.strip()]
-    require(all(re.fullmatch(r"[A-Z][A-Z_0-9]*", value) for value in names),
-            f"{name} changed: update the benchmark enum reader")
-    return {value: index for index, value in enumerate(names)}
+def read_benchmarks(path):
+    source = path.read_text(encoding="utf-8")
+    entries = re.findall(r'^\s*X\((\w+),\s*"([^"\n]+)",\s*(\w+),\s*(\w+),\s*(\w+),\s*(\w+)\)', source, re.M)
+    require(entries and len(entries) == len(re.findall(r'^\s*X\(', source, re.M)) and
+            len({entry[0] for entry in entries}) == len(entries), "invalid compiled benchmark manifest")
+    cases = tuple(Benchmark(name, description, setup, button, item, index)
+                  for index, (name, description, setup, button, terrain, item) in enumerate(entries))
+    require(all(case.setup in ("play", "wait", "use", "drop", "wand", "pickup") and
+                case.button in ("RIGHT", "A") for case in cases), "unsupported benchmark input preparation")
+    return cases
+
+
+BENCHMARKS = read_benchmarks(Path(__file__).with_name("bench.cpp"))
 
 
 def source_contract(source_dir):
-    model = (source_dir / "model.hpp").read_text(encoding="utf-8")
-    version = re.search(r"SAVE_VERSION\s*=\s*(\d+)", model)
-    require(version, "cannot find save version")
-    items = enum_values(model, "ItemType")
-    monsters = enum_values(model, "MonsterType")
     main_lines = (source_dir / "main.cpp").read_text(encoding="utf-8").splitlines()
     ui_lines = (source_dir / "ui.cpp").read_text(encoding="utf-8").splitlines()
 
@@ -102,118 +63,42 @@ def source_contract(source_dir):
         return next(i + 1 for i in range(start, len(lines)) if "avm_idle();" in lines[i])
 
     return {
-        "version": int(version[1]), "items": items, "monsters": monsters,
         "main_idle": idle_after(main_lines, "Sleep until an interrupt"),
         "item_idle": idle_after(ui_lines, "uint8_t selection = view.first_slot();"),
         "yesno_idle": idle_after(ui_lines, "static bool yesno_modal("),
-        "model_sha256": hashlib.sha256((source_dir / "model.hpp").read_bytes()).hexdigest(),
+        "bench_sha256": hashlib.sha256((source_dir.parent / "bench/bench.cpp").read_bytes()).hexdigest(),
     }
 
 
-def next_random(state):
-    state = state or 0xace1
-    state ^= (state << 7) & 0xffff
-    state ^= state >> 9
-    state ^= (state << 8) & 0xffff
-    return state
-
-
-def amulet_knowledge_bit(item, contract):
-    items = contract["items"]
-    index = (items["INVISIBILITY"] - items["HEALING"] + 1 +
-             items["SCROLL_MASS_POISON"] - items["SCROLL_IDENTIFY"] + 1 +
-             items["RING_INVISIBILITY"] - items["RING_SEE_INVISIBLE"] + 1 +
-             items[item] - items["AMULET_SPEED"])
-    return OFFSETS["identified_items"] + index // 8, 1 << (index & 7)
-
-
-def make_fixture(case, contract):
-    data = bytearray(GAME_SIZE)
-    data[:256] = b"\xff" * 256
-    data[774:778] = b"\x12\x43\x12\x43"
-    data[782:786] = bytes((0xa7, contract["version"], 1, 0))
-    data[786:792] = bytes((32, 16, 2, 2, 61, 29))
-    data[792:802] = bytes((100, 100, 1, 0, 5, 4, 4, 2, 200, 0))
-    data[810:815] = b"\xff" * 5
-    # Known appearances avoid mixing identification messages into equip tests.
-    data[815:821] = b"\xff" * 6
-
-    def carve(x, y):
-        bit = y * 64 + x
-        data[bit // 8] &= ~(1 << (bit & 7))
-
-    if case.terrain == "room":
-        data[512:516] = bytes((26, 10, 13, 13))
-        for y in range(11, 22):
-            for x in range(27, 38):
-                carve(x, y)
-    elif case.terrain == "edge":
-        data[786:788] = b"\0\0"
-        data[512:516] = bytes((0, 0, 9, 9))
-        for y in range(9):
-            for x in range(9):
-                carve(x, y)
-    elif case.terrain == "corridor":
-        for x in range(24, 43):
-            carve(x, 16)
-        for y in range(10, 23):
-            carve(32, y)
-    elif case.terrain == "dense":
-        data[256:512] = b"\xff" * 256
-        for y in range(10, 24):
-            for x in range(26, 40):
-                if x % 4 != 1 or y % 4 == 0:
-                    carve(x, y)
-    else:
-        raise ValueError(f"unknown terrain {case.terrain}")
-
-    def monster(index, x, y, name="GOBLIN", hp=100):
-        carve(x, y)
-        start = 582 + index * 8
-        data[start:start + 8] = bytes((x, y, contract["monsters"][name], hp, 0, 0, 0, 1))
-
-    def ground(index, x, y, name="FOOD"):
-        start = 678 + index * 4
-        data[start:start + 4] = bytes((x, y, contract["items"][name], 1))
-
-    if case.terrain == "dense":
-        positions = ((30, 16), (34, 16), (32, 14), (32, 18), (28, 12), (36, 12),
-                     (28, 20), (36, 20), (30, 10), (34, 10), (30, 22), (34, 22))
-        for index, (x, y) in enumerate(positions):
-            monster(index, x, y, ("GOBLIN", "TROLL", "RATTLESNAKE")[index % 3])
-        data[560:564] = bytes((31, 16, 35, 16))
-        data[809] = 2
-        for index, (x, y) in enumerate(((28, 16), (32, 12), (36, 16), (32, 20))):
-            ground(index, x, y)
-
-    if case.name.startswith("attack_"):
-        data[797] = 0 if case.name == "attack_miss" else 84
-        hp = 1 if case.name == "attack_kill" else 100
-        monster(0, 33, 16, hp=hp)
-        # Goblin DEX is 4; choose a seed guaranteeing the requested hit/miss.
-        limit = data[797] * 2 + 4 + 1
-        seed = next(seed for seed in range(1, 65536)
-                    if (next_random(seed) % limit >= 4) == (case.name != "attack_miss"))
-        data[776:778] = seed.to_bytes(2, "little")
-    if case.name == "open_door":
-        data[560:562] = bytes((33, 16))
-        data[809] = 1
-    if case.item:
-        info = 0x85 if case.item in ("LONG_SWORD", "CHAIN_MAIL") else 0x81
-        if case.item.startswith("WAND_"):
-            info = 0x83  # Identified, normal modifier, three charges.
-        data[742:744] = bytes((contract["items"][case.item], info))
+def state_fields(case):
+    # All reads use DWARF names; there is no dependency on Game byte layout.
+    fields = {
+        "valid": "game.valid", "hp": "game.hp", "turns": "game.turns",
+        "x": "game.player.x", "y": "game.player.y", "score": "game.score",
+        "monster_type": "game.monsters[0].type", "monster_hp": "game.monsters[0].hp",
+        "door_open": "(game.doors[0].pos.y & 0x80) != 0",
+        "item_type": "game.inventory[0].type", "item_info": "game.inventory[0].info",
+        "weapon": "game.weapon_slot", "armor": "game.armor_slot",
+        "amulet": "game.amulet_slot", "ring0": "game.ring_slots[0]", "ring1": "game.ring_slots[1]",
+        "ground_type": "game.ground[0].item.type",
+        "digging_wall": "(game.walls[(16 * MAP_W + 35) >> 3] & (1u << (35 & 7))) != 0",
+    }
+    fields = {key: re.sub(r'\b(game|MAP_W)\b', r'rogue::\1', expr) for key, expr in fields.items()}
+    if case.item != "NO_ITEM":
+        fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
+    if case.name == "pickup_food":
+        fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        data[743] = 0x41  # Cursed +1 magnitude; instance/curse not yet identified.
-        offset, mask = amulet_knowledge_bit(case.item, contract)
-        data[offset] &= ~mask  # Its type must also be discovered by equipping it.
-    if case.name == "drink_healing":
-        data[792] = 50
+        index = "(INVISIBILITY - HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_INVISIBILITY - RING_SEE_INVISIBLE + 1)"
+        index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
+        fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
+        fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
+        fields["identified"] = "(rogue::game.inventory[0].info & rogue::ITEM_IDENTIFIED) != 0"
+        fields["magnitude"] = "rogue::game.inventory[0].info & rogue::ITEM_VALUE_MASK"
+        fields["amulet_empty"] = "rogue::game.amulet_slot == rogue::NONE"
     if case.name == "wand_digging":
-        data[(16 * 64 + 35) // 8] |= 1 << (35 & 7)
-    if case.setup == "pickup":
-        ground(0, 33, 16)
-    return bytes(data)
+        fields["charges"] = "rogue::game.inventory[0].info & rogue::WAND_CHARGE_MASK"
+    return fields
 
 
 def quote(path):
@@ -221,30 +106,22 @@ def quote(path):
     return '"' + str(path).replace("\\", "/").replace('"', '\\"') + '"'
 
 
-def dump_game(path):
-    return (f"memory read --binary --outfile {quote(path)} --size 1 "
-            f"--count {GAME_SIZE} 0x{GAME_ADDRESS:x}")
-
-
-def layout_checks():
-    expressions = [("sizeof(rogue::game)", GAME_SIZE), ("&rogue::game", 0x100)]
-    expressions += [(f"(char*)&rogue::game.{field} - (char*)&rogue::game", offset)
-                    for field, offset in OFFSETS.items()]
-    return expressions
-
-
 def make_commands(case, contract, folder, native=False, deadline_ms=10000):
     run = f"avm run-for {deadline_ms}ms"
+
     def press(button):
         return ["avm button set " + button, run, "avm button set", run]
 
+    def snapshot():
+        return [f"expr -- (unsigned int)({expr})" for expr in state_fields(case).values()]
+
     commands = [
-        f"breakpoint set --file main.cpp --line {contract['main_idle']}", "run",
-        *[f"expr -- (unsigned int)({expr})" for expr, _ in layout_checks()],
-        *press("A"),  # Start a real game; initialize Ui/Session via production code.
-        f"memory write --infile {quote(folder / 'fixture.bin')} 0x{GAME_ADDRESS:x}",
-        *press("B"), *press("B"),  # Menu/cancel renders the fixture without taking a turn.
-        "avm time",  # Known main-loop boundary, before modal preparation.
+        "breakpoint set --name bench_select", "run",
+        f"expr -- (unsigned int)(bench_case = {case.index})", "breakpoint disable 1",
+        f"breakpoint set --name bench_{case.name}", run,
+        "expr -- (unsigned int)(bench_case)", "breakpoint disable 2",
+        f"breakpoint set --file main.cpp --line {contract['main_idle']}", run,
+        "avm time",  # Compiled setup and initial render have finished.
     ]
     if case.setup == "wait":
         commands += press("B")
@@ -256,19 +133,22 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
     if case.setup in ("use", "drop", "pickup", "wand"):
         line = contract["yesno_idle"] if case.setup == "pickup" else contract["item_idle"]
         commands += [
-            "breakpoint disable 1", f"breakpoint set --file ui.cpp --line {line}",
+            "breakpoint disable 3", f"breakpoint set --file ui.cpp --line {line}",
             "avm button set " + ("RIGHT" if case.setup == "pickup" else "A"), run,
             "avm button set", run,  # Poll release, ready for the final A edge.
-            "breakpoint disable 2", "breakpoint enable 1",
+            "breakpoint disable 4", "breakpoint enable 3",
         ]
         if case.setup == "wand":
-            commands += press("A")  # Confirm slot, stop after direction prompt is ready.
+            commands += press("A")  # Confirm slot; stop after direction prompt is ready.
     commands += [
-        dump_game(folder / "before.bin"), "avm time",
+        *snapshot(), "avm time",
         "avm profile start" + (" --native" if native else ""),
         "avm button set " + case.button, run, "avm time", "avm profile stop",
         f"avm profile save {quote(folder / 'turn.avmp')}", "avm profile report --top 12",
-        dump_game(folder / "after.bin"),
+        *snapshot(),
+        # Read this named array after profiling to check mapping, regardless of its size.
+        f"memory read --binary --outfile {quote(folder / 'explored.bin')} --size 1 "
+        "--count `sizeof(rogue::game.explored)` `(unsigned int)&rogue::game.explored + 0x01000000`",
         "thread backtrace",
         f"avm display save {quote(folder / 'frame.pgm')} --mode controller",
     ]
@@ -280,57 +160,59 @@ def records_from(output):
             if line.startswith("{") and line.endswith("}")]
 
 
-def validate_outcome(case, before, after, contract):
-    require(len(before) == len(after) == GAME_SIZE, "incomplete state capture")
-    require(after[801] == (before[801] + case.turns) % 256,
-            f"{case.name}: expected {case.turns} completed game turn(s)")
-    require(after[784] and after[792], "turn unexpectedly ended the run")
+def validate_outcome(case, before, after, explored):
+    require(after["turns"] == (before["turns"] + 1) % 256, "expected one completed game turn")
+    require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
+    position_before = (before["x"], before["y"])
+    position_after = (after["x"], after["y"])
+    if case.item != "NO_ITEM":
+        require(before["expected_item"], "compiled scenario prepared the wrong item")
     if case.name.startswith("move_"):
-        require(after[786:788] == bytes((before[786] + 1, before[787])), "player did not move right")
+        require(position_after == (before["x"] + 1, before["y"]), "player did not move right")
     if case.name == "attack_hit":
-        require(0 < after[585] < before[585], "attack did not hit a surviving enemy")
+        require(0 < after["monster_hp"] < before["monster_hp"], "attack did not hit a surviving enemy")
     if case.name == "attack_miss":
-        require(after[585] == before[585], "attack was not a miss")
+        require(after["monster_hp"] == before["monster_hp"], "attack was not a miss")
     if case.name == "attack_kill":
-        require(after[584] == 0 and after[778:780] != before[778:780], "enemy was not killed/scored")
+        require(after["monster_type"] == 0 and after["score"] != before["score"], "enemy was not killed/scored")
     if case.name == "open_door":
-        require(after[561] & 0x80 and after[786:788] == before[786:788], "door was not opened in place")
+        require(after["door_open"] and position_after == position_before, "door was not opened in place")
     if case.name in ("eat_food", "drink_healing", "scroll_mapping", "scroll_teleport", "drop_food"):
-        require(after[742] == 0, "consumable/drop was not used")
+        require(after["item_type"] == 0, "consumable/drop was not used")
     if case.name == "drink_healing":
-        require(after[792] > before[792], "potion did not heal")
-    if case.name == "equip_weapon":
-        require(after[810] == 0, "weapon was not equipped")
-    if case.name == "equip_armor":
-        require(after[811] == 0, "armor was not equipped")
+        require(after["hp"] > before["hp"], "potion did not heal")
+    for name, slot in (("equip_weapon", "weapon"), ("equip_armor", "armor")):
+        if case.name == name:
+            require(after[slot] == 0 and after["expected_item"], "item was not equipped")
     if case.name == "equip_ring":
-        require(0 in after[813:815], "ring was not equipped")
+        require(0 in (after["ring0"], after["ring1"]) and after["expected_item"], "ring was not equipped")
     if case.name == "equip_cursed_amulet":
-        offset, mask = amulet_knowledge_bit(case.item, contract)
-        require(before[812] == 0xff and before[742] == contract["items"][case.item] and
-                before[743] == 0x41 and not before[offset] & mask,
+        require(before["amulet_empty"] and before["cursed"] and not before["identified"] and
+                before["magnitude"] == 1 and not before["amulet_known"],
                 "cursed amulet must start unequipped with its type and curse unknown")
-        require(after[812] == 0 and after[742] == before[742] and
-                after[743] == 0xc1 and after[offset] & mask,
+        require(after["amulet"] == 0 and after["expected_item"] and
+                after["cursed"] and after["identified"] and after["magnitude"] == 1 and after["amulet_known"],
                 "amulet was not equipped with its type and curse discovered")
     if case.name == "scroll_mapping":
-        require(after[256:512] == b"\xff" * 256, "mapping did not reveal the map")
+        require(explored and all(byte == 0xff for byte in explored), "mapping did not reveal the map")
     if case.name == "scroll_teleport":
-        require(after[786:788] != before[786:788], "teleport did not move the player")
+        require(position_after != position_before, "teleport did not move the player")
     if case.name == "drop_food":
-        require(after[680] == contract["items"]["FOOD"], "dropped food is missing")
-    if case.name.startswith("wand_"):
-        require(after[743] & 0x0f == 2, "wand charge was not spent")
+        require(after["ground_type"] == before["item_type"], "dropped food is missing")
     if case.name == "wand_digging":
-        require(not after[(16 * 64 + 35) // 8] & (1 << (35 & 7)), "digging did not carve the wall")
+        require(after["charges"] == before["charges"] - 1 and before["digging_wall"] and not after["digging_wall"],
+                "digging did not spend a charge and carve the wall")
     if case.name == "pickup_food":
-        require(after[680] == 0 and after[742] == contract["items"]["FOOD"], "food was not picked up")
+        require(after["ground_type"] == 0 and after["food"], "food was not picked up")
 
 
 def validate_sample(case, contract, folder, output):
     values = [int(value) for value in re.findall(r"\(unsigned int\) \$\d+ = (\d+)", output)]
-    expected_layout = [expected for _, expected in layout_checks()]
-    require(values == expected_layout, "ELF saved layout does not match")
+    fields = list(state_fields(case))
+    require(len(values) == 2 + 2 * len(fields) and values[:2] == [case.index, case.index],
+            "missing compiled case selection or typed state capture")
+    before = dict(zip(fields, values[2:2 + len(fields)]))
+    after = dict(zip(fields, values[2 + len(fields):]))
     records = records_from(output)
     require(not any(record.get("ok") is False for record in records), "debugger command failed")
     stops = [record for record in records if "requested_cycles" in record]
@@ -353,27 +235,30 @@ def validate_sample(case, contract, folder, output):
     require(any(row["linkage"] == "_ZN5rogue6renderEv" for row in profile["pcs"]),
             "the measured turn did not execute the final render")
     require(not any("rogue::animate_" in row["function"] or
-                    row["linkage"] == "_ZN5rogue10make_floorEv" for row in profile["pcs"]),
-            "generation or animation occurred inside the measured turn")
+                    row["linkage"] == "_ZN5rogue10make_floorEv" or
+                    row["function"].lstrip(":").startswith("bench_") or
+                    Path(row.get("file", "").replace("\\", "/")).name == "bench.cpp"
+                    for row in profile["pcs"]),
+            "setup, generation or animation occurred inside the measured turn")
     buttons = [record for record in records if "pressed_mask" in record and
                start["cycles"] <= record.get("cycle", -1) <= end["cycles"]]
-    require(len(buttons) == 1 and buttons[0]["cycle"] == start["cycles"] and
-            buttons[0]["pressed_mask"] != 0,
+    require(len(buttons) == 1 and buttons[0]["cycle"] == start["cycles"] and buttons[0]["pressed_mask"] != 0,
             "a measured turn must contain exactly one submitted input")
-    validate_outcome(case, (folder / "before.bin").read_bytes(), (folder / "after.bin").read_bytes(), contract)
+    validate_outcome(case, before, after, (folder / "explored.bin").read_bytes())
+    for name, state in (("before", before), ("after", after)):
+        (folder / (name + ".json")).write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     return {"cycles": cycles, "ms": cycles * 1000 / CLOCK_HZ,
             "start_cycle": start["cycles"], "end_cycle": end["cycles"],
             "start_pc": start["pc"], "end_pc": end["pc"],
             "profile": str(folder / "turn.avmp"), "identity": profile["identity"],
-            "fixture_sha256": hashlib.sha256((folder / "fixture.bin").read_bytes()).hexdigest(),
-            "start_game_sha256": hashlib.sha256((folder / "before.bin").read_bytes()).hexdigest(),
+            "start_state_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest(),
             "display_hash": profile["end_display_hash"]}
 
 
 def write_summary(folder, cases, goal_ms, elf, contract):
     summary = {"schema": 1, "metric": "input-to-ready elapsed emulated cycles",
                "clock_hz": CLOCK_HZ, "goal_ms": goal_ms, "elf": str(elf),
-               "source_model_sha256": contract["model_sha256"], "benchmarks": cases}
+               "source_bench_sha256": contract["bench_sha256"], "benchmarks": cases}
     (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     with (folder / "summary.csv").open("w", newline="", encoding="utf-8") as output:
         writer = csv.writer(output)
@@ -390,11 +275,11 @@ def write_summary(folder, cases, goal_ms, elf, contract):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--elf", type=Path, help="current -g -O2 -flto game ELF")
+    parser.add_argument("--elf", type=Path, help="compiled ardurogue2-bench.elf")
     parser.add_argument("--lldb", type=Path, help="installed avm-lldb executable")
     parser.add_argument("--sdk-root", type=Path, help="SDK containing bin/avm-lldb")
     parser.add_argument("--source-dir", type=Path, default=Path(__file__).resolve().parents[1] / "src")
-    parser.add_argument("--output", type=Path, default=Path("turn-benchmarks"), help="parent of a new, unique run directory")
+    parser.add_argument("--output", type=Path, default=Path("build/turn-benchmarks"), help="parent of a new, unique run directory")
     parser.add_argument("--benchmark", action="append", choices=[case.name for case in BENCHMARKS], help="repeat to select cases")
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--goal-ms", type=float, default=DEFAULT_GOAL_MS)
@@ -402,15 +287,15 @@ def main(argv=None):
     parser.add_argument("--timeout", type=float, default=120, help="host seconds allowed for each debugger session")
     parser.add_argument("--native", action="store_true", help="also collect AVR interpreter hotspots")
     parser.add_argument("--html", action="store_true", help="render each profile with the SDK's avm-prof")
-    parser.add_argument("--emit-only", action="store_true", help="write fixtures/LLDB scripts without running")
+    parser.add_argument("--emit-only", action="store_true", help="write LLDB scripts without running")
     parser.add_argument("--check", action="store_true", help="exit 2 if any completed sample exceeds the goal")
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args(argv)
     if args.list:
         for case in BENCHMARKS:
-            print(f"{case.name:22} {case.description}")
+            print(f"{case.index:2} {case.name:22} {case.description}")
         return 0
-    require(args.elf and args.elf.is_file(), "--elf must name an existing game ELF")
+    require(args.elf and args.elf.is_file(), "--elf must name an existing benchmark ELF")
     require(args.repeat > 0 and args.deadline_ms > 0 and args.timeout > 0 and
             math.isfinite(args.goal_ms) and args.goal_ms > 0, "budgets and repeat count must be positive")
     suffix = ".exe" if sys.platform == "win32" else ""
@@ -428,7 +313,6 @@ def main(argv=None):
         for index in range(1, args.repeat + 1):
             sample_dir = folder / case.name / str(index)
             sample_dir.mkdir(parents=True)
-            (sample_dir / "fixture.bin").write_bytes(make_fixture(case, contract))
             commands = sample_dir / "turn.lldb"
             commands.write_text(make_commands(case, contract, sample_dir, args.native, args.deadline_ms), encoding="utf-8")
             if args.emit_only:

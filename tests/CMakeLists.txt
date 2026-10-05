@@ -8,6 +8,8 @@ add_executable(game_native
     game_native.cpp
     combat_checks.cpp
     weapon_checks.cpp
+    bench_checks.cpp
+    ../bench/bench.cpp
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp

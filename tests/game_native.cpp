@@ -2557,6 +2557,7 @@ void check_combat_rules();
 void print_armor_distributions();
 void print_weapon_distributions();
 void check_weapon_and_equipment_rules();
+void check_benchmark_scenarios();
 
 int main(int argc, char** argv)
 {
@@ -2569,6 +2570,7 @@ int main(int argc, char** argv)
         print_armor_distributions();
         return 0;
     }
+    check_benchmark_scenarios();
     check_combat_rules();
     check_weapon_and_equipment_rules();
     check_wand_encoding_and_scrolls();

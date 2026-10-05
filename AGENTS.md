@@ -23,13 +23,13 @@ predicates such as `is_weapon`, `is_armor`, `is_potion`, `is_ring`, `is_amulet`,
 # Turn performance
 
 Use this project's ignored `build/` directory for objects, `ardurogue2.elf`,
-and benchmark results; keep `ardurogue2.arduboy` at the project root.
+`ardurogue2-bench.elf`, and benchmark results; keep `ardurogue2.arduboy` at the project root.
 After development, run from this project's directory (`<sdk>` is the AVM SDK):
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
-cmake --build build --config RelWithDebInfo --target ardurogue2
-python bench/profile_turns.py --elf build/ardurogue2.elf --sdk-root <sdk> --repeat 3 --check --output build/turn-benchmarks
+cmake --build build --config RelWithDebInfo --target ardurogue2 ardurogue2_bench
+python bench/profile_turns.py --elf build/ardurogue2-bench.elf --sdk-root <sdk> --repeat 3 --check --output build/turn-benchmarks
 ```
 
 All cases must take at most **150 ms** in their worst sample, from submitted
