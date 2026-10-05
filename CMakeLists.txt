@@ -112,3 +112,17 @@ add_custom_command(
 )
 
 add_custom_target(ardurogue2 DEPENDS "${ARDUROGUE2_IMAGE}")
+
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_custom_target(ardurogue2_turn_benchmarks
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/bench/profile_turns.py"
+            --elf "${ARDUROGUE2_ELF}"
+            --lldb "${AVM_SDK_BIN}/avm-lldb${AVM_HOST_EXE_SUFFIX}"
+            --output "${CMAKE_CURRENT_BINARY_DIR}/turn-benchmarks"
+        DEPENDS ardurogue2
+        USES_TERMINAL
+        COMMENT "Profiling complete turns against the initial 150 ms goal"
+        VERBATIM)
+endif()

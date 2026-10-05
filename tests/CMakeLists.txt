@@ -54,3 +54,10 @@ add_test(NAME render_native COMMAND render_native)
 
 # Optional seeded balance diagnostic using the same production RNG/helpers.
 add_test(NAME combat_distributions COMMAND game_native --combat-distributions)
+
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME turn_benchmark_helpers
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../bench/test_profile_turns.py")
+endif()

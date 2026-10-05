@@ -1,5 +1,8 @@
 # ardurogue2_avm
 
+Complete input-to-render turn benchmarks and the initial 150 ms performance
+goal are documented in [bench/README.md](bench/README.md).
+
 This project builds an AVM image using an installed AVM SDK. It is a small
 turn-based dungeon crawl for a 128x64 monochrome screen.
 
