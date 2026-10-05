@@ -333,8 +333,8 @@ int main()
     };
     const uint32_t expected[] = {
         0xc0b79398u, 0xc7113a38u, 0x473d2b98u, 0x8bbf3a38u,
-        0x863529d4u, 0xfbdd3b6bu, 0x4d57b998u, 0x7b1ab8b4u,
-        0x2db7c517u, 0x7af2648du, 0x3a284971u
+        0x0d37258eu, 0x53d53fe8u, 0x37850c9cu, 0x67e10dcdu,
+        0x4b46c42bu, 0xd975e0abu, 0x0d861207u
     };
     bool failed = false;
     for(unsigned i = 0; i < sizeof expected / sizeof expected[0]; ++i) {
@@ -351,6 +351,9 @@ int main()
             std::memset(game.ground, 0, sizeof game.ground);
             for(uint8_t x = 4; x < 17; ++x) carve(x, 10);
             game.player = {10, 10};
+            // Keep the synthetic corridor fixture independent of generation.
+            game.up = {4, 10};
+            game.down = {16, 10};
             game.door_count = 1;
             game.doors[0] = {{12, 10}};
             if(i > 8) open_door(0);

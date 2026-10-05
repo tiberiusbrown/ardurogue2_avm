@@ -1,0 +1,5 @@
+style,count,coverage_mean,tiles_min,tiles_max,rooms_mean,rooms_min,doors_mean,loops_mean,loops_min,dead_ends_mean,junctions_mean,grid_cycle_rank_mean,stairs_mean,stairs_min,monster_distance_min,attempts_mean
+CHAMBERS,32960,35.83,654,920,13.17,6,7.86,2.94,0,6.46,12.08,486.13,54.16,38.60,4.00,216.5
+WARREN,32767,29.68,533,763,15.56,7,6.89,1.99,0,9.87,18.04,339.83,51.73,32.98,4.00,170.6
+FORTRESS,32424,39.42,727,955,13.51,7,10.89,5.45,0,5.86,13.27,543.20,55.56,43.42,4.00,360.2
+RUINS,32921,34.45,625,872,13.20,6,6.31,3.41,0,5.88,12.34,464.41,53.57,38.08,4.00,190.1

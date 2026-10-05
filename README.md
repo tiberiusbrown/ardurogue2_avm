@@ -2,6 +2,8 @@
 
 Complete input-to-render turn benchmarks and the 100 ms performance
 limit are documented in [bench/README.md](bench/README.md).
+The free-form dungeon generator, validation measurements, and example maps
+are documented in [docs/floor-generation.md](docs/floor-generation.md).
 
 This project builds an AVM image using an installed AVM SDK. It is a small
 turn-based dungeon crawl for a 128x64 monochrome screen.
@@ -27,8 +29,8 @@ bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
 bit, and an identified bit. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 23 stores one active floor in a 773-byte AVM `Game`. Room
-descriptors now exist only during floor generation, freeing 48 saved/RAM bytes.
+Save version 23 stores one active floor in a 773-byte AVM `Game`. Generation
+uses one temporary feature descriptor and flash templates, with no room records.
 Version 22 and older saves are incompatible; no migration is attempted.
 Weapons and armor each occupy one contiguous `ItemType` range.
 Long sword keeps the former sword ID; inserting the other weapons and armor
@@ -298,13 +300,13 @@ accumulate there; the next action clears them. Longer messages pause at
 ## Build
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=/path/to/avm-sdk
 cmake --build build --config RelWithDebInfo --target ardurogue2
 ```
 
-The build finds `avm-clang`, `avm-ld`, and `avm-image` on `PATH` and uses the
-compiler's SDK directory for headers, libraries, and interpreter files. You can
-set `-DAVM_SDK_ROOT=/path/to/avm-sdk` to choose a specific installation.
+The device build uses the selected SDK's compiler, linker, image packager,
+headers, libraries, and interpreter files. Without `AVM_SDK_ROOT`, the
+top-level configure builds native tests and floor inspection tools instead.
 Open this project folder in VS Code to use the default build task.
 
 Object files and `ardurogue2.elf` are always written to this project's ignored
@@ -319,8 +321,11 @@ automatically before building this project.
 actions, and `src/game_internal.hpp` shares helpers between gameplay modules.
 `src/state.cpp`, `src/combat.cpp`, and `src/items.cpp` implement run state,
 combat and turns, and inventory behavior. `src/combat_math.cpp` contains the
-shared hit, weapon-roll, STR, absorption, and MR arithmetic. `src/world.cpp` generates floors and
-handles map visibility. These modules compile into the native test program.
+shared hit, weapon-roll, STR, absorption, and MR arithmetic. `src/world.cpp`
+handles runtime terrain and visibility. `src/world_gen.cpp` grows terrain,
+adds loops, and chooses doors/stairs; `src/world_gen_population.cpp` populates
+entities independently. `src/world_gen_templates.hpp` holds packed flash data.
+These modules compile into the native test program.
 `src/persistence.cpp` handles save policy, `src/status.cpp` formats messages,
 `src/render.cpp` draws the display, and `src/ui.cpp` handles controls and modes.
 `src/main.cpp` initializes the app and runs the outer event loop. The AVM has
@@ -329,7 +334,7 @@ a separate 256-byte stack and 1024 bytes of global memory.
 The native game checks build independently of the AVM SDK:
 
 ```sh
-cmake -S tests -B build/native -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake -S . -B build/native -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/native --config RelWithDebInfo
 ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
 ```

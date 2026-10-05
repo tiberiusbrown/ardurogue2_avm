@@ -165,8 +165,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0xb87c8685u, 0xdf403ec4u}, {0xa91ac4aau, 0x991d3d18u},
-        {0x84aa534du, 0x7705c46eu}, {0xa082a514u, 0x44c044b9u}
+        {0x450009a6u, 0x8bae91f2u}, {0x28888a11u, 0x90b34d04u},
+        {0x596635e2u, 0xcc0eeef3u}, {0x9f98d485u, 0x9cb42fc0u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -2634,8 +2634,11 @@ void print_weapon_distributions();
 void check_weapon_and_equipment_rules();
 void check_benchmark_scenarios();
 
+bool generation_command(int argc, char** argv);
+
 int main(int argc, char** argv)
 {
+    if(generation_command(argc, argv)) return 0;
     if(argc == 2 && std::strcmp(argv[1], "--combat-distributions") == 0) {
         print_weapon_distributions();
         print_armor_distributions();

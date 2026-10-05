@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.20)
 
 project(ardurogue2 LANGUAGES NONE)
 
+# Without an SDK, the same top-level configure builds host correctness and
+# generator tools. Device builds keep the existing explicit SDK convention.
+if(NOT AVM_SDK_ROOT)
+    enable_language(CXX)
+    enable_testing()
+    add_subdirectory(tests)
+    return()
+endif()
+
 if(NOT DEFINED AVM_SDK_ROOT)
     set(AVM_SDK_ROOT "" CACHE PATH "Path to the installed AVM SDK")
 endif()
@@ -59,10 +68,10 @@ set(ARDUROGUE2_ELF "${ARDUROGUE2_BUILD_DIR}/ardurogue2.elf")
 set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/ardurogue2.arduboy")
 
 set(ARDUROGUE2_SOURCES
-    main state combat combat_math items world persistence status render ui)
+    main state combat combat_math items world world_gen world_gen_population persistence status render ui)
 set(ARDUROGUE2_HEADERS
     model game game_internal world app_state persistence status render ui
-    inventory_view combat_math ray_sight_generated)
+    inventory_view combat_math ray_sight_generated world_gen world_gen_templates)
 set(ARDUROGUE2_HEADER_FILES)
 foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
     list(APPEND ARDUROGUE2_HEADER_FILES
