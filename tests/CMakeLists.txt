@@ -26,6 +26,11 @@ target_include_directories(game_native PRIVATE ../src)
 add_test(NAME game_native COMMAND game_native)
 add_test(NAME floor_generation_bulk COMMAND game_native --floor-bulk 128)
 
+add_executable(inventory_view_native inventory_view_native.cpp)
+target_compile_features(inventory_view_native PRIVATE cxx_std_17)
+target_include_directories(inventory_view_native PRIVATE ../src)
+add_test(NAME inventory_view_native COMMAND inventory_view_native)
+
 add_executable(format_native format_native.cpp ../src/status.cpp)
 target_compile_features(format_native PRIVATE cxx_std_17)
 target_include_directories(format_native PRIVATE shim ../src)

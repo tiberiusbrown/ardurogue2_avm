@@ -17,6 +17,8 @@ static unsigned full_renders = 0;
 static unsigned inventory_renders = 0;
 static unsigned deferred_renders = 0;
 static bool play_render_pending = false;
+static uint8_t last_inventory_total = 0;
+static void require(bool condition, const char* message);
 
 namespace rogue {
 Game game = {};
@@ -36,8 +38,16 @@ void status_clear() {}
 void defer_play_render() { ++deferred_renders; play_render_pending = true; }
 void render_play() { ++play_renders; play_render_pending = false; }
 void restore_play_render() { if(play_render_pending) render_play(); }
-void render_inventory(const char*, const InventoryView&, uint8_t, uint8_t)
+void render_inventory(const char*, const InventoryView& view, uint8_t selection,
+                      uint8_t top, uint8_t total)
 {
+    require(total == view.count(), "modal reused a stale inventory count");
+    if(total) {
+        uint8_t row = view.position(selection);
+        require(row != NONE && row >= top && row < top + INVENTORY_VISIBLE_ROWS,
+                "modal selection row left its viewport");
+    } else require(selection == NONE && top == 0, "empty modal retained a selection");
+    last_inventory_total = total;
     ++inventory_renders;
 }
 void render_yesno_prompt(const char*, const Item*) { restore_play_render(); }
@@ -179,6 +189,43 @@ int main()
                                       "ring selection failed to toggle equipment");
         }
     }
-    std::puts("equipment, scroll, and wand UI flow passed");
+    // Each new modal must rebuild its metadata after inventory/filter changes.
+    std::memset(game.inventory, 0, sizeof game.inventory);
+    game.inventory[0] = {HEALING, 1};
+    game.inventory[7] = {WAND_FORCE, 2};
+    game.inventory[15] = {LONG_SWORD, 1};
+    const uint8_t browsing[] = {0, AVM_BUTTON_D, 0, AVM_BUTTON_D,
+                               0, AVM_BUTTON_U, 0, AVM_BUTTON_A};
+    std::memcpy(avm_test_buttons, browsing, sizeof browsing);
+    avm_test_button_count = sizeof browsing;
+    avm_test_button_index = 0;
+    ui.previous_buttons = ui.held_direction = 0;
+    turns = game.turns;
+    require(choose_item(F("Choose"), nullptr) == 7 && last_inventory_total == 6 &&
+            game.turns == turns,
+            "browsing did not skip headers or preserve the game turn");
+
+    game.inventory[15].type = NO_ITEM;
+    const uint8_t next_item[] = {0, AVM_BUTTON_D, 0, AVM_BUTTON_A};
+    std::memcpy(avm_test_buttons, next_item, sizeof next_item);
+    avm_test_button_count = sizeof next_item;
+    avm_test_button_index = 0;
+    ui.previous_buttons = ui.held_direction = 0;
+    require(choose_item(F("Choose"), nullptr) == 0 && last_inventory_total == 4,
+            "reopened modal retained removed inventory rows");
+
+    avm_test_buttons[0] = 0;
+    avm_test_buttons[1] = AVM_BUTTON_A;
+    avm_test_button_count = 2;
+    avm_test_button_index = 0;
+    ui.previous_buttons = ui.held_direction = 0;
+    require(choose_item(F("Choose"), is_potion) == 0 && last_inventory_total == 2,
+            "filtered modal reused unfiltered row metadata");
+
+    avm_test_button_index = 0;
+    ui.previous_buttons = ui.held_direction = 0;
+    require(choose_item(F("Choose"), is_equipment) == NONE && last_inventory_total == 0,
+            "empty filtered modal retained row metadata");
+    std::puts("equipment, scroll, wand, and inventory UI flow passed");
     return 0;
 }

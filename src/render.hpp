@@ -25,7 +25,8 @@ void animate_spreading_rays(Position origin, const uint8_t steps[4]);
 void animate_fire_bursts(const Position* centers, uint8_t count,
                          bool powerful);
 void render_inventory(const char AVM_PROGMEM* prompt,
-                      const InventoryView& view, uint8_t selection, uint8_t top);
+                      const InventoryView& view, uint8_t selection, uint8_t top,
+                      uint8_t total);
 void render_yesno_prompt(const char AVM_PROGMEM* prompt_text,
                          const Item* item);
 void render();

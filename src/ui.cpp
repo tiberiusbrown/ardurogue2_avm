@@ -46,8 +46,9 @@ __attribute__((noinline)) static uint8_t choose_item_modal(
     const char AVM_PROGMEM* prompt_text, ItemTypeFilter item_type_filter)
 {
     InventoryView view(game, item_type_filter);
-    if(!view.count()) {
-        render_inventory(prompt_text, view, NONE, 0);
+    const uint8_t total = view.count(); // Inventory stays unchanged until this modal returns.
+    if(!total) {
+        render_inventory(prompt_text, view, NONE, 0, total);
         avm_display(false);
         for(;;) {
             avm_idle();
@@ -59,9 +60,10 @@ __attribute__((noinline)) static uint8_t choose_item_modal(
         }
     }
     uint8_t selection = view.first_slot();
+    uint8_t selected_row = 1; // First item follows the first nonempty group header.
     uint8_t top = 0;
     for(;;) {
-        render_inventory(prompt_text, view, selection, top);
+        render_inventory(prompt_text, view, selection, top, total);
         avm_display(false);
         for(;;) {
             avm_idle();
@@ -73,8 +75,8 @@ __attribute__((noinline)) static uint8_t choose_item_modal(
             if(edges & AVM_BUTTON_A) return selection;
             if(direction == AVM_BUTTON_U || direction == AVM_BUTTON_D) {
                 selection = view.move(selection,
-                    direction == AVM_BUTTON_U ? -1 : 1);
-                view.keep_visible(selection, top);
+                    direction == AVM_BUTTON_U ? -1 : 1, selected_row, total);
+                view.keep_row_visible(selected_row, total, top);
                 break;
             }
         }

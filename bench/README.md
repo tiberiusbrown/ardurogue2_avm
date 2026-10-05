@@ -12,8 +12,11 @@ separately, benchmarking each; see the [second-round results](RESULTS-100MS.md).
 Removing persistent room metadata then saved 48 RAM bytes and simplified
 visibility; see the [room metadata results](RESULTS-ROOMS.md). The original 21
 cases met the current 100 ms limit. Nine inventory browsing stress cases now
-extend the suite to 30 cases; over-budget results remain baselines for future
-optimization. The runner defaults to the same limit.
+extend the suite to 30 cases. Inventory lookups and modal state reuse were then
+optimized in six separately benchmarked steps; all 30 cases now pass. See the
+[inventory profiling analysis](PROPOSALS-INVENTORY.md) and
+[inventory optimization results](RESULTS-INVENTORY.md). The runner defaults to
+the same limit.
 
 `profile_turns.py` uses Python 3's standard library and the installed SDK's
 `avm-lldb`. The separate `ardurogue2-bench.elf` links [bench.cpp](bench.cpp) with

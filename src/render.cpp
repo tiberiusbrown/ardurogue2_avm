@@ -631,13 +631,14 @@ __attribute__((noinline)) static void render_menu()
     }
 }
 
-void render_inventory(const char AVM_PROGMEM* prompt,
-                      const InventoryView& view, uint8_t selection, uint8_t top)
+// Keep the modal rendering boundary visible to complete-response profiling.
+__attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
+                      const InventoryView& view, uint8_t selection, uint8_t top,
+                      uint8_t total)
 {
     avm_draw_filled_rect_black(0, 0, 128, 64);
     avm_draw_text_P(1, 7, prompt);
     avm_draw_filled_rect_white(1, 9, 127, 1);
-    uint8_t total = view.count();
     if(!total) {
         avm_draw_text_P(8, 18, F("Empty"));
         return;
