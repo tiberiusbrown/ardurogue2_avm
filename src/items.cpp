@@ -2,6 +2,7 @@
 #include "game_internal.hpp"
 #include "status.hpp"
 #include "world.hpp"
+#include "sim_hooks.hpp"
 #include <string.h>
 
 namespace rogue {
@@ -146,6 +147,8 @@ __attribute__((noinline)) PickupResult take_item(uint8_t index)
         return PICKUP_NEEDS_SWAP;
     }
     ground.item.type = NO_ITEM;
+    SIM_EVENT(sim::EventKind::Pickup, index, item.type,
+              stackable(item.type) ? item_value(item) : 1);
     end_turn();
     return PICKUP_TAKEN;
 }
@@ -201,6 +204,10 @@ __attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t s
     game.inventory[slot] = incoming;
     // Keep the player's item in the slot being collected.
     game.ground[index].item = outgoing;
+    SIM_EVENT(sim::EventKind::Pickup, index, incoming.type,
+              stackable(incoming.type) ? item_value(incoming) : 1);
+    SIM_EVENT(sim::EventKind::Dropped, index, outgoing.type,
+              stackable(outgoing.type) ? item_value(outgoing) : 1);
     session.repeat_slot = NONE;
     status(F("You picked up"));
     status(incoming, '.');
@@ -294,6 +301,7 @@ static void consume_potion(Item& item)
     }
     uint8_t amount = item_value(item);
     if(amount) {
+        SIM_EVENT(sim::EventKind::Consumed, NONE, item.type);
         --amount;
         set_item_value(item, amount);
         if(!amount)
@@ -301,6 +309,7 @@ static void consume_potion(Item& item)
     }
     if(conservation < 0 && item.type != NO_ITEM && item_value(item) &&
        roll(4) == 0) {
+        SIM_EVENT(sim::EventKind::Consumed, NONE, item.type);
         amount = static_cast<uint8_t>(item_value(item) - 1);
         set_item_value(item, amount);
         if(!amount)
@@ -384,14 +393,24 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
            !can_see(target.pos)) continue;
         found = true;
         target.state |= MON_AGGRO;
+        SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
         switch(type) {
         case SCROLL_FEAR:
             target.state |= MON_AFRAID;
             monster_status(target, F("flees!"));
             break;
         case SCROLL_TORMENT:
+#if defined(ARDUROGUE2_SIM)
+            {
+            uint8_t old_hp = target.hp;
+#endif
             target.hp = static_cast<uint8_t>(target.hp / 2);
             if(!target.hp) target.hp = 1;
+            SIM_EVENT(sim::EventKind::MonsterDamage, i, target.type,
+                      old_hp - target.hp, true);
+#if defined(ARDUROGUE2_SIM)
+            }
+#endif
             monster_status(target, F("is stricken!"));
             break;
         case SCROLL_MASS_CONFUSE:
@@ -433,6 +452,9 @@ __attribute__((noinline)) static bool apply_inventory(
     Item& item = game.inventory[slot];
     if(item.type == NO_ITEM)
         return false;
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope damage_source(sim::Cause::Item, item.type);
+#endif
     if(is_equipment(item.type)) {
         uint8_t& equipped_slot = is_weapon(item.type) ? game.weapon_slot : game.armor_slot;
         if(equipped_slot != slot && equipped_slot < INVENTORY &&
@@ -461,12 +483,14 @@ __attribute__((noinline)) static bool apply_inventory(
             status(Item{type, 1}, '.');
         }
         uint8_t count = item_value(item);
+        SIM_EVENT(sim::EventKind::Consumed, NONE, type);
         if(count > 1) set_item_value(item, count - 1);
         else item.type = NO_ITEM;
         scroll_effect(type, target_slot);
         break;
     }
     case FOOD:
+        SIM_EVENT(sim::EventKind::Consumed, NONE, FOOD);
         game.hunger = game.hunger > 145 ? 255 : game.hunger + 110;
         status(F("You eat"));
         status(Item{item.type, 1}, '.');
@@ -529,6 +553,8 @@ __attribute__((noinline)) static bool apply_inventory(
             uint8_t base = static_cast<uint8_t>(player_max_hp() / 8 + 1);
             uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
             if(damage > 10) damage = 10;
+            SIM_EVENT(sim::EventKind::PlayerDamage, NONE, 0,
+                      damage < game.hp ? damage : game.hp);
             game.hp = damage >= game.hp ? 0 : game.hp - damage;
             status(F("The potion harms you!"));
             if(!game.hp) finish(DEATH);
@@ -580,8 +606,17 @@ __attribute__((noinline)) static bool apply_inventory(
 
 bool use_inventory(uint8_t slot, uint8_t target_slot)
 {
+#if defined(ARDUROGUE2_SIM)
+    uint8_t used_type = slot < INVENTORY ? game.inventory[slot].type : NO_ITEM;
+#endif
     if(!apply_inventory(slot, target_slot))
         return false;
+    SIM_EVENT(sim::EventKind::ItemUsed, slot, used_type);
+#if defined(ARDUROGUE2_SIM)
+    if(item_is_equipped(slot)) {
+        SIM_EVENT(sim::EventKind::Equipped, slot, used_type);
+    }
+#endif
     if(!session.ended)
         end_turn();
     if(game.inventory[slot].type == NO_ITEM && session.repeat_slot == slot)
@@ -599,6 +634,8 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
     Item& item = game.inventory[slot];
     uint8_t type = item.type;
     status(F("You throw"));
+    SIM_EVENT(sim::EventKind::PotionThrown, slot, type);
+    SIM_EVENT(sim::EventKind::Consumed, NONE, type);
     status(Item{type, 1}, '.');
     set_item_value(item, static_cast<uint8_t>(item_value(item) - 1));
     if(!item_value(item)) item.type = NO_ITEM;
@@ -681,6 +718,7 @@ static void polymorph_monster(uint8_t index)
     // A newly polymorphed mimic is already revealed; its default appearance
     // is scroll. Other forms must not retain the old mimic's appearance bits.
     target.state &= static_cast<uint8_t>(~MIMIC_APPEARANCE_MASK);
+    SIM_EVENT(sim::EventKind::MonsterChanged, index, target.type);
     target.hp = monster_health(target.type);
     target.stun = 0;
     target.effects[0] = target.effects[1] = 0;
@@ -717,6 +755,7 @@ static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
             if(!target.type || !in_wand_area(target.pos, end)) continue;
             found = true;
             target.state |= MON_AGGRO;
+            SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
             if(type == WAND_TELEPORT) teleport_monster(i);
             else if(type == WAND_POLYMORPH) polymorph_monster(i);
             else {
@@ -732,6 +771,7 @@ static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
     Monster& target = game.monsters[hit];
     if(!target.type) return;
     target.state |= MON_AGGRO;
+    SIM_EVENT(sim::EventKind::PlayerAttack, hit, target.type);
     switch(type) {
     case WAND_FORCE:
         force_monster(hit, dx, dy, powerful);
@@ -879,6 +919,10 @@ __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
         return false;
     }
     uint8_t type = item.type;
+    SIM_EVENT(sim::EventKind::ChargeUsed, slot, type);
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope damage_source(sim::Cause::Item, type);
+#endif
     WandModifier modifier = wand_modifier(item);
     bool known = item_type_identified(type);
     bool individual = item_is_identified(item);
@@ -915,6 +959,7 @@ __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
         } else single_wand_ray(type, dx, dy, powerful);
     }
     if(!remaining) {
+        SIM_EVENT(sim::EventKind::Consumed, NONE, type);
         item.type = NO_ITEM;
         status(F("The wand crumbles to dust."));
         if(session.repeat_slot == slot) session.repeat_slot = NONE;
@@ -966,6 +1011,11 @@ __attribute__((noinline)) static bool apply_drop(uint8_t slot, bool discard)
     if(session.repeat_slot == slot)
         session.repeat_slot = NONE;
     item.type = NO_ITEM;
+    SIM_EVENT(sim::EventKind::Dropped, ground_slot, dropped.type,
+              (stackable(dropped.type) ? item_value(dropped) : 1) -
+              (ground_slot == NONE ? remaining : 0));
+    SIM_EVENT(sim::EventKind::Discarded, NONE, dropped.type,
+              ground_slot == NONE ? remaining : 0);
     if(disposition == DROP_GROUND || disposition == DROP_DISCARD_REST) {
         status(F("You dropped"));
         status(dropped, '.');

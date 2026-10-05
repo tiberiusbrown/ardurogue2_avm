@@ -1,0 +1,174 @@
+#include "simulator.hpp"
+#include "game_internal.hpp"
+#include "world.hpp"
+#include <cstring>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+
+using namespace rogue;
+using namespace sim;
+namespace {
+void check(bool c,const char* message) { if(!c) throw std::runtime_error(message); }
+std::string all_metrics(const RunMetrics& r) {
+    std::ostringstream o; write_run(o,r); write_floors(o,r); write_items(o,r); write_monsters(o,r); return o.str();
+}
+void arena() {
+    game={}; session={NONE,DEATH,false}; game.run_seed=game.random_state=123;
+    game.hp=game.max_hp=100; game.level=1; game.strength=5; game.dexterity=4; game.speed=4;
+    game.hunger=220; game.player={4,4}; game.up={1,1}; game.down={8,8};
+    game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+}
+void determinism() {
+    OmniscientAgent a;
+    std::ostringstream first,second,without;
+    Options o; o.trace=&first; auto r1=run(4,a,o); Game final=game;
+    o.trace=&second; auto r2=run(4,a,o);
+    check(all_metrics(r1)==all_metrics(r2) && first.str()==second.str(),"same seed changed metrics/trace");
+    check(std::memcmp(&final,&game,sizeof game)==0,"same seed changed final state");
+    o.trace=nullptr; auto quiet=run(4,a,o);
+    check(all_metrics(r1)==all_metrics(quiet),"tracing perturbed the result or telemetry");
+    o.telemetry=false; o.trace=&without; auto disabled=run(4,a,o);
+    check(first.str()==without.str(),"telemetry collection changed action/event trace");
+    check(r1.actions==disabled.actions && r1.turns==disabled.turns && r1.score==disabled.score &&
+        r1.result==disabled.result && r1.action_hash==disabled.action_hash &&
+        std::memcmp(&final,&game,sizeof game)==0,"telemetry collection changed gameplay/RNG");
+    check(r1.result=="escaped" && r1.has_yendor && r1.final_floor==0,"escape regression seed 4 failed");
+    check(r1.monsters[LORD].killed==1 && r1.items[YENDOR_AMULET].picked_up==1,"escape skipped Lord/Yendor");
+    check(r1.floors.size()==31 && r1.floors_exited==31,"round trip lacks complete floor visits");
+    uint64_t actions=0,turns=0;
+    for(const auto& f:r1.floors) { actions+=f.actions; turns+=f.turns; }
+    check(actions==r1.actions && turns==r1.turns,"floor accounting lost stair actions/turns");
+    for(int i=0;i<16;++i) check(r1.floors[i].floor==i && !r1.floors[i].ascent,"descent visits merged");
+    for(int i=0;i<15;++i) check(r1.floors[16+i].floor==14-i && r1.floors[16+i].ascent,"ascent visits merged");
+}
+void policy_regressions() {
+    arena(); OmniscientAgent a;
+    game.inventory[0]={RING_STRENGTH,1}; game.inventory[1]={RING_DEXTERITY,1};
+    game.inventory[2]={RING_PROTECTION,1}; game.ring_slots[0]=0; game.ring_slots[1]=1;
+    Game before=game;
+    auto action=a.choose_action({game,0,0});
+    check(std::memcmp(&before,&game,sizeof game)==0,"agent advanced RNG/mutated state");
+    check(action.kind==ActionKind::Use && action.slot==0,"agent did not remove weakest ring");
+    check(dispatch(action),"ring removal rejected");
+    action=a.choose_action({game,1,1});
+    check(action.kind==ActionKind::Use && action.slot==2,"agent re-equipped weaker ring");
+    check(dispatch(action),"ring replacement rejected");
+    arena(); game.inventory[0]={FOOD,8};
+    for(int i=1;i<INVENTORY;++i) game.inventory[i]=make_equipment(PLATE_MAIL,0);
+    game.armor_slot=1; game.ground[0]={game.player,{SCROLL_TELEPORT,1}};
+    action=a.choose_action({game,0,0});
+    check(!(action.kind==ActionKind::Take && action.slot==0),"stocked food discarded using acquisition cap");
+    arena(); for(int i=0;i<INVENTORY;++i) game.inventory[i]={SCROLL_IDENTIFY,1};
+    game.ground[0]={game.player,{HEALING,1}};
+    action=a.choose_action({game,0,0});
+    check(action.kind==ActionKind::Take && action.slot==0,"full inventory lacks deterministic swap");
+    check(dispatch(action) && game.inventory[0].type==HEALING && game.ground[0].item.type==SCROLL_IDENTIFY,
+        "full inventory did not use production ground swap");
+    arena(); game.inventory[0]=make_equipment(PLATE_MAIL,0); game.inventory[0].info|=ITEM_CURSED; game.armor_slot=0;
+    game.ground[0]={game.player,{HEALING,1}};
+    Action swap; swap.kind=ActionKind::Swap; swap.target=0; swap.slot=0;
+    check(!dispatch(swap),"dispatcher removed cursed equipment");
+}
+void path_and_dispatch() {
+    arena(); std::memset(game.walls,0xff,sizeof game.walls);
+    for(int x=4;x<=8;++x) carve(static_cast<uint8_t>(x),4);
+    game.doors[0]={{5,4}}; game.door_count=1;
+    game.monsters[0]={{6,4},SNAKE,3,0,{0,0},0};
+    Paths safe, combat(true);
+    check(safe.to({6,4})==2 && safe.to({8,4})==-1 && combat.to({8,4})==4,"BFS monster occupancy wrong");
+    auto move=combat.move_to({8,4},"test");
+    check(dispatch(move) && door_open(0) && game.player==Position{4,4},"closed door bypassed production movement");
+    game.ground[0]={{8,4},{HEALING,1}};
+    Action take; take.kind=ActionKind::Take; take.target=0;
+    check(!dispatch(take) && game.ground[0].item.type==HEALING,"remote item pickup allowed");
+    game.paralyzed=2; Action wait; check(dispatch(wait) && game.paralyzed==1,"wait did not advance production statuses");
+    Action invalid; invalid.kind=ActionKind::Move; invalid.dx=invalid.dy=1;
+    check(!dispatch(invalid),"non-cardinal move accepted");
+}
+void hooks() {
+    arena(); game.monsters[0]={{5,4},SNAKE,3,0,{0,0},0};
+    Collector c; CollectScope sink(c); c.enter_floor(); c.observe();
+    damage_monster(0,255,true);
+    check(c.data.monsters[SNAKE].damage_taken==3 && c.data.monsters[SNAKE].killed==1,
+        "damage telemetry includes overkill or misses a kill");
+    check(c.data.floors[0].damage_dealt==3,"floor damage mismatch");
+    game.monsters[1]={{5,4},LORD,1,0,{0,0},0}; damage_monster(1,1,true);
+    check(c.data.items[YENDOR_AMULET].generated==1 && game.ground[15].item.type==YENDOR_AMULET,
+        "Lord drop generation hook missing");
+    game.player=game.ground[15].pos; c.observe();
+    Action take; take.kind=ActionKind::Take; take.target=15; check(dispatch(take),"Yendor pickup failed");
+    check(game.has_amulet && c.data.items[YENDOR_AMULET].picked_up==1 &&
+        c.data.items[YENDOR_AMULET].reached==1,"Yendor pickup/reach telemetry missing");
+    game.inventory[0]={FOOD,2}; Action eat; eat.kind=ActionKind::Use; eat.slot=0; check(dispatch(eat),"food failed");
+    check(c.data.items[FOOD].used==1 && c.data.items[FOOD].consumed==1,"food use/consumption wrong");
+    game.hp=2;
+    { DamageScope damage(Cause::Monster,DRAGON); hurt_player(250); }
+    check(c.data.death_cause=="DRAGON" && c.data.monsters[DRAGON].deaths==1 &&
+        c.data.monsters[DRAGON].player_damage==2,"death attribution/actual damage wrong");
+}
+class InvalidAgent final:public Agent {
+public:
+    const char* name() const override { return "test-invalid"; }
+    Action choose_action(const DecisionContext&) override { Action a; a.kind=ActionKind::Use; return a; }
+};
+class LostAgent final:public Agent {
+public:
+    const char* name() const override { return "test-lost"; }
+    Action choose_action(const DecisionContext&) override { Action a; a.goal="unable to find path"; a.diagnostic=Diagnostic::NoPath; return a; }
+};
+class MutatingAgent final:public Agent {
+public:
+    const char* name() const override { return "test-mutating"; }
+    Action choose_action(const DecisionContext&) override { ++game.random_state; return {}; }
+};
+class SwappingAgent final:public Agent {
+public:
+    const char* name() const override { return "test-swapping"; }
+    Action choose_action(const DecisionContext&) override { Action a; a.kind=ActionKind::Swap; a.target=a.slot=0; return a; }
+};
+class ThrowingAgent final:public Agent {
+public:
+    const char* name() const override { return "test-throwing"; }
+    Action choose_action(const DecisionContext&) override { throw std::runtime_error("policy failure"); }
+};
+void safety() {
+    OmniscientAgent a; Options o; o.max_actions=1;
+    auto r=run(3,a,o);
+    check(r.result=="SIM_STUCK" && r.stuck && r.reason=="excessive action count" && !session.ended,
+        "action budget counted as game loss");
+    InvalidAgent invalid; o={}; o.max_rejected=3;
+    r=run(3,invalid,o); check(r.result=="SIM_STUCK" && r.reason=="action rejected repeatedly", "rejection detection failed");
+    LostAgent lost; o={}; o.max_path_failures=3;
+    r=run(3,lost,o); check(r.result=="SIM_STUCK" && r.reason=="unable to find path","path failure not diagnosed");
+    MutatingAgent bad; r=run(3,bad);
+    check(r.result=="SIM_ERROR" && r.stuck && r.actions==0,"agent RNG mutation not detected");
+    ThrowingAgent throwing; r=run(3,throwing);
+    check(r.result=="SIM_ERROR" && r.reason=="agent error: policy failure","agent error did not remain a per-run failure");
+    arena(); game.inventory[0]={FOOD,8}; game.ground[0]={game.player,{SCROLL_TELEPORT,1}};
+    SwappingAgent swapping; r=run_started(123,swapping);
+    check(r.result=="SIM_STUCK" && r.reason.find("inventory-policy failure")==0,"swap cycle not diagnosed");
+    arena(); game.hp=1; game.hunger=0; game.turns=3;
+    r=run_started(123,lost);
+    check(r.result=="death" && r.death_cause=="starvation" && !r.stuck,"starvation classified as simulator failure");
+}
+void competence() {
+    OmniscientAgent a; int leaves=0,deep=0,wins=0; uint64_t kills=0,food=0,healing=0,equipment=0;
+    for(uint16_t seed=1;seed<=32;++seed) {
+        auto r=run(seed,a); check(!r.stuck,"fixed competence set stuck");
+        leaves+=r.deepest>0; deep+=r.deepest>=12; wins+=r.result=="escaped";
+        food+=r.items[FOOD].used; healing+=r.items[HEALING].drunk;
+        for(const auto& m:r.monsters) kills+=m.killed;
+        for(const auto& i:r.items) equipment+=i.equipped;
+    }
+    check(leaves>0 && deep>0 && wins>0 && kills && food && healing && equipment,"agent competence regression");
+    std::cout << "fixed seeds 1..32: left floor 0=" << leaves << " deep=" << deep << " escapes=" << wins << '\n';
+}
+}
+int main() {
+    try {
+        static_assert(sizeof(Game)==774 && SAVE_VERSION==23,"native saved layout changed");
+        determinism(); policy_regressions(); path_and_dispatch(); hooks(); safety(); competence();
+        std::cout << "simulator checks passed\n"; return 0;
+    } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+}

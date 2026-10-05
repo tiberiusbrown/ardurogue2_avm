@@ -4,6 +4,8 @@ Complete input-to-render turn benchmarks and the 100 ms performance
 limit are documented in [bench/README.md](bench/README.md).
 The free-form dungeon generator, validation measurements, and example maps
 are documented in [docs/floor-generation.md](docs/floor-generation.md).
+The deterministic host-native autoplay simulator, CLI, telemetry and fixed-seed
+validation are documented in [sim/README.md](sim/README.md).
 
 This project builds an AVM image using an installed AVM SDK. It is a small
 turn-based dungeon crawl for a 128x64 monochrome screen.

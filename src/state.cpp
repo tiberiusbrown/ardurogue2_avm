@@ -2,6 +2,7 @@
 #include "game_internal.hpp"
 #include "status.hpp"
 #include "world.hpp"
+#include "sim_hooks.hpp"
 #include <string.h>
 
 namespace rogue {
@@ -263,6 +264,7 @@ void start_new(uint16_t seed)
 
 void finish(RunResult result)
 {
+    SIM_EVENT(sim::EventKind::Finished, NONE, result);
     if(game.score > game.best_score)
         game.best_score = game.score;
     game.valid = 0;
@@ -272,6 +274,7 @@ void finish(RunResult result)
 
 void change_floor(int8_t delta)
 {
+    SIM_EVENT(sim::EventKind::FloorExited);
     game.floor = static_cast<uint8_t>(game.floor + delta);
     make_floor();
     status(F("You take the stairs."));

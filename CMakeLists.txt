@@ -8,6 +8,7 @@ if(NOT AVM_SDK_ROOT)
     enable_language(CXX)
     enable_testing()
     add_subdirectory(tests)
+    add_subdirectory(sim)
     return()
 endif()
 
@@ -71,7 +72,7 @@ set(ARDUROGUE2_SOURCES
     main state combat combat_math items world world_gen world_gen_population persistence status render ui)
 set(ARDUROGUE2_HEADERS
     model game game_internal world app_state persistence status render ui
-    inventory_view combat_math ray_sight_generated world_gen world_gen_templates)
+    inventory_view combat_math ray_sight_generated world_gen world_gen_templates sim_hooks)
 set(ARDUROGUE2_HEADER_FILES)
 foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
     list(APPEND ARDUROGUE2_HEADER_FILES

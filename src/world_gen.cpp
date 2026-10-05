@@ -1,4 +1,5 @@
 #include "world_gen.hpp"
+#include "sim_hooks.hpp"
 #include "world_gen_templates.hpp"
 #include "world.hpp"
 #include "game_internal.hpp"
@@ -602,6 +603,7 @@ void make_floor()
     populate_items(floor_seed(SUPPLIES), floor_seed(EQUIPMENT));
     game.player = game.has_amulet ? game.down : game.up;
     memset(game.explored, 0, sizeof game.explored);
+    SIM_EVENT(sim::EventKind::FloorEntered);
 #if defined(__AVM__)
     end_generation_render();
 #endif

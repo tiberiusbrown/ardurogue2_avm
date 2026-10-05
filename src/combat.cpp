@@ -2,6 +2,7 @@
 #include "game_internal.hpp"
 #include "status.hpp"
 #include "world.hpp"
+#include "sim_hooks.hpp"
 
 namespace rogue {
 
@@ -147,6 +148,8 @@ static bool can_monster_move(uint8_t x, uint8_t y, uint8_t door)
 
 void hurt_player(uint8_t damage)
 {
+    SIM_EVENT(sim::EventKind::PlayerDamage, NONE, 0,
+              damage < game.hp ? damage : game.hp);
     game.hp = damage >= game.hp ? 0 : static_cast<uint8_t>(game.hp - damage);
     if(!game.hp)
         finish(DEATH);
@@ -210,18 +213,23 @@ void player_take_fire_damage(uint8_t damage, uint8_t power)
 
 static void leave_yendor(const Monster& monster)
 {
-    if(monster.type == LORD)
+    if(monster.type == LORD) {
         game.ground[15] = {monster.pos, {YENDOR_AMULET, 1}};
+        SIM_EVENT(sim::EventKind::GeneratedItem, 15, YENDOR_AMULET);
+    }
 }
 
 void damage_monster(uint8_t index, uint8_t damage, bool player_attack)
 {
     Monster& target = game.monsters[index];
     if(!target.type) return;
+    SIM_EVENT(sim::EventKind::MonsterDamage, index, target.type,
+              damage < target.hp ? damage : target.hp, player_attack);
     if(player_attack) target.state |= MON_AGGRO;
     if(damage >= target.hp) {
         if(player_attack) defeat_monster(index);
         else {
+            SIM_EVENT(sim::EventKind::MonsterKilled, index, target.type);
             leave_yendor(target);
             target.type = NO_MONSTER;
         }
@@ -241,6 +249,9 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
             center.y - target.pos.y;
         if(dx > radius || dy > radius)
             continue;
+#if defined(ARDUROGUE2_SIM)
+        if(player_attack) SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
+#endif
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
         damage_monster(i, damage, player_attack);
     }
@@ -249,6 +260,9 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
     uint8_t py = game.player.y > center.y ? game.player.y - center.y :
         center.y - game.player.y;
     if(player_attack && px <= radius && py <= radius) {
+#if defined(ARDUROGUE2_SIM)
+        sim::DamageScope damage_source(sim::Cause::Fire);
+#endif
         uint8_t damage = static_cast<uint8_t>(8 + roll(8));
         uint8_t old_hp = game.hp;
         player_take_fire_damage(damage, 8);
@@ -315,6 +329,9 @@ static void advance_monster(uint8_t index)
     Monster& monster = game.monsters[index];
     if(!monster.type)
         return;
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope damage_source(sim::Cause::Monster, monster.type);
+#endif
     MonsterInfo info = monster_info(monster.type);
     bool confused = monster_effect(monster, MON_CONFUSED) != 0;
     bool afraid = (monster.state & MON_AFRAID) != 0;
@@ -341,10 +358,19 @@ static void advance_monster(uint8_t index)
             animate_ray(monster.pos, dx, dy, range);
             animate_fire_burst(game.player);
             uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+            SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
+            SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                      static_cast<uint8_t>(sim::Special::Fire));
+#if defined(ARDUROGUE2_SIM)
+            sim::DamageScope fire_source(sim::Cause::Fire, monster.type);
+#endif
+            SIM_EVENT(sim::EventKind::MonsterHit, index, monster.type);
             player_take_fire_damage(damage, 12);
             fire_burst_damage(game.player, false);
         } else if(range == 1 && pursuing && !confused && !afraid) {
+            SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
             if(physical_attack_hits(info.dexterity, player_dexterity())) {
+                SIM_EVENT(sim::EventKind::MonsterHit, index, monster.type);
                 uint8_t raw = static_cast<uint8_t>(info.strength + roll(3));
                 if(monster_effect(monster, MON_WEAKENED))
                     raw = static_cast<uint8_t>((raw + 1) / 2);
@@ -370,17 +396,23 @@ static void advance_monster(uint8_t index)
                    roll(4) == 0 && !game.confused &&
                    amulet_bonus(AMULET_CLARITY) <= 0) {
                     game.confused = static_cast<uint8_t>(4 + roll(4));
+                    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                              static_cast<uint8_t>(sim::Special::Confusion));
                     status(F("You feel confused."));
                 }
                 if(!session.ended && (info.flags & MON_POISON) &&
                    roll(4) == 0 && !game.weakened) {
                     game.weakened = 1;
+                    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                              static_cast<uint8_t>(sim::Special::Poison));
                     status(F("You feel weaker."));
                 }
                 if(!session.ended && (info.flags & MON_PARALYZE_HIT) &&
                    roll(4) == 0 && !game.paralyzed &&
                    amulet_bonus(AMULET_IRONBLOOD) <= 0) {
                     game.paralyzed = static_cast<uint8_t>(3 + roll(4));
+                    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                              static_cast<uint8_t>(sim::Special::Paralysis));
                     status(F("You are paralyzed!"));
                 }
             }
@@ -423,6 +455,7 @@ static void enemy_turn(uint8_t player_speed)
 
 void end_turn()
 {
+    SIM_EVENT(sim::EventKind::Turn);
     int16_t effective_speed = static_cast<int16_t>(game.speed) -
         amulet_bonus(AMULET_SPEED);
     if(game.slowed)
@@ -436,6 +469,10 @@ void end_turn()
     if(hunger_tick && game.hunger)
         --game.hunger;
     if(game.hunger == 0 && game.turns % 4 == 0) {
+#if defined(ARDUROGUE2_SIM)
+        sim::DamageScope damage_source(sim::Cause::Starvation);
+#endif
+        SIM_EVENT(sim::EventKind::PlayerDamage, NONE, 0, 1);
         --game.hp;
         status(F("You are starving!"));
         if(game.hp == 0) {
@@ -472,6 +509,7 @@ void defeat_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
     uint8_t killed_type = target.type;
+    SIM_EVENT(sim::EventKind::MonsterKilled, index, killed_type);
     leave_yendor(target);
     target.type = NO_MONSTER;
     uint8_t xp = monster_xp(killed_type);
@@ -484,6 +522,7 @@ void defeat_monster(uint8_t index)
 static void attack_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
+    SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
     MonsterInfo info = monster_info(target.type);
     if(!physical_attack_hits(player_accuracy(), info.dexterity)) {
@@ -500,6 +539,8 @@ static void attack_monster(uint8_t index)
     uint8_t raw = physical_raw_damage(weapon_roll, player_strength());
     uint8_t damage = physical_damage_after_armor(raw,
         armor_absorption(info.armor, 0));
+    SIM_EVENT(sim::EventKind::MonsterDamage, index, target.type,
+              damage < target.hp ? damage : target.hp, true);
     if(damage >= target.hp) {
         defeat_monster(index);
     } else {
@@ -512,6 +553,9 @@ static void attack_monster(uint8_t index)
         heal_player(1);
         status(F("Your amulet drains a little life."));
     } else if(vampire_bonus < 0) {
+#if defined(ARDUROGUE2_SIM)
+        sim::DamageScope damage_source(sim::Cause::Item, AMULET_VAMPIRE);
+#endif
         hurt_player(1);
         status(F("Your amulet drains your life."));
     }
@@ -561,6 +605,7 @@ void move_player(int8_t dx, int8_t dy)
 void apply_monster_potion(uint8_t type, uint8_t index)
 {
     Monster& target = game.monsters[index];
+    SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
     uint8_t maximum = monster_health(target.type);
     switch(type) {
@@ -589,6 +634,8 @@ void apply_monster_potion(uint8_t type, uint8_t index)
         uint8_t base = static_cast<uint8_t>(maximum / 8 + 1);
         uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
         if(damage > 10) damage = 10;
+        SIM_EVENT(sim::EventKind::MonsterDamage, index, target.type,
+                  damage < target.hp ? damage : target.hp, true);
         if(damage >= target.hp)
             defeat_monster(index);
         else {
