@@ -19,3 +19,21 @@ the roll distribution within the type's fixed range.
 Keep all items of the same group contiguous in the `ItemType` enum so group
 predicates such as `is_weapon`, `is_armor`, `is_potion`, `is_ring`, `is_amulet`,
 `is_scroll`, and `is_wand` can use simple inclusive range tests.
+
+# Turn performance
+
+Use this project's ignored `build/` directory for objects, `ardurogue2.elf`,
+and benchmark results; keep `ardurogue2.arduboy` at the project root.
+After development, run from this project's directory (`<sdk>` is the AVM SDK):
+
+```text
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
+cmake --build build --config RelWithDebInfo --target ardurogue2
+python bench/profile_turns.py --elf build/ardurogue2.elf --sdk-root <sdk> --repeat 3 --check --output build/turn-benchmarks
+```
+
+All cases must take at most **150 ms** in their worst sample, from submitted
+input through computation and final rendering to readiness for the next input;
+generation and animation are excluded. Use the saved avm-lldb profiles to
+optimize failures while preserving gameplay and benchmark coverage. Run
+correctness tests and rerun the full suite on the final ELF until all cases pass.

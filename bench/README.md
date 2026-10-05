@@ -21,14 +21,15 @@ uses real buttons, avoiding writes to globals that LTO may split into fragments.
 Build the game and run all 21 cases, three samples each:
 
 ```text
-cmake --build <game-build> --config RelWithDebInfo --target ardurogue2
-python bench/profile_turns.py --elf <game-build>/ardurogue2.elf --sdk-root <sdk> --output <results>
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
+cmake --build build --config RelWithDebInfo --target ardurogue2
+python bench/profile_turns.py --elf build/ardurogue2.elf --sdk-root <sdk> --output build/turn-benchmarks
 ```
 
 Or, when Python is available at CMake configure time:
 
 ```text
-cmake --build <game-build> --config RelWithDebInfo --target ardurogue2_turn_benchmarks
+cmake --build build --config RelWithDebInfo --target ardurogue2_turn_benchmarks
 ```
 
 Select individual cases, collect native AVR hotspots, and produce HTML reports:

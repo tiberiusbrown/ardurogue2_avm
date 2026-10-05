@@ -52,7 +52,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 set(ARDUROGUE2_OBJECTS)
-set(ARDUROGUE2_ELF "${CMAKE_CURRENT_BINARY_DIR}/ardurogue2.elf")
+# Keep game artifacts in one location, including when configured by a parent.
+set(ARDUROGUE2_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build")
+file(MAKE_DIRECTORY "${ARDUROGUE2_BUILD_DIR}")
+set(ARDUROGUE2_ELF "${ARDUROGUE2_BUILD_DIR}/ardurogue2.elf")
 set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/ardurogue2.arduboy")
 
 set(ARDUROGUE2_SOURCES
@@ -67,7 +70,7 @@ foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
 endforeach()
 
 foreach(ARDUROGUE2_SOURCE IN LISTS ARDUROGUE2_SOURCES)
-    set(ARDUROGUE2_OBJECT "${CMAKE_CURRENT_BINARY_DIR}/${ARDUROGUE2_SOURCE}.o")
+    set(ARDUROGUE2_OBJECT "${ARDUROGUE2_BUILD_DIR}/${ARDUROGUE2_SOURCE}.o")
     list(APPEND ARDUROGUE2_OBJECTS "${ARDUROGUE2_OBJECT}")
     add_custom_command(
         OUTPUT "${ARDUROGUE2_OBJECT}"
@@ -120,7 +123,7 @@ if(Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_SOURCE_DIR}/bench/profile_turns.py"
             --elf "${ARDUROGUE2_ELF}"
             --lldb "${AVM_SDK_BIN}/avm-lldb${AVM_HOST_EXE_SUFFIX}"
-            --output "${CMAKE_CURRENT_BINARY_DIR}/turn-benchmarks"
+            --output "${ARDUROGUE2_BUILD_DIR}/turn-benchmarks"
         DEPENDS ardurogue2
         USES_TERMINAL
         COMMENT "Profiling complete turns against the initial 150 ms goal"
