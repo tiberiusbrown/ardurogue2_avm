@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Profile input-to-render turns prepared by the compiled bench.cpp scenarios.
 
-Uses avm-lldb's command interface, not its optional Python bindings. No save
+Each case runs once. Uses avm-lldb's command interface, not its optional Python bindings. No save
 files, serialization offsets, or save-version parsing are used.
 """
 
@@ -15,7 +15,6 @@ import math
 from pathlib import Path
 import re
 import shutil
-import statistics
 import subprocess
 import sys
 import tempfile
@@ -256,20 +255,20 @@ def validate_sample(case, contract, folder, output):
 
 
 def write_summary(folder, cases, goal_ms, elf, contract):
-    summary = {"schema": 1, "metric": "input-to-ready elapsed emulated cycles",
+    summary = {"schema": 2, "metric": "input-to-ready elapsed emulated cycles",
                "clock_hz": CLOCK_HZ, "goal_ms": goal_ms, "elf": str(elf),
                "source_bench_sha256": contract["bench_sha256"], "benchmarks": cases}
     (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     with (folder / "summary.csv").open("w", newline="", encoding="utf-8") as output:
         writer = csv.writer(output)
-        writer.writerow(("benchmark", "samples", "median_ms", "worst_ms", "goal_ms", "meets_goal"))
+        writer.writerow(("benchmark", "cycles", "ms", "goal_ms", "meets_goal"))
         for case in cases:
-            writer.writerow((case["name"], len(case["samples"]), case["median_ms"], case["worst_ms"], goal_ms, case["meets_goal"]))
+            writer.writerow((case["name"], case["cycles"], case["ms"], goal_ms, case["meets_goal"]))
     lines = [f"# Turn benchmarks: {goal_ms:g} ms initial goal", "",
              "Elapsed emulated time at 16 MHz, from submitted button to the main input wait after final render/display.", "",
-             "| Benchmark | Median ms | Worst ms | Goal |", "| --- | ---: | ---: | --- |"]
+             "| Benchmark | Cycles | ms | Goal |", "| --- | ---: | ---: | --- |"]
     for case in cases:
-        lines.append(f"| {case['name']} | {case['median_ms']:.3f} | {case['worst_ms']:.3f} | {'PASS' if case['meets_goal'] else 'OVER'} |")
+        lines.append(f"| {case['name']} | {case['cycles']} | {case['ms']:.3f} | {'PASS' if case['meets_goal'] else 'OVER'} |")
     (folder / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -280,15 +279,14 @@ def main(argv=None):
     parser.add_argument("--sdk-root", type=Path, help="SDK containing bin/avm-lldb")
     parser.add_argument("--source-dir", type=Path, default=Path(__file__).resolve().parents[1] / "src")
     parser.add_argument("--output", type=Path, default=Path("build/turn-benchmarks"), help="parent of a new, unique run directory")
-    parser.add_argument("--benchmark", action="append", choices=[case.name for case in BENCHMARKS], help="repeat to select cases")
-    parser.add_argument("--repeat", type=int, default=3)
+    parser.add_argument("--benchmark", action="append", choices=[case.name for case in BENCHMARKS], help="select cases; may be specified multiple times")
     parser.add_argument("--goal-ms", type=float, default=DEFAULT_GOAL_MS)
     parser.add_argument("--deadline-ms", type=int, default=10000, help="emulated safety deadline, not the performance goal")
     parser.add_argument("--timeout", type=float, default=120, help="host seconds allowed for each debugger session")
     parser.add_argument("--native", action="store_true", help="also collect AVR interpreter hotspots")
     parser.add_argument("--html", action="store_true", help="render each profile with the SDK's avm-prof")
     parser.add_argument("--emit-only", action="store_true", help="write LLDB scripts without running")
-    parser.add_argument("--check", action="store_true", help="exit 2 if any completed sample exceeds the goal")
+    parser.add_argument("--check", action="store_true", help="exit 2 if any benchmark exceeds the goal")
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args(argv)
     if args.list:
@@ -296,8 +294,8 @@ def main(argv=None):
             print(f"{case.index:2} {case.name:22} {case.description}")
         return 0
     require(args.elf and args.elf.is_file(), "--elf must name an existing benchmark ELF")
-    require(args.repeat > 0 and args.deadline_ms > 0 and args.timeout > 0 and
-            math.isfinite(args.goal_ms) and args.goal_ms > 0, "budgets and repeat count must be positive")
+    require(args.deadline_ms > 0 and args.timeout > 0 and
+            math.isfinite(args.goal_ms) and args.goal_ms > 0, "budgets must be positive")
     suffix = ".exe" if sys.platform == "win32" else ""
     lldb = args.lldb or (args.sdk_root / "bin" / ("avm-lldb" + suffix) if args.sdk_root else shutil.which("avm-lldb"))
     require(args.emit_only or (lldb and Path(lldb).is_file()), "provide --lldb or --sdk-root, or put avm-lldb on PATH")
@@ -309,35 +307,30 @@ def main(argv=None):
     print(f"Artifacts: {folder}", flush=True)
     results = []
     for case in cases:
-        samples = []
-        for index in range(1, args.repeat + 1):
-            sample_dir = folder / case.name / str(index)
-            sample_dir.mkdir(parents=True)
-            commands = sample_dir / "turn.lldb"
-            commands.write_text(make_commands(case, contract, sample_dir, args.native, args.deadline_ms), encoding="utf-8")
-            if args.emit_only:
-                continue
-            try:
-                run = subprocess.run([str(Path(lldb).resolve()), "--batch", "--source", str(commands), str(args.elf.resolve())],
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
-                (sample_dir / "lldb.log").write_text(run.stdout, encoding="utf-8")
-                require(run.returncode == 0, f"avm-lldb exited {run.returncode}; see {sample_dir / 'lldb.log'}")
-                sample = validate_sample(case, contract, sample_dir, run.stdout)
-                samples.append(sample)
-                print(f"{case.name:22} [{index}/{args.repeat}] {sample['ms']:9.3f} ms  {'PASS' if sample['ms'] <= args.goal_ms else 'OVER'}", flush=True)
-                if args.html:
-                    profiler = Path(lldb).resolve().with_name("avm-prof" + suffix)
-                    subprocess.run([str(profiler), "report", str(sample_dir / "turn.avmp"), "--html", str(sample_dir / "profile.html")],
-                                   check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
-            except (ValueError, subprocess.SubprocessError) as error:
-                (sample_dir / "error.txt").write_text(str(error) + "\n", encoding="utf-8")
-                raise ValueError(f"{case.name} sample {index}: {error}; artifacts in {sample_dir}") from error
-        if samples:
-            worst = max(sample["ms"] for sample in samples)
-            results.append({"name": case.name, "description": case.description, "samples": samples,
-                            "median_ms": statistics.median(sample["ms"] for sample in samples),
-                            "worst_ms": worst, "meets_goal": worst <= args.goal_ms})
-            write_summary(folder, results, args.goal_ms, args.elf.resolve(), contract)
+        case_dir = folder / case.name
+        case_dir.mkdir()
+        commands = case_dir / "turn.lldb"
+        commands.write_text(make_commands(case, contract, case_dir, args.native, args.deadline_ms), encoding="utf-8")
+        if args.emit_only:
+            continue
+        try:
+            run = subprocess.run([str(Path(lldb).resolve()), "--batch", "--source", str(commands), str(args.elf.resolve())],
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
+            (case_dir / "lldb.log").write_text(run.stdout, encoding="utf-8")
+            require(run.returncode == 0, f"avm-lldb exited {run.returncode}; see {case_dir / 'lldb.log'}")
+            measurement = validate_sample(case, contract, case_dir, run.stdout)
+            meets_goal = measurement["ms"] <= args.goal_ms
+            print(f"{case.name:22} {measurement['ms']:9.3f} ms  {'PASS' if meets_goal else 'OVER'}", flush=True)
+            if args.html:
+                profiler = Path(lldb).resolve().with_name("avm-prof" + suffix)
+                subprocess.run([str(profiler), "report", str(case_dir / "turn.avmp"), "--html", str(case_dir / "profile.html")],
+                               check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
+        except (ValueError, subprocess.SubprocessError) as error:
+            (case_dir / "error.txt").write_text(str(error) + "\n", encoding="utf-8")
+            raise ValueError(f"{case.name}: {error}; artifacts in {case_dir}") from error
+        results.append({"name": case.name, "description": case.description,
+                        **measurement, "meets_goal": meets_goal})
+        write_summary(folder, results, args.goal_ms, args.elf.resolve(), contract)
     if args.emit_only:
         print("Run any generated turn.lldb with avm-lldb --batch --source <script> <elf>.")
         return 0

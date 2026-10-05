@@ -2,10 +2,10 @@
 
 The initial goal is **no more than 150 ms** (2,400,000 emulated AVR cycles at
 16 MHz) from submitting an action's input to the completed view being ready
-for the next input. The goal applies to the worst sample of every benchmark.
+for the next input. Each benchmark runs once because emulated time is deterministic.
 It is an initial performance target, not a claim that the current game meets it.
 
-The [initial baseline](BASELINE.md) records 63 samples across the 21 cases:
+The [baseline](BASELINE.md) records one measurement for each of the 21 cases:
 9 cases meet the goal and 12 exceed it.
 
 `profile_turns.py` uses Python 3's standard library and the installed SDK's
@@ -20,7 +20,7 @@ The normal `ardurogue2.elf` and root `.arduboy` do not include the benchmark cod
 
 ## Run
 
-Build the game and run all 21 cases, three samples each:
+Build the game and run all 21 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
@@ -37,7 +37,7 @@ cmake --build build --config RelWithDebInfo --target ardurogue2_turn_benchmarks
 Select individual cases, collect native AVR hotspots, and produce HTML reports:
 
 ```text
-python bench/profile_turns.py --elf build/ardurogue2-bench.elf --lldb <avm-lldb> --benchmark move_dense --benchmark equip_armor --repeat 3 --native --html --output build/turn-benchmarks
+python bench/profile_turns.py --elf build/ardurogue2-bench.elf --lldb <avm-lldb> --benchmark move_dense --benchmark equip_armor --native --html --output build/turn-benchmarks
 ```
 
 Native hotspot collection requires an `interp.elf` matching the SDK's
@@ -46,7 +46,7 @@ Native hotspot collection requires an `interp.elf` matching the SDK's
 the game image or measured firmware. Regular source profiling needs no
 interpreter ELF. HTML reports use the SDK's sibling `avm-prof` executable.
 
-`--list` lists the cases. `--check` exits 2 if any completed sample exceeds the
+`--list` lists the cases. `--check` exits 2 if any benchmark exceeds the
 goal; without it, over-budget timings are reported and exit status is 0.
 An invalid/incomplete measurement always exits 1. `--goal-ms` changes the target;
 the separate `--deadline-ms` (default 10 seconds of emulated time) bounds setup
@@ -55,7 +55,7 @@ and execution, while `--timeout` bounds host debugger runtime.
 Every invocation creates a unique directory under `--output`. It retains
 pre/post named state snapshots (`before.json`/`after.json`), debugger transcripts, controller
 frame captures, generated `.lldb` command files, and `.avmp` source profiles.
-`summary.json`, `summary.csv`, and `summary.md` contain median/worst timings,
+`summary.json`, `summary.csv`, and `summary.md` contain exact cycle counts and timings,
 pass/over status, exact cycle boundaries, and profiler launch identities.
 Profiles contain ELF/interpreter hashes and source/instruction hotspots for
 comparisons across optimizations. The compiled scenario source hash and initial
@@ -83,7 +83,7 @@ breakpoint set --name bench_equip_cursed_amulet
 continue
 ```
 
-Use `--emit-only --benchmark equip_cursed_amulet --repeat 1` to generate the
+Use `--emit-only --benchmark equip_cursed_amulet` to generate the
 complete setup, input, and profiling commands for that case. All UI navigation
 after compiled setup uses actual buttons; the debugger never writes Game or Ui.
 
@@ -130,8 +130,8 @@ the mapping check reads the explored array using its actual `sizeof`.
 - Wands: digging through blocked terrain without animation.
 
 These are controlled scenarios, not a statistical claim about all
-possible floors or turns. Repeat samples reset the same state/RNG and can be
-identical in emulated cycles. Host wall-clock time is not the game metric.
+possible floors or turns. Each case starts from a fixed state/RNG and produces
+a deterministic emulated cycle count. Host wall-clock time is not the game metric.
 Source line breakpoints are discovered from the matching source tree;
 `--source-dir` must correspond to the ELF. Adding a case to the `TURN_BENCHMARKS`
 manifest in `bench.cpp` gives it a selector and breakpoint entry automatically;

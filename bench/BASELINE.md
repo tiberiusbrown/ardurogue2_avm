@@ -6,10 +6,10 @@ and animated actions are excluded. Scenarios are compiled in `bench.cpp`;
 no save files or saved-layout fixtures are created.
 
 Initial goal: **150 ms / 2,400,000 cycles**. **9 of 21 cases meet the goal; 12
-exceed it.** Three fresh-emulator samples per case (63 profiles total) produced
-identical cycle counts within each case. Times below are both median and worst.
+exceed it.** Each case runs once (21 profiles total). Times below are exact
+emulated input-to-ready latencies.
 
-| Benchmark | Cycles | Median/worst ms | 150 ms goal |
+| Benchmark | Cycles | Elapsed ms | 150 ms goal |
 | --- | ---: | ---: | --- |
 | move_room | 1,627,623 | 101.726 | PASS |
 | move_corridor | 2,182,164 | 136.385 | PASS |
@@ -45,8 +45,8 @@ the one-byte case selector. Setup code is outside every measured interval.
 The different startup can change LTO/code layout, so this compiled baseline
 replaces the previous serialized-fixture baseline for comparisons.
 
-Source base commit: `19870c40fcfb064eeb57fd0c3bba4e2552b29811` with the
-compiled benchmark changes in this working tree.
+Game/scenario source commit: `724b6c1ee894e46634835517632ef6ed0488a0e4`. The runner/reporting
+changes are in this working tree.
 
 Benchmark ELF SHA-256: `619e6bf520d1ccc520cd1a1786a2ab253c4e577db76b1effdfcdcd0df88bcbb0`.
 
@@ -55,6 +55,6 @@ Scenario source SHA-256: `c9e2062e36cc915cb49d289986974b6b52eb049b7507ba0ffdaa1e
 Interpreter SHA-256: `659cd6ebf0d8c7b315bb0ec5bf58f2dc533b25410f7d4035cca6144368abc754`.
 
 Raw results and per-case `.lldb`/`.avmp` files are retained in
-[the local run directory](../build/turn-benchmarks/20261005T004152Z-gmmk7qr1/summary.md).
+[the local run directory](../build/turn-benchmarks/20261005T004609Z-1eijrlfk/summary.md).
 This is an ignored local build artifact. See [README.md](README.md) to reproduce
 the run or compare profiles.

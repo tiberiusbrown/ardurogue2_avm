@@ -29,7 +29,7 @@ After development, run from this project's directory (`<sdk>` is the AVM SDK):
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
 cmake --build build --config RelWithDebInfo --target ardurogue2 ardurogue2_bench
-python bench/profile_turns.py --elf build/ardurogue2-bench.elf --sdk-root <sdk> --repeat 3 --check --output build/turn-benchmarks
+python bench/profile_turns.py --elf build/ardurogue2-bench.elf --sdk-root <sdk> --check --output build/turn-benchmarks
 ```
 
 All cases must take at most **150 ms** in their worst sample, from submitted
