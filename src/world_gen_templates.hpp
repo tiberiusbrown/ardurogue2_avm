@@ -49,6 +49,39 @@ static_assert(sizeof(Template) == 64, "template stride must be a power of two");
 static_assert(sizeof templates / sizeof templates[0] == FAMILIES - L_CHAMBER,
               "feature template table mismatch");
 
+// A power-of-two stride keeps the flash lookup to shifts and adds.
+struct SocketRows { uint16_t rows[4][16]; };
+
+constexpr uint16_t template_row(const Template PROGMEM& t, int8_t y)
+{
+    return y < 0 || y >= t.h ? 0 : t.carve[y];
+}
+
+constexpr SocketRows socket_rows(const Template PROGMEM& t)
+{
+    SocketRows result = {};
+    for(uint8_t dir = 0; dir < 4; ++dir)
+        for(int8_t y = 0; y < t.h; ++y) {
+            uint16_t row = t.carve[y];
+            if(dir == 0) result.rows[dir][y] = static_cast<uint16_t>(row & (row >> 1) & ~(row << 1) & ~(row << 2));
+            else if(dir == 2) result.rows[dir][y] = static_cast<uint16_t>(row & (row << 1) & ~(row >> 1) & ~(row >> 2));
+            else {
+                int8_t forward = dir == 1 ? 1 : -1;
+                result.rows[dir][y] = static_cast<uint16_t>(row & template_row(t, y + forward) &
+                    ~template_row(t, y - forward) & ~template_row(t, y - 2 * forward));
+            }
+        }
+    return result;
+}
+
+static constexpr SocketRows PROGMEM template_sockets[] = {
+    socket_rows(templates[0]), socket_rows(templates[1]), socket_rows(templates[2]),
+    socket_rows(templates[3]), socket_rows(templates[4]), socket_rows(templates[5]),
+    socket_rows(templates[6]), socket_rows(templates[7]), socket_rows(templates[8]),
+    socket_rows(templates[9])
+};
+static_assert(sizeof(SocketRows) == 128, "socket row stride");
+
 struct Style {
     uint8_t weights[FAMILIES];
     uint16_t coverage;
@@ -59,6 +92,18 @@ static constexpr Style PROGMEM styles[4] = {
     {{29,6,1,14,15,16,2,1,1,1,1,1,9,1,1,1}, 590, 1,3,18,55,7},
     {{8,19,15,10,8,4,2,7,6,3,5,6,1,5,0,1}, 780, 4,4,12,94,11},
     {{12,15,8,10,7,9,7,3,2,3,3,1,3,2,8,7}, 680, 2,4,14,50,7}
+};
+
+constexpr uint8_t total_weight(const Style PROGMEM& style)
+{
+    uint8_t total = 0;
+    for(uint8_t weight : style.weights) total += weight;
+    return total;
+}
+
+static constexpr uint8_t PROGMEM style_weight_totals[] = {
+    total_weight(styles[0]), total_weight(styles[1]),
+    total_weight(styles[2]), total_weight(styles[3])
 };
 
 } // namespace rogue::generation

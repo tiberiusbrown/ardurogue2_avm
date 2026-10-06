@@ -1,5 +1,12 @@
 # Floor generation replacement
 
+Subsequent performance work tested eleven changes independently and retained
+nine with measured gains. The combined nine-case mean is 5.795 seconds, down
+41.2% from 9.853 seconds, with identical generated states and unchanged permanent
+RAM. See [the optimization results](../bench/RESULTS-GENERATION.md) for each trial,
+final validation, and resources. The measurements below describe the initial
+generator replacement.
+
 The fixed 4×3 room grid has been replaced with connected feature growth, followed
 by independent loop, door, stair, and population phases. Saved `Game` layout and
 save version 23 are unchanged. Combat, item effects, equipment definitions,

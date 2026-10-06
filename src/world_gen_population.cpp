@@ -127,12 +127,18 @@ static Position select_tile(uint16_t seed, uint8_t preference, bool monster)
     uint16_t stride = next_random(seed) | 1;
     Position spawn = game.has_amulet ? game.down : game.up;
     uint16_t safe = game.floor < 3 ? 36 : 16;
-    for(uint8_t pass = 0; pass < 3; ++pass) {
+    // Passage cleanup removes every dead end before population. The
+    // failed preference pass would only restart this same permutation.
+    for(uint8_t pass = preference == DEAD_END ? 1 : 0; pass < 3; ++pass) {
+        uint8_t wanted = pass == 0 ? preference : pass == 1 ? OPEN : 0;
         uint16_t index = start;
         for(uint16_t n = 0; n < 2048; ++n, index = (index + stride) & 2047) {
             if(!(n & 63)) progress();
             Position pos = {static_cast<uint8_t>(index & 63), static_cast<uint8_t>(index >> 6)};
-            if(wall_at(pos.x, pos.y) || pos == game.up || pos == game.down ||
+            // Geometry is immutable here; reject rare preferences before
+            // looking up occupants or checking monster spacing.
+            if(wall_at(pos.x, pos.y) || (wanted && !(geometry(pos) & wanted))) continue;
+            if(pos == game.up || pos == game.down ||
                door_at(pos) != NONE || monster_at(pos) != NONE) continue;
             if(monster && distance_squared(pos, spawn) < safe) continue;
             bool occupied = false;
@@ -144,8 +150,6 @@ static Position select_tile(uint16_t seed, uint8_t preference, bool monster)
                     if(game.monsters[i].type && distance_squared(pos, game.monsters[i].pos) < 9) occupied = true;
             }
             if(occupied) continue;
-            uint8_t wanted = pass == 0 ? preference : pass == 1 ? OPEN : 0;
-            if(wanted && !(geometry(pos) & wanted)) continue;
             return pos;
         }
     }

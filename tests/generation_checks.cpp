@@ -315,6 +315,27 @@ unsigned number(const char* value)
 
 bool generation_command(int argc, char** argv)
 {
+    if(argc >= 2 && std::strcmp(argv[1], "--floor-corpus") == 0) {
+        require(argc == 4, "usage: --floor-corpus SEED_COUNT OUTPUT");
+        unsigned seeds = number(argv[2]);
+        require(seeds >= 1 && seeds <= 65536, "seed count must be 1..65536");
+        FILE* out = std::fopen(argv[3], "wb");
+        require(out != nullptr, "could not create floor corpus");
+        // Same field order as --floor-state, plus gameplay RNG. Compare this
+        // corpus across builds to catch terrain, population and stream drift.
+        for(unsigned seed = 0; seed < seeds; ++seed)
+            for(unsigned floor = 0; floor < FLOORS; ++floor)
+                for(unsigned ascent = 0; ascent < 2; ++ascent) {
+                    generate(seed, floor, ascent != 0);
+                    require(std::fwrite(game.walls, 1, 694, out) == 694 &&
+                        std::fwrite(&game.player, 1, 6, out) == 6 &&
+                        std::fwrite(&game.door_count, 1, 1, out) == 1 &&
+                        std::fwrite(&game.random_state, 1, 2, out) == 2,
+                        "could not write floor corpus");
+                }
+        require(std::fclose(out) == 0, "could not close floor corpus");
+        return true;
+    }
     if(argc >= 2 && std::strcmp(argv[1], "--floor-state") == 0) {
         require(argc == 6, "usage: --floor-state RUN_SEED FLOOR ascent|descent OUTPUT");
         unsigned seed = number(argv[2]), floor = number(argv[3]);

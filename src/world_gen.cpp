@@ -144,6 +144,54 @@ static bool mask(const Feature& f, int8_t x, int8_t y, bool clearance, bool rela
     return (clearance_row & (1u << (bx + 1))) != 0;
 }
 
+static uint16_t base_clearance_row(const Feature& f, int8_t y, bool relaxed)
+{
+    if(y < -1 || y > f.h) return 0;
+    if(f.family >= L_CHAMBER && !relaxed)
+        return templates[f.family - L_CHAMBER].clearance[y + 1];
+    uint16_t full = static_cast<uint16_t>(0xffffu >> (14 - f.w));
+    if(f.family < BENT_PASSAGE) {
+        if(relaxed && (y == -1 || y == f.h))
+            return static_cast<uint16_t>(full & ~(1u | (1u << (f.w + 1))));
+        return full;
+    }
+    if(f.family == BENT_PASSAGE && !relaxed) return y >= f.h - 2 ? full : 7;
+    uint16_t row = base_row(f, y);
+    return static_cast<uint16_t>(row | (row << 1) | (row << 2) |
+        (base_row(f, y - 1) << 1) | (base_row(f, y + 1) << 1));
+}
+
+static constexpr uint8_t PROGMEM reversed_nibble[16] = {
+    0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15
+};
+
+static uint16_t reverse_row(uint16_t row, uint8_t width)
+{
+    uint16_t reversed = static_cast<uint16_t>((reversed_nibble[row & 15] << 12) |
+        (reversed_nibble[(row >> 4) & 15] << 8) |
+        (reversed_nibble[(row >> 8) & 15] << 4) | reversed_nibble[row >> 12]);
+    return static_cast<uint16_t>(reversed >> (14 - width));
+}
+
+// Transform one clearance row, rather than inverse-transforming every tile.
+static __attribute__((noinline)) uint16_t clearance_row(const Feature& f, int8_t y, bool relaxed)
+{
+    uint8_t rotation = f.transform & 3;
+    if(!(rotation & 1)) {
+        uint16_t row = base_clearance_row(f, rotation == 2 ? f.h - 1 - y : y, relaxed);
+        return ((rotation == 2) != ((f.transform & 4) != 0)) ? reverse_row(row, f.w) : row;
+    }
+    int8_t x = rotation == 1 ? y : f.w - 1 - y;
+    if(f.transform & 4) x = static_cast<int8_t>(f.w - 1 - x);
+    uint16_t bit = static_cast<uint16_t>(1u << (x + 1)), result = 0;
+    for(int8_t source_y = -1; source_y <= f.h; ++source_y)
+        if(base_clearance_row(f, source_y, relaxed) & bit) {
+            int8_t target_x = rotation == 1 ? f.h - 1 - source_y : source_y;
+            result |= static_cast<uint16_t>(1u << (target_x + 1));
+        }
+    return result;
+}
+
 #if !defined(__AVM__)
 bool check_feature_masks()
 {
@@ -173,6 +221,7 @@ bool check_feature_masks()
                             for(int8_t x = -1; x <= 1; ++x)
                                 if((!relaxed || !x || !y) && base_floor(f, bx + x, by + y)) expected = true;
                         if(mask(f, tx, ty, true, relaxed != 0) != expected) return false;
+                        if(((clearance_row(f, ty, relaxed != 0) >> (tx + 1)) & 1) != expected) return false;
                     }
                 }
         }
@@ -186,8 +235,7 @@ static uint8_t height(const Feature& f) { return f.transform & 1 ? f.w : f.h; }
 
 static __attribute__((noinline)) void pick_feature(Feature& f, uint16_t& seed, Archetype style)
 {
-    uint8_t total = 0;
-    for(uint8_t i = 0; i < FAMILIES; ++i) total += styles[style].weights[i];
+    uint8_t total = style_weight_totals[style];
     uint8_t choice = random(seed, total);
     f.family = 0;
     while(f.family + 1 < FAMILIES && choice >= styles[style].weights[f.family])
@@ -221,13 +269,23 @@ static __attribute__((noinline)) bool socket(Feature& f, Position at, uint8_t di
     int8_t sx = 0, sy = 0;
     for(int8_t y = 0; y < f.h; ++y) {
         if(!(y & 3)) progress();
-        uint16_t row = base_row(f, y), sockets;
-        if(base_dir == 0) sockets = static_cast<uint16_t>(row & (row >> 1) & ~(row << 1) & ~(row << 2));
-        else if(base_dir == 2) sockets = static_cast<uint16_t>(row & (row << 1) & ~(row >> 1) & ~(row >> 2));
-        else {
-            int8_t forward = base_dir == 1 ? 1 : -1;
-            sockets = static_cast<uint16_t>(row & base_row(f, y + forward) &
-                ~base_row(f, y - forward) & ~base_row(f, y - 2 * forward));
+        uint16_t sockets;
+        if(f.family >= L_CHAMBER) {
+            sockets = template_sockets[f.family - L_CHAMBER].rows[base_dir][y];
+        } else if(f.family < BENT_PASSAGE) {
+            if(base_dir == 0) sockets = f.w > 1 ? 1 : 0;
+            else if(base_dir == 2) sockets = f.w > 1 ? static_cast<uint16_t>(1u << (f.w - 1)) : 0;
+            else sockets = f.h > 1 && (base_dir == 1 ? y == 0 : y == f.h - 1)
+                ? static_cast<uint16_t>((1u << f.w) - 1) : 0;
+        } else {
+            uint16_t row = base_row(f, y);
+            if(base_dir == 0) sockets = static_cast<uint16_t>(row & (row >> 1) & ~(row << 1) & ~(row << 2));
+            else if(base_dir == 2) sockets = static_cast<uint16_t>(row & (row << 1) & ~(row >> 1) & ~(row >> 2));
+            else {
+                int8_t forward = base_dir == 1 ? 1 : -1;
+                sockets = static_cast<uint16_t>(row & base_row(f, y + forward) &
+                    ~base_row(f, y - forward) & ~base_row(f, y - 2 * forward));
+            }
         }
         for(int8_t x = 0; x < f.w && sockets; ++x, sockets >>= 1)
             if(sockets & 1)
@@ -260,6 +318,19 @@ static bool solid_run(uint8_t x, uint8_t y, uint8_t length)
     return true;
 }
 
+static bool solid_mask(uint8_t x, uint8_t y, uint16_t bits)
+{
+    uint16_t index = static_cast<uint16_t>(y * 8 + (x >> 3));
+    uint8_t shift = x & 7;
+    uint8_t low = static_cast<uint8_t>(bits << shift);
+    if((game.walls[index++] & low) != low) return false;
+    bits >>= 8 - shift;
+    uint8_t middle = static_cast<uint8_t>(bits);
+    if((game.walls[index++] & middle) != middle) return false;
+    uint8_t high = static_cast<uint8_t>(bits >> 8);
+    return !high || (game.walls[index] & high) == high;
+}
+
 static __attribute__((noinline)) bool valid(const Feature& f, bool relaxed)
 {
     if(f.x < 2 || f.y < 2 || f.x + width(f) > MAP_W - 2 ||
@@ -274,8 +345,8 @@ static __attribute__((noinline)) bool valid(const Feature& f, bool relaxed)
     }
     for(int8_t y = -1; y <= height(f); ++y) {
         if(!(y & 3)) progress();
-        for(int8_t x = -1; x <= width(f); ++x)
-            if(mask(f, x, y, true, relaxed) && !wall_at(f.x + x, f.y + y)) return false;
+        if(!solid_mask(static_cast<uint8_t>(f.x - 1), static_cast<uint8_t>(f.y + y),
+                       clearance_row(f, y, relaxed))) return false;
     }
     return true;
 }
@@ -403,13 +474,25 @@ __attribute__((noinline)) void generate_layout(uint16_t seed)
 static uint32_t scratch_row(uint8_t plane, uint8_t y)
 {
     uint32_t value;
+#if defined(__AVM__)
+    // AVM values have byte alignment; may_alias permits word access
+    // to the byte scratch without invoking a four-byte system service.
+    typedef uint32_t AliasWord __attribute__((may_alias));
+    value = *reinterpret_cast<const AliasWord*>(game.explored + plane * 92 + y * 4);
+#else
     memcpy(&value, game.explored + plane * 92 + y * 4, 4);
+#endif
     return value;
 }
 
 static void scratch_row(uint8_t plane, uint8_t y, uint32_t value)
 {
+#if defined(__AVM__)
+    typedef uint32_t AliasWord __attribute__((may_alias));
+    *reinterpret_cast<AliasWord*>(game.explored + plane * 92 + y * 4) = value;
+#else
     memcpy(game.explored + plane * 92 + y * 4, &value, 4);
+#endif
 }
 
 static __attribute__((noinline)) uint32_t floor_row(uint8_t x, uint8_t y)
@@ -421,6 +504,15 @@ static __attribute__((noinline)) uint32_t floor_row(uint8_t x, uint8_t y)
     return (~(bits >> (x & 7))) & 0x7fffffu;
 }
 
+// Monsters have not been populated during the connector pass. Reuse
+// their bytes for the 23 invariant floor masks, without stack storage.
+static uint32_t cached_floor_row(uint8_t row)
+{
+    uint32_t value;
+    memcpy(&value, reinterpret_cast<const uint8_t*>(game.monsters) + row * 4, 4);
+    return value;
+}
+
 // Exact synchronous cardinal expansion for routes up to the style's detour
 // threshold. A 23x23 window contains every such short route between these
 // close endpoints. Two 92-byte bit planes live in explored, never on stack.
@@ -428,17 +520,28 @@ static __attribute__((noinline)) bool short_route(Position a, Position b, Positi
 {
     uint8_t x = center.x < 11 ? 0 : center.x > 52 ? 41 : center.x - 11;
     uint8_t y = center.y < 11 ? 0 : center.y > 20 ? 9 : center.y - 11;
+    static_assert(sizeof game.monsters >= 23 * 4, "floor-mask scratch capacity");
+    for(uint8_t row = 0; row < 23; ++row) {
+        if(!(row & 3)) progress();
+        uint32_t value = floor_row(x, static_cast<uint8_t>(y + row));
+        memcpy(reinterpret_cast<uint8_t*>(game.monsters) + row * 4, &value, 4);
+    }
     memset(game.explored, 0, sizeof game.explored);
     scratch_row(0, static_cast<uint8_t>(a.y - y), 1ul << (a.x - x));
     for(uint8_t step = 0; step < limit; ++step) {
         progress();
-        for(uint8_t row = 0; row < 23; ++row) {
+        // Cardinal propagation can expand vertically by only one row.
+        uint8_t origin = static_cast<uint8_t>(a.y - y);
+        uint8_t first = origin > step + 1 ? origin - step - 1 : 0;
+        uint8_t last = static_cast<uint8_t>(origin + step + 1);
+        if(last > 22) last = 22;
+        for(uint8_t row = first; row <= last; ++row) {
             if(!(row & 3)) progress();
             uint32_t reached = scratch_row(0, row);
             uint32_t next = reached | (reached << 1) | (reached >> 1);
             if(row) next |= scratch_row(0, row - 1);
             if(row != 22) next |= scratch_row(0, row + 1);
-            scratch_row(1, row, next & floor_row(x, static_cast<uint8_t>(y + row)));
+            scratch_row(1, row, next & cached_floor_row(row));
         }
         memcpy(game.explored, game.explored + 92, 92);
         if(scratch_row(0, static_cast<uint8_t>(b.y - y)) & (1ul << (b.x - x))) return true;
@@ -482,6 +585,8 @@ __attribute__((noinline)) void add_secondary_connections(uint16_t seed)
                 door_candidate(at, 2, floor_seed(DOOR_SELECTION));
         }
     }
+    // No cached mask bytes may be mistaken for an existing occupant.
+    memset(game.monsters, 0, sizeof game.monsters);
 #if !defined(__AVM__)
     diagnostics.loops = made;
 #endif
@@ -550,7 +655,7 @@ static Position farthest(Position from, uint16_t& seed, bool first)
     for(uint16_t n = 0; n < 2048; ++n, index = (index + stride) & 2047) {
         if(!(n & 63)) progress();
         Position pos = tile(index);
-        if(wall_at(pos.x, pos.y) || !roomy(pos) || door_at(pos) != NONE) continue;
+        if(!(game.explored[index >> 3] & (1u << (index & 7)))) continue;
         uint16_t d = distance_squared(from, pos);
         if(first || d > distance) { best = pos; distance = d; }
         if(first) break;
@@ -560,6 +665,15 @@ static Position farthest(Position from, uint16_t& seed, bool first)
 
 __attribute__((noinline)) void choose_stairs(uint16_t seed)
 {
+    // Terrain and doors do not change across the three farthest scans.
+    // Reuse explored scratch while retaining permutation tie order.
+    memset(game.explored, 0, sizeof game.explored);
+    for(uint16_t index = 0; index < MAP_W * MAP_H; ++index) {
+        if(!(index & 63)) progress();
+        Position pos = tile(index);
+        if(!wall_at(pos.x, pos.y) && roomy(pos) && door_at(pos) == NONE)
+            game.explored[index >> 3] |= static_cast<uint8_t>(1u << (index & 7));
+    }
     Position a = farthest({0, 0}, seed, true);
     Position b = farthest(a, seed, false);
     a = farthest(b, seed, false);

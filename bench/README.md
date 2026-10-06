@@ -5,6 +5,11 @@ The limit is **no more than 100 ms** (1,600,000 emulated AVR cycles at
 for the next input. Each benchmark runs once because emulated time is deterministic.
 The target applies to the controlled scenarios listed below.
 
+Dungeon generation is measured separately, including its loading feedback.
+Eleven isolated optimization trials and the retained combination are documented
+in [the generation results](RESULTS-GENERATION.md). The combined nine-case mean
+fell from 9.853 to 5.795 seconds with unchanged generated states and permanent RAM.
+
 The [baseline](BASELINE.md) and [first optimization results](RESULTS.md)
 record earlier measurements against the former 150 ms limit.
 The next round implemented shared ray prefixes and row-based exploration
