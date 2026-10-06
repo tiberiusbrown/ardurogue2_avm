@@ -104,14 +104,6 @@ static const uint8_t PROGMEM map_icons[] = {
 static_assert(sizeof(map_icons) == 2 + 4 * MAP_ICON_CATEGORIES,
               "map icon categories changed");
 
-static void pixel(int16_t x, int16_t y)
-{
-    if(x < 0 || x >= 128 || y < 0 || y >= 64)
-        return;
-    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
-    __avm_framebuffer[offset] |= static_cast<uint8_t>(1u << (y & 7));
-}
-
 static bool screen_tile(Position pos, uint8_t& sx, uint8_t& sy)
 {
     int16_t dx = static_cast<int16_t>(pos.x) - game.player.x + 6;
@@ -559,8 +551,7 @@ __attribute__((noinline)) void render_play()
     avm_draw_filled_rect_black(0, 0, 65, 64);
     avm_draw_filled_rect_black(65, 0, 63, 23);
     render_dungeon_view();
-    for(uint8_t y = 0; y < 64; ++y)
-        pixel(64, y);
+    avm_draw_filled_rect_white(64, 0, 1, 64);
     render_stats();
 }
 
@@ -599,7 +590,7 @@ __attribute__((noinline)) void begin_generation_render()
 {
     play_render_pending = false;
     avm_draw_filled_rect_black(0, 0, 128, 64);
-    for(uint8_t y = 0; y < 64; ++y) pixel(64, y);
+    avm_draw_filled_rect_white(64, 0, 1, 64);
     render_stats();
     status_clear();
     status(F("Preparing a new floor."));
@@ -710,18 +701,15 @@ __attribute__((noinline)) static void render_full_map()
             if(!explored({x, y}))
                 continue;
             if(wall_exposed(x, y)) {
-                pixel(x * 2, y * 2);
-                pixel(x * 2 + 1, y * 2);
-                pixel(x * 2, y * 2 + 1);
-                pixel(x * 2 + 1, y * 2 + 1);
+                avm_draw_filled_rect_white(x * 2, y * 2, 2, 2);
             } else if(x + 6 >= game.player.x && x <= game.player.x + 6 &&
                       y + 6 >= game.player.y && y <= game.player.y + 6 &&
                       can_see({x, y})) {
-                pixel(x * 2, y * 2);
+                avm_draw_filled_rect_white(x * 2, y * 2, 1, 1);
             }
         }
-    pixel(game.player.x * 2, game.player.y * 2);
-    pixel(game.player.x * 2 + 1, game.player.y * 2 + 1);
+    avm_draw_filled_rect_white(game.player.x * 2, game.player.y * 2, 1, 1);
+    avm_draw_filled_rect_white(game.player.x * 2 + 1, game.player.y * 2 + 1, 1, 1);
 }
 
 __attribute__((noinline)) static void render_end()

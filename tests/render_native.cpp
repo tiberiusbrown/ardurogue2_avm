@@ -573,6 +573,39 @@ static bool check_generation_loading()
         !ui.held_direction && !ui.selection && ui.repeat_suppressed;
 }
 
+static bool check_full_map_pixels()
+{
+    using namespace rogue;
+    const Position positions[] = {{0, 0}, {63, 0}, {0, 31}, {63, 31}, {32, 16}};
+    for(Position pos : positions) for(uint8_t pattern : {uint8_t(0), uint8_t(0x55), uint8_t(0xff)}) {
+        start_new(0x4312);
+        game.player = pos;
+        std::memset(game.explored, pattern, sizeof game.explored);
+        uint8_t expected[1024] = {};
+        auto set_pixel = [&](unsigned x, unsigned y) {
+            expected[(y >> 3) * 128 + x] |= uint8_t(1u << (y & 7));
+        };
+        for(uint8_t y = 0; y < MAP_H; ++y)
+            for(uint8_t x = 0; x < MAP_W; ++x) {
+                if(!explored({x, y})) continue;
+                if(wall_exposed(x, y)) {
+                    for(unsigned dy = 0; dy < 2; ++dy)
+                        for(unsigned dx = 0; dx < 2; ++dx)
+                            set_pixel(x * 2 + dx, y * 2 + dy);
+                } else if(x + 6 >= pos.x && x <= pos.x + 6 &&
+                          y + 6 >= pos.y && y <= pos.y + 6 && can_see({x, y}))
+                    set_pixel(x * 2, y * 2);
+            }
+        set_pixel(pos.x * 2, pos.y * 2);
+        set_pixel(pos.x * 2 + 1, pos.y * 2 + 1);
+        ui.mode = FULL_MAP;
+        std::memset(__avm_framebuffer, 0xa5, sizeof __avm_framebuffer);
+        render();
+        if(std::memcmp(expected, __avm_framebuffer, sizeof expected)) return false;
+    }
+    return true;
+}
+
 int main()
 {
     using namespace rogue;
@@ -600,7 +633,7 @@ int main()
         std::fprintf(stderr, "Shared item/mimic icons or independent appearance flags failed\n");
         return 1;
     }
-    if(!check_terrain_rows() || !check_deferred_pages()) {
+    if(!check_terrain_rows() || !check_deferred_pages() || !check_full_map_pixels()) {
         std::fprintf(stderr, "Terrain rows or deferred page/prompt restoration failed\n");
         return 1;
     }
