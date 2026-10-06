@@ -65,10 +65,16 @@ static uint8_t floor_armor_type(uint16_t& seed)
 
 static uint8_t floor_ring_type(uint16_t& seed)
 {
-    uint8_t chance = floor_roll(seed, 16);
-    if(game.floor < 16 && chance % RING_COUNT == RING_COUNT - 1 && chance >= RING_COUNT)
-        return RING_FIRE_IMMUNITY;
-    return static_cast<uint8_t>(RING_FIRST + chance % RING_COUNT);
+    uint8_t chance = floor_equipment_roll(seed, 100);
+    return
+        chance < 10 ? RING_SEE_INVISIBLE :
+        chance < 25 ? RING_STRENGTH :
+        chance < 40 ? RING_DEXTERITY :
+        chance < 55 ? RING_PROTECTION :
+        chance < 68 ? RING_FIRE_IMMUNITY :
+        chance < 83 ? RING_ATTACK :
+        chance < 98 ? RING_SUSTENANCE :
+        RING_INVISIBILITY;
 }
 
 static uint8_t floor_amulet_type(uint16_t& seed)
