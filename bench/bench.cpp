@@ -22,7 +22,7 @@ using namespace rogue;
     X(attack_kill, "Bump attack that kills and awards XP", play, RIGHT, room, NO_ITEM, 0, 0) \
     X(open_door, "Open a closed door without moving", play, RIGHT, corridor, NO_ITEM, 0, 0) \
     X(eat_food, "Confirm eating food", use, A, room, FOOD, 0, 0) \
-    X(drink_healing, "Confirm drinking a healing potion", use, A, room, HEALING, 0, 0) \
+    X(drink_healing, "Confirm drinking a healing potion", use, A, room, POTION_HEALING, 0, 0) \
     X(equip_weapon, "Confirm equipping a long sword", use, A, room, LONG_SWORD, 0, 0) \
     X(equip_armor, "Confirm equipping chain mail", use, A, room, CHAIN_MAIL, 0, 0) \
     X(equip_ring, "Confirm equipping a dexterity ring", use, A, room, RING_DEXTERITY, 0, 0) \
@@ -80,7 +80,7 @@ void prepare_full_inventory()
     add_inventory(0, WAND_TELEPORT);
     add_inventory(1, FOOD);
     add_inventory(2, SCROLL_MASS_CONFUSE);
-    add_inventory(3, INVISIBILITY);
+    add_inventory(3, POTION_INVISIBILITY);
     add_inventory(4, RING_SEE_INVISIBLE);
     add_inventory(5, PLATE_MAIL);
     add_inventory(6, TWO_HANDED_SWORD);
@@ -88,7 +88,7 @@ void prepare_full_inventory()
     add_inventory(8, YENDOR_AMULET);
     add_inventory(9, WAND_POLYMORPH);
     add_inventory(10, SCROLL_REMOVE_CURSE);
-    add_inventory(11, EXPERIENCE);
+    add_inventory(11, POTION_EXPERIENCE);
     add_inventory(12, RING_INVISIBILITY);
     add_inventory(13, SPLINT_MAIL);
     add_inventory(14, LONG_SWORD);
@@ -101,7 +101,7 @@ void prepare_singleton_inventory()
     add_inventory(7, YENDOR_AMULET);
     add_inventory(8, FOOD);
     add_inventory(9, SCROLL_MASS_CONFUSE);
-    add_inventory(10, INVISIBILITY);
+    add_inventory(10, POTION_INVISIBILITY);
     add_inventory(11, WAND_POLYMORPH);
     add_inventory(12, AMULET_REGENERATION);
     add_inventory(13, RING_SEE_INVISIBLE);

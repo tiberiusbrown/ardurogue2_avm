@@ -601,7 +601,7 @@ void apply_monster_potion(uint8_t type, uint8_t index)
     target.state |= MON_AGGRO;
     uint8_t maximum = monster_health(target.type);
     switch(type) {
-    case HEALING: {
+    case POTION_HEALING: {
         uint8_t old_hp = target.hp;
         bool was_weakened = monster_effect(target, MON_WEAKENED) != 0;
         uint8_t healed = static_cast<uint8_t>(maximum / 4 +
@@ -615,14 +615,14 @@ void apply_monster_potion(uint8_t type, uint8_t index)
             monster_status(target, F("regains its strength."));
         break;
     }
-    case STRENGTH:
+    case POTION_STRENGTH:
         if(monster_effect(target, MON_WEAKENED))
             monster_status(target, F("regains its strength."));
         else
             status(F("It has no effect."));
         set_monster_effect(target, MON_WEAKENED, 0);
         break;
-    case HARMING: {
+    case POTION_HARMING: {
         uint8_t base = static_cast<uint8_t>(maximum / 8 + 1);
         uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
         if(damage > 10) damage = 10;
@@ -636,37 +636,37 @@ void apply_monster_potion(uint8_t type, uint8_t index)
         }
         break;
     }
-    case POISON:
+    case POTION_POISON:
         if(!monster_effect(target, MON_WEAKENED))
             monster_status(target, F("grows weaker."));
         set_monster_effect(target, MON_WEAKENED, 15);
         break;
-    case CONFUSION:
+    case POTION_CONFUSION:
         if(!monster_effect(target, MON_CONFUSED))
             monster_status(target, F("becomes confused."));
         set_monster_effect(target, MON_CONFUSED,
                            static_cast<uint8_t>(8 + roll(8)));
         break;
-    case PARALYSIS:
+    case POTION_PARALYSIS:
         if(!target.stun)
             monster_status(target, F("is paralyzed!"));
         target.stun = static_cast<uint8_t>(3 + roll(4));
         break;
-    case SLOWING:
+    case POTION_SLOWING:
         if(!monster_effect(target, MON_SLOWED))
             monster_status(target, F("slows down."));
         set_monster_effect(target, MON_SLOWED,
                            static_cast<uint8_t>(8 + roll(8)));
         break;
-    case INVISIBILITY:
+    case POTION_INVISIBILITY:
         if(!monster_effect(target, MON_INVISIBLE) &&
            !(monster_flags(target.type) & MON_NATURAL_INVIS))
             monster_status(target, F("vanishes."));
         set_monster_effect(target, MON_INVISIBLE,
                            static_cast<uint8_t>(12 + roll(4)));
         break;
-    case DEXTERITY:
-    case EXPERIENCE:
+    case POTION_DEXTERITY:
+    case POTION_EXPERIENCE:
         status(F("It has no effect."));
         break;
     default:

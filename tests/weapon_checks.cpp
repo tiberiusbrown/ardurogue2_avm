@@ -418,7 +418,7 @@ static void check_generated_equipment()
                 ++category_counts[inventory_group(item.type)];
                 if(is_ring(item.type)) ++ring_counts[item.type - RING_SEE_INVISIBLE];
                 if(is_amulet(item.type)) ++amulet_counts[item.type - AMULET_SPEED];
-                if(is_potion(item.type)) ++potion_counts[floor][item.type - HEALING];
+                if(is_potion(item.type)) ++potion_counts[floor][item.type - POTION_HEALING];
                 if(!is_equipment(item.type)) continue;
                 int8_t enchant = equipment_enchant(item);
                 require(enchant >= -2 && enchant <= 2 && !item_is_identified(item) &&
@@ -545,8 +545,8 @@ static void check_generated_equipment()
             require(count != 0, "generation omitted a potion at a depth");
             potions += count;
         }
-        unsigned experience = potion_counts[floor][EXPERIENCE - HEALING];
-        unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? SLOWING : HEALING) - HEALING];
+        unsigned experience = potion_counts[floor][POTION_EXPERIENCE - POTION_HEALING];
+        unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? POTION_SLOWING : POTION_HEALING) - POTION_HEALING];
         bool early_recovery = floor > 0 && floor < 5;
         require(experience * 100 > potions * 3 && experience * 100 < potions * 7 &&
                 replacement * 100 > potions * (early_recovery ? 20 : 12) &&

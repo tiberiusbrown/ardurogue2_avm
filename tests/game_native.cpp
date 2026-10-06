@@ -240,10 +240,10 @@ void check_inventory_view()
             empty.entry_at(0) == NONE,
             "empty inventory has selectable rows");
 
-    game.inventory[0] = {HEALING, 2};
+    game.inventory[0] = {POTION_HEALING, 2};
     game.inventory[1] = {CHAIN_MAIL, 1};
     game.inventory[2] = {LONG_SWORD, 1};
-    game.inventory[3] = {POISON, 1};
+    game.inventory[3] = {POTION_POISON, 1};
     game.inventory[4] = {RING_ATTACK, 1};
     game.inventory[5] = {FOOD, 1};
     game.inventory[6] = {LONG_SWORD, 2};
@@ -285,9 +285,9 @@ void check_inventory_view()
             "throw selection includes non-potions or headers");
 
     const uint8_t types[INVENTORY] = {
-        WAND_FORCE, FOOD, SCROLL_IDENTIFY, HEALING,
+        WAND_FORCE, FOOD, SCROLL_IDENTIFY, POTION_HEALING,
         RING_ATTACK, CHAIN_MAIL, LONG_SWORD, AMULET_SPEED,
-        YENDOR_AMULET, WAND_FIRE, SCROLL_FEAR, POISON,
+        YENDOR_AMULET, WAND_FIRE, SCROLL_FEAR, POTION_POISON,
         RING_STRENGTH, CHAIN_MAIL, LONG_SWORD, FOOD
     };
     for(uint8_t slot = 0; slot < INVENTORY; ++slot)
@@ -322,7 +322,7 @@ void check_stacked_ground_items()
     game.ground[1] = {{4, 5}, {FOOD, 1}};
     game.ground[5] = {{4, 5}, {LONG_SWORD, 1}};
     game.ground[9] = {{4, 5}, {CHAIN_MAIL, 1}};
-    game.ground[12] = {{6, 5}, {HEALING, 1}};
+    game.ground[12] = {{6, 5}, {POTION_HEALING, 1}};
     uint8_t top = ground_item_before({4, 5}, GROUND_ITEMS);
     uint8_t middle = ground_item_before({4, 5}, top);
     uint8_t bottom = ground_item_before({4, 5}, middle);
@@ -744,7 +744,7 @@ void check_potions()
 {
     start_new(0x1234);
     bool colors[POTION_COUNT] = {};
-    for(uint8_t type = HEALING; type <= INVISIBILITY; ++type) {
+    for(uint8_t type = POTION_HEALING; type <= POTION_INVISIBILITY; ++type) {
         uint8_t color = potion_color(type);
         require(color < POTION_COUNT && !colors[color],
                 "potion appearances are not a permutation");
@@ -753,15 +753,15 @@ void check_potions()
     }
     uint8_t original[POTION_COUNT];
     for(uint8_t i = 0; i < POTION_COUNT; ++i)
-        original[i] = potion_color(static_cast<uint8_t>(HEALING + i));
+        original[i] = potion_color(static_cast<uint8_t>(POTION_HEALING + i));
     start_new(0x1234);
     for(uint8_t i = 0; i < POTION_COUNT; ++i)
-        require(original[i] == potion_color(static_cast<uint8_t>(HEALING + i)),
+        require(original[i] == potion_color(static_cast<uint8_t>(POTION_HEALING + i)),
                 "same run seed changed potion names");
     start_new(0x4321);
     bool different = false;
     for(uint8_t i = 0; i < POTION_COUNT; ++i)
-        if(original[i] != potion_color(static_cast<uint8_t>(HEALING + i)))
+        if(original[i] != potion_color(static_cast<uint8_t>(POTION_HEALING + i)))
             different = true;
     require(different, "different runs share the same potion names");
 
@@ -773,58 +773,58 @@ void check_potions()
     };
     game.hp = 2;
     game.weakened = 2;
-    drink(HEALING, 2);
+    drink(POTION_HEALING, 2);
     require(game.hp > 2 && game.hp <= game.max_hp && !game.weakened &&
-            game.inventory[0].type == HEALING &&
+            game.inventory[0].type == POTION_HEALING &&
             item_value(game.inventory[0]) == 1,
             "healing or potion stack is wrong");
     uint8_t strength = game.strength;
-    drink(STRENGTH);
+    drink(POTION_STRENGTH);
     require(game.strength == strength + 1, "strength potion did not increase strength");
     uint8_t dexterity = game.dexterity;
-    drink(DEXTERITY);
+    drink(POTION_DEXTERITY);
     require(game.dexterity == dexterity + 1, "dexterity potion did not increase accuracy");
-    drink(POISON);
+    drink(POTION_POISON);
     require(game.weakened, "poison did not weaken the player");
     strength = game.strength;
-    drink(STRENGTH);
+    drink(POTION_STRENGTH);
     require(!game.weakened && game.strength == strength,
             "strength potion did not restore weakening");
     game.strength = 11;
-    drink(STRENGTH);
+    drink(POTION_STRENGTH);
     require(game.strength == 12, "strength potion did not reach the intended cap");
-    for(unsigned i = 0; i < 20; ++i) drink(STRENGTH);
+    for(unsigned i = 0; i < 20; ++i) drink(POTION_STRENGTH);
     require(game.strength == 12, "strength potions exceeded base STR 12");
     game.weakened = 3;
-    drink(STRENGTH);
+    drink(POTION_STRENGTH);
     require(!game.weakened && game.strength == 12,
             "strength potion at the cap did not cure weakness separately");
     game.strength = strength;
-    drink(CONFUSION);
+    drink(POTION_CONFUSION);
     require(game.confused, "confusion potion had no duration");
-    drink(PARALYSIS);
+    drink(POTION_PARALYSIS);
     require(game.paralyzed && !use_inventory(0),
             "paralysis does not prevent item use");
     game.paralyzed = 0;
-    drink(SLOWING);
+    drink(POTION_SLOWING);
     require(game.slowed, "slowing potion had no duration");
-    drink(INVISIBILITY);
+    drink(POTION_INVISIBILITY);
     require(game.invisible, "invisibility potion had no duration");
     uint8_t old_level = game.level;
-    drink(EXPERIENCE);
+    drink(POTION_EXPERIENCE);
     require(game.level > old_level, "experience potion did not grant levels");
     game.hp = game.max_hp;
-    drink(HARMING);
+    drink(POTION_HARMING);
     require(game.hp < game.max_hp && game.max_hp - game.hp <= 10,
             "harming potion dealt the wrong damage");
-    require(potion_identified(HEALING),
+    require(potion_identified(POTION_HEALING),
             "identified potion was forgotten");
-    uint8_t healing_appearance = potion_color(HEALING);
+    uint8_t healing_appearance = potion_color(POTION_HEALING);
     Game saved = game;
     std::memset(&game, 0, sizeof(game));
     game = saved;
-    require(potion_identified(HARMING) &&
-            potion_color(HEALING) == healing_appearance,
+    require(potion_identified(POTION_HARMING) &&
+            potion_color(POTION_HEALING) == healing_appearance,
             "potion knowledge did not survive save state copy");
 
     bool spawned[POTION_COUNT] = {};
@@ -833,8 +833,8 @@ void check_potions()
         start_new(seed);
         for(const GroundItem& item : game.ground)
             if(is_potion(item.item.type) &&
-               !spawned[item.item.type - HEALING]) {
-                spawned[item.item.type - HEALING] = true;
+               !spawned[item.item.type - POTION_HEALING]) {
+                spawned[item.item.type - POTION_HEALING] = true;
                 ++kinds;
             }
     }
@@ -860,9 +860,9 @@ void check_repeat_inventory_action()
             session.repeat_slot == 1,
             "eating the last food changed the previous repeat action");
 
-    game.ground[0] = {{game.player.x, game.player.y}, {HEALING, 2}};
+    game.ground[0] = {{game.player.x, game.player.y}, {POTION_HEALING, 2}};
     take_item(0);
-    require(game.inventory[0].type == HEALING && session.repeat_slot == 1,
+    require(game.inventory[0].type == POTION_HEALING && session.repeat_slot == 1,
             "pickup did not reuse the consumed food slot");
     action();
     require(item_value(game.inventory[0]) == 2,
@@ -887,7 +887,7 @@ void check_repeat_inventory_action()
     game.inventory[0] = {FOOD, 1};
     require(use_inventory(0) && session.repeat_slot == NONE,
             "food recorded a repeat action when none existed");
-    game.inventory[0] = {HEALING, 1};
+    game.inventory[0] = {POTION_HEALING, 1};
     require(use_inventory(0) && session.repeat_slot == NONE,
             "potion recorded a repeat action when none existed");
     game.inventory[0] = {SCROLL_MAPPING, 1};
@@ -927,16 +927,16 @@ void check_ground_item_exchange()
             "ordinary pickup failed");
 
     reset_item_fixture();
-    game.inventory[0] = {HEALING, 60};
-    game.ground[5] = {{3, 4}, {HEALING, static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
+    game.inventory[0] = {POTION_HEALING, 60};
+    game.ground[5] = {{3, 4}, {POTION_HEALING, static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
     require(take_item(5) == PICKUP_TAKEN &&
             item_value(game.inventory[0]) == 63 &&
             item_is_identified(game.inventory[0]),
             "inventory stack did not fully merge");
 
     reset_item_fixture();
-    game.inventory[0] = {HEALING, static_cast<uint8_t>(60 | ITEM_CURSED)};
-    game.ground[5] = {{3, 4}, {HEALING,
+    game.inventory[0] = {POTION_HEALING, static_cast<uint8_t>(60 | ITEM_CURSED)};
+    game.ground[5] = {{3, 4}, {POTION_HEALING,
                             static_cast<uint8_t>(3 | ITEM_IDENTIFIED)}};
     require(take_item(5) == PICKUP_TAKEN &&
             game.inventory[0].info ==
@@ -1094,10 +1094,10 @@ void check_ground_item_drop()
             "partial discard did not fill ground stacks");
 
     reset_item_fixture();
-    game.inventory[0] = {HEALING, 7};
-    game.ground[2] = {{3, 4}, {HEALING, 60}};
+    game.inventory[0] = {POTION_HEALING, 7};
+    game.ground[2] = {{3, 4}, {POTION_HEALING, 60}};
     require(drop_inventory(0) && item_value(game.ground[2].item) == 63 &&
-            game.ground[0].item.type == HEALING &&
+            game.ground[0].item.type == POTION_HEALING &&
             item_value(game.ground[0].item) == 4,
             "drop remainder did not use a reusable slot");
 
@@ -1185,7 +1185,7 @@ void check_scrolls_and_identification()
     uint16_t random_state = game.random_state;
     for(uint16_t seed = 1; seed <= 64; ++seed) {
         game.run_seed = seed;
-        permutation(HEALING, POTION_COUNT);
+        permutation(POTION_HEALING, POTION_COUNT);
         permutation(SCROLL_IDENTIFY, SCROLL_COUNT);
         permutation(RING_SEE_INVISIBLE, RING_COUNT);
         permutation(AMULET_SPEED, AMULET_COUNT);
@@ -1332,29 +1332,29 @@ void check_thrown_potions()
     game.invisible = 100; // Keep the target in place during assertions.
     game.hunger = 255;
 
-    game.inventory[0] = {HARMING, 2};
+    game.inventory[0] = {POTION_HARMING, 2};
     require(!throw_potion(0, 1, 1) && item_value(game.inventory[0]) == 2,
             "invalid throwing direction consumed a potion");
     require(throw_potion(0, 1, 0) && item_value(game.inventory[0]) == 1 &&
-            !potion_identified(HARMING),
+            !potion_identified(POTION_HARMING),
             "a missed throw did not consume one unknown potion");
 
     game.monsters[0] = {{13, 10}, ORC, 5, 0, {0, 0}};
     uint16_t wall = static_cast<uint16_t>(10 * MAP_W + 11);
     game.walls[wall >> 3] |= static_cast<uint8_t>(1u << (wall & 7));
-    game.inventory[0] = {POISON, 3};
-    require(throw_potion(0, 1, 0) && !potion_identified(POISON) &&
+    game.inventory[0] = {POTION_POISON, 3};
+    require(throw_potion(0, 1, 0) && !potion_identified(POTION_POISON) &&
             !monster_effect(game.monsters[0], MON_WEAKENED),
             "potion passed through a wall");
     game.walls[wall >> 3] = 0;
     game.door_count = 1;
     game.doors[0] = {{11, 10}};
-    require(throw_potion(0, 1, 0) && !potion_identified(POISON),
+    require(throw_potion(0, 1, 0) && !potion_identified(POTION_POISON),
             "potion passed through a closed door");
     open_door(0);
     game.monsters[0].pos = {13, 10};
     game.monsters[1] = {{14, 10}, ORC, 5, 0, {0, 0}};
-    require(throw_potion(0, 1, 0) && potion_identified(POISON) &&
+    require(throw_potion(0, 1, 0) && potion_identified(POTION_POISON) &&
             monster_effect(game.monsters[0], MON_WEAKENED) &&
             !monster_effect(game.monsters[1], MON_WEAKENED) &&
             game.inventory[0].type == NO_ITEM,
@@ -1368,17 +1368,17 @@ void check_thrown_potions()
                 "thrown potion failed to identify on hit");
     };
     game.monsters[0].hp = 2;
-    throw_at_target(HEALING);
+    throw_at_target(POTION_HEALING);
     require(game.monsters[0].hp > 2 &&
             !monster_effect(game.monsters[0], MON_WEAKENED),
             "healing did not restore monster health and strength");
-    throw_at_target(CONFUSION);
+    throw_at_target(POTION_CONFUSION);
     require(monster_effect(game.monsters[0], MON_CONFUSED),
             "confusion did not affect the monster");
-    throw_at_target(SLOWING);
+    throw_at_target(POTION_SLOWING);
     require(monster_effect(game.monsters[0], MON_SLOWED),
             "slowing did not affect the monster");
-    throw_at_target(INVISIBILITY);
+    throw_at_target(POTION_INVISIBILITY);
     require(monster_effect(game.monsters[0], MON_INVISIBLE),
             "invisibility did not affect the monster");
     Game saved = game;
@@ -1388,15 +1388,15 @@ void check_thrown_potions()
             monster_effect(game.monsters[0], MON_SLOWED) &&
             monster_effect(game.monsters[0], MON_INVISIBLE),
             "monster effects were not retained in the save state");
-    throw_at_target(PARALYSIS);
+    throw_at_target(POTION_PARALYSIS);
     require(game.monsters[0].stun, "paralysis did not stun the monster");
-    throw_at_target(POISON);
-    throw_at_target(STRENGTH);
+    throw_at_target(POTION_POISON);
+    throw_at_target(POTION_STRENGTH);
     require(!monster_effect(game.monsters[0], MON_WEAKENED),
             "strength did not cure monster weakness");
     uint8_t hp = game.monsters[0].hp;
-    throw_at_target(DEXTERITY);
-    throw_at_target(EXPERIENCE);
+    throw_at_target(POTION_DEXTERITY);
+    throw_at_target(POTION_EXPERIENCE);
     require(game.monsters[0].hp == hp,
             "player-only potion changed monster health");
     for(uint8_t i = 0; i < 40; ++i)
@@ -1409,7 +1409,7 @@ void check_thrown_potions()
     game.monsters[0].hp = 1;
     game.monsters[0].pos = {13, 10};
     uint16_t old_score = game.score;
-    throw_at_target(HARMING);
+    throw_at_target(POTION_HARMING);
     require(game.monsters[0].type == NO_MONSTER &&
             game.score > old_score,
             "harming did not defeat and credit the monster");
@@ -1431,23 +1431,23 @@ void check_effect_messages()
         require(status_text.find(ended) != std::string::npos,
                 "player effect end message is missing");
     };
-    player_effect(CONFUSION, &Game::confused,
+    player_effect(POTION_CONFUSION, &Game::confused,
                   "You feel confused.", "You are no longer confused.");
-    player_effect(PARALYSIS, &Game::paralyzed,
+    player_effect(POTION_PARALYSIS, &Game::paralyzed,
                   "You are paralyzed!", "You can move again.");
-    player_effect(SLOWING, &Game::slowed,
+    player_effect(POTION_SLOWING, &Game::slowed,
                   "You feel sluggish.", "You move normally again.");
-    player_effect(INVISIBILITY, &Game::invisible,
+    player_effect(POTION_INVISIBILITY, &Game::invisible,
                   "You turn invisible.", "You become visible again.");
 
     start_new(0x4567);
     std::memset(game.monsters, 0, sizeof(game.monsters));
-    game.inventory[0] = {POISON, 1};
+    game.inventory[0] = {POTION_POISON, 1};
     status_text.clear();
     require(use_inventory(0) &&
             status_text.find("You feel weaker.") != std::string::npos,
             "player poison start message is missing");
-    game.inventory[0] = {HEALING, 1};
+    game.inventory[0] = {POTION_HEALING, 1};
     status_text.clear();
     require(use_inventory(0) &&
             status_text.find("Your strength returns.") != std::string::npos,
@@ -1478,13 +1478,13 @@ void check_effect_messages()
         require(status_text.find(ended) != std::string::npos,
                 "monster effect end message is missing");
     };
-    monster_effect_message(CONFUSION, "becomes confused.",
+    monster_effect_message(POTION_CONFUSION, "becomes confused.",
                            "is no longer confused.");
-    monster_effect_message(PARALYSIS, "is paralyzed!",
+    monster_effect_message(POTION_PARALYSIS, "is paralyzed!",
                            "can move again.");
-    monster_effect_message(SLOWING, "slows down.",
+    monster_effect_message(POTION_SLOWING, "slows down.",
                            "moves normally again.");
-    monster_effect_message(INVISIBILITY, "vanishes.",
+    monster_effect_message(POTION_INVISIBILITY, "vanishes.",
                            "becomes visible again.");
 
     start_new(0x5678);
@@ -1494,12 +1494,12 @@ void check_effect_messages()
     game.player = {10, 10};
     game.invisible = 100;
     game.monsters[0] = {{13, 10}, ORC, 5, 0, {0, 0}};
-    game.inventory[0] = {POISON, 1};
+    game.inventory[0] = {POTION_POISON, 1};
     status_text.clear();
     require(throw_potion(0, 1, 0) &&
             status_text.find("grows weaker.") != std::string::npos,
             "monster poison start message is missing");
-    game.inventory[0] = {STRENGTH, 1};
+    game.inventory[0] = {POTION_STRENGTH, 1};
     status_text.clear();
     require(throw_potion(0, 1, 0) &&
             status_text.find("regains its strength.") != std::string::npos,

@@ -89,16 +89,16 @@ int value(Item i) {
     }
     switch(i.type) {
     case FOOD: return quantity(FOOD) >= 8 ? 0 : (game.hunger < 60 ? 180 : 70);
-    case HEALING: return 180;
-    case EXPERIENCE: return 220;
-    case STRENGTH: return game.strength < 12 || game.weakened ? 160 : 0;
-    case DEXTERITY: return game.dexterity < 12 ? 150 : 0;
-    case PARALYSIS: return 100;
-    case CONFUSION: return 65;
-    case SLOWING: return 60;
-    case POISON: return 60;
-    case HARMING: return 55;
-    case INVISIBILITY: return 70;
+    case POTION_HEALING: return 180;
+    case POTION_EXPERIENCE: return 220;
+    case POTION_STRENGTH: return game.strength < 12 || game.weakened ? 160 : 0;
+    case POTION_DEXTERITY: return game.dexterity < 12 ? 150 : 0;
+    case POTION_PARALYSIS: return 100;
+    case POTION_CONFUSION: return 65;
+    case POTION_SLOWING: return 60;
+    case POTION_POISON: return 60;
+    case POTION_HARMING: return 55;
+    case POTION_INVISIBILITY: return 70;
     case SCROLL_ENCHANT: return 190;
     case SCROLL_TORMENT: return 95;
     case SCROLL_MASS_CONFUSE: return 100;
@@ -288,7 +288,7 @@ bool retreat(Position previous, Action& choice) {
 }
 bool emergency_control(Action& choice) {
     // Hard control first. Production ray/visibility checks still decide hits.
-    for(uint8_t type : {uint8_t(PARALYSIS),uint8_t(CONFUSION)}) {
+    for(uint8_t type : {uint8_t(POTION_PARALYSIS),uint8_t(POTION_CONFUSION)}) {
         int s = find(type); if(s < 0) continue;
         for(int d = 0; d < 4; ++d) {
             auto ray = scan_ray(game.player,dxs[d],dys[d],6);
@@ -311,7 +311,7 @@ bool emergency_control(Action& choice) {
         }
     }
     // Invisibility is useful control only if every immediate threat lacks sight.
-    int invisible = find(INVISIBILITY); bool usable_invisibility = invisible >= 0 && !player_is_invisible();
+    int invisible = find(POTION_INVISIBILITY); bool usable_invisibility = invisible >= 0 && !player_is_invisible();
     for(const auto& m : game.monsters) if(m.type && distance(m.pos,game.player) <= 3 && hostile(m) &&
         (monster_flags(m.type) & MON_SEE_INVIS)) usable_invisibility = false;
     if(usable_invisibility) { choice = use(invisible,"emergency invisibility"); return true; }
@@ -361,7 +361,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         if(d <= 5 && can_see(m.pos)) ++threats;
         if(d == 1 && (adjacent < 0 || m.hp < game.monsters[adjacent].hp)) adjacent = i;
     }
-    int healing = find(HEALING);
+    int healing = find(POTION_HEALING);
     Danger risk = danger();
     if(retreat_floor != game.floor) { retreat_floor = game.floor; retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
     // Track current hostile identities, not a distance/visibility threshold.
@@ -374,7 +374,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
                       (game.weakened && game.hp < player_max_hp())))
         return use(healing,"heal and restore strength");
     if(risk.emergency) {
-        int experience = find(EXPERIENCE);
+        int experience = find(POTION_EXPERIENCE);
         if(experience >= 0 && game.level <= 12) return use(experience,"emergency experience recovery");
         Action choice;
         if(emergency_control(choice)) return choice;
@@ -404,9 +404,9 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         }
         return use(upgrade_slot,"equip upgrade");
     }
-    int xp = find(EXPERIENCE);
+    int xp = find(POTION_EXPERIENCE);
     if(xp >= 0) return use(xp,"gain levels and recover HP");
-    if(game.weakened && find(STRENGTH) >= 0) return use(find(STRENGTH),"restore strength");
+    if(game.weakened && find(POTION_STRENGTH) >= 0) return use(find(POTION_STRENGTH),"restore strength");
 
     // Real ray scanning determines the first hittable monster, including mimics.
     for(int d = 0; d < 4; ++d) {
@@ -415,10 +415,10 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         const Monster& m = game.monsters[ray.monster];
         bool dangerous = m.type >= ORC || game.hp < 12 || threats > 1;
         if(!dangerous || (ray.steps > 4 && m.type != LORD)) continue;
-        for(uint8_t type : {uint8_t(PARALYSIS),uint8_t(POISON),uint8_t(CONFUSION),uint8_t(SLOWING)}) {
-            bool needed = type == PARALYSIS ? m.stun == 0 && ray.steps <= 2 :
-                type == POISON ? !monster_effect(m,MON_WEAKENED) :
-                type == CONFUSION ? !monster_effect(m,MON_CONFUSED) && !m.stun :
+        for(uint8_t type : {uint8_t(POTION_PARALYSIS),uint8_t(POTION_POISON),uint8_t(POTION_CONFUSION),uint8_t(POTION_SLOWING)}) {
+            bool needed = type == POTION_PARALYSIS ? m.stun == 0 && ray.steps <= 2 :
+                type == POTION_POISON ? !monster_effect(m,MON_WEAKENED) :
+                type == POTION_CONFUSION ? !monster_effect(m,MON_CONFUSED) && !m.stun :
                 !monster_effect(m,MON_SLOWED);
             int s = find(type);
             if(s >= 0 && needed && (m.type >= INCUBUS || (adjacent >= 0 && game.hp < player_max_hp()*3/4))) {
@@ -426,7 +426,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
                 a.dx = dxs[d]; a.dy = dys[d]; a.goal = "control dangerous monster"; a.destination = m.pos; return a;
             }
         }
-        for(uint8_t type : {uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(HARMING)}) {
+        for(uint8_t type : {uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(POTION_HARMING)}) {
             int s = find(type); if(s < 0) continue;
             Item i = game.inventory[s];
             if(is_wand(type) && (wand_afflicted(i) || !wand_charges(i))) continue;
@@ -454,9 +454,9 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         Action a; a.kind = ActionKind::Move; a.dx = static_cast<int8_t>(int(m.pos.x)-game.player.x);
         a.dy = static_cast<int8_t>(int(m.pos.y)-game.player.y); a.goal = "melee combat"; a.destination = m.pos; return a;
     }
-    for(uint8_t type : {uint8_t(STRENGTH),uint8_t(DEXTERITY)}) {
+    for(uint8_t type : {uint8_t(POTION_STRENGTH),uint8_t(POTION_DEXTERITY)}) {
         int s = find(type);
-        if(s >= 0 && (type == STRENGTH ? game.strength : game.dexterity) < 12) return use(s,"permanent stat improvement");
+        if(s >= 0 && (type == POTION_STRENGTH ? game.strength : game.dexterity) < 12) return use(s,"permanent stat improvement");
     }
     int enchant = find(SCROLL_ENCHANT);
     if(enchant >= 0) {

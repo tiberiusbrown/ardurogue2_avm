@@ -86,7 +86,7 @@ static bool check_shared_icons()
         if(is_armor(type) && item_icon(type) != 0x0f90) return false;
     }
     const uint8_t representatives[MIMIC_APPEARANCE_COUNT] = {
-        SCROLL_IDENTIFY, HEALING, AMULET_SPEED, RING_STRENGTH, WAND_FORCE
+        SCROLL_IDENTIFY, POTION_HEALING, AMULET_SPEED, RING_STRENGTH, WAND_FORCE
     };
     const uint16_t expected[MIMIC_APPEARANCE_COUNT] = {0x01b3, 0x0bb0, 0x0606, 0x0aaa, 0x1248};
     uint8_t disguised[sizeof __avm_framebuffer], revealed[sizeof __avm_framebuffer];

@@ -212,12 +212,12 @@ static void check_item_status()
     check_status_item({FOOD, 1}, '.', "Some food.", true);
     check_status_item({FOOD, 3}, '?', "the 3 food rations?");
     check_status_item({FOOD, 3}, '.', "3 food rations.");
-    other_known[HEALING] = false;
-    check_status_item({HEALING, 1}, '?', "the red potion?");
-    check_status_item({HEALING, 3}, '.', "3 red potions.");
-    other_known[HEALING] = true;
-    check_status_item({HEALING, 1}, '?', "the potion of healing?");
-    check_status_item({HEALING, 1}, '.', "a potion of healing.");
+    other_known[POTION_HEALING] = false;
+    check_status_item({POTION_HEALING, 1}, '?', "the red potion?");
+    check_status_item({POTION_HEALING, 3}, '.', "3 red potions.");
+    other_known[POTION_HEALING] = true;
+    check_status_item({POTION_HEALING, 1}, '?', "the potion of healing?");
+    check_status_item({POTION_HEALING, 1}, '.', "a potion of healing.");
     other_known[SCROLL_REMOVE_CURSE] = false;
     check_status_item({SCROLL_REMOVE_CURSE, 1}, '?', "the faded scroll?");
     other_known[SCROLL_REMOVE_CURSE] = true;

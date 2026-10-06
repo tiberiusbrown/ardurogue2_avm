@@ -13,7 +13,12 @@ int integer(const std::string& s) {
 }
 uint8_t content(const std::string& s, bool monster) {
     int last=monster ? rogue::LORD : rogue::WAND_POLYMORPH;
-    for(int i=1;i<=last;++i) if(s==(monster ? monster_name(uint8_t(i)) : item_name(uint8_t(i)))) return uint8_t(i);
+    for(int i=1;i<=last;++i) {
+        const char* name=monster ? monster_name(uint8_t(i)) : item_name(uint8_t(i));
+        // CSV labels retain schema-2 spellings; accept renamed potion enums too.
+        if(s==name || (!monster && rogue::is_potion(uint8_t(i)) && s==std::string("POTION_")+name))
+            return uint8_t(i);
+    }
     throw std::runtime_error("unknown intervention content: "+s);
 }
 int group(uint8_t t) {

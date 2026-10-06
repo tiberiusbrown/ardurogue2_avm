@@ -110,7 +110,7 @@ void tactical_wands() {
         check(action_text(a)==decision,"polymorph choice inspected future RNG");
     }
     arena(12); agent.reset(); monster(DRAGON,{11,10}); wand(WAND_FORCE);
-    game.inventory[1] = {HEALING,1};
+    game.inventory[1] = {POTION_HEALING,1};
     auto a = choose(agent); check(a.kind==ActionKind::Use && a.slot==1,"healing did not precede emergency wand");
 }
 void retreat_and_inventory() {

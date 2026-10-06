@@ -497,9 +497,9 @@ __attribute__((noinline)) static bool apply_inventory(
         set_item_value(item, static_cast<uint8_t>(item_value(item) - 1));
         if(!item_value(item)) item.type = NO_ITEM;
         break;
-    case HEALING: case CONFUSION: case POISON: case HARMING:
-    case STRENGTH: case DEXTERITY: case PARALYSIS: case SLOWING:
-    case EXPERIENCE: case INVISIBILITY: {
+    case POTION_HEALING: case POTION_CONFUSION: case POTION_POISON: case POTION_HARMING:
+    case POTION_STRENGTH: case POTION_DEXTERITY: case POTION_PARALYSIS: case POTION_SLOWING:
+    case POTION_EXPERIENCE: case POTION_INVISIBILITY: {
         uint8_t type = item.type;
         bool known = potion_identified(type);
         status(F("You drink"));
@@ -513,7 +513,7 @@ __attribute__((noinline)) static bool apply_inventory(
             status(Item{type, 1}, '.');
         }
         switch(type) {
-        case HEALING: {
+        case POTION_HEALING: {
             uint8_t maximum = player_max_hp();
             uint8_t healed = static_cast<uint8_t>(maximum / 4 +
                 roll(static_cast<uint8_t>(maximum / 2 + 1)));
@@ -524,7 +524,7 @@ __attribute__((noinline)) static bool apply_inventory(
             status(F("You feel better."));
             break;
         }
-        case STRENGTH:
+        case POTION_STRENGTH:
             if(game.weakened) {
                 game.weakened = 0;
                 status(F("Your strength returns."));
@@ -533,14 +533,14 @@ __attribute__((noinline)) static bool apply_inventory(
                 status(F("You feel stronger."));
             }
             break;
-        case DEXTERITY:
+        case POTION_DEXTERITY:
             if(game.dexterity < 12) ++game.dexterity;
             status(F("You feel more agile."));
             break;
-        case EXPERIENCE:
+        case POTION_EXPERIENCE:
             gain_xp(50);
             break;
-        case INVISIBILITY:
+        case POTION_INVISIBILITY:
             if(ring_bonus(RING_INVISIBILITY) < 0) {
                 status(F("The cursed ring keeps you visible."));
             } else {
@@ -549,7 +549,7 @@ __attribute__((noinline)) static bool apply_inventory(
                 game.invisible = static_cast<uint8_t>(12 + roll(16));
             }
             break;
-        case HARMING: {
+        case POTION_HARMING: {
             uint8_t base = static_cast<uint8_t>(player_max_hp() / 8 + 1);
             uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
             if(damage > 10) damage = 10;
@@ -560,12 +560,12 @@ __attribute__((noinline)) static bool apply_inventory(
             if(!game.hp) finish(DEATH);
             break;
         }
-        case POISON:
+        case POTION_POISON:
             if(!game.weakened)
                 status(F("You feel weaker."));
             if(game.weakened < 3) ++game.weakened;
             break;
-        case CONFUSION:
+        case POTION_CONFUSION:
             if(amulet_bonus(AMULET_CLARITY) > 0) {
                 status(F("Your amulet protects you from confusion."));
             } else {
@@ -574,7 +574,7 @@ __attribute__((noinline)) static bool apply_inventory(
                 game.confused = static_cast<uint8_t>(8 + roll(8));
             }
             break;
-        case PARALYSIS:
+        case POTION_PARALYSIS:
             if(amulet_bonus(AMULET_IRONBLOOD) > 0) {
                 status(F("Your amulet protects you from paralysis."));
             } else {
@@ -583,7 +583,7 @@ __attribute__((noinline)) static bool apply_inventory(
                 game.paralyzed = static_cast<uint8_t>(3 + roll(4));
             }
             break;
-        case SLOWING:
+        case POTION_SLOWING:
             if(!game.slowed)
                 status(F("You feel sluggish."));
             game.slowed = static_cast<uint8_t>(8 + roll(8));

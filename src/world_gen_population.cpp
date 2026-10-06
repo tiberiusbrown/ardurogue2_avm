@@ -68,23 +68,23 @@ static uint8_t floor_ring_type(uint16_t& seed)
     uint8_t chance = floor_roll(seed, 16);
     if(game.floor < 16 && chance % RING_COUNT == RING_COUNT - 1 && chance >= RING_COUNT)
         return RING_FIRE_IMMUNITY;
-    return static_cast<uint8_t>(RING_SEE_INVISIBLE + chance % RING_COUNT);
+    return static_cast<uint8_t>(RING_FIRST + chance % RING_COUNT);
 }
 
 static uint8_t floor_amulet_type(uint16_t& seed)
 {
     uint8_t chance = floor_roll(seed, 16);
     if(chance == 8) return AMULET_VAMPIRE;
-    return static_cast<uint8_t>(AMULET_SPEED + chance % AMULET_COUNT);
+    return static_cast<uint8_t>(AMULET_FIRST + chance % AMULET_COUNT);
 }
 
 static uint8_t floor_potion_type(uint16_t& seed)
 {
     uint8_t chance = floor_roll(seed, 20);
-    if(game.floor > 0 && game.floor < 5 && (chance == POTION_COUNT + HARMING - HEALING || chance == POTION_COUNT + POISON - HEALING)) return HEALING;
-    if(chance == POTION_COUNT + EXPERIENCE - HEALING)
-        return game.floor == 0 || (game.floor >= 5 && game.floor < 10) ? SLOWING : HEALING;
-    return static_cast<uint8_t>(HEALING + chance % POTION_COUNT);
+    if(game.floor > 0 && game.floor < 5 && (chance == POTION_COUNT + POTION_HARMING - POTION_FIRST || chance == POTION_COUNT + POTION_POISON - POTION_FIRST)) return POTION_HEALING;
+    if(chance == POTION_COUNT + POTION_EXPERIENCE - POTION_FIRST)
+        return game.floor == 0 || (game.floor >= 5 && game.floor < 10) ? POTION_SLOWING : POTION_HEALING;
+    return static_cast<uint8_t>(POTION_FIRST + chance % POTION_COUNT);
 }
 
 constexpr uint8_t NORMAL_WAND_WEIGHT = 60;
@@ -182,11 +182,11 @@ __attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_
         uint8_t chance = floor_roll(seed, 72);
         uint8_t type = chance < 20 ? FOOD : chance < 40
             ? floor_potion_type(seed) :
-              chance < 48 ? static_cast<uint8_t>(SCROLL_IDENTIFY +
+              chance < 48 ? static_cast<uint8_t>(SCROLL_FIRST +
                                                 floor_roll(seed, SCROLL_COUNT)) :
               chance < 56 ? floor_weapon_type(equipment_seed) :
               chance < 64 ? floor_armor_type(equipment_seed) :
-              chance < 68 ? static_cast<uint8_t>(WAND_FORCE +
+              chance < 68 ? static_cast<uint8_t>(WAND_FIRST +
                                                  floor_roll(seed, WAND_COUNT)) :
               chance < 70
                 ? floor_ring_type(seed)

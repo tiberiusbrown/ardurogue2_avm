@@ -206,12 +206,12 @@ static const char PROGMEM* const PROGMEM wand_descriptors[] = {
 
 const char PROGMEM* ring_name(uint8_t type)
 {
-    return is_ring(type) ? ring_names[type - RING_SEE_INVISIBLE] : F("unknown");
+    return is_ring(type) ? ring_names[type - RING_FIRST] : F("unknown");
 }
 
 const char PROGMEM* amulet_name(uint8_t type)
 {
-    return is_amulet(type) ? amulet_names[type - AMULET_SPEED] : F("unknown");
+    return is_amulet(type) ? amulet_names[type - AMULET_FIRST] : F("unknown");
 }
 
 struct BufferedItemText {
@@ -374,8 +374,8 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
                 : (plural ? F("potions") : F("potion")));
             text.word(F("of"));
             text.final_word(is_scroll(item.type)
-                ? scroll_names[item.type - SCROLL_IDENTIFY]
-                : potion_effect_names[item.type - HEALING], suffix);
+                ? scroll_names[item.type - SCROLL_FIRST]
+                : potion_effect_names[item.type - POTION_FIRST], suffix);
         } else {
             text.word(first_word);
             text.final_word(is_scroll(item.type)
@@ -432,9 +432,9 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
             text.word(F("wand"));
             text.word(F("of"));
             if(individual && style == INVENTORY_ITEM) {
-                text.words(wand_names[item.type - WAND_FORCE]);
+                text.words(wand_names[item.type - WAND_FIRST]);
                 text.final_number(wand_charges(item), suffix);
-            } else text.final_word(wand_names[item.type - WAND_FORCE], suffix);
+            } else text.final_word(wand_names[item.type - WAND_FIRST], suffix);
         } else {
             text.word(first_word);
             text.final_word(F("wand"), suffix);

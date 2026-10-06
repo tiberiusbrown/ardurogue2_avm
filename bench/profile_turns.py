@@ -26,7 +26,7 @@ INVENTORY_RANGES = (("LONG_SWORD", "TWO_HANDED_SWORD", "WEAPONS"),
                     ("RING_SEE_INVISIBLE", "RING_INVISIBILITY", "RINGS"),
                     ("AMULET_SPEED", "AMULET_WISDOM", "AMULETS"),
                     ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
-                    ("HEALING", "INVISIBILITY", "POTIONS"),
+                    ("POTION_HEALING", "POTION_INVISIBILITY", "POTIONS"),
                     ("SCROLL_IDENTIFY", "SCROLL_MASS_POISON", "SCROLLS"))
 
 
@@ -100,7 +100,7 @@ def state_fields(case):
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(INVISIBILITY - HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_INVISIBILITY - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_INVISIBILITY - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_INVISIBILITY - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"

@@ -46,8 +46,8 @@ void determinism() {
 }
 void entry_state_report() {
     arena();
-    game.inventory[0]={CONFUSION,3}; game.inventory[1]={SCROLL_TELEPORT,2};
-    game.inventory[2]={HARMING,4}; game.inventory[3]={WAND_FIRE,5};
+    game.inventory[0]={POTION_CONFUSION,3}; game.inventory[1]={SCROLL_TELEPORT,2};
+    game.inventory[2]={POTION_HARMING,4}; game.inventory[3]={WAND_FIRE,5};
     game.inventory[4]={WAND_FORCE,7}; game.inventory[5]={WAND_DIGGING,9};
     game.inventory[6]={WAND_ICE,8}; set_wand_modifier(game.inventory[6],WAND_UNRELIABLE);
     game.inventory[7]={RING_INVISIBILITY,1}; game.ring_slots[0]=7;
@@ -82,13 +82,13 @@ void policy_regressions() {
     action=a.choose_action({game,0,0});
     check(!(action.kind==ActionKind::Take && action.slot==0),"stocked food discarded using acquisition cap");
     arena(); for(int i=0;i<INVENTORY;++i) game.inventory[i]={SCROLL_IDENTIFY,1};
-    game.ground[0]={game.player,{HEALING,1}};
+    game.ground[0]={game.player,{POTION_HEALING,1}};
     action=a.choose_action({game,0,0});
     check(action.kind==ActionKind::Take && action.slot==0,"full inventory lacks deterministic swap");
-    check(dispatch(action) && game.inventory[0].type==HEALING && game.ground[0].item.type==SCROLL_IDENTIFY,
+    check(dispatch(action) && game.inventory[0].type==POTION_HEALING && game.ground[0].item.type==SCROLL_IDENTIFY,
         "full inventory did not use production ground swap");
     arena(); game.inventory[0]=make_equipment(PLATE_MAIL,0); game.inventory[0].info|=ITEM_CURSED; game.armor_slot=0;
-    game.ground[0]={game.player,{HEALING,1}};
+    game.ground[0]={game.player,{POTION_HEALING,1}};
     Action swap; swap.kind=ActionKind::Swap; swap.target=0; swap.slot=0;
     check(!dispatch(swap),"dispatcher removed cursed equipment");
 }
@@ -101,9 +101,9 @@ void path_and_dispatch() {
     check(safe.to({6,4})==2 && safe.to({8,4})==-1 && combat.to({8,4})==4,"BFS monster occupancy wrong");
     auto move=combat.move_to({8,4},"test");
     check(dispatch(move) && door_open(0) && game.player==Position{4,4},"closed door bypassed production movement");
-    game.ground[0]={{8,4},{HEALING,1}};
+    game.ground[0]={{8,4},{POTION_HEALING,1}};
     Action take; take.kind=ActionKind::Take; take.target=0;
-    check(!dispatch(take) && game.ground[0].item.type==HEALING,"remote item pickup allowed");
+    check(!dispatch(take) && game.ground[0].item.type==POTION_HEALING,"remote item pickup allowed");
     game.paralyzed=2; Action wait; check(dispatch(wait) && game.paralyzed==1,"wait did not advance production statuses");
     Action invalid; invalid.kind=ActionKind::Move; invalid.dx=invalid.dy=1;
     check(!dispatch(invalid),"non-cardinal move accepted");
@@ -201,7 +201,7 @@ void competence() {
     for(uint16_t seed=1;seed<=32;++seed) {
         auto r=run(seed,a); check(!r.stuck,"fixed competence set stuck");
         leaves+=r.deepest>0; deep+=r.deepest>=12; wins+=r.result=="escaped";
-        food+=r.items[FOOD].used; healing+=r.items[HEALING].drunk;
+        food+=r.items[FOOD].used; healing+=r.items[POTION_HEALING].drunk;
         for(const auto& m:r.monsters) kills+=m.killed;
         for(const auto& i:r.items) equipment+=i.equipped;
     }
@@ -222,7 +222,7 @@ void experiments() {
     try { run(4,agent,o); } catch(const std::runtime_error&) { rejected=true; }
     check(rejected,"experiment gameplay RNG mutation not rejected");
     arena(); game.floor=2;
-    game.ground[0]={{3,6},{HEALING,4}}; game.ground[1]={{8,7},{HEALING,3}};
+    game.ground[0]={{3,6},{POTION_HEALING,4}}; game.ground[1]={{8,7},{POTION_HEALING,3}};
     game.ground[2]={{9,7},make_equipment(DAGGER,-1)};
     game.monsters[0]={{4,6},SNAKE,1,6,{255,255},MON_AGGRO};
     auto exp=std::make_shared<RuleExperiment>();
@@ -233,18 +233,20 @@ void experiments() {
     check(game.random_state==rng,"replacement consumed gameplay RNG");
     check(game.ground[0].pos==Position{3,6} && game.ground[0].item.type==FOOD && game.ground[0].item.info==1,
         "replacement failed position/default info invariant");
-    check(game.ground[1].item.type==HEALING && game.ground[2].item.info==make_equipment(DAGGER,-1).info,
+    check(game.ground[1].item.type==POTION_HEALING && game.ground[2].item.info==make_equipment(DAGGER,-1).info,
         "replacement cap or compatible encoding failed");
     check(game.monsters[0].pos==Position{4,6} && game.monsters[0].hp==monster_health(MIMIC) &&
         game.monsters[0].stun==0 && game.monsters[0].effects[0]==0 && game.monsters[0].effects[1]==0 &&
         mimic_appearance(game.monsters[0])==MIMIC_SCROLL,"monster initialization invariant failed");
-    check(c.data.items[FOOD].generated==1 && c.data.items[HEALING].generated==3 &&
+    check(c.data.items[FOOD].generated==1 && c.data.items[POTION_HEALING].generated==3 &&
         c.data.monsters[MIMIC].generated==1 && c.data.monsters[SNAKE].generated==0,"intervention occurred after generation scan");
     check(c.data.interventions.size()==3 && c.data.interventions[0].count==1 && c.data.interventions[0].visit==1,
         "intervention ledger does not reconcile");
     exp->rules={parse_rule("remove-item:HEALING"),parse_rule("remove-monster:MIMIC")};
     exp->apply(game,{123,2},c.data.interventions);
     check(!game.ground[1].item.type && !game.monsters[0].type,"removal failed");
+    check(parse_rule("remove-item:POTION_HEALING").from==parse_rule("remove-item:HEALING").from,
+        "prefixed potion intervention name changed its item ID");
     bool incompatible=false;
     try { parse_rule("replace-item:DAGGER:FOOD:info=preserve"); } catch(const std::runtime_error&) { incompatible=true; }
     check(incompatible,"incompatible instance info preservation accepted");

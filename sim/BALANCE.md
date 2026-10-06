@@ -285,7 +285,10 @@ replace-monster:FROM:TO[:floor=N][:direction=descent|ascent][:max=N]
 remove-monster:FROM[:floor=N][:direction=descent|ascent][:max=N]
 ```
 
-Names are enum names; floors are 0..15. Omitted scope matches every floor and
+Names are enum names; potion enums use `POTION_` prefixes, for example
+`replace-item:POTION_HEALING:FOOD`. The original potion spellings such as
+`HEALING` remain accepted, and schema-2 CSV labels retain those original
+spellings so existing datasets stay comparable. Floors are 0..15. Omitted scope matches every floor and
 direction; omitted cap is unlimited within each visit. Rules execute in supplied
 order and can compose; later rules see prior replacements. Removed item slots
 retain their position but become empty. Replacements preserve positions.

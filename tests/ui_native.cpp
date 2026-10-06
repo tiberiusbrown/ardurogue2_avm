@@ -191,7 +191,7 @@ int main()
     }
     // Each new modal must rebuild its metadata after inventory/filter changes.
     std::memset(game.inventory, 0, sizeof game.inventory);
-    game.inventory[0] = {HEALING, 1};
+    game.inventory[0] = {POTION_HEALING, 1};
     game.inventory[7] = {WAND_FORCE, 2};
     game.inventory[15] = {LONG_SWORD, 1};
     const uint8_t browsing[] = {0, AVM_BUTTON_D, 0, AVM_BUTTON_D,

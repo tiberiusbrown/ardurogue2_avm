@@ -72,6 +72,7 @@ void after_floor_generation() {
     if(rogue::game.random_state!=rng) throw std::runtime_error("experiment consumed gameplay RNG");
 }
 const char* item_name(uint8_t type) {
+    // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","HEALING","CONFUSION","POISON","HARMING",
         "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY",
         "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","CHAIN_MAIL","LEATHER_ARMOR",
@@ -125,9 +126,9 @@ void Collector::enter_floor() {
     if(g.armor_slot<rogue::INVENTORY) f.entry_armor_type=g.inventory[g.armor_slot].type;
     for(auto i:g.inventory) {
         if(i.type==rogue::FOOD) f.entry_food_units+=rogue::item_value(i);
-        if(i.type==rogue::HEALING) f.entry_healing_units+=rogue::item_value(i);
-        if(i.type==rogue::CONFUSION || i.type==rogue::PARALYSIS || i.type==rogue::SLOWING ||
-           i.type==rogue::STRENGTH || i.type==rogue::INVISIBILITY || i.type==rogue::SCROLL_FEAR ||
+        if(i.type==rogue::POTION_HEALING) f.entry_healing_units+=rogue::item_value(i);
+        if(i.type==rogue::POTION_CONFUSION || i.type==rogue::POTION_PARALYSIS || i.type==rogue::POTION_SLOWING ||
+           i.type==rogue::POTION_STRENGTH || i.type==rogue::POTION_INVISIBILITY || i.type==rogue::SCROLL_FEAR ||
            i.type==rogue::SCROLL_TELEPORT || i.type==rogue::SCROLL_MASS_CONFUSE)
                 f.entry_control_units+=rogue::item_value(i);
         if(rogue::is_wand(i.type) && !rogue::wand_afflicted(i) && i.type!=rogue::WAND_DIGGING) {

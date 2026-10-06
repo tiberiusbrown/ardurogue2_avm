@@ -105,11 +105,11 @@ bool potion_identified(uint8_t type)
 
 static uint8_t knowledge_index(uint8_t type)
 {
-    if(is_potion(type)) return static_cast<uint8_t>(type - HEALING);
-    if(is_scroll(type)) return static_cast<uint8_t>(POTION_COUNT + type - SCROLL_IDENTIFY);
-    if(is_ring(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + type - RING_SEE_INVISIBLE);
-    if(is_amulet(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + RING_COUNT + type - AMULET_SPEED);
-    if(is_wand(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + type - WAND_FORCE);
+    if(is_potion(type)) return static_cast<uint8_t>(type - POTION_FIRST);
+    if(is_scroll(type)) return static_cast<uint8_t>(POTION_COUNT + type - SCROLL_FIRST);
+    if(is_ring(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + type - RING_FIRST);
+    if(is_amulet(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + RING_COUNT + type - AMULET_FIRST);
+    if(is_wand(type)) return static_cast<uint8_t>(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + type - WAND_FIRST);
     return NONE;
 }
 
@@ -171,19 +171,19 @@ static uint8_t permuted_appearance(uint8_t index, uint8_t count,
 uint8_t item_appearance(uint8_t type)
 {
     if(is_potion(type))
-        return permuted_appearance(static_cast<uint8_t>(type - HEALING),
+        return permuted_appearance(static_cast<uint8_t>(type - POTION_FIRST),
                                    POTION_COUNT, 1, potion_multipliers.values);
     if(is_scroll(type))
-        return permuted_appearance(static_cast<uint8_t>(type - SCROLL_IDENTIFY),
+        return permuted_appearance(static_cast<uint8_t>(type - SCROLL_FIRST),
                                    SCROLL_COUNT, 2, scroll_multipliers.values);
     if(is_ring(type))
-        return permuted_appearance(static_cast<uint8_t>(type - RING_SEE_INVISIBLE),
+        return permuted_appearance(static_cast<uint8_t>(type - RING_FIRST),
                                    RING_COUNT, 3, jewel_multipliers.values);
     if(is_amulet(type))
-        return permuted_appearance(static_cast<uint8_t>(type - AMULET_SPEED),
+        return permuted_appearance(static_cast<uint8_t>(type - AMULET_FIRST),
                                    AMULET_COUNT, 4, jewel_multipliers.values);
     if(is_wand(type))
-        return permuted_appearance(static_cast<uint8_t>(type - WAND_FORCE),
+        return permuted_appearance(static_cast<uint8_t>(type - WAND_FIRST),
                                    WAND_COUNT, 5, wand_multipliers.values);
     return NONE;
 }
