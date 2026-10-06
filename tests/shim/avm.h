@@ -79,5 +79,24 @@ inline void avm_draw_filled_rect_black(int16_t x, int16_t y, uint8_t w, uint8_t 
 { avm_test_rect(x, y, w, h, false); }
 inline void avm_draw_filled_rect_white(int16_t x, int16_t y, uint8_t w, uint8_t h)
 { avm_test_rect(x, y, w, h, true); }
-inline void avm_draw_sprite_overwrite(int16_t, int16_t, const uint8_t*, uint8_t) {}
+inline void avm_test_sprite(int16_t x, int16_t y, const uint8_t* sprite,
+                            uint16_t frame, uint8_t mode)
+{
+    unsigned width = sprite[0], height = sprite[1];
+    const uint8_t* bitmap = sprite + 2 + frame * width * ((height + 7) / 8);
+    for(unsigned row = 0; row < height; ++row)
+        for(unsigned col = 0; col < width; ++col) {
+            bool lit = bitmap[(row / 8) * width + col] & (1u << (row & 7));
+            if(!mode || lit) avm_test_rect(x + col, y + row, 1, 1, mode == 2 ? false : lit);
+        }
+}
+inline void avm_draw_sprite_overwrite(int16_t x, int16_t y,
+                                      const uint8_t* sprite, uint16_t frame)
+{ avm_test_sprite(x, y, sprite, frame, 0); }
+inline void avm_draw_sprite_self_masked(int16_t x, int16_t y,
+                                        const uint8_t* sprite, uint16_t frame)
+{ avm_test_sprite(x, y, sprite, frame, 1); }
+inline void avm_draw_sprite_erase(int16_t x, int16_t y,
+                                  const uint8_t* sprite, uint16_t frame)
+{ avm_test_sprite(x, y, sprite, frame, 2); }
 inline void avm_set_text_mode(uint8_t) {}

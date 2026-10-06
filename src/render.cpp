@@ -22,66 +22,87 @@ void status_clear()
     reset_status_position();
 }
 
-static const uint16_t PROGMEM monster_icons[] = {
-    0x0000, // none
-    0x0fa4, // bat
-    0x0bd0, // snake
-    0x0f5a, // rattlesnake
-    0x9db9, // zombie
-    0x0bf0, // goblin
-    0x0f52, // phantom
-    0x0f9f, // orc
-    0x07a0, // tarantula
-    0x0f2c, // hobgoblin
-    0x0f2f, // mimic
-    0x09f9, // incubus
-    0x01f1, // troll
-    0x069d, // griffin
-    0xf996, // dragon
-    0x0e5e, // fallen angel
-    0x0f88, // Lord of Darkness
+static const uint8_t PROGMEM monster_icons[] = {
+    4, 4, // width, height; four vertical columns per frame
+    0x00, 0x00, 0x00, 0x00, // none
+    0x00, 0x0f, 0x0a, 0x04, // bat
+    0x00, 0x0b, 0x0d, 0x00, // snake
+    0x00, 0x0f, 0x05, 0x0a, // rattlesnake
+    0x09, 0x0d, 0x0b, 0x09, // zombie
+    0x00, 0x0b, 0x0f, 0x00, // goblin
+    0x00, 0x0f, 0x05, 0x02, // phantom
+    0x00, 0x0f, 0x09, 0x0f, // orc
+    0x00, 0x07, 0x0a, 0x00, // tarantula
+    0x00, 0x0f, 0x02, 0x0c, // hobgoblin
+    0x00, 0x0f, 0x02, 0x0f, // mimic
+    0x00, 0x09, 0x0f, 0x09, // incubus
+    0x00, 0x01, 0x0f, 0x01, // troll
+    0x00, 0x06, 0x09, 0x0d, // griffin
+    0x0f, 0x09, 0x09, 0x06, // dragon
+    0x00, 0x0e, 0x05, 0x0e, // fallen angel
+    0x00, 0x0f, 0x08, 0x08, // Lord of Darkness
 };
+static_assert(sizeof(monster_icons) == 2 + 4 * (LORD + 1),
+              "monster icon roster changed");
 // Shared visual categories are independent of ItemType ordering and roster size.
 enum ItemIconCategory : uint8_t {
     ICON_NONE, ICON_AMMO, ICON_FOOD, ICON_POTION, ICON_WEAPON, ICON_ARMOR,
     ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ITEM_ICON_CATEGORIES
 };
-static const uint16_t PROGMEM item_icons[] = {
-    0x0000, 0x8421, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
-    0x0606, 0x0aaa, 0x01b3, 0x1248
+static const uint8_t PROGMEM item_icons[] = {
+    4, 4, // width, height; four vertical columns per frame
+    0x00, 0x00, 0x00, 0x00, // none
+    0x08, 0x04, 0x02, 0x01, // ammo
+    0x09, 0x04, 0x02, 0x09, // food
+    0x00, 0x0b, 0x0b, 0x00, // potion
+    0x00, 0x04, 0x0f, 0x04, // weapon
+    0x00, 0x0f, 0x09, 0x00, // armor
+    0x00, 0x06, 0x00, 0x06, // amulet
+    0x00, 0x0a, 0x0a, 0x0a, // ring
+    0x00, 0x01, 0x0b, 0x03, // scroll
+    0x01, 0x02, 0x04, 0x08, // wand
 };
-static_assert(sizeof(item_icons) / sizeof(item_icons[0]) == ITEM_ICON_CATEGORIES,
+static_assert(sizeof(item_icons) == 2 + 4 * ITEM_ICON_CATEGORIES,
               "item icon categories changed");
 
-uint16_t item_icon(uint8_t type)
+uint8_t item_icon(uint8_t type)
 {
-    if(is_ammo(type)) return item_icons[ICON_AMMO];
-    if(is_weapon(type)) return item_icons[ICON_WEAPON];
-    if(is_armor(type)) return item_icons[ICON_ARMOR];
-    if(is_potion(type)) return item_icons[ICON_POTION];
-    if(is_scroll(type)) return item_icons[ICON_SCROLL];
-    if(is_amulet(type) || type == YENDOR_AMULET) return item_icons[ICON_AMULET];
-    if(is_ring(type)) return item_icons[ICON_RING];
-    if(is_wand(type)) return item_icons[ICON_WAND];
-    return item_icons[type == FOOD ? ICON_FOOD : ICON_NONE];
+    if(is_ammo(type)) return ICON_AMMO;
+    if(is_weapon(type)) return ICON_WEAPON;
+    if(is_armor(type)) return ICON_ARMOR;
+    if(is_potion(type)) return ICON_POTION;
+    if(is_scroll(type)) return ICON_SCROLL;
+    if(is_amulet(type) || type == YENDOR_AMULET) return ICON_AMULET;
+    if(is_ring(type)) return ICON_RING;
+    if(is_wand(type)) return ICON_WAND;
+    return type == FOOD ? ICON_FOOD : ICON_NONE;
 }
 
-uint16_t mimic_icon(MimicAppearance appearance)
+uint8_t mimic_icon(MimicAppearance appearance)
 {
     switch(appearance) {
-    case MIMIC_SCROLL: return item_icons[ICON_SCROLL];
-    case MIMIC_POTION: return item_icons[ICON_POTION];
-    case MIMIC_AMULET: return item_icons[ICON_AMULET];
-    case MIMIC_RING: return item_icons[ICON_RING];
-    case MIMIC_WAND: return item_icons[ICON_WAND];
-    default: return item_icons[ICON_NONE];
+    case MIMIC_SCROLL: return ICON_SCROLL;
+    case MIMIC_POTION: return ICON_POTION;
+    case MIMIC_AMULET: return ICON_AMULET;
+    case MIMIC_RING: return ICON_RING;
+    case MIMIC_WAND: return ICON_WAND;
+    default: return ICON_NONE;
     }
 }
-static constexpr uint16_t PLAYER_ICON = 0x6ff6;
-static constexpr uint16_t DOWN_STAIRS_ICON = 0xfec8;
-static constexpr uint16_t UP_STAIRS_ICON = 0x8cef;
-static constexpr uint16_t CLOSED_DOOR_ICON = 0xefbe;
-static constexpr uint16_t OPEN_DOOR_ICON = 0xe11e;
+enum MapIconCategory : uint8_t {
+    PLAYER_ICON, DOWN_STAIRS_ICON, UP_STAIRS_ICON, CLOSED_DOOR_ICON, OPEN_DOOR_ICON,
+    MAP_ICON_CATEGORIES
+};
+static const uint8_t PROGMEM map_icons[] = {
+    4, 4,
+    0x06, 0x0f, 0x0f, 0x06, // player
+    0x0f, 0x0e, 0x0c, 0x08, // down stairs
+    0x08, 0x0c, 0x0e, 0x0f, // up stairs
+    0x0e, 0x0f, 0x0b, 0x0e, // closed door
+    0x0e, 0x01, 0x01, 0x0e, // open door
+};
+static_assert(sizeof(map_icons) == 2 + 4 * MAP_ICON_CATEGORIES,
+              "map icon categories changed");
 
 static void pixel(int16_t x, int16_t y)
 {
@@ -89,26 +110,6 @@ static void pixel(int16_t x, int16_t y)
         return;
     uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
     __avm_framebuffer[offset] |= static_cast<uint8_t>(1u << (y & 7));
-}
-
-// All map symbols fit on screen. Write a whole vertical nibble at once.
-__attribute__((noinline)) static void column(uint8_t x, uint8_t y, uint8_t bits)
-{
-    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
-    uint8_t shift = y & 7;
-    __avm_framebuffer[offset] |= static_cast<uint8_t>(bits << shift);
-    if(shift > 4 && y < 60)
-        __avm_framebuffer[offset + 128] |= static_cast<uint8_t>(bits >> (8 - shift));
-}
-
-static void icon(uint16_t shape, uint8_t x, uint8_t y)
-{
-    avm_draw_filled_rect_black(x, y, 4, 4);
-    for(uint8_t col = 0; col < 4; ++col) {
-        column(static_cast<uint8_t>(x + col), y,
-               static_cast<uint8_t>(shape >> 12));
-        shape = static_cast<uint16_t>(shape << 4);
-    }
 }
 
 static bool screen_tile(Position pos, uint8_t& sx, uint8_t& sy)
@@ -129,40 +130,21 @@ static void animation_wait()
         avm_idle();
 }
 
-static void effect_pixel(int16_t x, int16_t y, bool lit)
-{
-    if(x < 0 || x >= 64 || y < 0 || y >= 64) return;
-    uint16_t offset = static_cast<uint16_t>((y >> 3) * 128 + x);
-    uint8_t mask = static_cast<uint8_t>(1u << (y & 7));
-    if(lit) __avm_framebuffer[offset] |= mask;
-    else __avm_framebuffer[offset] &= static_cast<uint8_t>(~mask);
-}
-
-// ArduRogue clears the sprite's set pixels at all eight neighboring pixel
-// positions before setting the four sprite columns at the current tile.
+// Clear the effect's pixels in the eight neighboring positions, then draw
+// its 4x4 sprite. The shortened erase sprite clips to the dungeon pane at x=64.
 static void effect_sprite(uint8_t sx, uint8_t sy)
 {
-    constexpr uint16_t shape = 0x0eae;
+    static const uint8_t PROGMEM effect[] = {4, 4, 0x00, 0x0e, 0x0a, 0x0e};
+    static const uint8_t PROGMEM edge_effect[] = {3, 4, 0x00, 0x0e, 0x0a};
     int16_t x = static_cast<int16_t>(sx) * 5;
     int16_t y = static_cast<int16_t>(sy) * 5;
     for(int8_t oy = -1; oy <= 1; ++oy)
         for(int8_t ox = -1; ox <= 1; ++ox) {
             if(!ox && !oy) continue;
-            for(uint8_t col = 0; col < 4; ++col) {
-                uint8_t bits = static_cast<uint8_t>(
-                    (shape >> (12 - col * 4)) & 0x0f);
-                for(uint8_t row = 0; row < 4; ++row)
-                    if(bits & (1u << row))
-                        effect_pixel(x + ox + col, y + oy + row, false);
-            }
+            avm_draw_sprite_erase(x + ox, y + oy,
+                                  x + ox > 60 ? edge_effect : effect, 0);
         }
-    for(uint8_t col = 0; col < 4; ++col) {
-        uint8_t bits = static_cast<uint8_t>(
-            (shape >> (12 - col * 4)) & 0x0f);
-        for(uint8_t row = 0; row < 4; ++row)
-            if(bits & (1u << row))
-                effect_pixel(x + col, y + row, true);
-    }
+    avm_draw_sprite_self_masked(x, y, effect, 0);
 }
 
 static void draw_effect_tile(int16_t x, int16_t y)
@@ -195,7 +177,7 @@ __attribute__((noinline)) void animate_ray(Position origin, int8_t dx,
     avm_display(false);
 }
 
-// Each nibble is one vertical column of a 4x4 arrow. Flash-only sprites.
+// Four 4x4 arrow frames, one for each cardinal direction.
 __attribute__((noinline)) void animate_arrow(Position origin, int8_t dx, int8_t dy, uint8_t steps)
 {
 #if defined(ARDUROGUE2_BENCH)
@@ -203,7 +185,13 @@ __attribute__((noinline)) void animate_arrow(Position origin, int8_t dx, int8_t 
     (void)origin; (void)dx; (void)dy; (void)steps;
     render_play(); avm_display(false);
 #else
-    static const uint16_t PROGMEM arrows[] = {0x2f20, 0x44e4, 0x4f40, 0x4e44};
+    static const uint8_t PROGMEM arrows[] = {
+        4, 4,
+        0x02, 0x0f, 0x02, 0x00,
+        0x04, 0x04, 0x0e, 0x04,
+        0x04, 0x0f, 0x04, 0x00,
+        0x04, 0x0e, 0x04, 0x04,
+    };
     uint8_t direction = dy < 0 ? 0 : dx > 0 ? 1 : dy > 0 ? 2 : 3;
     Position pos = origin;
     for(uint8_t step = 0; step < steps; ++step) {
@@ -211,7 +199,8 @@ __attribute__((noinline)) void animate_arrow(Position origin, int8_t dx, int8_t 
         pos.x = static_cast<uint8_t>(pos.x + dx);
         pos.y = static_cast<uint8_t>(pos.y + dy);
         uint8_t sx, sy;
-        if(screen_tile(pos, sx, sy)) icon(arrows[direction], sx * 5, sy * 5);
+        if(screen_tile(pos, sx, sy))
+            avm_draw_sprite_overwrite(sx * 5, sy * 5, arrows, direction);
         avm_display(false);
         uint16_t until = static_cast<uint16_t>(avm_millis() + 60);
         while(static_cast<int16_t>(avm_millis() - until) < 0) avm_idle();
@@ -496,32 +485,31 @@ __attribute__((noinline)) static void draw_view_objects(const uint16_t sight[13]
         Position door = door_position(i);
         uint8_t sx, sy;
         if(screen_tile(door, sx, sy) && explored(door))
-            icon(door_open(i) ? OPEN_DOOR_ICON : CLOSED_DOOR_ICON,
-                 static_cast<uint8_t>(sx * 5),
-                 static_cast<uint8_t>(sy * 5));
+            avm_draw_sprite_overwrite(sx * 5, sy * 5, map_icons,
+                                      door_open(i) ? OPEN_DOOR_ICON : CLOSED_DOOR_ICON);
     }
     uint8_t sx, sy;
     if(screen_tile(game.up, sx, sy) && explored(game.up))
-        icon(UP_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
-             static_cast<uint8_t>(sy * 5));
+        avm_draw_sprite_overwrite(sx * 5, sy * 5, map_icons, UP_STAIRS_ICON);
     if(game.floor < FLOORS - 1 &&
        screen_tile(game.down, sx, sy) && explored(game.down))
-        icon(DOWN_STAIRS_ICON, static_cast<uint8_t>(sx * 5),
-             static_cast<uint8_t>(sy * 5));
+        avm_draw_sprite_overwrite(sx * 5, sy * 5, map_icons, DOWN_STAIRS_ICON);
     for(const GroundItem& ground : game.ground)
         if(ground.item.type && in_sight(ground.pos, sight, sx, sy))
-            icon(item_icon(ground.item.type), static_cast<uint8_t>(sx * 5),
-                 static_cast<uint8_t>(sy * 5));
+            avm_draw_sprite_overwrite(sx * 5, sy * 5, item_icons,
+                                      item_icon(ground.item.type));
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         const Monster& monster = game.monsters[i];
         if(player_can_see_monster(i) &&
-           in_sight(monster.pos, sight, sx, sy))
-            icon(monster.type == MIMIC && !(monster.state & MON_AGGRO)
-                     ? mimic_icon(mimic_appearance(monster))
-                     : monster_icons[monster.type],
-                 static_cast<uint8_t>(sx * 5), static_cast<uint8_t>(sy * 5));
+           in_sight(monster.pos, sight, sx, sy)) {
+            bool disguised = monster.type == MIMIC && !(monster.state & MON_AGGRO);
+            avm_draw_sprite_overwrite(sx * 5, sy * 5,
+                                      disguised ? item_icons : monster_icons,
+                                      disguised ? mimic_icon(mimic_appearance(monster))
+                                                : monster.type);
+        }
     }
-    icon(PLAYER_ICON, 30, 30);
+    avm_draw_sprite_overwrite(30, 30, map_icons, PLAYER_ICON);
 }
 
 __attribute__((noinline)) static void reveal_view(
@@ -591,7 +579,7 @@ __attribute__((noinline)) void update_generation_render(uint8_t percent)
     // Keep the display buffer intact between displays. Only repaint the two
     // moving regions; labels, divider, stats and status retain their pixels.
     avm_draw_filled_rect_black(16, 6, 32, 32);
-    icon(PLAYER_ICON, 30, 20);
+    avm_draw_sprite_overwrite(30, 20, map_icons, PLAYER_ICON);
     for(uint8_t trail = 0; trail < 3; ++trail) {
         uint8_t at = static_cast<uint8_t>(((ui.held_direction - trail) & 7) * 2);
         avm_draw_filled_rect_white(orbit[at], orbit[at + 1],

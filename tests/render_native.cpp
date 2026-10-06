@@ -75,6 +75,44 @@ static bool check_arrow_animation()
     return item_icon(ARROWS) != item_icon(SHORT_BOW) && item_icon(ARROWS) != 0;
 }
 
+static bool check_effect_sprites()
+{
+    using namespace rogue;
+    start_new(0x4312);
+    std::memset(game.walls, 0, sizeof game.walls);
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    std::memset(game.ground, 0, sizeof game.ground);
+    game.player = {20, 15}; game.door_count = 0;
+    for(int x : {0, 30, 60}) for(int y : {0, 30, 60}) {
+        render_play();
+        uint8_t base[1024], expected[1024];
+        std::memcpy(base, __avm_framebuffer, sizeof base);
+        std::memcpy(expected, base, sizeof expected);
+        for(int pass = 0; pass < 2; ++pass)
+            for(int oy = -1; oy <= 1; ++oy)
+                for(int ox = -1; ox <= 1; ++ox) {
+                    if((pass == 0) == (!ox && !oy)) continue;
+                    for(int col = 0; col < 4; ++col)
+                        for(int row = 0; row < 4; ++row) {
+                            int px = x + ox + col, py = y + oy + row;
+                            if(px < 0 || px >= 64 || py < 0 || py >= 64 ||
+                               !((0x0eae >> (12 - col * 4)) & (1u << row))) continue;
+                            uint8_t& byte = expected[(py >> 3) * 128 + px];
+                            uint8_t mask = uint8_t(1u << (py & 7));
+                            byte = pass ? byte | mask : byte & ~mask;
+                        }
+                }
+        arrow_frame_count = 0;
+        avm_test_display_hook = capture_arrow_frame;
+        animate_ray({uint8_t(game.player.x + x / 5 - 7),
+                     uint8_t(game.player.y + y / 5 - 6)}, 1, 0, 1);
+        avm_test_display_hook = nullptr;
+        if(arrow_frame_count != 2 || std::memcmp(expected, arrow_frames[0], sizeof expected) ||
+           std::memcmp(base, arrow_frames[1], sizeof base)) return false;
+    }
+    return true;
+}
+
 static char hidden_target_text[256];
 static void capture_hidden_target_text(int16_t x, int16_t y, const char* text)
 {
@@ -197,14 +235,55 @@ static bool check_packed_wall_rows()
     return true;
 }
 
+// Compare every item/monster frame to the original column-nibble artwork,
+// including tiles that cross framebuffer page boundaries.
+static bool check_sprite_artwork()
+{
+    using namespace rogue;
+    const uint8_t items[] = {ARROWS, FOOD, POTION_HEALING, LONG_SWORD, CHAIN_MAIL,
+                             AMULET_SPEED, RING_STRENGTH, SCROLL_IDENTIFY, WAND_FORCE};
+    const uint16_t item_shapes[] = {0x8421, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
+                                    0x0606, 0x0aaa, 0x01b3, 0x1248};
+    const uint16_t monster_shapes[] = {0, 0x0fa4, 0x0bd0, 0x0f5a, 0x9db9,
+        0x0bf0, 0x0f52, 0x0f9f, 0x07a0, 0x0f2c, 0x0f2f, 0x09f9,
+        0x01f1, 0x069d, 0xf996, 0x0e5e, 0x0f88};
+    start_new(0x4312);
+    std::memset(game.walls, 0, sizeof game.walls);
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    std::memset(game.ground, 0, sizeof game.ground);
+    game.player = {10, 10}; game.door_count = 0;
+    game.up = game.down = {NONE, NONE};
+    game.inventory[0] = {RING_SEE_INVISIBLE, 1}; game.ring_slots[0] = 0;
+    for(unsigned kind = 0; kind < 2; ++kind)
+        for(unsigned index = kind ? 1 : 0;
+            index < (kind ? sizeof monster_shapes / sizeof *monster_shapes : sizeof items); ++index)
+            for(uint8_t sy : {uint8_t(6), uint8_t(7), uint8_t(8)}) {
+                Position pos{11, uint8_t(10 + sy - 6)};
+                game.ground[0] = {pos, {kind ? uint8_t(NO_ITEM) : items[index], 1}};
+                game.monsters[0] = {pos, kind ? uint8_t(index) : uint8_t(NO_MONSTER),
+                                    100, 0, {0, 0}, MON_AGGRO};
+                render_play();
+                uint16_t shape = kind ? monster_shapes[index] : item_shapes[index];
+                for(unsigned col = 0; col < 4; ++col)
+                    for(unsigned row = 0; row < 4; ++row) {
+                        unsigned y = sy * 5 + row;
+                        bool actual = __avm_framebuffer[(y >> 3) * 128 + 35 + col] &
+                                      (1u << (y & 7));
+                        bool lit = (shape >> (12 - col * 4)) & (1u << row);
+                        if(actual != lit) return false;
+                    }
+            }
+    return true;
+}
+
 static bool check_shared_icons()
 {
     using namespace rogue;
-    if(item_icon(LONG_SWORD) != 0x04f4 || item_icon(CHAIN_MAIL) != 0x0f90 ||
+    if(item_icon(LONG_SWORD) != 4 || item_icon(CHAIN_MAIL) != 5 ||
        item_icon(NO_ITEM) != 0 || item_icon(255) != 0) return false;
     for(unsigned type = 0; type <= 255; ++type) {
-        if(is_weapon(type) && item_icon(type) != 0x04f4) return false;
-        if(is_armor(type) && item_icon(type) != 0x0f90) return false;
+        if(is_weapon(type) && item_icon(type) != 4) return false;
+        if(is_armor(type) && item_icon(type) != 5) return false;
     }
     const uint8_t representatives[MIMIC_APPEARANCE_COUNT] = {
         SCROLL_IDENTIFY, POTION_HEALING, AMULET_SPEED, RING_STRENGTH, WAND_FORCE
@@ -221,8 +300,7 @@ static bool check_shared_icons()
     game.down = {63, 31};
     for(uint8_t appearance = 0; appearance < MIMIC_APPEARANCE_COUNT; ++appearance) {
         MimicAppearance category = static_cast<MimicAppearance>(appearance);
-        if(mimic_icon(category) != expected[appearance] ||
-           mimic_icon(category) != item_icon(representatives[appearance])) return false;
+        if(mimic_icon(category) != item_icon(representatives[appearance])) return false;
         for(uint8_t flags : {uint8_t(0), MON_AGGRO, MON_AFRAID, uint8_t(MON_AGGRO | MON_AFRAID)}) {
             Monster monster{{11, 10}, MIMIC, 20, 0, {0, 0}, flags};
             set_mimic_appearance(monster, category);
@@ -235,6 +313,13 @@ static bool check_shared_icons()
         set_mimic_appearance(game.monsters[0], category);
         render_play();
         std::memcpy(disguised, __avm_framebuffer, sizeof disguised);
+        for(unsigned col = 0; col < 4; ++col)
+            for(unsigned row = 0; row < 4; ++row) {
+                bool actual = disguised[((30 + row) >> 3) * 128 + 35 + col] &
+                              (1u << ((30 + row) & 7));
+                bool lit = (expected[appearance] >> (12 - col * 4)) & (1u << row);
+                if(actual != lit) return false;
+            }
         game.monsters[0].type = NO_MONSTER;
         game.ground[0] = {{11, 10}, {representatives[appearance], 1}};
         render_play();
@@ -491,7 +576,7 @@ static bool check_generation_loading()
 int main()
 {
     using namespace rogue;
-    if(!check_arrow_animation()) {
+    if(!check_arrow_animation() || !check_effect_sprites()) {
         std::fprintf(stderr, "Arrow direction, cadence, restoration or state/RNG isolation failed\n");
         return 1;
     }
@@ -511,7 +596,7 @@ int main()
         std::fprintf(stderr, "Packed wall row extraction failed\n");
         return 1;
     }
-    if(!check_shared_icons()) {
+    if(!check_shared_icons() || !check_sprite_artwork()) {
         std::fprintf(stderr, "Shared item/mimic icons or independent appearance flags failed\n");
         return 1;
     }

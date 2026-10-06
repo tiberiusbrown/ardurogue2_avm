@@ -284,10 +284,12 @@ group contiguous in `ItemType` so its predicate remains a simple range test.
 
 Mimics store one of five `MimicAppearance` categories: scroll, potion, amulet,
 ring, or wand. Explicit appearance bits are separate from aggression and fear.
-Rendering maps categories to shared icons through `mimic_icon`; `item_icon`
-also maps ordinary item categories to shared icons. Neither the stored mimic
+Rendering maps categories to shared sprite frame indices through `mimic_icon`;
+`item_icon` also maps ordinary item categories to shared sprite frames. Neither the stored mimic
 appearance nor the icon table depends on `ItemType` numeric ordering or roster
-size. The shared icon table remains in flash, and `Monster` remains eight bytes.
+size. Monster, item, player, stair, door, arrow, and effect artwork uses flash
+sprites rendered through the AVM sprite methods. Map icons are 4x4 pixels, and
+`Monster` remains eight bytes.
 
 Magic bypasses physical armor, protection, and DEX. MR saves when
 `roll(resistance + power + 1) < resistance`; each input caps at 127 to keep
