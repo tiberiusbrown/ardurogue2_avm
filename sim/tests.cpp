@@ -44,6 +44,26 @@ void determinism() {
     for(int i=0;i<16;++i) check(r1.floors[i].floor==i && !r1.floors[i].ascent,"descent visits merged");
     for(int i=0;i<15;++i) check(r1.floors[16+i].floor==14-i && r1.floors[16+i].ascent,"ascent visits merged");
 }
+void entry_state_report() {
+    arena();
+    game.inventory[0]={CONFUSION,3}; game.inventory[1]={SCROLL_TELEPORT,2};
+    game.inventory[2]={HARMING,4}; game.inventory[3]={WAND_FIRE,5};
+    game.inventory[4]={WAND_FORCE,7}; game.inventory[5]={WAND_DIGGING,9};
+    game.inventory[6]={WAND_ICE,8}; set_wand_modifier(game.inventory[6],WAND_UNRELIABLE);
+    game.inventory[7]={RING_INVISIBILITY,1}; game.ring_slots[0]=7;
+    game.inventory[8]={AMULET_SPEED,1}; game.amulet_slot=8;
+    Collector c; c.enter_floor();
+    const auto& f=c.data.floors.back();
+    check(f.entry_control_units==5,"control reserves counted damage potions or lost stack units");
+    check(f.entry_wand_charges==12 && f.entry_offensive_charges==5 && f.entry_emergency_charges==7,
+        "usable wand reserves included digging/afflicted wands or misclassified force");
+    check(f.entry_ring_invisibility && f.entry_speed_amulet && f.entry_invisible && f.entry_speed==3,
+        "entry accessory occupancy/effective state was not captured");
+    game.inventory[7].info|=ITEM_CURSED;
+    Collector cursed; cursed.enter_floor();
+    check(cursed.data.floors.back().entry_ring_invisibility && !cursed.data.floors.back().entry_invisible,
+        "worn invisibility ring was confused with effective invisibility");
+}
 void policy_regressions() {
     arena(); OmniscientAgent a;
     game.inventory[0]={RING_STRENGTH,1}; game.inventory[1]={RING_DEXTERITY,1};
@@ -233,7 +253,7 @@ void experiments() {
 int main() {
     try {
         static_assert(sizeof(Game)==774 && SAVE_VERSION==23,"native saved layout changed");
-        check_v2_policy(); determinism(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
+        check_v2_policy(); determinism(); entry_state_report(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

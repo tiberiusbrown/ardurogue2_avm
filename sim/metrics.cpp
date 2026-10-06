@@ -126,7 +126,25 @@ void Collector::enter_floor() {
     for(auto i:g.inventory) {
         if(i.type==rogue::FOOD) f.entry_food_units+=rogue::item_value(i);
         if(i.type==rogue::HEALING) f.entry_healing_units+=rogue::item_value(i);
+        if(i.type==rogue::CONFUSION || i.type==rogue::PARALYSIS || i.type==rogue::SLOWING ||
+           i.type==rogue::STRENGTH || i.type==rogue::INVISIBILITY || i.type==rogue::SCROLL_FEAR ||
+           i.type==rogue::SCROLL_TELEPORT || i.type==rogue::SCROLL_MASS_CONFUSE)
+                f.entry_control_units+=rogue::item_value(i);
+        if(rogue::is_wand(i.type) && !rogue::wand_afflicted(i) && i.type!=rogue::WAND_DIGGING) {
+            auto charges=rogue::wand_charges(i);
+            f.entry_wand_charges+=charges;
+            if(i.type==rogue::WAND_FIRE || i.type==rogue::WAND_STRIKING || i.type==rogue::WAND_ICE)
+                f.entry_offensive_charges+=charges;
+            if(i.type==rogue::WAND_FORCE || i.type==rogue::WAND_TELEPORT || i.type==rogue::WAND_POLYMORPH)
+                f.entry_emergency_charges+=charges;
+        }
     }
+    for(auto slot:{g.ring_slots[0],g.ring_slots[1]})
+        if(slot<rogue::INVENTORY && g.inventory[slot].type==rogue::RING_INVISIBILITY)
+            f.entry_ring_invisibility=true;
+    f.entry_speed_amulet=g.amulet_slot<rogue::INVENTORY &&
+        g.inventory[g.amulet_slot].type==rogue::AMULET_SPEED;
+    f.entry_invisible=rogue::player_is_invisible();
     const auto& d=rogue::generation::diagnostics;
     const char* archetypes[]={"CHAMBERS","WARREN","FORTRESS","RUINS"};
     f.archetype=archetypes[rogue::generation::archetype(rogue::generation::floor_seed(rogue::generation::LAYOUT))];
@@ -339,6 +357,18 @@ void write_interventions(std::ostream& o,const RunMetrics& r) {
     for(const auto& i:r.interventions) {
         key(o,r); o<<','<<i.visit<<','<<i.floor<<','<<(i.ascent ? "ascent" : "descent")<<','
             <<csv(r.experiment)<<','<<csv(r.variant)<<','<<i.operation<<','<<i.from<<','<<i.to<<','<<i.count<<'\n';
+    }
+}
+void write_entry_state_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,entry_control_units,entry_wand_charges,"
+        "entry_offensive_charges,entry_emergency_charges,entry_ring_invisibility,entry_speed_amulet,entry_invisible\n";
+}
+void write_entry_state(std::ostream& o,const RunMetrics& r) {
+    for(const auto& f:r.floors) {
+        visit_key(o,r,f);
+        o<<','<<f.entry_control_units<<','<<f.entry_wand_charges<<','<<f.entry_offensive_charges
+         <<','<<f.entry_emergency_charges<<','<<f.entry_ring_invisibility<<','<<f.entry_speed_amulet
+         <<','<<f.entry_invisible<<'\n';
     }
 }
 const std::array<CsvStream,7> csv_streams{{

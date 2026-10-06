@@ -6,6 +6,8 @@ The free-form dungeon generator, validation measurements, and example maps
 are documented in [docs/floor-generation.md](docs/floor-generation.md).
 The deterministic host-native autoplay simulator, CLI, telemetry and fixed-seed
 validation are documented in [sim/README.md](sim/README.md).
+Run `python sim/check_balance.py` for a 10,000-seed balance scorecard with
+floor mortality band checks; setup and options are in [sim/BALANCE.md](sim/BALANCE.md#human-readable-10k-scorecard).
 
 This project builds an AVM image using an installed AVM SDK. It is a small
 turn-based dungeon crawl for a 128x64 monochrome screen.

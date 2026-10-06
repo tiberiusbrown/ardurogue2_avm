@@ -25,9 +25,10 @@ int main(int argc, char** argv) {
             auto value=[&]() { if(i+1>=argc) throw std::runtime_error("missing value for "+arg); return std::string(argv[++i]); };
             if(arg=="--help") {
                 std::cout << "ardurogue2_sim [--seed N | --seeds FIRST:LAST | --all-seeds | --count N --start-seed N]\n"
-                    "  [--output DIRECTORY] [--jobs N] [--trace] [--max-actions N] [--no-telemetry]\n"
+                    "  [--output DIRECTORY] [--jobs N] [--trace] [--max-actions N] [--no-telemetry] [--entry-state]\n"
                     "Seeds are unsigned 16-bit; ranges are inclusive. Trace goes to stderr.\n"
                     "Without --output, runs.csv goes to stdout. With --output seven CSVs and manifest.json are written.\n"
+                    "--entry-state adds entry_state.csv for balance reports; requires --output and telemetry.\n"
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"
                     "Also replace-monster, remove-item:FROM and remove-monster:FROM.\n"
@@ -52,6 +53,7 @@ int main(int argc, char** argv) {
             else if(arg=="--jobs") jobs=number(value());
             else if(arg=="--trace") trace=true;
             else if(arg=="--no-telemetry") options.telemetry=false;
+            else if(arg=="--entry-state") options.entry_state=true;
             else if(arg=="--experiment") options.experiment_id=value();
             else if(arg=="--variant") options.variant=value();
             else if(arg=="--intervention") options.intervention_rules.push_back(value());
@@ -67,6 +69,17 @@ int main(int argc, char** argv) {
             for(const auto& rule:options.intervention_rules) experiment->rules.push_back(sim::parse_rule(rule));
             options.experiment=experiment;
         }
+        if(options.entry_state && (output.empty() || !options.telemetry))
+            throw std::runtime_error("--entry-state requires --output and telemetry");
+        std::ofstream entry_state;
+        if(options.entry_state) {
+            std::filesystem::create_directories(output);
+            if(std::filesystem::exists(std::filesystem::path(output)/"runs.csv"))
+                throw std::runtime_error("output already contains runs.csv; choose a fresh directory");
+            entry_state.open(std::filesystem::path(output)/"entry_state.csv");
+            if(!entry_state) throw std::runtime_error("cannot open entry_state.csv");
+            sim::write_entry_state_header(entry_state);
+        }
         std::array<std::ofstream,7> files;
         std::array<std::ostream*,7> outputs{}; outputs[0]=&std::cout;
         if(!output.empty()) {
@@ -80,19 +93,25 @@ int main(int argc, char** argv) {
         for(size_t s=0;s<outputs.size();++s) if(outputs[s]) sim::csv_streams[s].header(*outputs[s]);
         uint64_t escaped=0,deaths=0,stuck=0;
         if(jobs>1 && count>1) {
-            auto totals=sim::parallel_batch(argv[0],start,count,static_cast<unsigned>(jobs),options,outputs);
+            auto totals=sim::parallel_batch(argv[0],start,count,static_cast<unsigned>(jobs),options,outputs,
+                options.entry_state ? &entry_state : nullptr);
             escaped=totals.escaped; deaths=totals.deaths; stuck=totals.stuck;
         } else {
             sim::OmniscientAgent agent;
             for(uint64_t i=0;i<count;++i) {
                 auto r=sim::run(static_cast<uint16_t>(start+i),agent,options);
                 for(size_t s=0;s<outputs.size();++s) if(outputs[s]) sim::csv_streams[s].rows(*outputs[s],r);
+                if(options.entry_state) sim::write_entry_state(entry_state,r);
                 escaped+=r.result=="escaped"; deaths+=r.result=="death"; stuck+=r.stuck;
             }
         }
         for(auto* stream:outputs) if(stream) {
             stream->flush();
             if(!*stream) throw std::runtime_error("output write failed");
+        }
+        if(options.entry_state) {
+            entry_state.flush();
+            if(!entry_state) throw std::runtime_error("entry_state.csv write failed");
         }
         if(!output.empty()) sim::write_manifest(std::filesystem::path(output)/"manifest.json",start,count,unsigned(jobs),all_seeds,options,argc,argv);
         std::cerr << "runs=" << count << " escaped=" << escaped << " death=" << deaths << " simulator_failures=" << stuck << '\n';

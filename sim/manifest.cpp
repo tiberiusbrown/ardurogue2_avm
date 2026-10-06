@@ -29,7 +29,8 @@ void write_manifest(const std::filesystem::path& path,uint64_t start,uint64_t co
      <<",\n  \"options\": {\"max_actions\": "<<options.max_actions<<", \"telemetry\": "<<(options.telemetry ? "true" : "false")
      <<", \"jobs\": "<<jobs<<"},\n  \"interventions\": [";
     for(size_t i=0;i<options.intervention_rules.size();++i) { if(i) o<<", "; o<<json(options.intervention_rules[i]); }
-    o<<"],\n  \"command\": [";
+    o<<"],\n  \"entry_state_schema_version\": "<<(options.entry_state ? ENTRY_STATE_SCHEMA_VERSION : 0)
+     <<",\n  \"command\": [";
     for(int i=0;i<argc;++i) { if(i) o<<", "; o<<json(argv[i]); }
     o<<"]\n}\n";
     if(!o) throw std::runtime_error("manifest write failed");

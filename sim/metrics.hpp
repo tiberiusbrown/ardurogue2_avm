@@ -26,6 +26,10 @@ struct FloorMetrics {
     int entry_max_hp=0, entry_strength=0, entry_dexterity=0, entry_speed=0,
         entry_hunger=0, entry_armor_rating=0, entry_food_units=0, entry_healing_units=0,
         entry_weapon_type=0, entry_weapon_enchant=0, entry_armor_type=0, entry_armor_enchant=0;
+    // Optional host report sidecar; the seven schema-2 streams stay unchanged.
+    int entry_control_units=0, entry_wand_charges=0, entry_offensive_charges=0,
+        entry_emergency_charges=0;
+    bool entry_ring_invisibility=false, entry_speed_amulet=false, entry_invisible=false;
     std::string archetype;
     int floor_tiles=0, major_features=0, corridors=0, loops=0, open_connections=0;
     std::array<uint8_t,16> families{};
@@ -85,6 +89,9 @@ void write_interventions_header(std::ostream&);
 void write_visit_items(std::ostream&, const RunMetrics&);
 void write_visit_monsters(std::ostream&, const RunMetrics&);
 void write_interventions(std::ostream&, const RunMetrics&);
+inline constexpr unsigned ENTRY_STATE_SCHEMA_VERSION=1;
+void write_entry_state_header(std::ostream&);
+void write_entry_state(std::ostream&, const RunMetrics&);
 struct CsvStream {
     const char* name;
     void (*header)(std::ostream&);

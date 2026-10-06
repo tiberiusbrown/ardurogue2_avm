@@ -27,6 +27,7 @@ def main():
                  ("--start-seed", "65535", "--count", "2"), ("--jobs", "0"), ("--jobs", "65"),
                  ("--jobs",), ("--seed",), ("--unknown",)):
         invoke(*args, valid=False)
+    invoke("--entry-state",valid=False)
     for args in (("--all-seeds", "--seed", "4"), ("--seeds", "0:65535"),
                  ("--intervention", "replace-item:DAGGER:FOOD:info=preserve"),
                  ("--intervention", "replace-monster:BAT:INVALID")):
@@ -46,18 +47,30 @@ def main():
         invoke("--seeds", "1:8", "--output", str(first))
         invoke("--count", "8", "--start-seed", "1", "--output", str(second))
         invoke("--seeds", "1:8", "--jobs", "3", "--output", str(concurrent))
+        entry_serial, entry_parallel = Path(scratch)/"entry serial", Path(scratch)/"entry parallel"
+        invoke("--seeds","1:8","--output",str(entry_serial),"--entry-state")
+        invoke("--seeds","1:8","--jobs","3","--output",str(entry_parallel),"--entry-state")
+        invoke("--seed","1","--output",str(Path(scratch)/"invalid entry"),"--entry-state","--no-telemetry",valid=False)
         rows = {}
         streams = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions")
         for name in streams:
             path = first / f"{name}.csv"
             assert path.read_bytes() == (second / path.name).read_bytes(), name
             assert path.read_bytes() == (concurrent / path.name).read_bytes(), f"parallel {name}"
+            assert path.read_bytes() == (entry_serial/path.name).read_bytes(), f"entry collection perturbed {name}"
+            assert path.read_bytes() == (entry_parallel/path.name).read_bytes(), f"parallel entry collection perturbed {name}"
             with path.open(newline="") as f:
                 rows[name] = list(csv.DictReader(f))
             assert all(r["agent"] == "omniscient-v2" for r in rows[name])
             if name != "interventions":
                 assert rows[name] and set(r["seed"] for r in rows[name]) == set(map(str, range(1, 9)))
         assert len(rows["runs"]) == 8
+        assert (entry_serial/"entry_state.csv").read_bytes()==(entry_parallel/"entry_state.csv").read_bytes()
+        with (entry_serial/"entry_state.csv").open(newline="") as file:
+            entry_rows=list(csv.DictReader(file))
+        assert len(entry_rows)==len(rows["floors"])
+        assert json.loads((entry_serial/"manifest.json").read_text())["entry_state_schema_version"]==1
+        assert all(int(r["entry_wand_charges"])==int(r["entry_offensive_charges"])+int(r["entry_emergency_charges"]) for r in entry_rows)
         for run in rows["runs"]:
             visits = [f for f in rows["floors"] if f["seed"] == run["seed"]]
             assert sum(int(f["actions"]) for f in visits) == int(run["actions"])

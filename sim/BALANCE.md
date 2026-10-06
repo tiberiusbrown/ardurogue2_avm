@@ -33,6 +33,85 @@ Optional CTest integration: configure `-DBALANCE_PYTHON=/absolute/path/to/venv/p
 to register `balance_statistics` and `balance_cli`. Without those packages,
 ordinary native tests remain available.
 
+## Human-readable 10k scorecard
+
+After installing Python 3.10+, CMake and a native C++ compiler, install the
+analysis dependencies once (or use the balance virtual environment above):
+
+```sh
+python -m pip install -r sim/requirements-balance.txt
+```
+
+Then run this from the repository root:
+
+```sh
+python sim/check_balance.py
+```
+
+The script uses `build/balance-venv` automatically when the invoking Python
+lacks the analysis dependencies. It configures and rebuilds the **current
+production simulator**, then runs exactly seeds **1..10000**, with eight worker
+processes. Windows Visual Studio's developer environment is loaded automatically;
+its bundled Clang and Ninja are used when both are available. The default native
+build is `build/balance-check-native`, independent of the AVM SDK/build.
+
+It prints the full report and saves `report/summary.md`, `summary.txt`,
+`summary.json`, `floors.csv`, `death_causes.csv`, `items_per_run.csv` and
+`monsters_per_run.csv` under a fresh timestamped `build/balance-check-runs/`
+directory. Raw telemetry and hashed provenance are retained there.
+
+The scorecard covers outcomes, all 16 descent and 15 ascent floors, floor-0 death
+concentration, starvation, entry HP/max HP/level/stats/armor, food/healing/control
+and usable wand reserves, heavy weapon/Plate occupancy, worn Invisibility/Speed
+accessories, effective invisibility/speed, typed item activity and monster burden.
+Floor CSVs include means, medians, reach/survival, Wilson mortality intervals,
+actions, turns, damage and consumables. The additional host-only `--entry-state`
+sidecar has its own schema version 1; the seven original schema-2 streams and
+agent remain unchanged. Old runs without this sidecar must be rerun for a full
+scorecard. Extra probes used by the detailed rebalance audit (such as level-up
+healing attribution) are outside this script's telemetry.
+
+Descent mortality uses the requested broad design bands, inclusive at both ends:
+
+| Floors | Mortality per entered visit |
+| --- | --- |
+| 0 | 8–15% |
+| 1–4 | 1–3% |
+| 5–8 | 1–2.5% |
+| 9–11 | 1.5–3% |
+| 12 | 2–4% |
+| 13 | 3–6% |
+| 14 | 4–7% |
+| 15 | 5–9% |
+
+Each descent floor is marked **LOW**, **HIGH**, **IN BAND**, or **NO DATA** using
+the unrounded point estimate. The 95% Wilson intervals provide sampling context;
+bands are design goals, not statistical acceptance tests. Ascent is marked
+**REVIEW** because no numerical target was specified. Overall escape, resources
+and equipment have no invented bands. Floor 0 accounting for at least half of
+all deaths is a separate review flag, and starvation deaths are reported.
+Invalid/stuck/error runs invalidate the report rather than counting as deaths.
+
+Optional commands:
+
+```sh
+# Use a different configured native build; it is rebuilt before running.
+python sim/check_balance.py --build-dir build/sim-native
+# Fresh named output, four workers, and a paired comparison with a prior 10k run.
+python sim/check_balance.py --jobs 4 --output build/balance/check-next --baseline build/balance/check-previous
+# Reprint a completed report without simulation.
+python sim/check_balance.py --summarize-only build/balance/check-next
+# CI-friendly status: exit 2 for out-of-band descent; exit 1 for invalid data/errors.
+python sim/check_balance.py --strict-bands
+```
+
+Normal execution exits 0 even when design bands are missed. `--simulator EXE`
+skips compilation when the caller has already built the executable; this option
+requires ensuring the binary contains the intended current mechanics and supports
+`--entry-state`. Output directories must be fresh; datasets are never overwritten.
+`--baseline` uses the existing paired framework with matched effective seeds,
+McNemar's test, a deterministic paired bootstrap and detailed comparison exports.
+
 ## Routine 10k and full-seed workflows
 
 ```sh

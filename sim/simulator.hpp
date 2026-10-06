@@ -8,6 +8,7 @@ struct Options {
     uint64_t max_actions = 20000;
     unsigned max_rejected = 32, max_identical = 32, max_path_failures = 32;
     bool telemetry = true;
+    bool entry_state = false;
     std::ostream* trace = nullptr;
     std::shared_ptr<const Experiment> experiment;
     std::vector<std::string> intervention_rules;

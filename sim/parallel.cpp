@@ -116,7 +116,8 @@ void merge(const fs::path& file, std::ostream& output, const std::string& expect
 }
 }
 BatchCounts parallel_batch(const std::string& executable, uint64_t start,
-    uint64_t count, unsigned jobs, const Options& options, const std::array<std::ostream*,7>& outputs) {
+    uint64_t count, unsigned jobs, const Options& options, const std::array<std::ostream*,7>& outputs,
+    std::ostream* entry_state) {
     if(options.trace) throw std::runtime_error("parallel batches cannot trace multiple seeds");
     jobs=static_cast<unsigned>(std::min<uint64_t>(jobs,count));
     Scratch scratch;
@@ -129,6 +130,7 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
         std::vector<std::string> args{executable,"--seeds",std::to_string(first)+":"+std::to_string(last),
             "--output",directory.string(),"--max-actions",std::to_string(options.max_actions)};
         if(!options.telemetry) args.push_back("--no-telemetry");
+        if(entry_state) args.push_back("--entry-state");
         args.insert(args.end(),{"--experiment",options.experiment_id,"--variant",options.variant});
         for(const auto& rule:options.intervention_rules) args.insert(args.end(),{"--intervention",rule});
         directories.push_back(directory);
@@ -155,6 +157,7 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
         if(input.bad()) throw std::runtime_error("worker runs read failed");
         for(size_t s=1;s<csv_streams.size();++s) if(outputs[s])
             merge(directory/csv_streams[s].name,*outputs[s],header(csv_streams[s].header));
+        if(entry_state) merge(directory/"entry_state.csv",*entry_state,header(write_entry_state_header));
     }
     if(next!=start+count) throw std::runtime_error("worker seed count mismatch");
     return result;
