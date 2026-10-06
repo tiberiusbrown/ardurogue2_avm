@@ -393,7 +393,7 @@ int main()
     };
     const uint32_t expected[] = {
         0xc0b79398u, 0xc7113a38u, 0x473d2b98u, 0x8bbf3a38u,
-        0x0b000368u, 0xc421c3bfu, 0x37850c9cu, 0xdc749961u,
+        0x226e8606u, 0xc280f35fu, 0x37850c9cu, 0xdc749961u,
         0x4b46c42bu, 0xd975e0abu, 0x0d861207u
     };
     bool failed = false;

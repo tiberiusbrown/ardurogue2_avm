@@ -394,6 +394,9 @@ static void check_generated_equipment()
 {
     unsigned counts[2][5][2] = {}, depth_counts[FLOORS][2][5] = {};
     unsigned subtype_counts[11][5][2] = {}, category_counts[INVENTORY_GROUPS] = {};
+    unsigned depth_subtypes[FLOORS][11] = {};
+    unsigned ring_counts[RING_COUNT] = {}, amulet_counts[AMULET_COUNT] = {};
+    unsigned potion_counts[FLOORS][POTION_COUNT] = {};
     unsigned generated = 0;
     unsigned appearances[MIMIC_APPEARANCE_COUNT] = {};
     for(uint16_t seed = 1; seed <= 4096; ++seed) {
@@ -413,6 +416,9 @@ static void check_generated_equipment()
                 if(item.type == NO_ITEM) continue;
                 ++generated;
                 ++category_counts[inventory_group(item.type)];
+                if(is_ring(item.type)) ++ring_counts[item.type - RING_SEE_INVISIBLE];
+                if(is_amulet(item.type)) ++amulet_counts[item.type - AMULET_SPEED];
+                if(is_potion(item.type)) ++potion_counts[floor][item.type - HEALING];
                 if(!is_equipment(item.type)) continue;
                 int8_t enchant = equipment_enchant(item);
                 require(enchant >= -2 && enchant <= 2 && !item_is_identified(item) &&
@@ -422,8 +428,10 @@ static void check_generated_equipment()
                 ++counts[is_weapon(item.type) ? 0 : 1][enchant + 2][item_is_cursed(item) ? 1 : 0];
                 ++depth_counts[floor][is_weapon(item.type) ? 0 : 1][enchant + 2];
                 for(unsigned subtype = 0; subtype < sizeof equipment_types; ++subtype)
-                    if(item.type == equipment_types[subtype])
+                    if(item.type == equipment_types[subtype]) {
                         ++subtype_counts[subtype][enchant + 2][item_is_cursed(item) ? 1 : 0];
+                        ++depth_subtypes[floor][subtype];
+                    }
             }
         }
     }
@@ -453,18 +461,13 @@ static void check_generated_equipment()
         require(category_counts[category] * 7200 > generated * (category_weights[category] * 100 - 72) &&
                 category_counts[category] * 7200 < generated * (category_weights[category] * 100 + 72),
                 "subtype generation changed overall loot category probability");
-    const unsigned subtype_weights[] = {25, 20, 30, 15, 10, 25, 20, 20, 15, 12, 8};
     for(unsigned subtype = 0; subtype < sizeof equipment_types; ++subtype) {
-        unsigned total = 0, category_total = 0, cursed = 0;
+        unsigned total = 0, cursed = 0;
         for(const auto& bucket : subtype_counts[subtype]) {
             total += bucket[0] + bucket[1];
             cursed += bucket[1];
         }
-        for(const auto& bucket : counts[subtype < 5 ? 0 : 1])
-            category_total += bucket[0] + bucket[1];
-        require(total > 500 && total * 100 > category_total * (subtype_weights[subtype] - 2) &&
-                total * 100 < category_total * (subtype_weights[subtype] + 2),
-                "equipment subtype omitted or incorrectly weighted");
+        require(total > 500, "equipment generation omitted a tier");
         require(cursed * 100 > total * 8 && cursed * 100 < total * 17,
                 "equipment curse probability depends on subtype");
         for(unsigned enchant = 0; enchant < 5; ++enchant) {
@@ -478,6 +481,29 @@ static void check_generated_equipment()
                     "equipment curse probability depends on subtype/enchantment together");
         }
     }
+    unsigned early_armor = 0, late_armor = 0, early_plate = 0, late_plate = 0;
+    unsigned early_weapons = 0, late_weapons = 0, early_heavy = 0, late_heavy = 0;
+    for(unsigned floor = 0; floor < FLOORS; ++floor) {
+        for(unsigned subtype = 0; subtype < sizeof equipment_types; ++subtype) {
+            require(depth_subtypes[floor][subtype] != 0,
+                    "equipment tier is locked out at a depth");
+            if(subtype < 5) {
+                if(floor < 4) early_weapons += depth_subtypes[floor][subtype];
+                if(floor >= 12) late_weapons += depth_subtypes[floor][subtype];
+                continue;
+            }
+            if(floor < 4) early_armor += depth_subtypes[floor][subtype];
+            if(floor >= 12) late_armor += depth_subtypes[floor][subtype];
+        }
+        if(floor < 4) early_heavy += depth_subtypes[floor][4];
+        if(floor >= 12) late_heavy += depth_subtypes[floor][4];
+        if(floor < 4) early_plate += depth_subtypes[floor][10];
+        if(floor >= 12) late_plate += depth_subtypes[floor][10];
+    }
+    require(early_plate * 100 < early_armor * 3 && late_plate * 100 > late_armor * 14,
+            "plate availability no longer supports a depth-paced upgrade curve");
+    require(early_heavy * 100 < early_weapons * 4 && late_heavy * 100 > late_weapons * 15,
+            "top weapon availability no longer supports a depth-paced upgrade curve");
     for(const auto& depth : depth_counts) {
         for(const auto& equipment : depth) {
             unsigned total = 0;
@@ -490,6 +516,43 @@ static void check_generated_equipment()
     }
     for(unsigned count : appearances)
         require(count != 0, "generation omitted a mimic appearance category");
+    unsigned rings = 0;
+    for(unsigned count : ring_counts) {
+        require(count != 0, "generation omitted a ring type");
+        rings += count;
+    }
+    unsigned invisible = ring_counts[RING_INVISIBILITY - RING_SEE_INVISIBLE];
+    unsigned immunity = ring_counts[RING_FIRE_IMMUNITY - RING_SEE_INVISIBLE];
+    require(invisible * 100 > rings * 5 && invisible * 100 < rings * 8 &&
+            immunity * 100 > rings * 16 && immunity * 100 < rings * 21,
+            "permanent invisibility is not rarer than its defensive comparator");
+    unsigned amulets = 0;
+    for(unsigned count : amulet_counts) {
+        require(count != 0, "generation omitted an amulet type");
+        amulets += count;
+    }
+    unsigned speed = amulet_counts[0];
+    unsigned vampire = amulet_counts[AMULET_VAMPIRE - AMULET_SPEED];
+    if(!(speed * 100 > amulets * 5 && speed * 100 < amulets * 8 &&
+         vampire * 100 > amulets * 16 && vampire * 100 < amulets * 21))
+        std::printf("Amulet sample: speed=%u vampire=%u total=%u\n", speed, vampire, amulets);
+    require(speed * 100 > amulets * 5 && speed * 100 < amulets * 8 &&
+            vampire * 100 > amulets * 16 && vampire * 100 < amulets * 21,
+            "speed is not rarer than its combat-healing comparator");
+    for(uint8_t floor = 0; floor < FLOORS; ++floor) {
+        unsigned potions = 0;
+        for(unsigned count : potion_counts[floor]) {
+            require(count != 0, "generation omitted a potion at a depth");
+            potions += count;
+        }
+        unsigned experience = potion_counts[floor][EXPERIENCE - HEALING];
+        unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? SLOWING : HEALING) - HEALING];
+        bool early_recovery = floor > 0 && floor < 5;
+        require(experience * 100 > potions * 3 && experience * 100 < potions * 7 &&
+                replacement * 100 > potions * (early_recovery ? 20 : 12) &&
+                replacement * 100 < potions * (early_recovery ? 30 : 18),
+                "experience rarity or tactical/recovery supply pacing regressed");
+    }
 }
 
 void check_weapon_and_equipment_rules()

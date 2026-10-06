@@ -230,7 +230,10 @@ void gain_xp(uint8_t amount)
         total -= threshold;
         ++game.level;
         game.max_hp = static_cast<uint8_t>(game.max_hp + 3);
-        game.hp = player_max_hp();
+        uint8_t recovery = static_cast<uint8_t>((static_cast<uint16_t>(player_max_hp()) + 3) / 4);
+        if(recovery < 18) recovery = 18;
+        uint16_t recovered = static_cast<uint16_t>(game.hp) + recovery;
+        game.hp = recovered > player_max_hp() ? player_max_hp() : static_cast<uint8_t>(recovered);
         if(game.level % 4 == 0 && game.magic_resistance < 127)
             ++game.magic_resistance;
         status(F("You gained a level!"));

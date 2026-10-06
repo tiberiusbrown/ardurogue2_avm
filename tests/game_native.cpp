@@ -165,8 +165,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0xcfea7fdcu, 0xf3c78df8u}, {0x630b2ec8u, 0xf8c71261u},
-        {0xc076a16du, 0xf85500e5u}, {0x1ceb4681u, 0x270ace4au}
+        {0x5e71a7f5u, 0xe8bf145du}, {0x2858b89cu, 0x6c365cb5u},
+        {0xd8686f8au, 0xfb40913eu}, {0x4c230c33u, 0x8e2b6476u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -1558,7 +1558,8 @@ void check_enemy_roster()
         (1u << MIMIC) | (1u << INCUBUS) | (1u << TROLL) |
             (1u << GRIFFIN) | (1u << DRAGON),
         (1u << INCUBUS) | (1u << TROLL) | (1u << GRIFFIN) | (1u << DRAGON),
-        (1u << INCUBUS) | (1u << ANGEL) | (1u << DRAGON),
+        (1u << INCUBUS) | (1u << ANGEL) | (1u << DRAGON) |
+            (1u << TROLL) | (1u << GRIFFIN),
         (1u << INCUBUS) | (1u << ANGEL) | (1u << LORD)
     };
     for(uint8_t floor = 0; floor < FLOORS; ++floor) {

@@ -23,18 +23,19 @@ void arena() {
 void determinism() {
     OmniscientAgent a;
     std::ostringstream first,second,without;
-    Options o; o.trace=&first; auto r1=run(4,a,o); Game final=game;
-    o.trace=&second; auto r2=run(4,a,o);
+    constexpr uint16_t escape_seed = 1;
+    Options o; o.trace=&first; auto r1=run(escape_seed,a,o); Game final=game;
+    o.trace=&second; auto r2=run(escape_seed,a,o);
     check(all_metrics(r1)==all_metrics(r2) && first.str()==second.str(),"same seed changed metrics/trace");
     check(std::memcmp(&final,&game,sizeof game)==0,"same seed changed final state");
-    o.trace=nullptr; auto quiet=run(4,a,o);
+    o.trace=nullptr; auto quiet=run(escape_seed,a,o);
     check(all_metrics(r1)==all_metrics(quiet),"tracing perturbed the result or telemetry");
-    o.telemetry=false; o.trace=&without; auto disabled=run(4,a,o);
+    o.telemetry=false; o.trace=&without; auto disabled=run(escape_seed,a,o);
     check(first.str()==without.str(),"telemetry collection changed action/event trace");
     check(r1.actions==disabled.actions && r1.turns==disabled.turns && r1.score==disabled.score &&
         r1.result==disabled.result && r1.action_hash==disabled.action_hash &&
         std::memcmp(&final,&game,sizeof game)==0,"telemetry collection changed gameplay/RNG");
-    check(r1.result=="escaped" && r1.has_yendor && r1.final_floor==0,"escape regression seed 4 failed");
+    check(r1.result=="escaped" && r1.has_yendor && r1.final_floor==0,"escape regression seed 1 failed");
     check(r1.monsters[LORD].killed==1 && r1.items[YENDOR_AMULET].picked_up==1,"escape skipped Lord/Yendor");
     check(r1.floors.size()==31 && r1.floors_exited==31,"round trip lacks complete floor visits");
     uint64_t actions=0,turns=0;

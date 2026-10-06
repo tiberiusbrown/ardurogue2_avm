@@ -7,23 +7,23 @@ namespace rogue::generation {
 
 // Weighted encounter lists from ArduRogue's MAP_GEN_INFOS. Zero entries are
 // retried, as in the original generator.
-static const uint8_t PROGMEM floor_monsters[FLOORS][6] = {
-    {BAT, SNAKE, SNAKE, 0, 0, 0},
-    {SNAKE, SNAKE, SNAKE, SNAKE, RATTLESNAKE, RATTLESNAKE},
-    {ZOMBIE, ZOMBIE, ZOMBIE, GOBLIN, GOBLIN, PHANTOM},
-    {ZOMBIE, GOBLIN, GOBLIN, PHANTOM, ORC, 0},
-    {PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM},
-    {GOBLIN, GOBLIN, GOBLIN, ORC, HOBGOBLIN, 0},
-    {ORC, ORC, HOBGOBLIN, TARANTULA, MIMIC, 0},
-    {ORC, HOBGOBLIN, TARANTULA, TARANTULA, TARANTULA, MIMIC},
-    {HOBGOBLIN, HOBGOBLIN, HOBGOBLIN, TARANTULA, MIMIC, INCUBUS},
-    {MIMIC, MIMIC, MIMIC, MIMIC, TARANTULA, HOBGOBLIN},
-    {TARANTULA, HOBGOBLIN, MIMIC, INCUBUS, INCUBUS, TROLL},
-    {HOBGOBLIN, MIMIC, INCUBUS, TROLL, TROLL, GRIFFIN},
-    {MIMIC, INCUBUS, TROLL, GRIFFIN, GRIFFIN, DRAGON},
-    {INCUBUS, TROLL, GRIFFIN, DRAGON, DRAGON, DRAGON},
-    {INCUBUS, ANGEL, ANGEL, DRAGON, DRAGON, DRAGON},
-    {INCUBUS, INCUBUS, ANGEL, ANGEL, ANGEL, ANGEL}
+static const uint8_t PROGMEM floor_monsters[FLOORS][12] = {
+    {BAT, BAT, SNAKE, 0, 0, 0, BAT, BAT, SNAKE, 0, 0, 0},
+    {SNAKE, SNAKE, SNAKE, SNAKE, RATTLESNAKE, RATTLESNAKE, SNAKE, SNAKE, SNAKE, SNAKE, RATTLESNAKE, RATTLESNAKE},
+    {ZOMBIE, ZOMBIE, ZOMBIE, GOBLIN, GOBLIN, PHANTOM, ZOMBIE, ZOMBIE, ZOMBIE, GOBLIN, GOBLIN, PHANTOM},
+    {ZOMBIE, GOBLIN, GOBLIN, PHANTOM, ORC, 0, ZOMBIE, GOBLIN, GOBLIN, PHANTOM, ORC, 0},
+    {PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM, PHANTOM},
+    {GOBLIN, GOBLIN, GOBLIN, ORC, HOBGOBLIN, 0, GOBLIN, GOBLIN, GOBLIN, ORC, HOBGOBLIN, 0},
+    {ORC, ORC, HOBGOBLIN, TARANTULA, MIMIC, 0, ORC, ORC, HOBGOBLIN, TARANTULA, MIMIC, 0},
+    {ORC, HOBGOBLIN, TARANTULA, TARANTULA, TARANTULA, MIMIC, ORC, HOBGOBLIN, TARANTULA, TARANTULA, TARANTULA, MIMIC},
+    {HOBGOBLIN, HOBGOBLIN, HOBGOBLIN, TARANTULA, MIMIC, INCUBUS, HOBGOBLIN, HOBGOBLIN, HOBGOBLIN, TARANTULA, MIMIC, INCUBUS},
+    {MIMIC, MIMIC, MIMIC, MIMIC, TARANTULA, HOBGOBLIN, MIMIC, MIMIC, MIMIC, MIMIC, TARANTULA, HOBGOBLIN},
+    {TARANTULA, HOBGOBLIN, MIMIC, INCUBUS, INCUBUS, TROLL, TARANTULA, HOBGOBLIN, MIMIC, INCUBUS, INCUBUS, TROLL},
+    {HOBGOBLIN, MIMIC, INCUBUS, TROLL, TROLL, GRIFFIN, HOBGOBLIN, MIMIC, INCUBUS, TROLL, TROLL, GRIFFIN},
+    {MIMIC, INCUBUS, TROLL, GRIFFIN, GRIFFIN, DRAGON, MIMIC, INCUBUS, TROLL, GRIFFIN, GRIFFIN, INCUBUS},
+    {INCUBUS, TROLL, GRIFFIN, DRAGON, DRAGON, TROLL, INCUBUS, TROLL, GRIFFIN, TROLL, INCUBUS, GRIFFIN},
+    {INCUBUS, ANGEL, ANGEL, DRAGON, DRAGON, DRAGON, INCUBUS, ANGEL, ANGEL, DRAGON, TROLL, GRIFFIN},
+    {INCUBUS, INCUBUS, ANGEL, ANGEL, ANGEL, ANGEL, INCUBUS, INCUBUS, ANGEL, ANGEL, ANGEL, ANGEL}
 };
 
 static uint8_t floor_roll(uint16_t& seed, uint8_t limit)
@@ -46,19 +46,45 @@ static uint8_t floor_equipment_roll(uint16_t& seed, uint8_t limit)
 
 static uint8_t floor_weapon_type(uint16_t& seed)
 {
-    // Cumulative integer weights: 25, 20, 30, 15, 10.
+    // Keep the full weapon ladder, with the top tier rarer during the opening.
+    uint8_t heavy = game.floor < 4 ? 2 : game.floor < 8 ? game.floor : game.floor < 10 ? 10 : 20;
     uint8_t chance = floor_equipment_roll(seed, 100);
     return chance < 25 ? DAGGER : chance < 45 ? SPEAR :
-        chance < 75 ? LONG_SWORD : chance < 90 ? MACE : TWO_HANDED_SWORD;
+        chance < 75 ? LONG_SWORD : chance < 100 - heavy ? MACE : TWO_HANDED_SWORD;
 }
 
 static uint8_t floor_armor_type(uint16_t& seed)
 {
-    // Cumulative integer weights: 25, 20, 20, 15, 12, 8.
+    // Delay Plate while keeping every intrinsic tier possible at every depth.
+    uint8_t plate = game.floor < 4 ? 1 : game.floor < 8 ? game.floor - 1 : game.floor < 10 ? 8 : 18;
     uint8_t chance = floor_equipment_roll(seed, 100);
     return chance < 25 ? LEATHER_ARMOR : chance < 45 ? RING_MAIL :
         chance < 65 ? SCALE_MAIL : chance < 80 ? CHAIN_MAIL :
-        chance < 92 ? SPLINT_MAIL : PLATE_MAIL;
+        chance < 100 - plate ? SPLINT_MAIL : PLATE_MAIL;
+}
+
+static uint8_t floor_ring_type(uint16_t& seed)
+{
+    uint8_t chance = floor_roll(seed, 16);
+    if(game.floor < 16 && chance % RING_COUNT == RING_COUNT - 1 && chance >= RING_COUNT)
+        return RING_FIRE_IMMUNITY;
+    return static_cast<uint8_t>(RING_SEE_INVISIBLE + chance % RING_COUNT);
+}
+
+static uint8_t floor_amulet_type(uint16_t& seed)
+{
+    uint8_t chance = floor_roll(seed, 16);
+    if(chance == 8) return AMULET_VAMPIRE;
+    return static_cast<uint8_t>(AMULET_SPEED + chance % AMULET_COUNT);
+}
+
+static uint8_t floor_potion_type(uint16_t& seed)
+{
+    uint8_t chance = floor_roll(seed, 20);
+    if(game.floor > 0 && game.floor < 5 && (chance == POTION_COUNT + HARMING - HEALING || chance == POTION_COUNT + POISON - HEALING)) return HEALING;
+    if(chance == POTION_COUNT + EXPERIENCE - HEALING)
+        return game.floor == 0 || (game.floor >= 5 && game.floor < 10) ? SLOWING : HEALING;
+    return static_cast<uint8_t>(HEALING + chance % POTION_COUNT);
 }
 
 constexpr uint8_t NORMAL_WAND_WEIGHT = 60;
@@ -133,7 +159,7 @@ __attribute__((noinline)) void populate_monsters(uint16_t seed)
             // Encounter table retries retain the original depth distribution.
             // Every row has a nonzero entry; bound even this retry loop.
             for(uint8_t tries = 0; tries < 32 && !type; ++tries)
-                type = floor_monsters[game.floor][floor_roll(seed, 6)];
+                type = floor_monsters[game.floor][floor_roll(seed, 12)];
             if(!type) type = floor_monsters[game.floor][0];
         }
         uint8_t appearance = type == MIMIC ? floor_roll(seed, MIMIC_APPEARANCE_COUNT) : 0;
@@ -155,7 +181,7 @@ __attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
         uint8_t chance = floor_roll(seed, 72);
         uint8_t type = chance < 20 ? FOOD : chance < 40
-            ? static_cast<uint8_t>(HEALING + floor_roll(seed, POTION_COUNT)) :
+            ? floor_potion_type(seed) :
               chance < 48 ? static_cast<uint8_t>(SCROLL_IDENTIFY +
                                                 floor_roll(seed, SCROLL_COUNT)) :
               chance < 56 ? floor_weapon_type(equipment_seed) :
@@ -163,10 +189,8 @@ __attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_
               chance < 68 ? static_cast<uint8_t>(WAND_FORCE +
                                                  floor_roll(seed, WAND_COUNT)) :
               chance < 70
-                ? static_cast<uint8_t>(RING_SEE_INVISIBLE +
-                                       floor_roll(seed, RING_COUNT))
-                : static_cast<uint8_t>(AMULET_SPEED +
-                                       floor_roll(seed, AMULET_COUNT));
+                ? floor_ring_type(seed)
+                : floor_amulet_type(seed);
         uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) : 1;
         if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
             info |= ITEM_CURSED;

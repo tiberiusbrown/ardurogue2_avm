@@ -149,6 +149,48 @@ static void combat_fixture()
     game.hunger = 255;
 }
 
+static void check_level_recovery()
+{
+    combat_fixture();
+    game.hp = 1;
+    game.max_hp = 18;
+    game.level = 1;
+    game.xp = 0;
+    gain_xp(7);
+    require(game.level == 2 && game.max_hp == 21 && game.hp == 19 && game.xp == 0,
+            "first level must grant the minimum recovery without filling HP");
+
+    combat_fixture();
+    game.hp = 1;
+    game.max_hp = 78;
+    game.level = 21;
+    game.xp = 0;
+    gain_xp(67);
+    require(game.level == 22 && game.max_hp == 81 && game.hp == 22,
+            "late level must recover a quarter of effective max HP, rounded up");
+
+    combat_fixture();
+    game.hp = 20;
+    game.max_hp = 18;
+    game.level = 1;
+    game.xp = 0;
+    game.inventory[0] = {AMULET_VITALITY, 2};
+    game.amulet_slot = 0;
+    game.vamp_drain = 5;
+    gain_xp(7);
+    require(player_max_hp() == 26 && game.hp == 26,
+            "level recovery must clamp to effective vitality/drain maximum");
+
+    combat_fixture();
+    game.hp = 1;
+    game.max_hp = 18;
+    game.level = 1;
+    game.xp = 0;
+    gain_xp(17);
+    require(game.level == 3 && game.max_hp == 24 && game.hp == 24 && game.xp == 0,
+            "each level in a multi-level reward must recover HP separately");
+}
+
 static void check_player_pipeline()
 {
     combat_fixture();
@@ -396,6 +438,7 @@ static void check_live_melee()
 void check_combat_rules()
 {
     check_arithmetic();
+    check_level_recovery();
     check_player_pipeline();
     check_live_melee();
 }

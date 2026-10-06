@@ -17,8 +17,8 @@ def main():
         assert (p.returncode == 0) == valid, (args, p.stderr)
         return p
 
-    quiet = invoke("--seed", "4")
-    traced = invoke("--seed", "0x4", "--trace")
+    quiet = invoke("--seed", "1")
+    traced = invoke("--seed", "0x1", "--trace")
     assert quiet.stdout == traced.stdout
     assert "killed LORD" in traced.stderr and "picked up YENDOR_AMULET" in traced.stderr
     assert "result=escaped" in traced.stderr
@@ -38,7 +38,7 @@ def main():
     serial=invoke("--seeds","0:8")
     parallel=invoke("--seeds","0:8","--jobs","3")
     assert (serial.stdout,serial.stderr)==(parallel.stdout,parallel.stderr)
-    assert invoke("--seed","4","--jobs","8","--trace").stdout==quiet.stdout
+    assert invoke("--seed","1","--jobs","8","--trace").stdout==quiet.stdout
     limited=invoke("--seeds","1:5","--max-actions","1","--no-telemetry")
     assert limited.stdout==invoke("--seeds","1:5","--jobs","3","--max-actions","1","--no-telemetry").stdout
     with tempfile.TemporaryDirectory(prefix="ardurogue2-sim-cli-") as scratch:
