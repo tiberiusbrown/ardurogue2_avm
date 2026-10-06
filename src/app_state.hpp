@@ -5,7 +5,7 @@
 namespace rogue {
 
 enum Mode : uint8_t {
-    TITLE, PLAY, MENU, THROW_DIRECTION, WAND_DIRECTION, FULL_MAP, END
+    TITLE, PLAY, MENU, PROJECTILE_DIRECTION, WAND_DIRECTION, FULL_MAP, END
 };
 
 struct Ui {

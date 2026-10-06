@@ -46,7 +46,7 @@ def main():
         assert summary["simulator_failures"]==0
         assert saved["floors"][0]["mortality_pct"]==100*int((opening.exited==0).sum())/8
         assert all(r["band_status"] in ("REVIEW","NO DATA") for r in saved["floors"] if r["direction"]=="ascent")
-        assert len(saved["provenance"]["output_csv_sha256"])==7
+        assert len(saved["provenance"]["output_csv_sha256"])==8
         assert len(saved["provenance"]["entry_state_sha256"])==64
         assert (run/"report/items_per_run.csv").exists() and (run/"report/monsters_per_run.csv").exists()
         rejected(lambda: report.make_report(run,expected_runs=10000),"exactly seeds")

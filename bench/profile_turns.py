@@ -21,7 +21,8 @@ import tempfile
 
 CLOCK_HZ = 16_000_000
 DEFAULT_GOAL_MS = 100.0
-INVENTORY_RANGES = (("LONG_SWORD", "TWO_HANDED_SWORD", "WEAPONS"),
+INVENTORY_RANGES = (("LONG_SWORD", "LONG_BOW", "WEAPONS"),
+                    ("ARROWS", "ARROWS", "AMMO"),
                     ("CHAIN_MAIL", "PLATE_MAIL", "ARMORS"),
                     ("RING_SEE_INVISIBLE", "RING_INVISIBILITY", "RINGS"),
                     ("AMULET_SPEED", "AMULET_WISDOM", "AMULETS"),
@@ -54,9 +55,9 @@ def read_benchmarks(path):
             len({entry[0] for entry in entries}) == len(entries), "invalid compiled benchmark manifest")
     cases = tuple(Benchmark(name, description, setup, button, item, int(down), int(up), index)
                   for index, (name, description, setup, button, terrain, item, down, up) in enumerate(entries))
-    require(all((case.setup == "browse" and case.button in ("A", "DOWN", "UP") and
+    require(all((case.setup in ("browse", "projectile_browse") and case.button in ("A", "DOWN", "UP") and
                  (case.button != "A" or not (case.down or case.up))) or
-                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup") and
+                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile") and
                  case.button in ("RIGHT", "A") and not (case.down or case.up))
                 for case in cases), "unsupported benchmark input preparation")
     return cases
@@ -109,7 +110,7 @@ def state_fields(case):
         fields["amulet_empty"] = "rogue::game.amulet_slot == rogue::NONE"
     if case.name == "wand_digging":
         fields["charges"] = "rogue::game.inventory[0].info & rogue::WAND_CHARGE_MASK"
-    if case.setup == "browse":
+    if case.setup in ("browse", "projectile_browse"):
         fields["pack_size"] = "rogue::INVENTORY"
         fields["visible_rows"] = "rogue::INVENTORY_VISIBLE_ROWS"
         fields["group_count"] = "rogue::InventoryGroup::INVENTORY_GROUPS"
@@ -152,12 +153,12 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
     ]
     if case.setup == "wait":
         commands += press("B")
-    if case.setup in ("use", "drop", "wand", "browse"):
+    if case.setup in ("use", "drop", "wand", "browse", "projectile", "projectile_browse"):
         commands += press("B")
-        selection = 2 if case.setup == "drop" else 1
+        selection = 3 if case.setup in ("projectile", "projectile_browse") else 2 if case.setup == "drop" else 1
         for _ in range(selection):
             commands += press("DOWN")
-    if case.setup == "browse":
+    if case.setup in ("browse", "projectile_browse"):
         commands += ["breakpoint disable 3",
                      f"breakpoint set --file ui.cpp --line {contract['item_idle']}"]
         if case.button != "A":
@@ -165,7 +166,7 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
             for button, count in (("DOWN", case.down), ("UP", case.up)):
                 for _ in range(count):
                     commands += press(button)
-    if case.setup in ("use", "drop", "pickup", "wand"):
+    if case.setup in ("use", "drop", "pickup", "wand", "projectile"):
         line = contract["yesno_idle"] if case.setup == "pickup" else contract["item_idle"]
         commands += [
             "breakpoint disable 3", f"breakpoint set --file ui.cpp --line {line}",
@@ -173,11 +174,11 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
             "avm button set", run,  # Poll release, ready for the final A edge.
             "breakpoint disable 4", "breakpoint enable 3",
         ]
-        if case.setup == "wand":
+        if case.setup in ("wand", "projectile"):
             commands += press("A")  # Confirm slot; stop after direction prompt is ready.
     commands += [
         *snapshot(),
-        *([f"avm display save {quote(folder / 'before.pgm')} --mode logical"] if case.setup == "browse" else []),
+        *([f"avm display save {quote(folder / 'before.pgm')} --mode logical"] if case.setup in ("browse", "projectile_browse") else []),
         "avm time",
         "avm profile start" + (" --native" if native else ""),
         "avm button set " + case.button, run, "avm time", "avm profile stop",
@@ -187,7 +188,7 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         f"memory read --binary --outfile {quote(folder / 'explored.bin')} --size 1 "
         "--count `sizeof(rogue::game.explored)` `(unsigned int)&rogue::game.explored + 0x01000000`",
         "thread backtrace",
-        f"avm display save {quote(folder / 'frame.pgm')} --mode " + ("logical" if case.setup == "browse" else "controller"),
+        f"avm display save {quote(folder / 'frame.pgm')} --mode " + ("logical" if case.setup in ("browse", "projectile_browse") else "controller"),
     ]
     return "\n".join(commands) + "\n"
 
@@ -198,11 +199,11 @@ def records_from(output):
 
 
 def validate_outcome(case, before, after, explored):
-    expected_turns = before["turns"] if case.setup == "browse" else (before["turns"] + 1) % 256
-    require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup == "browse"
+    expected_turns = before["turns"] if case.setup in ("browse", "projectile_browse") else (before["turns"] + 1) % 256
+    require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup in ("browse", "projectile_browse")
             else "expected one completed game turn")
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
-    if case.setup == "browse":
+    if case.setup in ("browse", "projectile_browse"):
         require(before == after, "inventory browsing changed game state")
         return
     position_before = (before["x"], before["y"])
@@ -223,7 +224,7 @@ def validate_outcome(case, before, after, explored):
         require(after["item_type"] == 0, "consumable/drop was not used")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
-    for name, slot in (("equip_weapon", "weapon"), ("equip_armor", "armor")):
+    for name, slot in (("equip_weapon", "weapon"), ("equip_bow", "weapon"), ("equip_armor", "armor")):
         if case.name == name:
             require(after[slot] == 0 and after["expected_item"], "item was not equipped")
     if case.name == "equip_ring":
@@ -244,6 +245,11 @@ def validate_outcome(case, before, after, explored):
     if case.name == "wand_digging":
         require(after["charges"] == before["charges"] - 1 and before["digging_wall"] and not after["digging_wall"],
                 "digging did not spend a charge and carve the wall")
+    if case.setup == "projectile":
+        require(before["item_info"] == 255 and after["item_info"] == 254, "arrow consumption/quantity wrong")
+        if case.name == "arrow_hit": require(after["monster_hp"] < before["monster_hp"], "arrow failed to hit")
+        if case.name == "arrow_miss": require(after["monster_hp"] == before["monster_hp"], "arrow failed to miss")
+        if case.name == "arrow_kill": require(after["monster_type"] == 0 and after["score"] > before["score"], "arrow failed to kill")
     if case.name == "pickup_food":
         require(after["ground_type"] == 0 and after["food"], "food was not picked up")
 
@@ -332,7 +338,7 @@ def validate_sample(case, contract, folder, output):
     times = [record for record in records if "seconds_since_reset" in record]
     require(len(times) == 3, "missing ready/start/end clock records")
     ready, start, end = times
-    if case.setup == "browse":
+    if case.setup in ("browse", "projectile_browse"):
         modal_pcs = re.findall(r'^Breakpoint 4:.*address = (0x[0-9a-fA-F]+)', output, re.M)
         require(len(modal_pcs) == 1 and end["pc"] == int(modal_pcs[0], 16),
                 "stopped before inventory display returned to the modal input loop")
@@ -348,10 +354,10 @@ def validate_sample(case, contract, folder, output):
             int(window["end_cycle"]) == end["cycles"] and cycles > 0 and
             sum(int(row["cycles"]) for row in profile["pcs"]) == cycles,
             "profile and input-to-ready clock interval do not reconcile")
-    renderer = "_ZN5rogue16render_inventoryE" if case.setup == "browse" else "_ZN5rogue6renderEv"
+    renderer = "_ZN5rogue16render_inventoryE" if case.setup in ("browse", "projectile_browse") else "_ZN5rogue6renderEv"
     require(any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
             "the measured turn did not execute the final render")
-    require(not any("rogue::animate_" in row["function"] or
+    require(not any(("rogue::animate_" in row["function"] and case.setup != "projectile") or
                     row["linkage"] == "_ZN5rogue10make_floorEv" or
                     row["function"].lstrip(":").startswith("bench_") or
                     Path(row.get("file", "").replace("\\", "/")).name == "bench.cpp"
@@ -362,7 +368,7 @@ def validate_sample(case, contract, folder, output):
     require(len(buttons) == 1 and buttons[0]["cycle"] == start["cycles"] and buttons[0]["pressed_mask"] != 0,
             "a measured turn must contain exactly one submitted input")
     validate_outcome(case, before, after, (folder / "explored.bin").read_bytes())
-    if case.setup == "browse":
+    if case.setup in ("browse", "projectile_browse"):
         validate_browsing(case, before, read_frame(folder / "before.pgm"), read_frame(folder / "frame.pgm"))
     for name, state in (("before", before), ("after", after)):
         (folder / (name + ".json")).write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")

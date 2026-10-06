@@ -39,12 +39,13 @@ class OmniscientAgent final : public Agent {
     rogue::Position retreat_origin{rogue::NONE, rogue::NONE};
     uint8_t retreat_floor = rogue::NONE;
     unsigned retreat_steps = 0;
+    unsigned bow_idle = 0, bow_cooldown = 0;
     uint16_t retreat_threats = 0;
 public:
-    // Version is part of experimental reproducibility. Frozen balance reference:
-    // policy changes require a new version and baseline.
+    // Maintained balance policy. The automatic build hash identifies its exact
+    // implementation; establish a fresh reference after extending mechanics.
     const char* name() const override { return "omniscient-v2"; }
-    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; }
+    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = 0; }
     Action choose_action(const DecisionContext&) override;
 };
 std::string action_text(const Action&);

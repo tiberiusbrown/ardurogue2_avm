@@ -47,10 +47,8 @@ static uint8_t floor_equipment_roll(uint16_t& seed, uint8_t limit)
 static uint8_t floor_weapon_type(uint16_t& seed)
 {
     // Keep the full weapon ladder, with the top tier rarer during the opening.
-    uint8_t heavy = game.floor < 4 ? 2 : game.floor < 8 ? game.floor : game.floor < 10 ? 10 : 20;
     uint8_t chance = floor_equipment_roll(seed, 100);
-    return chance < 25 ? DAGGER : chance < 45 ? SPEAR :
-        chance < 75 ? LONG_SWORD : chance < 100 - heavy ? MACE : TWO_HANDED_SWORD;
+    return weapon_type_for_roll(chance, game.floor);
 }
 
 static uint8_t floor_armor_type(uint16_t& seed)
@@ -186,7 +184,7 @@ __attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_
     uint16_t placement_seed = seed;
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
         uint8_t chance = floor_roll(seed, 72);
-        uint8_t type = chance < 20 ? FOOD : chance < 40
+        uint8_t type = chance < FOOD_WEIGHT ? FOOD : chance < 20 ? ARROWS : chance < 40
             ? floor_potion_type(seed) :
               chance < 48 ? static_cast<uint8_t>(SCROLL_FIRST +
                                                 floor_roll(seed, SCROLL_COUNT)) :
@@ -198,6 +196,10 @@ __attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_
                 ? floor_ring_type(seed)
                 : floor_amulet_type(seed);
         uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) : 1;
+        if(is_ammo(type)) {
+            uint16_t quantity_seed = static_cast<uint16_t>(floor_seed(AMMO_QUANTITY) ^ ((i + 1u) * 0x9e37u));
+            info = static_cast<uint8_t>(ARROW_BUNDLE_MIN + floor_roll(quantity_seed, ARROW_BUNDLE_MAX - ARROW_BUNDLE_MIN + 1));
+        }
         if((is_ring(type) || is_amulet(type)) && floor_roll(seed, 8) == 0)
             info |= ITEM_CURSED;
         if(is_wand(type)) {

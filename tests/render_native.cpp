@@ -1,5 +1,6 @@
 #include "app_state.hpp"
 #include "game.hpp"
+#include "game_internal.hpp"
 #include "render.hpp"
 #include "status.hpp"
 #include "world.hpp"
@@ -24,6 +25,126 @@ static uint32_t hash_bytes(uint32_t hash, const uint8_t* bytes, size_t size)
     for(size_t i = 0; i < size; ++i)
         hash = (hash ^ bytes[i]) * 16777619u;
     return hash;
+}
+
+static uint8_t arrow_frames[7][1024];
+static unsigned arrow_frame_count;
+static void capture_arrow_frame()
+{
+    if(arrow_frame_count < 7)
+        std::memcpy(arrow_frames[arrow_frame_count], __avm_framebuffer, 1024);
+    ++arrow_frame_count;
+}
+
+static bool check_arrow_animation()
+{
+    using namespace rogue;
+    start_new(0x4312);
+    std::memset(game.walls, 0, sizeof game.walls);
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    std::memset(game.ground, 0, sizeof game.ground);
+    game.player = {20, 15}; game.door_count = 0;
+    render_play();
+    Game before = game;
+    uint8_t base[1024], expected[1024];
+    std::memcpy(base, __avm_framebuffer, 1024);
+    const int8_t dx[] = {0, 1, 0, -1}, dy[] = {-1, 0, 1, 0};
+    const uint16_t sprites[] = {0x2f20, 0x44e4, 0x4f40, 0x4e44};
+    for(unsigned direction = 0; direction < 4; ++direction) {
+        arrow_frame_count = 0; avm_test_millis = 65500;
+        avm_test_display_hook = capture_arrow_frame;
+        animate_arrow(game.player, dx[direction], dy[direction], 6);
+        avm_test_display_hook = nullptr;
+        if(arrow_frame_count != 7 || avm_test_millis != uint16_t(65500 + 360) ||
+           std::memcmp(&before, &game, sizeof game) ||
+           std::memcmp(base, __avm_framebuffer, 1024)) return false;
+        for(unsigned step = 1; step <= 6; ++step) {
+            std::memcpy(expected, base, 1024);
+            int x = 30 + dx[direction] * int(step) * 5;
+            int y = 30 + dy[direction] * int(step) * 5;
+            for(int col = 0; col < 4; ++col) for(int row = 0; row < 4; ++row) {
+                auto& pixel = expected[((y + row) >> 3) * 128 + x + col];
+                uint8_t mask = uint8_t(1u << ((y + row) & 7));
+                bool lit = (sprites[direction] >> (12 - col * 4)) & (1u << row);
+                pixel = lit ? pixel | mask : pixel & ~mask;
+            }
+            if(std::memcmp(expected, arrow_frames[step - 1], 1024)) return false;
+        }
+        if(std::memcmp(base, arrow_frames[6], 1024)) return false;
+    }
+    return item_icon(ARROWS) != item_icon(SHORT_BOW) && item_icon(ARROWS) != 0;
+}
+
+static char hidden_target_text[256];
+static void capture_hidden_target_text(int16_t x, int16_t y, const char* text)
+{
+    if(x < 128 && x >= 65 && y >= 23) {
+        size_t used = std::strlen(hidden_target_text), n = std::strlen(text);
+        if(used + n < sizeof hidden_target_text)
+            std::memcpy(hidden_target_text + used, text, n + 1);
+    }
+}
+static bool check_hidden_arrow_status()
+{
+    using namespace rogue;
+    for(bool hit : {false, true}) for(uint8_t hp : {uint8_t(1), uint8_t(100)}) {
+        game = {}; session = {NONE, DEATH, false}; ui = {};
+        game.player = {20, 15}; game.hp = game.max_hp = 240; game.hunger = 240;
+        game.strength = 5; game.dexterity = 4; game.speed = game.level = 1;
+        game.weapon_slot = 0;
+        game.armor_slot = game.amulet_slot = game.ring_slots[0] = game.ring_slots[1] = NONE;
+        game.inventory[0] = make_equipment(LONG_BOW, 0);
+        game.inventory[1] = {ARROWS, 4};
+        game.monsters[0] = {{23, 15}, PHANTOM, hp, 15, {0, 0}, 0};
+        for(unsigned seed = 1; seed <= 65535; ++seed) {
+            game.random_state = uint16_t(seed);
+            if(physical_attack_hits(player_ranged_accuracy(LONG_BOW), monster_dexterity(PHANTOM)) == hit) {
+                game.random_state = uint16_t(seed); break;
+            }
+        }
+        status_clear(); hidden_target_text[0] = 0;
+        avm_test_text_hook = capture_hidden_target_text;
+        bool accepted = throw_or_shoot(1, 1, 0);
+        avm_test_text_hook = nullptr;
+        if(!accepted || std::strstr(hidden_target_text, "phantom") || std::strstr(hidden_target_text, "Phantom") ||
+           !std::strstr(hidden_target_text, "something")) {
+            std::fprintf(stderr, "Hidden target hit=%u hp=%u accepted=%u text=%s\n", hit, hp, accepted, hidden_target_text);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool check_monster_reference_status()
+{
+    using namespace rogue;
+    game = {}; ui = {}; session = {NONE, DEATH, false};
+    game.player = {20, 15}; game.hp = game.max_hp = 100;
+    game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
+    game.ring_slots[0] = game.ring_slots[1] = NONE;
+    for(uint8_t ring : {uint8_t(NO_ITEM), uint8_t(RING_SEE_INVISIBLE)})
+        for(bool cursed : {false, true}) for(uint16_t turns : {0, 1})
+            for(uint8_t type : {uint8_t(ORC), uint8_t(PHANTOM)})
+                for(bool temporary : {false, true}) for(bool distant : {false, true}) {
+                    game.inventory[0] = {ring, uint8_t(1 | (cursed ? ITEM_CURSED : 0))};
+                    game.ring_slots[0] = ring ? 0 : NONE; game.turns = turns;
+                    for(uint8_t index = 0; index < MONSTERS; ++index) {
+                        auto& monster = game.monsters[index];
+                        monster = {{uint8_t(distant ? 40 : 23), 15}, type, 100, 0, {0, 0}, 0};
+                        if(temporary) set_monster_effect(monster, MON_INVISIBLE, 5);
+                        bool detected = player_can_see_monster(index);
+                        if(detected != player_can_see_monster(monster)) return false;
+                        bool visible = !distant && (!cursed || !ring || !((turns + index) & 1)) &&
+                            ((!temporary && type != PHANTOM) || (ring && !cursed));
+                        status_clear(); hidden_target_text[0] = 0;
+                        avm_test_text_hook = capture_hidden_target_text;
+                        status_capitalize(); status(monster, '!');
+                        avm_test_text_hook = nullptr;
+                        const char* expected = !visible ? "Something!" : type == PHANTOM ? "Thephantom!" : "Theorc!";
+                        if(std::strcmp(hidden_target_text, expected)) return false;
+                    }
+                }
+    return true;
 }
 
 static uint16_t reference_wall_row(uint8_t y, int16_t left)
@@ -370,6 +491,18 @@ static bool check_generation_loading()
 int main()
 {
     using namespace rogue;
+    if(!check_arrow_animation()) {
+        std::fprintf(stderr, "Arrow direction, cadence, restoration or state/RNG isolation failed\n");
+        return 1;
+    }
+    if(!check_hidden_arrow_status()) {
+        std::fprintf(stderr, "Hidden arrow hit/miss/defeat status revealed a monster\n");
+        return 1;
+    }
+    if(!check_monster_reference_status()) {
+        std::fprintf(stderr, "Monster reference visibility, article or punctuation failed\n");
+        return 1;
+    }
     if(!check_generation_loading()) {
         std::fprintf(stderr, "Generation loading cadence, pane bounds or scratch isolation failed\n");
         return 1;

@@ -3,6 +3,7 @@
 #include "game.hpp"
 #include "render.hpp"
 #include "status.hpp"
+#include "world.hpp"
 #include <stdio.h>
 #include <string.h>
 
@@ -155,9 +156,12 @@ const char AVM_PROGMEM* monster_name(uint8_t type)
     }
 }
 
-void status_entity(uint8_t type, char punctuation = 0)
+void status_entity(const Monster& monster, char punctuation = 0)
 {
-    status_final_words(monster_name(type), punctuation);
+    if(can_see(monster.pos) && player_can_see_monster(monster)) {
+        status_words(F("the"));
+        status_final_words(monster_name(monster.type), punctuation);
+    } else status_final_words(F("something"), punctuation);
 }
 
 static const char PROGMEM* const PROGMEM potion_effect_names[] = {
@@ -336,6 +340,8 @@ struct StatusItemText {
 const char AVM_PROGMEM* equipment_name(uint8_t type)
 {
     switch(type) {
+    case SHORT_BOW: return F("short bow");
+    case LONG_BOW: return F("long bow");
     case DAGGER: return F("dagger");
     case SPEAR: return F("spear");
     case LONG_SWORD: return F("long sword");
@@ -453,6 +459,11 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         return;
     }
     switch(item.type) {
+    case ARROWS:
+        if(style == PROMPT_ITEM) text.word(F("the"));
+        text.number(item_value(item));
+        text.final_word(item_value(item) == 1 ? F("arrow") : F("arrows"), suffix);
+        break;
     case FOOD:
         if(item_value(item) > 1) {
             if(style == PROMPT_ITEM) text.word(F("the"));
@@ -548,12 +559,12 @@ void rogue::status(Item item, char punctuation)
               text, punctuation);
 }
 
-void rogue::status(MonsterType monster)
+void rogue::status(const Monster& monster)
 {
     status_entity(monster);
 }
 
-void rogue::status(MonsterType monster, char punctuation)
+void rogue::status(const Monster& monster, char punctuation)
 {
     status_entity(monster, punctuation);
 }

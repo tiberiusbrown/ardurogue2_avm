@@ -38,6 +38,10 @@ extern "C" int main()
             if(input == INPUT_MOVED) {
                 prompt_ground_items();
                 prompt_stairs();
+            } else if(input >= INPUT_PROJECTILE_UP && input <= INPUT_PROJECTILE_LEFT) {
+                int8_t dx = input == INPUT_PROJECTILE_RIGHT ? 1 : input == INPUT_PROJECTILE_LEFT ? -1 : 0;
+                int8_t dy = input == INPUT_PROJECTILE_UP ? -1 : input == INPUT_PROJECTILE_DOWN ? 1 : 0;
+                if(!throw_or_shoot(ui.selection, dx, dy)) ui.mode = PROJECTILE_DIRECTION;
             } else if(input >= INPUT_WAND_UP &&
                       input <= INPUT_WAND_IMMEDIATE) {
                 int8_t dx = input == INPUT_WAND_RIGHT ? 1 :

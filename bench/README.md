@@ -150,13 +150,13 @@ the mapping check reads the explored array using its actual `sizeof`.
 - Wands: digging through blocked terrain without animation.
 - Inventory browsing: opening, scrolling down near the end, and scrolling up
   from the top of a scrolled viewport for each of these layouts:
-  - A full 16-slot pack with all nine groups interleaved (25 rows including
+  - A full 16-slot pack with all ten groups interleaved (26 rows including
     headers), identified equipment and accessories, and long consumable names.
   - A full 16-slot group containing all seven identified wand types, alternating
     overpowered and unreliable modifiers, and 10–15 charges. Scrolled views
     render seven item names rather than spending a row on the group header.
-  - All nine groups with one item each (18 rows). The nine items occupy the last
-    nine slots in reverse group order, maximizing headers and scanning past
+  - All ten groups with one item each (20 rows). The ten items occupy the last
+    ten slots in reverse group order, maximizing headers and scanning past
     empty leading slots. Scrolling crosses group headers near the bottom.
 
 These are controlled scenarios, not a statistical claim about all
@@ -174,3 +174,5 @@ Run the helper/measurement rejection tests with:
 ```text
 python bench/test_profile_turns.py
 ```
+
+Bow integration extends the suite to 36 cases: arrow hit/miss/kill/empty, bow equipping and the Throw/Shoot picker. The benchmark arrow renderer retains production render setup and excludes the timed animation frames. The ordinary image keeps the complete 60 ms/tile animation.

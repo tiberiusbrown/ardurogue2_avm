@@ -23,8 +23,9 @@ void status(const char PROGMEM* words);
 void status(const char PROGMEM* words, char punctuation);
 void status(Item item);
 void status(Item item, char punctuation);
-void status(MonsterType monster);
-void status(MonsterType monster, char punctuation);
+// Includes "the" only for a legitimately visible target, otherwise "something".
+void status(const Monster& monster);
+void status(const Monster& monster, char punctuation);
 void status_number(uint8_t value);
 void status_number(uint8_t value, char punctuation);
 

@@ -8,7 +8,7 @@ enum class EventKind {
     FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,
-    ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged
+    ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget
 };
 enum class Cause : uint8_t { Other, Monster, Starvation, Item, Fire };
 enum class Special : uint8_t { Poison, Confusion, Paralysis, Fire };

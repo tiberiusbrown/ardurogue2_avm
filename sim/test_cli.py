@@ -52,7 +52,7 @@ def main():
         invoke("--seeds","1:8","--jobs","3","--output",str(entry_parallel),"--entry-state")
         invoke("--seed","1","--output",str(Path(scratch)/"invalid entry"),"--entry-state","--no-telemetry",valid=False)
         rows = {}
-        streams = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions")
+        streams = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions", "ranged")
         for name in streams:
             path = first / f"{name}.csv"
             assert path.read_bytes() == (second / path.name).read_bytes(), name
@@ -86,7 +86,7 @@ def main():
                 for k in counters:
                     assert totals[(row["effective_seed"], row[type_key])][k] == int(row[k]), (category, k, row)
         manifest = json.loads((first / "manifest.json").read_text())
-        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 2
+        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 3 and len(manifest["agent_policy_hash"]) == 64
         assert manifest["effective_seed_count"] == 8 and manifest["variant"] == "control"
         for row in rows["floors"]:
             assert int(row["entry_max_hp"]) >= int(row["entry_hp"]) and int(row["floor_tiles"]) > 0

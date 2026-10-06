@@ -10,10 +10,11 @@ void status(const char*) {}
 void status(const char*, char) {}
 void status(Item) {}
 void status(Item, char) {}
-void status(MonsterType) {}
-void status(MonsterType, char) {}
+void status(const Monster&) {}
+void status(const Monster&, char) {}
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
+void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
 void animate_ray(Position, int8_t, int8_t, uint8_t) {}
 void animate_fire_burst(Position) {}
 void animate_spreading_rays(Position, const uint8_t[4]) {}

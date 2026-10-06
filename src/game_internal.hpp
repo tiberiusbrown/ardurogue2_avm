@@ -32,12 +32,14 @@ void hurt_player(uint8_t damage);
 uint8_t player_strength();
 uint8_t player_dexterity();
 uint8_t player_accuracy();
+uint8_t player_ranged_accuracy(uint8_t bow_type);
 uint8_t player_armor_rating();
 int8_t player_armor_enchant();
 void player_take_magic_damage(uint8_t damage, uint8_t power);
 void player_take_fire_damage(uint8_t damage, uint8_t power);
 void fire_burst_damage(Position center, bool player_attack,
                        uint8_t radius = 1);
+void animate_arrow(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_fire_burst(Position center);
 void animate_spreading_rays(Position origin, const uint8_t steps[4]);

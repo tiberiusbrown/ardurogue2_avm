@@ -22,8 +22,8 @@ from scipy import linalg, special, stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-SCHEMA = 2
-STREAMS = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions")
+SCHEMA = 3
+STREAMS = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions", "ranged")
 NOTICE = ("Adjusted observational association is not proof of causation. "
           "Controlled A/B interventions are preferred for causal balance conclusions.")
 BASE_NUMERIC = ("entry_hp_fraction", "entry_level", "entry_strength", "entry_dexterity",
@@ -54,7 +54,7 @@ def read_manifest(directory):
     if not path.exists():
         raise ValueError(f"missing manifest: {path}; legacy datasets must be rerun")
     m = json.loads(path.read_text(encoding="utf-8"))
-    required = ("schema_version", "telemetry_schema_version", "agent", "effective_seed_count",
+    required = ("schema_version", "telemetry_schema_version", "agent", "agent_policy_hash", "effective_seed_count",
                 "seed_selection", "experiment", "variant", "options")
     if any(k not in m for k in required) or m["schema_version"] != 1:
         raise ValueError(f"unsupported/incomplete manifest: {path}")
@@ -163,6 +163,9 @@ def reconcile_telemetry(tables):
         totals = tables["visit_" + category].groupby(["effective_seed", type_key])[fields].sum().reindex(whole.index, fill_value=0)
         if not np.array_equal(whole[fields].to_numpy(), totals.to_numpy()):
             raise ValueError(f"visit/run {category} counters do not reconcile")
+    if 'ranged' in tables:
+        import ranged_report
+        ranged_report.reconcile(tables)
     return True
 
 
@@ -395,7 +398,7 @@ def factors(directory, output=None, min_exposure=100, q_threshold=.05):
              "## Insufficient-data factors", "",
              markdown_table(results[results.status != "ok"], ["factor", "category", "exposed_visits", "status", "note"], len(results)), "",
              "## Limits", "", "Residual confounding, entry-survivor selection, correlated availability and policy-specific decisions remain. "
-             "These models measure conditional visit survival under this frozen agent, not human win rates. "
+             "These models measure conditional visit survival under the recorded policy hash, not human win rates. "
              "Presence ignores dose, curse, enchantment, positions and accessibility; geometry measures can be correlated. "
              "Fixed content slots induce composition confounding: presence of one type can displace another. "
              "A positive monster coefficient is not evidence that adding that monster helps. "
@@ -449,6 +452,8 @@ def paired_binary(baseline, candidate, census=False, repetitions=2000):
 def pair_runs(bm, bt, cm, ct):
     validate_runs(bt, bm)
     validate_runs(ct, cm)
+    if not bm.get("agent_policy_hash") or bm["agent_policy_hash"] != cm.get("agent_policy_hash"):
+        raise ValueError("agent policy hashes differ or are missing")
     if bm["agent"] != cm["agent"]:
         raise ValueError("agent versions differ")
     if bm["telemetry_schema_version"] != cm["telemetry_schema_version"]:
@@ -555,7 +560,7 @@ def compare(baseline, candidate, output=None, repetitions=2000):
     discordant = discordant[bo.escaped != co.escaped].copy()
     discordant["classification"] = np.where(discordant.baseline_result == "escaped", "baseline_win_candidate_loss", "baseline_loss_candidate_win")
     discordant.reset_index().to_csv(output / "discordant_seeds.csv", index=False)
-    result = dict(effective_seed_count=len(br), census=bool(census), agent=bm["agent"], primary=primary,
+    result = dict(effective_seed_count=len(br), census=bool(census), agent=bm["agent"], agent_policy_hash=bm["agent_policy_hash"], primary=primary,
                   secondary=secondary, bootstrap_seed=20261005, bootstrap_repetitions=repetitions,
                   baseline_manifest_sha256=sha256(Path(baseline) / "manifest.json"),
                   candidate_manifest_sha256=sha256(Path(candidate) / "manifest.json"))
@@ -592,7 +597,7 @@ def compare(baseline, candidate, output=None, repetitions=2000):
     text += ["Trace these pairs with their original binary, experiment and variant before retuning constants. "
              "Matched seeds supply initial conditions. Actions/mechanics may subsequently diverge and consume different "
              "gameplay random draws; do not resynchronize RNG. Controlled interventions can support causal conclusions "
-             "for the specified substitution/removal under this frozen policy. Ordinary two-build comparisons include every build difference.", ""]
+             "for the specified substitution/removal under this maintained policy. Ordinary two-build comparisons include every build difference.", ""]
     (output / "compare.md").write_text("\n".join(text), encoding="utf-8")
     return result
 
@@ -611,7 +616,7 @@ def summarize(directory, output=None, executable=None):
               "means": {c: float(o[c].mean()) for c in o.columns}}
     write_json(output / "summary.json", result)
     floor_survival(t).to_csv(output / "floor_survival.csv", index=False)
-    (output / "summary.md").write_text(f"# Frozen balance summary\n\n{len(o):,} runs; {int(o.escaped.sum()):,} escaped "
+    (output / "summary.md").write_text(f"# Maintained-policy balance summary\n\n{len(o):,} runs; {int(o.escaped.sum()):,} escaped "
                                       f"({100 * o.escaped.mean():.2f}%); no simulator failures.\n\n{NOTICE}\n", encoding="utf-8")
     return result
 

@@ -1,6 +1,6 @@
 # Balance experiments
 
-The native simulator executes production mechanics with frozen `omniscient-v2`.
+The native simulator executes production mechanics with maintained `omniscient-v2`.
 Python performs analysis and experiment orchestration. No production balance or
 agent-policy change is part of this framework. See [README.md](README.md) for
 simulator mechanics and [BALANCE_RESULTS.md](BALANCE_RESULTS.md) for the milestone
@@ -66,8 +66,7 @@ and usable wand reserves, heavy weapon/Plate occupancy, worn Invisibility/Speed
 accessories, effective invisibility/speed, typed item activity and monster burden.
 Floor CSVs include means, medians, reach/survival, Wilson mortality intervals,
 actions, turns, damage and consumables. The additional host-only `--entry-state`
-sidecar has its own schema version 1; the seven original schema-2 streams and
-agent remain unchanged. Old runs without this sidecar must be rerun for a full
+sidecar has its own schema version 1; schema 3 adds ranged counters and three item IDs; the entry sidecar remains version 1. Old runs without this sidecar must be rerun for a full
 scorecard. Extra probes used by the detailed rebalance audit (such as level-up
 healing attribution) are outside this script's telemetry.
 
@@ -132,9 +131,9 @@ containing existing `runs.csv` cannot be overwritten; choose fresh directories.
 and seals raw CSVs with SHA-256 hashes. `--simulator` additionally records the
 executable path/hash. `factors` defaults to `RUN/factors/`.
 
-## Telemetry schema 2
+## Telemetry schema 3
 
-All seven deterministic streams merge in requested-seed order and are identical
+All eight deterministic streams merge in requested-seed order and are identical
 between serial and parallel execution. A descriptor table supplies headers,
 writers and merging; header-only sparse streams are valid.
 
@@ -225,7 +224,7 @@ These are descriptive and policy-selected, even when useful to diagnose mechanis
 ## Paired two-binary A/B
 
 Build baseline and candidate separately in independent checkouts/worktrees and
-build directories. Keep the frozen agent identical. For example, from each
+build directories. Keep the maintained agent identical. For example, from each
 checkout run `cmake -S . -B build/sim-native -DCMAKE_BUILD_TYPE=RelWithDebInfo`,
 then its CMake build command above. Preserve binaries and use absolute paths.
 Python does not check out or compile revisions.
@@ -338,24 +337,24 @@ build/sim-native/sim/ardurogue2_sim --seed SEED --trace --experiment healing-foo
 
 Inspect first differing action, current HP/resources, actual events and ledger.
 Audit examples in both win/loss directions before changing balance constants.
-The frozen policy may handle new content poorly; that is part of the measured
-effect under this policy. If policy support is added, first disable/replace all
-new content and compare old-content results, action hashes and relevant telemetry
-against the frozen reference. Behaviorally unreachable support should match
-exactly. Material old-content changes require a new agent version/reference;
-never attribute a different agent's gain to game content. Document defects
-without modifying omniscient-v2 in this milestone.
+Represent new mechanics competently in maintained `omniscient-v2` before
+drawing balance conclusions. Extend it in place, then disable/replace new content
+and compare old-content action hashes, outcomes and relevant telemetry against
+the previous reference. Behaviorally unreachable support should match exactly.
+Document necessary infrastructure differences. Establish a fresh reference with
+the new automatic policy hash. Every paired content experiment must use identical
+policy hashes; never attribute a different policy's gain to content.
 
 ## Reproducibility manifest
 
 Every simulator output directory contains `manifest.json` schema 1:
 telemetry_schema_version, git_sha/git_dirty (configure-time; unknown if unavailable),
-agent, requested seed selection/effective count, experiment/variant, build type,
+agent and automatic agent_policy_hash, requested seed selection/effective count, experiment/variant, build type,
 compiler, command/options, ordered intervention rules. Reconfigure before final
 validation to refresh build provenance.
 
 Python `ab` additionally records executable absolute path/SHA-256, hashes of all
-seven CSVs, experiment specification and its SHA-256, dependency versions, and
+eight CSVs, experiment specification and its SHA-256, dependency versions, and
 deterministic result SHA-256. `summarize --simulator` can seal direct simulator
 runs equivalently. Paths, timestamps, command spelling and job count are excluded
 from result identity. Effective population, executable, behavior options,
@@ -377,3 +376,29 @@ milestone's demonstrations run on Windows. Large raw tables consume disk/memory;
 analysis uses bounded bootstrap batches, sparse visit rows and small per-run
 host arrays. Paired comparison hashes typed visits without loading their unused
 rows; factor/summarize analysis loads them. GLM fitting data is not streamed.
+
+
+## Bow validation workflow
+
+Start at 17 Food / 3 Ammo outcomes, bundles 3..5, Short Bow 2..5/+1/range 5
+and Long Bow 3..6/0/range 6; obtain the initial 1..10000 measurement before
+tuning. Validate agent correctness first, then availability/droughts, damage,
+accuracy, subtype distinction, bundle size and subtype frequency. Only then
+adjust unrelated progression with one measured change at a time. Use the same
+effective seeds, executable and policy hash for causal bow substitution:
+
+```text
+--intervention replace-item:SHORT_BOW:SPEAR:info=preserve
+--intervention replace-item:LONG_BOW:LONG_SWORD:info=preserve
+--intervention replace-item:ARROWS:FOOD:info=1
+```
+
+The deterministic one-ration replacement reconstructs the original displaced
+Food opportunity; it never copies ammo's raw info bits. Preserve bow enchantment
+and curse. Review discordant traces in both directions. After policy extension,
+run the no-bow control against the pre-extension reference as a compatibility
+audit, then establish the maintained policy's new reference. Final validation
+uses all 65535 unique effective seeds, ordinary scorecard, factors, controlled
+bow A/B, native tests, serial/parallel byte equality, stream isolation and AVM
+size/complete stack/100 ms turn benchmarks. Historical documents are retained
+with their original data and agent identity.

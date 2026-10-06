@@ -36,10 +36,11 @@ constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 23;
+constexpr uint8_t SAVE_VERSION = 24;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
+    AMMO_FIRST, ARROWS = AMMO_FIRST, AMMO_LAST = ARROWS,
     // Inclusive group boundaries alias real items without consuming IDs.
     POTION_FIRST,
     POTION_HEALING = POTION_FIRST, POTION_CONFUSION, POTION_POISON, POTION_HARMING,
@@ -47,8 +48,8 @@ enum ItemType : uint8_t {
     POTION_INVISIBILITY,
     POTION_LAST = POTION_INVISIBILITY,
     WEAPON_FIRST,
-    LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD,
-    WEAPON_LAST = TWO_HANDED_SWORD,
+    LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
+    WEAPON_LAST = LONG_BOW,
     ARMOR_FIRST,
     CHAIN_MAIL = ARMOR_FIRST, LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, SPLINT_MAIL, PLATE_MAIL,
     ARMOR_LAST = PLATE_MAIL,
@@ -73,6 +74,9 @@ enum ItemType : uint8_t {
     WAND_STRIKING, WAND_ICE, WAND_POLYMORPH,
     WAND_LAST = WAND_POLYMORPH
 };
+constexpr uint8_t MAX_BOW_RANGE = MAX_LIGHT_RADIUS;
+constexpr bool is_ammo(uint8_t type) { return type >= AMMO_FIRST && type <= AMMO_LAST; }
+constexpr bool is_bow(uint8_t type) { return type == SHORT_BOW || type == LONG_BOW; }
 constexpr uint8_t POTION_COUNT = POTION_LAST - POTION_FIRST + 1;
 constexpr uint8_t RING_COUNT = RING_LAST - RING_FIRST + 1;
 constexpr uint8_t AMULET_COUNT = AMULET_LAST - AMULET_FIRST + 1;
@@ -107,6 +111,9 @@ constexpr bool is_wand(uint8_t type)
 {
     return type >= WAND_FIRST && type <= WAND_LAST;
 }
+
+constexpr bool is_throwable_or_shootable(uint8_t type) { return is_potion(type) || is_ammo(type); }
+constexpr bool is_stackable(uint8_t type) { return type == FOOD || is_ammo(type) || is_potion(type) || is_scroll(type); }
 
 enum MonsterType : uint8_t {
     NO_MONSTER, BAT, SNAKE, RATTLESNAKE, ZOMBIE, GOBLIN,
@@ -184,9 +191,20 @@ constexpr uint8_t ITEM_IDENTIFIED = 0x80;
 // Inherent capability belongs to type definitions, never to instance info.
 struct WeaponDefinition { uint8_t minimum_damage, maximum_damage; int8_t accuracy; };
 struct ArmorDefinition { uint8_t rating; };
+struct RangedWeaponDefinition { uint8_t minimum_damage, maximum_damage; int8_t accuracy; uint8_t range; };
+constexpr RangedWeaponDefinition ranged_weapon_definition(uint8_t type)
+{
+    return type == SHORT_BOW ? RangedWeaponDefinition{4, 7, 1, 5} :
+           type == LONG_BOW ? RangedWeaponDefinition{5, 8, 0, MAX_BOW_RANGE} :
+                             RangedWeaponDefinition{1, 2, -2, 3};
+}
+static_assert(ranged_weapon_definition(SHORT_BOW).range <= MAX_BOW_RANGE &&
+              ranged_weapon_definition(LONG_BOW).range <= MAX_BOW_RANGE, "bow exceeds viewport");
+constexpr uint8_t maximum_stack(uint8_t type) { return is_ammo(type) ? 255 : ITEM_VALUE_MASK; }
 constexpr WeaponDefinition weapon_definition(uint8_t type)
 {
     switch(type) {
+    case SHORT_BOW: case LONG_BOW: return {1, 2, -2};
     case DAGGER: return {1, 4, 2};
     case SPEAR: return {2, 5, 1};
     case LONG_SWORD: return {2, 6, 0};
@@ -285,23 +303,25 @@ constexpr bool wand_needs_direction(const Item& item)
 // must use equipment_enchant/set_equipment_enchant; this is not a combat API.
 constexpr uint8_t item_value(const Item& item)
 {
-    return is_wand(item.type) ? wand_charges(item) :
+    return is_ammo(item.type) ? item.info : is_wand(item.type) ? wand_charges(item) :
            item.info & ITEM_VALUE_MASK;
 }
 constexpr void set_item_value(Item& item, uint8_t value)
 {
-    if(is_wand(item.type)) set_wand_charges(item, value);
+    if(is_ammo(item.type)) item.info = value;
+    else if(is_wand(item.type)) set_wand_charges(item, value);
     else item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) |
                                           (value & ITEM_VALUE_MASK));
 }
 constexpr bool item_is_cursed(const Item& item)
 {
+    if(is_ammo(item.type)) return false;
     return is_wand(item.type) ? wand_modifier(item) == WAND_CURSED :
            (item.info & ITEM_CURSED) != 0;
 }
 constexpr bool item_is_identified(const Item& item)
 {
-    return (item.info & ITEM_IDENTIFIED) != 0;
+    return is_ammo(item.type) || (item.info & ITEM_IDENTIFIED) != 0;
 }
 static_assert(sizeof(Item) == 2, "Item must use two bytes");
 struct GroundItem { Position pos; Item item; };

@@ -30,7 +30,7 @@ def runs(n=10):
     r = pd.DataFrame({"seed": np.arange(1, n + 1), "effective_seed": np.arange(1, n + 1),
                       "agent": "omniscient-v2", "result": ["escaped"] * (n // 2) + ["death"] * (n - n // 2),
                       "stuck": 0})
-    manifest = dict(schema_version=1, telemetry_schema_version=b.SCHEMA, agent="omniscient-v2",
+    manifest = dict(schema_version=1, telemetry_schema_version=b.SCHEMA, agent="omniscient-v2", agent_policy_hash="synthetic-policy",
                     effective_seed_count=n, seed_selection=dict(first=1, last=n, all_seeds=False),
                     experiment="test", variant="control", options=dict(max_actions=20000, telemetry=True))
     return r, manifest
@@ -126,6 +126,14 @@ class Paired(unittest.TestCase):
             b.pair_runs(m, r, m, different)
         with self.assertRaisesRegex(ValueError, "schema"):
             b.pair_runs(m, r, {**m, "telemetry_schema_version": 999}, r)
+
+    def test_policy_hash_mismatch(self):
+        r, m = runs()
+        with self.assertRaisesRegex(ValueError, "policy hashes"):
+            b.pair_runs(m, r, {**m, "agent_policy_hash": "different"}, r)
+        legacy = {k:v for k,v in m.items() if k != "agent_policy_hash"}
+        with self.assertRaisesRegex(ValueError, "policy hashes"):
+            b.pair_runs(legacy, r, legacy, r)
 
     def test_bootstrap_stable(self):
         d = np.arange(-10, 20)

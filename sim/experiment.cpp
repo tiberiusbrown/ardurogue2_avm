@@ -24,7 +24,7 @@ uint8_t content(const std::string& s, bool monster) {
 int group(uint8_t t) {
     using namespace rogue;
     return t==FOOD ? 1 : is_potion(t) ? 2 : is_scroll(t) ? 3 : is_weapon(t) ? 4 :
-        is_armor(t) ? 5 : is_ring(t) ? 6 : is_amulet(t) ? 7 : is_wand(t) ? 8 : 9;
+        is_armor(t) ? 5 : is_ring(t) ? 6 : is_amulet(t) ? 7 : is_wand(t) ? 8 : is_ammo(t) ? 10 : 9;
 }
 }
 Rule parse_rule(const std::string& text) {

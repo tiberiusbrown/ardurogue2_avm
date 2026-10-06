@@ -11,7 +11,8 @@ std::string action_text(const Action& a) {
     case ActionKind::Swap: return "SWAP ground="+std::to_string(a.target)+" slot="+std::to_string(a.slot);
     case ActionKind::Stairs: return "STAIRS";
     case ActionKind::Use: return "USE slot="+std::to_string(a.slot)+" target="+std::to_string(a.target);
-    case ActionKind::Throw: return "THROW slot="+std::to_string(a.slot)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
+    case ActionKind::Throw: return std::string(a.slot<rogue::INVENTORY && rogue::is_ammo(rogue::game.inventory[a.slot].type) ?
+        (rogue::game.weapon_slot<rogue::INVENTORY && rogue::is_bow(rogue::game.inventory[rogue::game.weapon_slot].type) ? "shoot arrow slot=" : "throw arrow slot=") : "throw potion slot=")+std::to_string(a.slot)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
     case ActionKind::Wand: return "WAND slot="+std::to_string(a.slot)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
     case ActionKind::Drop: return "DROP slot="+std::to_string(a.slot)+" discard="+std::to_string(a.discard);
     }

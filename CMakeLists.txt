@@ -139,10 +139,12 @@ ardurogue2_compile("${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
     "${ARDUROGUE2_BENCH_DIR}/main.o" -DARDUROGUE2_BENCH)
 ardurogue2_compile("${CMAKE_CURRENT_SOURCE_DIR}/bench/bench.cpp"
     "${ARDUROGUE2_BENCH_DIR}/bench.o" -fno-eliminate-unused-debug-types)
+ardurogue2_compile("${CMAKE_CURRENT_SOURCE_DIR}/src/render.cpp"
+    "${ARDUROGUE2_BENCH_DIR}/render.o" -DARDUROGUE2_BENCH)
 set(ARDUROGUE2_BENCH_OBJECTS ${ARDUROGUE2_OBJECTS})
-list(REMOVE_ITEM ARDUROGUE2_BENCH_OBJECTS "${ARDUROGUE2_BUILD_DIR}/main.o")
+list(REMOVE_ITEM ARDUROGUE2_BENCH_OBJECTS "${ARDUROGUE2_BUILD_DIR}/main.o" "${ARDUROGUE2_BUILD_DIR}/render.o")
 list(APPEND ARDUROGUE2_BENCH_OBJECTS
-    "${ARDUROGUE2_BENCH_DIR}/main.o" "${ARDUROGUE2_BENCH_DIR}/bench.o")
+    "${ARDUROGUE2_BENCH_DIR}/main.o" "${ARDUROGUE2_BENCH_DIR}/bench.o" "${ARDUROGUE2_BENCH_DIR}/render.o")
 set(ARDUROGUE2_BENCH_ELF "${ARDUROGUE2_BUILD_DIR}/ardurogue2-bench.elf")
 add_custom_command(
     OUTPUT "${ARDUROGUE2_BENCH_ELF}"

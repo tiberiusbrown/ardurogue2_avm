@@ -21,6 +21,7 @@ void write_manifest(const std::filesystem::path& path,uint64_t start,uint64_t co
     std::ofstream o(path);
     o<<"{\n  \"schema_version\": 1,\n  \"telemetry_schema_version\": "<<TELEMETRY_SCHEMA_VERSION
      <<",\n  \"git_sha\": "<<json(SIM_GIT_SHA)<<",\n  \"git_dirty\": "<<SIM_GIT_DIRTY
+     <<",\n  \"agent_policy_hash\": "<<json(SIM_AGENT_POLICY_HASH)
      <<",\n  \"agent\": \"omniscient-v2\",\n  \"seed_selection\": {\"first\": "<<start
      <<", \"last\": "<<start+count-1<<", \"all_seeds\": "<<(all_seeds ? "true" : "false")
      <<"},\n  \"effective_seed_count\": "<<count

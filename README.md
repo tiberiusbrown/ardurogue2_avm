@@ -30,15 +30,16 @@ classic Rogue nonpersistent-floor model and saves 112 bytes of AVM RAM.
 The active floor's explored map uses one bit per tile, and a spare bit in each
 door coordinate records whether that door is open. Each inventory item uses two
 bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
-bit, and an identified bit. Wands use four charge bits, three modifier bits,
+bit, and an identified bit. Arrows use all eight info bits as unsigned quantity
+(0..255); curse and identification bits have no meaning, and arrows are always
+known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 23 stores one active floor in a 773-byte AVM `Game`. Generation
+Save version 24 stores one active floor in a 773-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 22 and older saves are incompatible; no migration is attempted.
-Weapons and armor each occupy one contiguous `ItemType` range.
-Long sword keeps the former sword ID; inserting the other weapons and armor
-shifts the armor and subsequent item IDs. Long sword and chain mail preserve
+Version 23 and older saves are incompatible; no migration is attempted.
+Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
+Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
 subtypes with independent enchantment and curse rolls. The former attack and
 cached defense fields store strength and magic resistance.
@@ -103,9 +104,12 @@ wands amplify their effect; overpowered wands combine spreading and powerful.
 Each activation spends one charge and one turn. Non-digging shots show
 ArduRogue's accumulating animated ray. Fire wands add an animated three-by-three
 burst, or five-by-five when powerful. Dragon breath keeps its five-tile range,
-ordinary three-by-three burst, and fire immunity rules.
+ordinary three-by-three burst, and fire immunity rules. Its fire damage is now
+6..13 with a one-in-three eligible-turn breath chance. Measured progression
+adjustments also use Zombie STR 3, Troll STR 9, Dragon armor 7, and Lord armor 7 /
+HP 112; other monster definitions remain unchanged.
 
-Select **Throw Potion** from the action menu, choose a potion, then press a
+Select **Throw/Shoot** from the action menu, choose a potion, then press a
 direction. It travels up to eight tiles and shatters on the first monster,
 closed door, or wall. A hit applies the potion to that monster and identifies
 its type; a miss consumes the potion without revealing it. Harming can kill a
@@ -132,15 +136,52 @@ and attack rings, accuracy. Long sword adds no accuracy. Cursed attack rings
 reduce accuracy. Weapon enchantment never changes accuracy.
 DEX affects neither damage, absorption, nor MR.
 
-Five mundane weapons share a single weapon slot and icon:
+Seven weapons, including two bows, share a single weapon slot and icon:
 
 | Weapon | Damage | Accuracy | Generation weight |
 | --- | --- | --- | --- |
 | Dagger | 1..4 | +2 | 25 |
-| Spear | 2..5 | +1 | 20 |
-| Long sword | 2..6 | 0 | 30 |
-| Mace | 3..7 | -1 | 15 |
-| Two-handed sword | 4..8 | -2 | 10 |
+| Spear | 2..5 | +1 | 14 |
+| Short bow (melee) | 1..2 | -2 | 6 |
+| Long sword | 2..6 | 0 | 26 |
+| Long bow (melee) | 1..2 | -2 | 4 |
+| Mace | 3..7 | -1 | 25 minus heavy |
+| Two-handed sword | 4..8 | -2 | heavy |
+
+Explicit arrow shooting uses a separate ranged definition:
+
+| Bow | Damage | Accuracy | Range |
+| --- | --- | --- | --- |
+| Short bow | 4..7 | +1 | 5 |
+| Long bow | 5..8 | 0 | 6 |
+
+Choose **Throw/Shoot**, select arrows (the Ammo group precedes Potions), then
+press a cardinal direction. Equipping and switching weapons cost ordinary turns.
+Bumping a monster with a bow uses its poor 1..2/-2 melee definition. Without a
+bow, a thrown arrow uses 1..2/-2/range 3. Every accepted shot consumes an arrow
+and a turn, including misses, empty shots and blockers; arrows are not recovered.
+Production `scan_ray` stops at the first monster, wall or closed door and passes
+open doors. A miss stops on the target. Range comes from the bow, capped at
+`MAX_BOW_RANGE == MAX_LIGHT_RADIUS == 6`, independently of current light.
+Accuracy and damage use ordinary physical DEX/level/Attack-ring, STR and armor
+rules. Bow enchantment biases the fixed damage range, without adding accuracy.
+Bows use ordinary curses/enchanting/removal; arrows cannot be cursed or enchanted.
+
+The 72-outcome supply roll allocates Food 15, Arrows 5, Potions 20, Scrolls 8,
+Weapons 8, Armor 8, Wands 4, Rings 2 and Amulets 2. Arrows uniformly generate
+2..3 per bundle from the independent `AMMO_QUANTITY` purpose, leaving ordinary
+supply/equipment/placement and gameplay RNG unchanged. Short/Long Bow weights
+remain 6%/4% within Weapons; the depth-dependent heavy region is unchanged.
+These values follow the specified initial 17/3, 3..5 and 2..5/3..6 measurements;
+the iterations and census are in [the bow balance report](docs/BOW_BALANCE_2026-10-06.md).
+
+Arrow stacks merge up to 255 with wider capacity arithmetic; overflowing pickup
+or ground stacks retain a remainder. Four flash 4x4 directional arrow sprites
+animate at 60 ms per tile, restoring the playfield. Shots resolve after the UI
+frame unwinds; simulation/headless gameplay skips animation. Monster status text
+uses `status(const Monster&)` throughout, checking position, light/line of sight,
+natural/temporary invisibility and See Invisible (including cursed flicker),
+then emitting "the <name>" or "something" with normal punctuation/capitalization.
 
 Long sword preserves the old generic sword's **2..6**, zero-accuracy baseline.
 Two-handed sword is a balance profile using the same slot, with no hand
@@ -261,9 +302,9 @@ status effects retain their special behavior.
 
 The small integer helpers in `src/combat_math.hpp` depend only on the seeded
 RNG and can be reused by a native balance harness. These mechanics establish a
-measurable first pass; they do not claim final balance. For identical raw damage
+measurable balance profile; the bow report records remaining concerns. For identical raw damage
 7, rating 8 flat armor previously dealt 1 HP; randomized armor now averages
-about 1.6 HP per landed hit. No broad monster-stat retuning is included.
+about 1.6 HP per landed hit.
 
 ### Controls
 
@@ -278,21 +319,21 @@ about 1.6 HP per landed hit. No broad monster-stat retuning is included.
 | Pickup or stairs prompt | A/B | Confirm or cancel the action |
 | Dungeon | B | Open the action menu |
 | Status prompt | A | Continue a long message after `[more]` |
-| Action menu | Up/Down, A | Choose wait, use item, drop item, throw potion, full map, save and exit, or abandon |
+| Action menu | Up/Down, A | Choose wait, use item, drop item, Throw/Shoot, full map, save and exit, or abandon |
 | Item selection | Up/Down, A | Select an item for the chosen action |
 | Item selection | B | Cancel selection |
-| Throw selection | Up/Down, A | Choose a potion from inventory |
+| Throw/Shoot selection | Up/Down, A | Choose arrows or a potion; Ammo appears first |
 | Wand direction | Direction pad | Fire the selected wand |
 | Wand direction | B | Cancel without spending a charge or turn |
-| Throw direction | Direction pad | Throw the selected potion |
+| Projectile direction | Direction pad | Shoot/throw cardinally; B cancels without a turn |
 | Confirmation | A/B | Confirm or cancel abandoning the game |
-| Throw direction, full map | B | Return to the dungeon |
+| Projectile direction, full map | B | Return to the dungeon |
 
 Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
 best score. The inventory has 16 slots. Dropped items occupy an available empty
 ground slot on the active floor; one slot remains reserved for the Lord's
-Amulet drop until it dies. Compatible food, potions, and scrolls merge into
+Amulet drop until it dies. Compatible food, arrows, potions, and scrolls merge into
 ground stacks when possible. If the ground cannot hold an item, the game asks for an
 explicit discard confirmation. The amulet cannot be dropped.
 
@@ -346,7 +387,7 @@ ctest --test-dir build/native -C RelWithDebInfo --output-on-failure
 The native suite includes deterministic range/overflow checks, signed weapon and
 armor enchantment sampling with 100,000 samples per distribution, diminishing
 returns and symmetry, paired-seed melee/ring/MR/fire checks, equipment encoding,
-all eleven equipment definitions, bounded rolls at every enchantment,
+all thirteen weapon/armor definitions, bounded rolls at every enchantment,
 scroll/curse and pickup/drop checks, generic predicates and grouping, strength
 potion caps, generation distributions and curse independence across 4,096 seeds
 and all depths, subtype weighting and subtype/enchantment independence, all
@@ -371,10 +412,10 @@ the generator.
 
 The AVM build uses a 773-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. With the current SDK, the build reports a
-complete maximum stack bound of 238 bytes and zero analysis gaps, on the
+complete maximum stack bound of 244 bytes and zero analysis gaps, on the
 wand/teleport/status pagination/terrain drawing path. This fits the 256-byte VM stack
-with eighteen bytes to spare; future changes should continue checking the linker
-report. The saved and ordinary data sections total 875 of 1,024 bytes. The
+with twelve bytes to spare; future changes should continue checking the linker
+report. The saved and ordinary data sections total 876 of 1,024 bytes. The
 renderer reuses transient row scratch outside the saved layout to keep
 pagination within the stack limit. Floor generation keeps its 48-byte room
 array on the stack; rendering uses line of sight without room metadata.

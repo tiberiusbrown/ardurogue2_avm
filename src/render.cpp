@@ -43,11 +43,11 @@ static const uint16_t PROGMEM monster_icons[] = {
 };
 // Shared visual categories are independent of ItemType ordering and roster size.
 enum ItemIconCategory : uint8_t {
-    ICON_NONE, ICON_FOOD, ICON_POTION, ICON_WEAPON, ICON_ARMOR,
+    ICON_NONE, ICON_AMMO, ICON_FOOD, ICON_POTION, ICON_WEAPON, ICON_ARMOR,
     ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ITEM_ICON_CATEGORIES
 };
 static const uint16_t PROGMEM item_icons[] = {
-    0x0000, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
+    0x0000, 0x6f69, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
     0x0606, 0x0aaa, 0x01b3, 0x1248
 };
 static_assert(sizeof(item_icons) / sizeof(item_icons[0]) == ITEM_ICON_CATEGORIES,
@@ -55,6 +55,7 @@ static_assert(sizeof(item_icons) / sizeof(item_icons[0]) == ITEM_ICON_CATEGORIES
 
 uint16_t item_icon(uint8_t type)
 {
+    if(is_ammo(type)) return item_icons[ICON_AMMO];
     if(is_weapon(type)) return item_icons[ICON_WEAPON];
     if(is_armor(type)) return item_icons[ICON_ARMOR];
     if(is_potion(type)) return item_icons[ICON_POTION];
@@ -192,6 +193,32 @@ __attribute__((noinline)) void animate_ray(Position origin, int8_t dx,
     }
     render_play();
     avm_display(false);
+}
+
+// Each nibble is one vertical column of a 4x4 arrow. Flash-only sprites.
+__attribute__((noinline)) void animate_arrow(Position origin, int8_t dx, int8_t dy, uint8_t steps)
+{
+#if defined(ARDUROGUE2_BENCH)
+    // Benchmark contract excludes animation; retain production render setup.
+    (void)origin; (void)dx; (void)dy; (void)steps;
+    render_play(); avm_display(false);
+#else
+    static const uint16_t PROGMEM arrows[] = {0x2f20, 0x44e4, 0x4f40, 0x4e44};
+    uint8_t direction = dy < 0 ? 0 : dx > 0 ? 1 : dy > 0 ? 2 : 3;
+    Position pos = origin;
+    for(uint8_t step = 0; step < steps; ++step) {
+        render_play();
+        pos.x = static_cast<uint8_t>(pos.x + dx);
+        pos.y = static_cast<uint8_t>(pos.y + dy);
+        uint8_t sx, sy;
+        if(screen_tile(pos, sx, sy)) icon(arrows[direction], sx * 5, sy * 5);
+        avm_display(false);
+        uint16_t until = static_cast<uint16_t>(avm_millis() + 60);
+        while(static_cast<int16_t>(avm_millis() - until) < 0) avm_idle();
+    }
+    render_play();
+    avm_display(false);
+#endif
 }
 
 __attribute__((noinline)) void animate_fire_burst(Position center)
@@ -620,7 +647,7 @@ __attribute__((noinline)) static void render_title()
 __attribute__((noinline)) static void render_menu()
 {
     static const char AVM_PROGMEM* const AVM_PROGMEM names[] = {
-        F("WAIT"), F("USE ITEM"), F("DROP ITEM"), F("THROW POTION"),
+        F("WAIT"), F("USE ITEM"), F("DROP ITEM"), F("Throw/Shoot"),
         F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON")
     };
     avm_draw_text_P(10, 8, F("ACTION MENU"));
@@ -651,6 +678,7 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
         if(entry >= INVENTORY) {
             switch(entry - INVENTORY) {
             case WEAPONS: avm_draw_text_P(1, y, F("Weapons")); break;
+            case AMMO: avm_draw_text_P(1, y, F("Ammo")); break;
             case ARMORS: avm_draw_text_P(1, y, F("Armor")); break;
             case RINGS: avm_draw_text_P(1, y, F("Rings")); break;
             case AMULETS: avm_draw_text_P(1, y, F("Amulets")); break;
@@ -681,7 +709,7 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
 __attribute__((noinline)) static void render_throw_direction()
 {
     avm_draw_text_P(8, 12, ui.mode == WAND_DIRECTION
-        ? F("USE WAND") : F("THROW POTION"));
+        ? F("USE WAND") : F("Throw/Shoot"));
     draw_item_text(8, 27, game.inventory[ui.selection]);
     avm_draw_text_P(8, 43, F("D-PAD: DIRECTION"));
     avm_draw_text_P(8, 56, F("B: BACK"));
@@ -726,7 +754,7 @@ __attribute__((noinline)) void render()
     case TITLE: render_title(); break;
     case PLAY: render_play(); break;
     case MENU: render_menu(); break;
-    case THROW_DIRECTION: render_throw_direction(); break;
+    case PROJECTILE_DIRECTION: render_throw_direction(); break;
     case WAND_DIRECTION: render_throw_direction(); break;
     case FULL_MAP: render_full_map(); break;
     case END: render_end(); break;

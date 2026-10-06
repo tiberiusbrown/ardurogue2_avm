@@ -73,7 +73,8 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
     else if(r.death_cause.empty()) r.death_cause = "other";
     if(c.enabled) {
         for(Item i : game.inventory) if(i.type)
-            r.items[i.type].carried += i.type == FOOD || is_potion(i.type) || is_scroll(i.type) ? item_value(i) : 1;
+            r.items[i.type].carried += is_stackable(i.type) ? item_value(i) : 1;
+        r.ranged.carried = r.items[ARROWS].carried;
         if(game.has_amulet) r.items[YENDOR_AMULET].carried = 1;
     }
     if(options.trace) { *options.trace << "result=" << r.result << " actions=" << r.actions << " turns=" << r.turns
@@ -100,7 +101,7 @@ bool dispatch(const Action& a) {
     case ActionKind::Swap: return !game.paralyzed && ground_here(a.target) && swap_ground_item(a.target,a.slot);
     case ActionKind::Stairs: return take_stairs();
     case ActionKind::Use: return use_inventory(a.slot,a.target);
-    case ActionKind::Throw: return cardinal(a) && throw_potion(a.slot,a.dx,a.dy);
+    case ActionKind::Throw: return cardinal(a) && throw_or_shoot(a.slot,a.dx,a.dy);
     case ActionKind::Wand: return use_wand(a.slot,a.dx,a.dy);
     case ActionKind::Drop: return drop_inventory(a.slot,a.discard);
     }

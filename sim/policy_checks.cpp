@@ -162,4 +162,51 @@ void retreat_and_inventory() {
     check(choose(agent).kind != ActionKind::Wand,"digging used artificially in an emergency");
 }
 }
-void check_v2_policy() { fire_checks(); tactical_wands(); retreat_and_inventory(); }
+void check_v2_policy() {
+    fire_checks(); tactical_wands(); retreat_and_inventory();
+    using namespace rogue; using namespace sim;
+    OmniscientAgent agent;
+    arena(); monster(HOBGOBLIN,{15,10});
+    game.inventory[0]=make_equipment(SPEAR,0); game.weapon_slot=0;
+    game.inventory[1]=make_equipment(LONG_BOW,0); game.inventory[2]={ARROWS,20};
+    auto a=choose(agent);
+    check(a.kind==ActionKind::Use && a.slot==1,"bow policy missed useful approach shot");
+    check(dispatch(a) && game.weapon_slot==1,"bow switch did not use production equipment turn");
+    a=choose(agent); check(a.kind==ActionKind::Throw && a.slot==2,"equipped bow failed to fire visible opportunity");
+    check(dispatch(a) && game.inventory[2].info==19,"sim Throw failed production arrow consumption");
+    for(uint16_t rng:{1,17,300,65000}) {
+        arena(); agent.reset(); monster(HOBGOBLIN,{15,10});
+        game.inventory[0]=make_equipment(LONG_BOW,0); game.weapon_slot=0; game.inventory[1]={ARROWS,20};
+        game.random_state=rng;
+        a=choose(agent); check(a.kind==ActionKind::Throw,"bow decision inspected future RNG");
+    }
+    for(uint8_t type:{PHANTOM,HOBGOBLIN}) {
+        arena(); agent.reset(); monster(type,{15,10});
+        if(type==HOBGOBLIN) set_monster_effect(game.monsters[0],MON_INVISIBLE,10);
+        game.inventory[0]=make_equipment(LONG_BOW,0); game.weapon_slot=0; game.inventory[1]={ARROWS,20};
+        check(choose(agent).kind!=ActionKind::Throw,"bow policy cheated on unseen target");
+        game.inventory[2]={RING_SEE_INVISIBLE,1}; game.ring_slots[0]=2;
+        agent.reset(); check(choose(agent).kind==ActionKind::Throw,"legitimate see-invisible bow target rejected");
+    }
+    arena(); agent.reset(); monster(BAT,{15,10});
+    game.inventory[0]=make_equipment(LONG_BOW,0); game.weapon_slot=0; game.inventory[1]={ARROWS,20};
+    check(choose(agent).kind!=ActionKind::Throw,"bow policy wasted arrows on a Bat");
+    arena(); agent.reset(); monster(HOBGOBLIN,{12,10},true);
+    game.inventory[0]=make_equipment(TWO_HANDED_SWORD,7); game.weapon_slot=0;
+    game.inventory[1]=make_equipment(LONG_BOW,-7); game.inventory[2]={ARROWS,20};
+    a=choose(agent); check(!(a.kind==ActionKind::Use && a.slot==1),"bow equipped for a close shot it would reject next turn");
+    // Full-census regressions: complementary bow/ammo slots caused reverse
+    // swaps for seeds 39396/41956. Neither pickup may strand its counterpart.
+    for(uint8_t bow : {uint8_t(SHORT_BOW), uint8_t(LONG_BOW)}) {
+        arena(); agent.reset();
+        for(auto& item:game.inventory) item={POTION_HEALING,1};
+        game.inventory[0]=make_equipment(TWO_HANDED_SWORD,0); game.weapon_slot=0;
+        game.inventory[1]=make_equipment(bow,0);
+        game.ground[0]={game.player,{ARROWS,2}};
+        a=choose(agent);
+        check(!(a.kind==ActionKind::Take && a.slot==1),"ammo displaced its only useful bow");
+        game.inventory[1]={ARROWS,2}; game.ground[0].item=make_equipment(bow,0);
+        agent.reset(); a=choose(agent);
+        check(!(a.kind==ActionKind::Take && a.slot==1),"bow displaced its last ammo");
+    }
+}

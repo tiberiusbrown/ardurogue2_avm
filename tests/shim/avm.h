@@ -39,7 +39,8 @@ inline AvmTextCursor avm_draw_textf_P(int16_t x, int16_t y, const char* format,
 #if defined(AVM_TEST_LOADING)
 extern unsigned avm_test_displays;
 extern uint16_t avm_test_millis;
-inline void avm_display(bool) { ++avm_test_displays; }
+inline void (*avm_test_display_hook)() = nullptr;
+inline void avm_display(bool) { ++avm_test_displays; if(avm_test_display_hook) avm_test_display_hook(); }
 #else
 inline void avm_display(bool) {}
 #endif
@@ -50,7 +51,11 @@ inline uint8_t avm_buttons() {
     return avm_test_button_index < avm_test_button_count
         ? avm_test_buttons[avm_test_button_index++] : 0;
 }
-inline void avm_idle() {}
+inline void avm_idle() {
+#if defined(AVM_TEST_LOADING)
+    ++avm_test_millis;
+#endif
+}
 #if defined(AVM_TEST_LOADING)
 inline uint16_t avm_millis() { return avm_test_millis; }
 #else

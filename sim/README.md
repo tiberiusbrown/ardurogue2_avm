@@ -45,7 +45,7 @@ build/sim-native/sim/ardurogue2_sim --seed 4 --max-actions 5 --trace
 Ranges are inclusive. Seeds must fit the production 16-bit API; batches never
 wrap. Production maps seed zero to `0xace1`, so CSV records both the requested
 `seed` and `effective_seed`. Without `--output`, stdout contains `runs.csv`.
-With `--output`, the directory receives seven CSV files and `manifest.json` (see
+With `--output`, the directory receives eight CSV files and `manifest.json` (see
 `BALANCE.md` for schemas). Trace is restricted
 to one seed and goes to stderr, keeping CSV parseable. `--no-telemetry` disables
 aggregate collection for isolation diagnostics; run/floor action and turn
@@ -54,7 +54,7 @@ counts, safety checks and tracing continue to work.
 `--jobs N` runs a batch in 1..64 separate worker processes (default 1), capped
 at the number of seeds. Production `Game` and `session` are global, so processes
 isolate them and each seed's RNG. Contiguous seed chunks merge in ascending
-seed order; all seven CSVs are byte-identical to serial execution. Workers use
+seed order; all eight CSVs are byte-identical to serial execution. Workers use
 temporary directories, which the parent removes after joining them. Only the
 parent writes final output. Tracing still requires one seed and runs serially.
 Windows workers start without visible console windows; POSIX uses `posix_spawnp`.
@@ -109,13 +109,16 @@ collectors. The current context exposes the full read-only world for the
 omniscient policy; a future restricted observation layer can sit at that
 interface. No normal-information agent or experimental management is included.
 
-## Frozen omniscient-v2 policy
+## Maintained omniscient-v2 policy
 
-`omniscient-v2` is the frozen balance-reference policy. Future game-content
-comparisons must use exactly this version for both baseline and candidate.
-Any policy change that can materially alter outcomes requires a new agent
-version and a new fixed-seed baseline. See [V2_RESULTS.md](V2_RESULTS.md) for
-validation, limitations and the comparison with the historical v1 results.
+`omniscient-v2` is the maintained omniscient balance policy. New production
+mechanics may extend it in place. CMake automatically hashes `agent.hpp` and
+`omniscient_agent.cpp` with SHA-256, combines those hashes and records the
+result as `agent_policy_hash` in every manifest. Incremental builds refresh it.
+Content comparisons require matching policy hashes; the Python paired framework
+rejects mismatches or missing hashes. Establish a new reference after a policy
+extension, including a no-new-content compatibility control. Historical
+[V2_RESULTS.md](V2_RESULTS.md) describes the earlier implementation.
 
 The policy uses fixed integer preferences and deterministic array/direction
 tie breaking. It never reads future RNG outcomes, calls `roll()` or advances
@@ -265,7 +268,7 @@ death path and remain `death`. Limit termination never calls `finish(DEATH)`.
 
 ## Verification
 
-See [V2_RESULTS.md](V2_RESULTS.md) for the current fixed batch and trace audit,
+See [../docs/BOW_BALANCE_2026-10-06.md](../docs/BOW_BALANCE_2026-10-06.md) for the current bow-aware census, and [V2_RESULTS.md](V2_RESULTS.md) for the historical fixed batch and trace audit,
 and [RESULTS.md](RESULTS.md) for the historical v1 validation. CTest verifies:
 
 * identical complete metrics, full trace, final state and action digest on repeat;
@@ -276,7 +279,7 @@ and [RESULTS.md](RESULTS.md) for the historical v1 validation. CTest verifies:
 * doors/occupancy, current-tile pickup, full-pack swap and cursed removability;
 * ring and food swap loop regressions, overkill accounting and death causes;
 * action/path/rejection/inventory safety and RNG-mutation/agent-error detection;
-* CLI validation, both batch syntaxes and byte-identical seven-stream CSV output.
+* CLI validation, both batch syntaxes and byte-identical eight-stream CSV output.
 * all fire modifiers, immunity and exhaustive byte-coordinate square coverage;
 * tactical wand emergencies, modifier groups, afflicted/trivial declines and
   polymorph decisions independent of RNG state;
@@ -287,3 +290,33 @@ and [RESULTS.md](RESULTS.md) for the historical v1 validation. CTest verifies:
 
 Existing correctness, generation snapshot/stream-isolation, visibility, UI,
 rendering, item formatting and combat distribution tests remain enabled.
+
+
+## Bow policy and telemetry
+
+The policy retains one best melee weapon, one useful uncursed bow and a capped
+arrow supply (target 24 units, lower acquisition value without a bow). Ammo uses
+the shared 255-unit capacity. It scores visible hostile cardinal opportunities
+through production `scan_ray`, accounting for armor, hit likelihood, threat,
+target HP, supply and both equipment turns. It requires enough approach time
+before equipping, restores melee for close fights and uses a four-decision
+cooldown after restoring melee. No deliberate Bat shots, future RNG inspection,
+free switching or additional kiting path is provided. Naturally/temporarily
+invisible targets require production See Invisible detection and line of sight.
+
+ActionKind::Throw dispatches production `throw_or_shoot` for both potions and
+arrows. Trace labels distinguish throw potion, shoot arrow and throw arrow.
+Schema 3 adds `ranged.csv`: uint64 host counters for bundle/unit generation,
+pickup/firing/throwing/carried units, bow occupancy/switches, shots/hits/effective
+damage/kills by bow, distance and target. Misses are shots minus hits. Distance
+zero represents an immediate blocker. Per-floor arrow bundles/units/pickups and
+bow ownership provide descent drought analysis. First-found sentinel 255 means
+never. Gaps include reached terminal death floors and exclude ascent (no supply
+generation). Acquisition gaps while owning any bow may include deliberately
+stocked/cursed bows and are descriptive, not proof of exhausted ammunition.
+
+All eight descriptor-managed streams, plus optional entry_state.csv, merge in
+seed order. `ranged_report.py` reconciles consumption, inventory conservation,
+floor generation/acquisition and typed shot breakdowns. `check_balance.py`
+exports ranged usage, first discovery/acquisition, gap distribution summaries,
+firing distance and target breakdowns alongside the ordinary scorecard.

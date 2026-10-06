@@ -116,7 +116,7 @@ void merge(const fs::path& file, std::ostream& output, const std::string& expect
 }
 }
 BatchCounts parallel_batch(const std::string& executable, uint64_t start,
-    uint64_t count, unsigned jobs, const Options& options, const std::array<std::ostream*,7>& outputs,
+    uint64_t count, unsigned jobs, const Options& options, const std::array<std::ostream*,sim::CSV_STREAM_COUNT>& outputs,
     std::ostream* entry_state) {
     if(options.trace) throw std::runtime_error("parallel batches cannot trace multiple seeds");
     jobs=static_cast<unsigned>(std::min<uint64_t>(jobs,count));

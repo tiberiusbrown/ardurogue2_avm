@@ -37,10 +37,11 @@ void status(const char* words, char punctuation) {
 }
 void status(Item) {}
 void status(Item, char) {}
-void status(MonsterType) {}
-void status(MonsterType, char) {}
+void status(const Monster&) {}
+void status(const Monster&, char) {}
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
+void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
 void animate_ray(Position origin, int8_t, int8_t, uint8_t steps) {
     ++ray_animations;
     animated_origin = origin;
@@ -165,8 +166,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x41b181dcu, 0xe8bf145du}, {0x8334ef1cu, 0x6c365cb5u},
-        {0x266b77adu, 0xfb40913eu}, {0x6911a042u, 0x8e2b6476u}
+        {0x8292003fu, 0xe8bf145du}, {0x16353963u, 0x6c365cb5u},
+        {0xe114ffcbu, 0xfb40913eu}, {0x50fd706au, 0x8e2b6476u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -1209,7 +1210,7 @@ void check_scrolls_and_identification()
             different = true;
     require(different, "scroll appearances do not change between runs");
     for(const GroundItem& ground : game.ground)
-        if(ground.item.type)
+        if(ground.item.type && !is_ammo(ground.item.type))
             require(!item_is_identified(ground.item),
                     "generated item starts identified");
 
@@ -1514,7 +1515,7 @@ void check_enemy_roster()
         {0, 1, 6, 8, 0, 1, 1},
         {MON_MEAN, 2, 3, 3, 0, 3, 2},
         {MON_MEAN | MON_POISON, 3, 3, 3, 0, 4, 3},
-        {MON_MEAN | MON_OPENER, 4, 2, 2, 0, 6, 5},
+        {MON_MEAN | MON_OPENER, 3, 2, 2, 0, 6, 5},
         {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6},
         {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
             6, 4, 4, 1, 12, 7},
@@ -1524,13 +1525,13 @@ void check_enemy_roster()
         {MON_MEAN | MON_NOMOVE, 7, 4, 4, 3, 20, 11},
         {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
             9, 4, 4, 3, 24, 14},
-        {MON_MEAN | MON_REGENS | MON_OPENER, 10, 3, 3, 5, 32, 18},
+        {MON_MEAN | MON_REGENS | MON_OPENER, 9, 3, 3, 5, 32, 18},
         {MON_MEAN, 7, 6, 6, 1, 24, 18},
-        {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 8, 48, 25},
+        {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 7, 48, 25},
         {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
              MON_OPENER | MON_SEE_INVIS, 10, 6, 6, 3, 24, 35},
         {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
-             MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 8, 128, 90}
+             MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 7, 112, 90}
     };
     for(uint8_t type = BAT; type <= LORD; ++type) {
         MonsterInfo info = monster_info(type);
@@ -1538,7 +1539,7 @@ void check_enemy_roster()
         require(info.flags == e.flags && info.strength == e.str &&
                 info.dexterity == e.dex && info.speed == e.speed &&
                 info.armor == e.def && info.health == e.hp &&
-                info.xp == e.xp, "enemy stats differ from ArduRogue");
+                info.xp == e.xp, "enemy balance profile changed");
     }
     const uint32_t floor_types[FLOORS] = {
         (1u << BAT) | (1u << SNAKE),
@@ -1787,7 +1788,7 @@ void check_enemy_abilities()
         end_turn();
         breathed = status_text.find("breathes fire!") != std::string::npos;
     }
-    require(breathed && game.hp <= 224,
+    require(breathed && game.hp >= 214 && game.hp <= 228,
             "cursed fire ring did not amplify dragon breath");
 
     const uint8_t attackers[] = {RATTLESNAKE, TARANTULA, INCUBUS};
@@ -2662,6 +2663,8 @@ int main(int argc, char** argv)
     check_cursed_wands();
     check_spreading_and_overpowered_wands();
     check_unreliable_wand();
+    extern void check_bows();
+    check_bows();
     check_startup_save_state();
     check_floor_generation_snapshots();
     check_new_run_state();

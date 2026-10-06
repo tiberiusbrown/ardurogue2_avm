@@ -72,16 +72,32 @@ bool player_is_invisible()
     return bonus > 0 || (game.invisible && bonus >= 0);
 }
 
-bool player_can_see_monster(uint8_t index)
+static bool can_detect_monster(const Monster& monster, uint8_t index)
 {
-    if(index >= MONSTERS || !game.monsters[index].type)
+    if(!monster.type)
         return false;
     if(ring_bonus(RING_SEE_INVISIBLE) < 0 &&
        ((game.turns + index) & 1))
         return false;
-    return (!(monster_flags(game.monsters[index].type) & MON_NATURAL_INVIS) &&
-            !monster_effect(game.monsters[index], MON_INVISIBLE)) ||
+    return (!(monster_flags(monster.type) & MON_NATURAL_INVIS) &&
+            !monster_effect(monster, MON_INVISIBLE)) ||
            ring_bonus(RING_SEE_INVISIBLE) > 0;
+}
+
+bool player_can_see_monster(uint8_t index)
+{
+    return index < MONSTERS && can_detect_monster(game.monsters[index], index);
+}
+
+bool player_can_see_monster(const Monster& monster)
+{
+    // Cursed see-invisible flickers by slot. Preserve that rule for references;
+    // a detached monster has the same phase as slot zero.
+    uint8_t index = 0;
+    if(ring_bonus(RING_SEE_INVISIBLE) < 0)
+        for(uint8_t i = 0; i < MONSTERS; ++i)
+            if(&game.monsters[i] == &monster) { index = i; break; }
+    return can_detect_monster(monster, index);
 }
 
 void heal_player(uint8_t amount)
@@ -211,7 +227,7 @@ void identify_item(uint8_t slot)
 {
     if(slot >= INVENTORY || !game.inventory[slot].type) return;
     Item& item = game.inventory[slot];
-    item.info |= ITEM_IDENTIFIED;
+    if(!is_ammo(item.type)) item.info |= ITEM_IDENTIFIED;
     identify_type(item.type);
 }
 

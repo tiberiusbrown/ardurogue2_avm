@@ -19,14 +19,25 @@ struct MonsterMetrics {
         player_attacks=0, damage_taken=0, attacks=0, hits=0,
         player_damage=0, deaths=0, poison=0, confusion=0, paralysis=0, fire=0;
 };
+struct ShotMetrics { uint64_t shots=0, hits=0, damage=0, kills=0; };
+struct RangedMetrics {
+    uint64_t bundles=0, generated=0, picked=0, fired=0, thrown=0, carried=0,
+        bow_turns=0, switches_to=0, switches_away=0,
+        first_generated=255, first_picked=255, generation_gap=0, acquisition_gap=0;
+    std::array<ShotMetrics,2> bows{};
+    std::array<ShotMetrics,7> distances{}; // 0 records an adjacent blocker.
+    std::array<ShotMetrics,rogue::LORD+1> targets{};
+};
 struct FloorMetrics {
     int floor=0, visit=0;
+    uint64_t arrow_bundles=0, arrow_generated=0, arrow_picked=0;
+    bool bow_owned=false;
     bool ascent=false, exited=false;
     int entry_hp=0, exit_hp=0, entry_level=0, exit_level=0;
     int entry_max_hp=0, entry_strength=0, entry_dexterity=0, entry_speed=0,
         entry_hunger=0, entry_armor_rating=0, entry_food_units=0, entry_healing_units=0,
         entry_weapon_type=0, entry_weapon_enchant=0, entry_armor_type=0, entry_armor_enchant=0;
-    // Optional host report sidecar; the seven schema-2 streams stay unchanged.
+    // Optional host report sidecar has a version independent of the main streams.
     int entry_control_units=0, entry_wand_charges=0, entry_offensive_charges=0,
         entry_emergency_charges=0;
     bool entry_ring_invisibility=false, entry_speed_amulet=false, entry_invisible=false;
@@ -39,6 +50,7 @@ struct FloorMetrics {
         pickups=0, consumables=0;
 };
 struct RunMetrics {
+    RangedMetrics ranged;
     uint16_t seed=0, effective_seed=0;
     std::string agent, result, reason, death_cause;
     uint64_t actions=0, turns=0, action_hash=14695981039346656037ull;
@@ -53,6 +65,9 @@ struct RunMetrics {
 };
 struct Collector {
     RunMetrics data;
+    uint64_t generation_gap=0, acquisition_gap=0;
+    uint8_t last_weapon=rogue::NO_ITEM;
+    int closed_ranged_visit=0;
     bool enabled=true;
     std::ostream* trace=nullptr;
     std::array<bool, rogue::GROUND_ITEMS> reached{};
@@ -97,8 +112,11 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=2;
-extern const std::array<CsvStream,7> csv_streams;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=3;
+inline constexpr size_t CSV_STREAM_COUNT=8;
+void write_ranged_header(std::ostream&);
+void write_ranged(std::ostream&, const RunMetrics&);
+extern const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams;
 // The production hooks have one non-owning, scoped sink. Execution is serial.
 class CollectScope {
     Collector* previous;

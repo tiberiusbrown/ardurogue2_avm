@@ -197,7 +197,7 @@ static void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
-// Defer wand activation to the main loop so this UI frame unwinds first.
+// Defer wand/projectile activation to the main loop so this UI frame unwinds first.
 __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
 {
     bool moved = false;
@@ -238,17 +238,13 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         }
         return INPUT_NONE;
     }
-    if(ui.mode == THROW_DIRECTION || ui.mode == WAND_DIRECTION) {
+    if(ui.mode == PROJECTILE_DIRECTION || ui.mode == WAND_DIRECTION) {
         if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
             status_clear();
             ui.dirty = true;
         } else if(direction) {
             bool wand_direction = ui.mode == WAND_DIRECTION;
-            int8_t dx = direction == AVM_BUTTON_L ? -1 :
-                        direction == AVM_BUTTON_R ? 1 : 0;
-            int8_t dy = direction == AVM_BUTTON_U ? -1 :
-                        direction == AVM_BUTTON_D ? 1 : 0;
             ui.mode = PLAY;
             status_clear();
             defer_play_render();
@@ -258,9 +254,12 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                        direction == AVM_BUTTON_R ? INPUT_WAND_RIGHT :
                        direction == AVM_BUTTON_D ? INPUT_WAND_DOWN :
                                                    INPUT_WAND_LEFT;
-            } else if(!throw_potion(ui.selection, dx, dy))
-                ui.mode = THROW_DIRECTION;
-            ui.dirty = true;
+            } else {
+                ui.dirty = true;
+                return direction == AVM_BUTTON_U ? INPUT_PROJECTILE_UP :
+                       direction == AVM_BUTTON_R ? INPUT_PROJECTILE_RIGHT :
+                       direction == AVM_BUTTON_D ? INPUT_PROJECTILE_DOWN : INPUT_PROJECTILE_LEFT;
+            }
         }
         return INPUT_NONE;
     }
@@ -324,9 +323,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                        disposition == DROP_DISCARD_REST) {
                         bool confirmed = disposition == DROP_DISCARD_REST
                             ? yesno(F("Discard the rest?"))
-                            : ((game.inventory[slot].type == FOOD ||
-                                is_potion(game.inventory[slot].type) ||
-                                is_scroll(game.inventory[slot].type))
+                            : (is_stackable(game.inventory[slot].type)
                                 ? yesno(F("Discard this item?"))
                                 : yesno(F("Discard"), game.inventory[slot]));
                         status_clear();
@@ -339,15 +336,15 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
             }
             case 3: {
                 ui.mode = PLAY;
-                uint8_t slot = choose_item(F("Throw what?"), is_potion);
+                uint8_t slot = choose_item(F("Throw/Shoot what?"), is_throwable_or_shootable);
                 if(slot != NONE) {
                     ui.selection = slot;
-                    ui.mode = THROW_DIRECTION;
+                    ui.mode = PROJECTILE_DIRECTION;
                 } else {
                     status_clear();
-                    InventoryView potions(game, is_potion);
-                    if(!potions.count()) {
-                        status(F("You have no potions."));
+                    InventoryView projectiles(game, is_throwable_or_shootable);
+                    if(!projectiles.count()) {
+                        status(F("You have nothing to throw or shoot."));
                     }
                 }
                 break;

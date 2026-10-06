@@ -11,7 +11,7 @@ static const MonsterInfo PROGMEM monster_table[] = {
     {0, 1, 6, 8, 0, 1, 1},                         // bat
     {MON_MEAN, 2, 3, 3, 0, 3, 2},                // snake
     {MON_MEAN | MON_POISON, 3, 3, 3, 0, 4, 3}, // rattlesnake
-    {MON_MEAN | MON_OPENER, 4, 2, 2, 0, 6, 5}, // zombie
+    {MON_MEAN | MON_OPENER, 3, 2, 2, 0, 6, 5}, // zombie
     {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6}, // goblin
     {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
         6, 4, 4, 1, 12, 7},                     // phantom
@@ -21,13 +21,13 @@ static const MonsterInfo PROGMEM monster_table[] = {
     {MON_MEAN | MON_NOMOVE, 7, 4, 4, 3, 20, 11}, // mimic
     {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
         9, 4, 4, 3, 24, 14},                    // incubus
-    {MON_MEAN | MON_REGENS | MON_OPENER, 10, 3, 3, 5, 32, 18}, // troll
+    {MON_MEAN | MON_REGENS | MON_OPENER, 9, 3, 3, 5, 32, 18}, // troll
     {MON_MEAN, 7, 6, 6, 1, 24, 18},            // griffin
-    {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 8, 48, 25}, // dragon
+    {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 7, 48, 25}, // dragon
     {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
          MON_OPENER | MON_SEE_INVIS, 10, 6, 6, 3, 24, 35}, // angel
     {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
-         MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 8, 128, 90} // Lord
+         MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 7, 112, 90} // Lord
 };
 
 MonsterInfo monster_info(uint8_t type)
@@ -92,8 +92,8 @@ void set_monster_effect(Monster& monster, MonsterEffect effect,
 void monster_status(const Monster& monster,
                            const char PROGMEM* message)
 {
-    status(F("The"));
-    status(static_cast<MonsterType>(monster.type));
+    status_capitalize();
+    status(monster);
     status(message);
 }
 
@@ -177,6 +177,13 @@ uint8_t player_accuracy()
     uint8_t type = game.weapon_slot < INVENTORY ? game.inventory[game.weapon_slot].type : NO_ITEM;
     return clamp_combat_stat(static_cast<int16_t>(player_dexterity()) +
                              experience + ring_bonus(RING_ATTACK) + weapon_definition(type).accuracy);
+}
+
+uint8_t player_ranged_accuracy(uint8_t bow_type)
+{
+    uint8_t experience = game.level ? (game.level - 1) / 3 : 0;
+    return clamp_combat_stat(static_cast<int16_t>(player_dexterity()) + experience +
+                            ring_bonus(RING_ATTACK) + ranged_weapon_definition(bow_type).accuracy);
 }
 
 uint8_t player_armor_rating()
@@ -339,9 +346,9 @@ static void advance_monster(uint8_t index)
         if(player_is_invisible() && !(info.flags & MON_SEE_INVIS))
             pursuing = false;
         if(!afraid && pursuing && !confused && (info.flags & MON_FIRE_BREATH) &&
-           fire_line_clear(monster) && roll(2)) {
-            status(F("The"));
-            status(static_cast<MonsterType>(monster.type));
+           fire_line_clear(monster) && roll(3) == 0) {
+            status_capitalize();
+            status(monster);
             status(F("breathes fire!"));
             int8_t dx = monster.pos.x == game.player.x ? 0 :
                 monster.pos.x < game.player.x ? 1 : -1;
@@ -349,7 +356,7 @@ static void advance_monster(uint8_t index)
                 monster.pos.y < game.player.y ? 1 : -1;
             animate_ray(monster.pos, dx, dy, range);
             animate_fire_burst(game.player);
-            uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+            uint8_t damage = static_cast<uint8_t>(6 + roll(8));
             SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
             SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
                       static_cast<uint8_t>(sim::Special::Fire));
@@ -369,8 +376,8 @@ static void advance_monster(uint8_t index)
                 uint8_t damage = physical_damage_after_armor(raw,
                     armor_absorption(player_armor_rating(), player_armor_enchant()));
                 hurt_player(damage);
-                status(F("The"));
-                status(static_cast<MonsterType>(monster.type));
+                status_capitalize();
+                status(monster);
                 status(F("hits you!"));
                 if(info.flags & MON_VAMPIRE) {
                     game.vamp_drain = static_cast<uint8_t>(game.vamp_drain + 3);
@@ -500,14 +507,13 @@ void end_turn()
 void defeat_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
-    uint8_t killed_type = target.type;
-    SIM_EVENT(sim::EventKind::MonsterKilled, index, killed_type);
+    SIM_EVENT(sim::EventKind::MonsterKilled, index, target.type);
     leave_yendor(target);
-    target.type = NO_MONSTER;
-    uint8_t xp = monster_xp(killed_type);
+    uint8_t xp = monster_xp(target.type);
     game.score += static_cast<uint16_t>(5 + xp * 3);
-    status(F("You defeat the"));
-    status(static_cast<MonsterType>(killed_type), '.');
+    status(F("You defeat"));
+    status(target, '.');
+    target.type = NO_MONSTER;
     gain_xp(xp);
 }
 
@@ -518,8 +524,8 @@ static void attack_monster(uint8_t index)
     target.state |= MON_AGGRO;
     MonsterInfo info = monster_info(target.type);
     if(!physical_attack_hits(player_accuracy(), info.dexterity)) {
-        status(F("You miss the"));
-        status(static_cast<MonsterType>(target.type), '.');
+        status(F("You miss"));
+        status(target, '.');
         return;
     }
     bool armed = game.weapon_slot < INVENTORY &&
@@ -537,8 +543,8 @@ static void attack_monster(uint8_t index)
         defeat_monster(index);
     } else {
         target.hp -= damage;
-        status(F("You hit the"));
-        status(static_cast<MonsterType>(target.type), '.');
+        status(F("You hit"));
+        status(target, '.');
     }
     int8_t vampire_bonus = amulet_bonus(AMULET_VAMPIRE);
     if(vampire_bonus > 0 && game.hp < player_max_hp()) {

@@ -48,7 +48,7 @@ void visit_key(std::ostream& o,const RunMetrics& r,const FloorMetrics& f) {
     key(o,r); o<<','<<f.visit<<','<<f.floor<<','<<(f.ascent ? "ascent" : "descent");
 }
 uint16_t units(rogue::Item i) {
-    return i.type == rogue::FOOD || rogue::is_potion(i.type) || rogue::is_scroll(i.type) ? rogue::item_value(i) : 1;
+    return rogue::is_stackable(i.type) ? rogue::item_value(i) : 1;
 }
 std::string csv(const std::string& text) {
     std::string result = "\"";
@@ -73,9 +73,9 @@ void after_floor_generation() {
 }
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
-    static const char* names[] = {"NO_ITEM","FOOD","HEALING","CONFUSION","POISON","HARMING",
+    static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
         "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY",
-        "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","CHAIN_MAIL","LEATHER_ARMOR",
+        "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","CHAIN_MAIL","LEATHER_ARMOR",
         "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
         "RING_SUSTENANCE","RING_INVISIBILITY","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
@@ -163,12 +163,24 @@ void Collector::enter_floor() {
         const auto& i=g.ground[s];
         ground_wands[s]=rogue::is_wand(i.item.type) ? new_wand() : 0;
         if(i.item.type) data.items[i.item.type].generated += units(i.item);
+        if(rogue::is_ammo(i.item.type)) {
+            ++data.ranged.bundles; data.ranged.generated += units(i.item);
+            ++data.floors.back().arrow_bundles; data.floors.back().arrow_generated += units(i.item);
+            if(data.ranged.first_generated == 255) data.ranged.first_generated = g.floor;
+        }
     }
     for(const auto& m : g.monsters) if(m.type) ++data.monsters[m.type].generated;
 }
 void Collector::close_floor(bool exited) {
     if(data.floors.empty() || data.floors.back().exited) return;
     auto& f = data.floors.back();
+    if(f.visit != closed_ranged_visit && !f.ascent) {
+        generation_gap = f.arrow_bundles ? 0 : generation_gap + 1;
+        acquisition_gap = !f.bow_owned || f.arrow_picked ? 0 : acquisition_gap + 1;
+        data.ranged.generation_gap = std::max(data.ranged.generation_gap, generation_gap);
+        data.ranged.acquisition_gap = std::max(data.ranged.acquisition_gap, acquisition_gap);
+        closed_ranged_visit = f.visit;
+    }
     for(size_t i=0;i<data.items.size();++i) for(const auto& field:item_fields)
         f.items[i].*(field.member)=data.items[i].*(field.member)-entry_items[i].*(field.member);
     for(size_t i=0;i<data.monsters.size();++i) for(const auto& field:monster_fields)
@@ -179,6 +191,8 @@ void Collector::close_floor(bool exited) {
 void Collector::observe() {
     if(!enabled) return;
     const auto& g = rogue::game;
+    if(!data.floors.empty()) for(auto i:g.inventory)
+        if(rogue::is_bow(i.type)) data.floors.back().bow_owned=true;
     for(int i = 0; i < rogue::GROUND_ITEMS; ++i)
         if(!reached[i] && g.ground[i].item.type && g.ground[i].pos == g.player) {
             reached[i] = true; data.items[g.ground[i].item.type].reached += units(g.ground[i].item);
@@ -194,6 +208,16 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     if(k == EventKind::FloorExited) { close_floor(true); return; }
     if(k == EventKind::Turn) {
         ++data.turns;
+        if(enabled) {
+            uint8_t weapon = rogue::game.weapon_slot < rogue::INVENTORY ?
+                rogue::game.inventory[rogue::game.weapon_slot].type : rogue::NO_ITEM;
+            if(weapon != last_weapon) {
+                if(rogue::is_bow(weapon)) ++data.ranged.switches_to;
+                if(rogue::is_bow(last_weapon)) ++data.ranged.switches_away;
+                last_weapon = weapon;
+            }
+            if(rogue::is_bow(weapon)) ++data.ranged.bow_turns;
+        }
         if(!data.floors.empty()) ++data.floors.back().turns;
         if(enabled) for(uint8_t s : {rogue::game.weapon_slot,rogue::game.armor_slot,rogue::game.amulet_slot,
                                    rogue::game.ring_slots[0],rogue::game.ring_slots[1]})
@@ -222,6 +246,28 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
     };
     switch(k) {
+    case EventKind::ArrowFired:
+        ++data.items[rogue::ARROWS].used; ++data.items[rogue::ARROWS].consumed;
+        if(f) ++f->consumables;
+        if(rogue::is_bow(type)) {
+            ++data.ranged.fired;
+            ++data.ranged.bows[type == rogue::LONG_BOW].shots;
+            ++data.ranged.distances[std::min<unsigned>(amount,6)].shots;
+        } else ++data.ranged.thrown;
+        break;
+    case EventKind::ArrowTarget:
+        if(rogue::is_bow(type) && index < rogue::MONSTERS) {
+            uint8_t target = rogue::game.monsters[index].type;
+            bool hit = detail & 0x80;
+            auto damage = std::min<uint16_t>(amount, rogue::game.monsters[index].hp);
+            for(auto* shot : {&data.ranged.bows[type == rogue::LONG_BOW],
+                             &data.ranged.distances[detail & 0x7f], &data.ranged.targets[target]}) {
+                shot->hits += hit; shot->damage += damage;
+                shot->kills += hit && amount >= rogue::game.monsters[index].hp;
+            }
+            ++data.ranged.targets[target].shots;
+        }
+        break;
     case EventKind::PlayerDamage: if(f) f->damage_taken += amount; break;
     case EventKind::PlayerAttack: ++data.monsters[type].player_attacks; engage(); break;
     case EventKind::MonsterDamage:
@@ -245,6 +291,11 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         break;
     case EventKind::Pickup:
         data.items[type].picked_up += amount; if(f) f->pickups += amount;
+        if(rogue::is_ammo(type)) {
+            data.ranged.picked += amount; if(f) f->arrow_picked += amount;
+            if(data.ranged.first_picked == 255) data.ranged.first_picked = rogue::game.floor;
+        }
+        if(f && rogue::is_bow(type)) f->bow_owned=true;
         if(index < rogue::GROUND_ITEMS) {
             reached[index] = false;
             bool swapped = rogue::game.ground[index].item.type != rogue::NO_ITEM;
@@ -297,7 +348,7 @@ void write_runs_header(std::ostream& o) {
     o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash\n";
 }
 void write_floors_header(std::ostream& o) {
-    o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,archetype,floor_tiles,major_features,corridors,loops,open_connections";
+    o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
     for(int i=0;i<16;++i) o<<",feature_family_"<<i;
     o<<'\n';
 }
@@ -320,6 +371,7 @@ void write_floors(std::ostream& o, const RunMetrics& r) {
       << ',' << f.entry_max_hp << ',' << f.entry_strength << ',' << f.entry_dexterity << ',' << f.entry_speed
       << ',' << f.entry_hunger << ',' << f.entry_armor_rating << ',' << f.entry_food_units << ',' << f.entry_healing_units
       << ',' << f.entry_weapon_type << ',' << f.entry_weapon_enchant << ',' << f.entry_armor_type << ',' << f.entry_armor_enchant
+      << ',' << f.arrow_bundles << ',' << f.arrow_generated << ',' << f.arrow_picked << ',' << f.bow_owned
       << ',' << f.archetype << ',' << f.floor_tiles << ',' << f.major_features << ',' << f.corridors << ',' << f.loops << ',' << f.open_connections;
       for(auto family:f.families) o<<','<<int(family);
       o<<'\n';
@@ -372,10 +424,29 @@ void write_entry_state(std::ostream& o,const RunMetrics& r) {
          <<','<<f.entry_invisible<<'\n';
     }
 }
-const std::array<CsvStream,7> csv_streams{{
+void write_ranged_header(std::ostream& o) {
+    o << "seed,effective_seed,agent,bundles,generated,picked,fired,thrown,carried,bow_turns,switches_to,switches_away,first_generated,first_picked,generation_gap,acquisition_gap";
+    for(const char* bow:{"short","long"}) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << bow << '_' << field;
+    for(int d=0;d<=6;++d) for(const char* field:{"shots","hits","damage","kills"}) o << ",distance" << d << '_' << field;
+    for(int t=1;t<=rogue::LORD;++t) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << monster_name(t) << '_' << field;
+    o << '\n';
+}
+void write_ranged(std::ostream& o,const RunMetrics& r) {
+    key(o,r); const auto& m=r.ranged;
+    o << ',' << m.bundles << ',' << m.generated << ',' << m.picked << ',' << m.fired << ',' << m.thrown
+      << ',' << m.carried << ',' << m.bow_turns << ',' << m.switches_to << ',' << m.switches_away
+      << ',' << m.first_generated << ',' << m.first_picked << ',' << m.generation_gap << ',' << m.acquisition_gap;
+    auto shot=[&](const ShotMetrics& s) { o << ',' << s.shots << ',' << s.hits << ',' << s.damage << ',' << s.kills; };
+    for(auto s:m.bows) shot(s);
+    for(auto s:m.distances) shot(s);
+    for(int t=1;t<=rogue::LORD;++t) shot(m.targets[t]);
+    o << '\n';
+}
+const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
     {"runs.csv",write_runs_header,write_run},{"floors.csv",write_floors_header,write_floors},
     {"items.csv",write_items_header,write_items},{"monsters.csv",write_monsters_header,write_monsters},
     {"visit_items.csv",write_visit_items_header,write_visit_items},
     {"visit_monsters.csv",write_visit_monsters_header,write_visit_monsters},
-    {"interventions.csv",write_interventions_header,write_interventions}}};
+    {"interventions.csv",write_interventions_header,write_interventions},
+    {"ranged.csv",write_ranged_header,write_ranged}}};
 }

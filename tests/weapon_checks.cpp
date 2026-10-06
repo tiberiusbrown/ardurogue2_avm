@@ -2,6 +2,7 @@
 #include "game_internal.hpp"
 #include "world.hpp"
 #include "inventory_view.hpp"
+#include "world_gen.hpp"
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
@@ -13,13 +14,13 @@ static constexpr unsigned SAMPLES = 100000;
 struct WeaponCase { uint8_t type, minimum, maximum; int8_t accuracy; };
 static constexpr WeaponCase weapons[] = {
     {DAGGER, 1, 4, 2}, {SPEAR, 2, 5, 1}, {LONG_SWORD, 2, 6, 0},
-    {MACE, 3, 7, -1}, {TWO_HANDED_SWORD, 4, 8, -2}
+    {MACE, 3, 7, -1}, {TWO_HANDED_SWORD, 4, 8, -2}, {SHORT_BOW, 1, 2, -2}, {LONG_BOW, 1, 2, -2}
 };
 static constexpr uint8_t armors[] = {
     LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL
 };
 static constexpr uint8_t equipment_types[] = {
-    DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD,
+    DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
     LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL
 };
 
@@ -44,7 +45,7 @@ static uint8_t expected_rating(uint8_t type)
 
 static void check_equipment_definitions_and_ranges()
 {
-    static_assert(LONG_SWORD == 12 && TWO_HANDED_SWORD - LONG_SWORD + 1 == 5 &&
+    static_assert(LONG_SWORD == 13 && WEAPON_LAST - WEAPON_FIRST + 1 == 7 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
                   POTION_COUNT == 10 && RING_COUNT == 8 && AMULET_COUNT == 8 &&
                   SCROLL_COUNT == 9 && WAND_COUNT == 7,
@@ -393,8 +394,8 @@ static void check_equipment_actions()
 static void check_generated_equipment()
 {
     unsigned counts[2][5][2] = {}, depth_counts[FLOORS][2][5] = {};
-    unsigned subtype_counts[11][5][2] = {}, category_counts[INVENTORY_GROUPS] = {};
-    unsigned depth_subtypes[FLOORS][11] = {};
+    unsigned subtype_counts[sizeof equipment_types][5][2] = {}, category_counts[INVENTORY_GROUPS] = {};
+    unsigned depth_subtypes[FLOORS][sizeof equipment_types] = {};
     unsigned ring_counts[RING_COUNT] = {}, amulet_counts[AMULET_COUNT] = {};
     unsigned potion_counts[FLOORS][POTION_COUNT] = {};
     unsigned generated = 0;
@@ -456,8 +457,8 @@ static void check_generated_equipment()
         }
     }
     // Original category weights out of 72; equipment expansion changes only subtypes.
-    const unsigned category_weights[] = {8, 8, 2, 2, 4, 20, 8, 20};
-    for(unsigned category = 0; category < 8; ++category)
+    const unsigned category_weights[] = {8, generation::AMMO_WEIGHT, 8, 2, 2, 4, 20, 8, generation::FOOD_WEIGHT};
+    for(unsigned category = 0; category < sizeof category_weights / sizeof category_weights[0]; ++category)
         require(category_counts[category] * 7200 > generated * (category_weights[category] * 100 - 72) &&
                 category_counts[category] * 7200 < generated * (category_weights[category] * 100 + 72),
                 "subtype generation changed overall loot category probability");
@@ -487,7 +488,7 @@ static void check_generated_equipment()
         for(unsigned subtype = 0; subtype < sizeof equipment_types; ++subtype) {
             require(depth_subtypes[floor][subtype] != 0,
                     "equipment tier is locked out at a depth");
-            if(subtype < 5) {
+            if(is_weapon(equipment_types[subtype])) {
                 if(floor < 4) early_weapons += depth_subtypes[floor][subtype];
                 if(floor >= 12) late_weapons += depth_subtypes[floor][subtype];
                 continue;
@@ -497,8 +498,8 @@ static void check_generated_equipment()
         }
         if(floor < 4) early_heavy += depth_subtypes[floor][4];
         if(floor >= 12) late_heavy += depth_subtypes[floor][4];
-        if(floor < 4) early_plate += depth_subtypes[floor][10];
-        if(floor >= 12) late_plate += depth_subtypes[floor][10];
+        if(floor < 4) early_plate += depth_subtypes[floor][sizeof equipment_types - 1];
+        if(floor >= 12) late_plate += depth_subtypes[floor][sizeof equipment_types - 1];
     }
     require(early_plate * 100 < early_armor * 3 && late_plate * 100 > late_armor * 14,
             "plate availability no longer supports a depth-paced upgrade curve");
@@ -523,8 +524,8 @@ static void check_generated_equipment()
     }
     unsigned invisible = ring_counts[RING_INVISIBILITY - RING_SEE_INVISIBLE];
     unsigned immunity = ring_counts[RING_FIRE_IMMUNITY - RING_SEE_INVISIBLE];
-    require(invisible * 100 > rings * 5 && invisible * 100 < rings * 8 &&
-            immunity * 100 > rings * 16 && immunity * 100 < rings * 21,
+    require(invisible * 100 > rings * 1 && invisible * 100 < rings * 3 &&
+            immunity * 100 > rings * 11 && immunity * 100 < rings * 15,
             "permanent invisibility is not rarer than its defensive comparator");
     unsigned amulets = 0;
     for(unsigned count : amulet_counts) {

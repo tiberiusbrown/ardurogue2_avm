@@ -4,6 +4,7 @@
 #include "status.hpp"
 
 #include <cstdio>
+#include <initializer_list>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -16,6 +17,8 @@ void (*avm_test_text_hook)(int16_t, int16_t, const char*) = nullptr;
 
 namespace rogue {
 Ui ui = {};
+bool can_see(Position) { return true; }
+bool player_can_see_monster(const Monster&) { return true; }
 void status_clear() { reset_status_position(); }
 void restore_play_render() {}
 bool known[WAND_COUNT] = {};
@@ -250,8 +253,9 @@ static void check_item_status()
     status(Item{FOOD, 1}, '?');
     expect_status("Pick up the food?");
     begin_capture();
-    status(MonsterType(LORD), '!');
-    expect_status("Lord of Darkness!");
+    Monster lord{{1, 1}, LORD, 112, 0, {0, 0}, 0};
+    status(lord, '!');
+    expect_status("the Lord of Darkness!");
     begin_capture();
     status("   alpha beta   ", '?');
     expect_status("alpha beta?");
@@ -498,6 +502,13 @@ int main()
         check_drawn_item(item);
         item.info |= ITEM_IDENTIFIED;
         check_drawn_item(item);
+    }
+    for(uint8_t n:{1,63,64,127,128,254,255}) {
+        Item arrows{ARROWS,n};
+        format_item(arrows,text);
+        char expected[32]; std::snprintf(expected,sizeof expected,"%u %s",n,n==1 ? "arrow" : "arrows");
+        if(std::strcmp(text,expected)) { std::fprintf(stderr,"arrow quantity text: %s\n",text); return 1; }
+        check_drawn_item(arrows);
     }
     check_streaming_status();
     check_item_status();

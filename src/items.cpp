@@ -33,7 +33,7 @@ Item ground_item_info(uint8_t index)
 
 static bool stackable(uint8_t type)
 {
-    return type == FOOD || is_potion(type) || is_scroll(type);
+    return is_stackable(type);
 }
 
 static bool compatible(Item a, Item b)
@@ -43,20 +43,22 @@ static bool compatible(Item a, Item b)
 
 static uint8_t stack_space(Item item)
 {
-    return static_cast<uint8_t>(ITEM_VALUE_MASK - item_value(item));
+    return static_cast<uint8_t>(maximum_stack(item.type) - item_value(item));
 }
 
 static Item clean_stack(Item item)
 {
-    item.info &= static_cast<uint8_t>(ITEM_VALUE_MASK | ITEM_IDENTIFIED);
+    if(!is_ammo(item.type)) item.info &= static_cast<uint8_t>(ITEM_VALUE_MASK | ITEM_IDENTIFIED);
     return item;
 }
 
 static void merge_stack(Item& target, Item incoming, uint8_t amount)
 {
     set_item_value(target, static_cast<uint8_t>(item_value(target) + amount));
-    target.info = static_cast<uint8_t>(target.info & ~ITEM_CURSED);
-    target.info |= incoming.info & ITEM_IDENTIFIED;
+    if(!is_ammo(target.type)) {
+        target.info = static_cast<uint8_t>(target.info & ~ITEM_CURSED);
+        target.info |= incoming.info & ITEM_IDENTIFIED;
+    }
 }
 
 static uint8_t reusable_ground_slot()
@@ -106,7 +108,7 @@ static bool add_inventory(Item incoming)
         if(compatible(item, incoming)) capacity += stack_space(item);
     }
     if(stackable(incoming.type)) {
-        if(capacity + (empty == NONE ? 0 : ITEM_VALUE_MASK) <
+        if(capacity + (empty == NONE ? 0 : maximum_stack(incoming.type)) <
            item_value(incoming)) return false;
         uint8_t remaining = item_value(incoming);
         for(Item& item : game.inventory) {
@@ -642,8 +644,8 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
 
     uint8_t hit = scan_ray(game.player, dx, dy, 8).monster;
     if(hit != NONE) {
-        status(F("It hits the"));
-        status(static_cast<MonsterType>(game.monsters[hit].type), '.');
+        status(F("It hits"));
+        status(game.monsters[hit], '.');
         bool known = potion_identified(type);
         identify_type(type);
         if(!known) {
@@ -657,6 +659,53 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
         end_turn();
     if(item.type == NO_ITEM && session.repeat_slot == slot)
         session.repeat_slot = NONE;
+    return true;
+}
+
+// Resolve only after the input/modal frame has unwound. Ammo has no instance flags.
+__attribute__((noinline)) static bool apply_arrow(uint8_t slot, int8_t dx, int8_t dy)
+{
+    if(slot >= INVENTORY || game.paralyzed ||
+       !is_ammo(game.inventory[slot].type) ||
+       (!dx && !dy) || (dx && dy) || dx < -1 || dx > 1 || dy < -1 || dy > 1 ||
+       !item_value(game.inventory[slot])) return false;
+    Item& ammo = game.inventory[slot];
+    uint8_t bow = game.weapon_slot < INVENTORY ? game.inventory[game.weapon_slot].type : NO_ITEM;
+    if(!is_bow(bow)) bow = NO_ITEM;
+    RangedWeaponDefinition ranged = ranged_weapon_definition(bow);
+    set_item_value(ammo, static_cast<uint8_t>(item_value(ammo) - 1));
+    if(!item_value(ammo)) ammo.type = NO_ITEM;
+    RayResult ray = scan_ray(game.player, dx, dy, ranged.range);
+    SIM_EVENT(sim::EventKind::ArrowFired, slot, bow, ray.steps);
+    animate_arrow(game.player, dx, dy, ray.steps);
+    if(ray.monster != NONE) {
+        Monster& target = game.monsters[ray.monster];
+        target.state |= MON_AGGRO;
+        SIM_EVENT(sim::EventKind::PlayerAttack, ray.monster, target.type);
+        bool hit = physical_attack_hits(player_ranged_accuracy(bow), monster_dexterity(target.type));
+        status(hit ? F("The arrow hits") : F("The arrow misses"));
+        status(target, '.');
+        uint8_t damage = 0;
+        if(hit) {
+            int8_t enchant = bow == NO_ITEM ? 0 : equipment_enchant(game.inventory[game.weapon_slot]);
+            uint8_t raw = physical_raw_damage(weapon_damage_roll(ranged.minimum_damage,
+                ranged.maximum_damage, enchant), player_strength());
+            damage = physical_damage_after_armor(raw, armor_absorption(monster_armor(target.type), 0));
+        }
+        SIM_EVENT(sim::EventKind::ArrowTarget, ray.monster, bow, damage,
+                  static_cast<uint8_t>(ray.steps | (hit ? 0x80 : 0)));
+        if(hit) damage_monster(ray.monster, damage, true);
+    } else status(bow == NO_ITEM ? F("You throw an arrow.") : F("You shoot an arrow."));
+    if(ammo.type == NO_ITEM && session.repeat_slot == slot) session.repeat_slot = NONE;
+    return true;
+}
+
+__attribute__((noinline)) bool throw_or_shoot(uint8_t slot, int8_t dx, int8_t dy)
+{
+    if(slot < INVENTORY && is_potion(game.inventory[slot].type)) return throw_potion(slot, dx, dy);
+    if(!apply_arrow(slot, dx, dy)) return false;
+    // Arrow/animation temporaries have unwound before the enemy/status chain.
+    if(!session.ended) end_turn();
     return true;
 }
 
@@ -687,8 +736,8 @@ static void force_monster(uint8_t index, int8_t dx, int8_t dy,
     target.pos = path.monster != NONE ? path.before : path.end;
     uint8_t stun = powerful ? 8 : 4;
     if(path.monster != NONE) {
-        monster_status(target, F("crashes into the"));
-        status(static_cast<MonsterType>(game.monsters[path.monster].type), '!');
+        monster_status(target, F("crashes into"));
+        status(game.monsters[path.monster], '!');
         target.stun = stun;
         game.monsters[path.monster].stun = stun;
     } else if(path.blocker) {

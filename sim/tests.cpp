@@ -254,7 +254,7 @@ void experiments() {
 }
 int main() {
     try {
-        static_assert(sizeof(Game)==774 && SAVE_VERSION==23,"native saved layout changed");
+        static_assert(sizeof(Game)==774 && SAVE_VERSION==24,"native saved layout changed");
         check_v2_policy(); determinism(); entry_state_report(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }

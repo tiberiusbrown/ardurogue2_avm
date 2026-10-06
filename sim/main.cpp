@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
                 std::cout << "ardurogue2_sim [--seed N | --seeds FIRST:LAST | --all-seeds | --count N --start-seed N]\n"
                     "  [--output DIRECTORY] [--jobs N] [--trace] [--max-actions N] [--no-telemetry] [--entry-state]\n"
                     "Seeds are unsigned 16-bit; ranges are inclusive. Trace goes to stderr.\n"
-                    "Without --output, runs.csv goes to stdout. With --output seven CSVs and manifest.json are written.\n"
+                    "Without --output, runs.csv goes to stdout. With --output eight CSVs and manifest.json are written.\n"
                     "--entry-state adds entry_state.csv for balance reports; requires --output and telemetry.\n"
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"
@@ -80,8 +80,8 @@ int main(int argc, char** argv) {
             if(!entry_state) throw std::runtime_error("cannot open entry_state.csv");
             sim::write_entry_state_header(entry_state);
         }
-        std::array<std::ofstream,7> files;
-        std::array<std::ostream*,7> outputs{}; outputs[0]=&std::cout;
+        std::array<std::ofstream,sim::CSV_STREAM_COUNT> files;
+        std::array<std::ostream*,sim::CSV_STREAM_COUNT> outputs{}; outputs[0]=&std::cout;
         if(!output.empty()) {
             std::filesystem::create_directories(output);
             if(std::filesystem::exists(std::filesystem::path(output)/"runs.csv")) throw std::runtime_error("output already contains runs.csv; choose a fresh directory");

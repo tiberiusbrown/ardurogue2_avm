@@ -31,15 +31,21 @@ using namespace rogue;
     X(scroll_teleport, "Confirm a teleport scroll", use, A, room, SCROLL_TELEPORT, 0, 0) \
     X(drop_food, "Confirm dropping food", drop, A, room, FOOD, 0, 0) \
     X(wand_digging, "Submit digging direction; carve blocked terrain", wand, RIGHT, corridor, WAND_DIGGING, 0, 0) \
+    X(arrow_hit, "Shoot an arrow that hits", projectile, RIGHT, room, ARROWS, 0, 0) \
+    X(arrow_miss, "Shoot an arrow that misses", projectile, RIGHT, room, ARROWS, 0, 0) \
+    X(arrow_kill, "Shoot an arrow that kills and awards XP", projectile, RIGHT, room, ARROWS, 0, 0) \
+    X(arrow_empty, "Shoot six tiles into empty space", projectile, RIGHT, room, ARROWS, 0, 0) \
+    X(equip_bow, "Equip a bow in the weapon slot", use, A, room, LONG_BOW, 0, 0) \
+    X(projectile_picker, "Open Ammo before Potions in Throw/Shoot", projectile_browse, A, room, ARROWS, 0, 0) \
     X(pickup_food, "Confirm pickup after stepping onto food", pickup, A, room, NO_ITEM, 0, 0) \
-    X(inventory_open_full, "Open a full pack spanning all nine groups", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_open_full, "Open a full pack spanning all ten groups", browse, A, room, NO_ITEM, 0, 0) \
     X(inventory_down_full, "Scroll down across the last group in a full mixed pack", browse, DOWN, room, NO_ITEM, 14, 0) \
     X(inventory_up_full, "Scroll up near the bottom of a full mixed pack", browse, UP, room, NO_ITEM, 15, 5) \
     X(inventory_open_wands, "Open a full pack of identified wands with long names", browse, A, room, NO_ITEM, 0, 0) \
     X(inventory_down_wands, "Scroll down to the last of 16 identified wands", browse, DOWN, room, NO_ITEM, 14, 0) \
     X(inventory_up_wands, "Scroll up through seven visible long wand names", browse, UP, room, NO_ITEM, 15, 6) \
-    X(inventory_open_singletons, "Open all nine groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
-    X(inventory_down_singletons, "Scroll down across the last of nine singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
+    X(inventory_open_singletons, "Open all ten groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_down_singletons, "Scroll down across the last of ten singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
     X(inventory_up_singletons, "Scroll up across singleton group headers near the bottom", browse, UP, room, NO_ITEM, 8, 3)
 
 namespace {
@@ -65,7 +71,7 @@ void add_ground(uint8_t index, Position pos)
 void add_inventory(uint8_t slot, ItemType type)
 {
     Item item = is_equipment(type) ? make_equipment(type, -3) : Item{type, 15};
-    item.info |= ITEM_IDENTIFIED;
+    if(!is_ammo(type)) item.info |= ITEM_IDENTIFIED;
     if(is_equipment(type)) item.info |= ITEM_CURSED;
     if(is_wand(type)) {
         set_wand_charges(item, static_cast<uint8_t>(15 - slot % 6));
@@ -92,12 +98,13 @@ void prepare_full_inventory()
     add_inventory(12, RING_INVISIBILITY);
     add_inventory(13, SPLINT_MAIL);
     add_inventory(14, LONG_SWORD);
-    add_inventory(15, FOOD);
+    add_inventory(15, ARROWS);
 }
 
 void prepare_singleton_inventory()
 {
-    // Nine is the maximum group count. Empty leading slots increase scanning.
+    // Ten is the maximum group count. Empty leading slots increase scanning.
+    add_inventory(6, ARROWS);
     add_inventory(7, YENDOR_AMULET);
     add_inventory(8, FOOD);
     add_inventory(9, SCROLL_MASS_CONFUSE);
@@ -174,7 +181,7 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
 
     if(item != NO_ITEM) {
         game.inventory[0] = is_equipment(item) ? make_equipment(item, 0) : Item{item, 1};
-        game.inventory[0].info |= ITEM_IDENTIFIED;
+        if(!is_ammo(item)) game.inventory[0].info |= ITEM_IDENTIFIED;
         if(is_wand(item)) {
             set_wand_charges(game.inventory[0], 3);
             set_wand_modifier(game.inventory[0], WAND_NORMAL);
@@ -222,6 +229,23 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         game.inventory[0].info = ITEM_CURSED | 1;
         constexpr uint8_t index = POTION_COUNT + SCROLL_COUNT + RING_COUNT;
         game.identified_items[index >> 3] &= static_cast<uint8_t>(~(1u << (index & 7)));
+        break;
+    }
+    case Case::projectile_picker:
+        game.inventory[0]={ARROWS,255}; game.inventory[1]={POTION_POISON,1};
+        break;
+    case Case::arrow_hit: case Case::arrow_miss: case Case::arrow_kill: case Case::arrow_empty: {
+        game.inventory[0]={ARROWS,255}; game.inventory[1]=make_equipment(LONG_BOW,0); game.weapon_slot=1;
+        game.dexterity=scenario==Case::arrow_miss ? 0 : MAX_PHYSICAL_STAT;
+        if(scenario!=Case::arrow_empty) {
+            add_monster(0,{36,16},GOBLIN,scenario==Case::arrow_kill ? 1 : 100);
+            for(uint16_t seed=1;;++seed) {
+                uint16_t state=seed;
+                uint8_t accuracy=player_ranged_accuracy(LONG_BOW);
+                if((next_random(state) % (accuracy*2+monster_dexterity(GOBLIN)+1) >= monster_dexterity(GOBLIN)) ==
+                   (scenario!=Case::arrow_miss)) { game.random_state=seed; break; }
+            }
+        }
         break;
     }
     case Case::wand_digging:

@@ -20,7 +20,7 @@ def main():
         for variant in ("control", "treatment"):
             m = json.loads((root / variant / "manifest.json").read_text())
             assert m["variant"] == variant and m["experiment"] == "same-binary-test"
-            assert len(m["simulator_executable_sha256"]) == 64 and len(m["output_csv_sha256"]) == 7
+            assert len(m["simulator_executable_sha256"]) == 64 and len(m["output_csv_sha256"]) == 8
             assert m["experiment_specification_sha256"]
         result = json.loads((root / "comparison" / "comparison.json").read_text())
         assert result["effective_seed_count"] == 32 and not result["census"]

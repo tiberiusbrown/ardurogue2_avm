@@ -8,6 +8,7 @@ add_executable(game_native
     game_native.cpp
     combat_checks.cpp
     weapon_checks.cpp
+    bow_checks.cpp
     bench_checks.cpp
     generation_checks.cpp
     ../bench/bench.cpp

@@ -25,7 +25,7 @@ void check_benchmark_scenarios()
         bench_setup();
         require(game.valid && !game.turns && !session.ended &&
                 !wall_at(game.player.x, game.player.y), "benchmark setup is not playable");
-        require(game.weapon_slot == NONE && game.armor_slot == NONE &&
+        require((game.weapon_slot == NONE || (game.weapon_slot == 1 && is_bow(game.inventory[1].type))) && game.armor_slot == NONE &&
                 game.amulet_slot == NONE && game.ring_slots[0] == NONE &&
                 game.ring_slots[1] == NONE, "benchmark equipment must start unequipped");
         Game first = game;

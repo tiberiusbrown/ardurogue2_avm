@@ -30,8 +30,8 @@ void status(const char*) {}
 void status(const char*, char) {}
 void status(Item) {}
 void status(Item, char) {}
-void status(MonsterType) {}
-void status(MonsterType, char) {}
+void status(const Monster&) {}
+void status(const Monster&, char) {}
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
 void status_clear() {}
@@ -52,6 +52,7 @@ void render_inventory(const char*, const InventoryView& view, uint8_t selection,
 }
 void render_yesno_prompt(const char*, const Item*) { restore_play_render(); }
 void render() { ++full_renders; play_render_pending = false; }
+void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
 void animate_ray(Position, int8_t, int8_t, uint8_t) {}
 void animate_fire_burst(Position) {}
 void animate_spreading_rays(Position, const uint8_t[4]) {}
@@ -73,6 +74,11 @@ static rogue::InputAction dispatch_input(uint8_t buttons)
 {
     using namespace rogue;
     InputAction input = handle_input(buttons);
+    if(input >= INPUT_PROJECTILE_UP && input <= INPUT_PROJECTILE_LEFT) {
+        int8_t dx=input==INPUT_PROJECTILE_RIGHT ? 1 : input==INPUT_PROJECTILE_LEFT ? -1 : 0;
+        int8_t dy=input==INPUT_PROJECTILE_UP ? -1 : input==INPUT_PROJECTILE_DOWN ? 1 : 0;
+        if(!throw_or_shoot(ui.selection,dx,dy)) ui.mode=PROJECTILE_DIRECTION;
+    }
     if(input >= INPUT_WAND_UP && input <= INPUT_WAND_IMMEDIATE) {
         int8_t dx = input == INPUT_WAND_RIGHT ? 1 :
                     input == INPUT_WAND_LEFT ? -1 : 0;
@@ -87,6 +93,16 @@ static rogue::InputAction dispatch_input(uint8_t buttons)
 int main()
 {
     using namespace rogue;
+    start_new(0x4312);
+    std::memset(game.walls,0,sizeof game.walls); std::memset(game.monsters,0,sizeof game.monsters);
+    game.door_count=0; game.player={10,10}; game.inventory[0]={ARROWS,255};
+    ui.mode=PROJECTILE_DIRECTION; ui.selection=0;
+    uint8_t before=game.turns;
+    require(handle_input(AVM_BUTTON_R)==INPUT_PROJECTILE_RIGHT && game.inventory[0].info==255 && game.turns==before,
+            "UI resolved animated projectile before its frame unwound");
+    require(throw_or_shoot(ui.selection,1,0) && game.inventory[0].info==254,"deferred arrow dispatch failed");
+    ui.mode=PROJECTILE_DIRECTION; ui.previous_buttons=0;
+    require(handle_input(AVM_BUTTON_B)==INPUT_NONE && ui.mode==PLAY && game.inventory[0].info==254,"projectile cancel spent ammo");
     start_new(0x4312);
     game.inventory[0] = {WAND_FIRE, 3};
     ui.mode = WAND_DIRECTION;

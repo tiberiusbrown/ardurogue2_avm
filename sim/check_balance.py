@@ -136,7 +136,7 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
     manifest, data = balance.load_directory(directory)
     runs = data["runs"]
     if manifest["agent"] != "omniscient-v2" or set(runs.effective_seed) != set(range(1, expected_runs + 1)):
-        raise ValueError(f"Expected frozen omniscient-v2 and exactly seeds 1..{expected_runs}")
+        raise ValueError(f"Expected maintained omniscient-v2 and exactly seeds 1..{expected_runs}")
     if manifest.get("interventions"):
         raise ValueError("This scorecard requires production mechanics without interventions")
     balance.reconcile_telemetry(data)  # Also rejects simulator failures via load_directory.
@@ -147,6 +147,7 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
     # Release sparse visit telemetry after the framework's reconciliation.
     del data["visit_items"], data["visit_monsters"]
     n = len(runs)
+    census = balance.is_census(runs.effective_seed.to_numpy())
     deaths = runs[runs.result.eq("death")]
     escaped = int(runs.result.eq("escaped").sum())
     yendor = int(runs.has_yendor.sum())
@@ -169,8 +170,9 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
                        target_low_pct=band[0] if band else None, target_high_pct=band[1] if band else None,
                        band_status=band_status(mortality, band))
             if entered:
-                low, high = balance.stats.binomtest(failed, entered).proportion_ci(method="wilson")
-                row.update(mortality_ci_low_pct=100 * low, mortality_ci_high_pct=100 * high)
+                if not census:
+                    low, high = balance.stats.binomtest(failed, entered).proportion_ci(method="wilson")
+                    row.update(mortality_ci_low_pct=100 * low, mortality_ci_high_pct=100 * high)
                 row["entry_hp_fraction_mean"] = float((visits.entry_hp / visits.entry_max_hp).mean())
                 row["top_weapon_pct"] = percentage(int(visits.entry_weapon_type.eq(item_types["TWO_HANDED_SWORD"]).sum()), entered)
                 row["plate_pct"] = percentage(int(visits.entry_armor_type.eq(item_types["PLATE_MAIL"]).sum()), entered)
@@ -217,7 +219,7 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
     if baseline:
         comparison = balance.compare(baseline,directory,output=out / "comparison")
         paired = comparison["primary"]
-    provenance = dict(agent=manifest["agent"],seed_range=f"1..{expected_runs}",
+    provenance = dict(agent=manifest["agent"],agent_policy_hash=manifest["agent_policy_hash"],seed_range=f"1..{expected_runs}",
                       git_sha=manifest["git_sha"],git_dirty=manifest["git_dirty"],
                       workspace_source_sha256={str(p.relative_to(ROOT)):balance.sha256(p)
                           for folder in (ROOT/"src",ROOT/"sim") for p in sorted(folder.glob("*"))
@@ -229,10 +231,12 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
     balance.write_json(out/"summary.json",dict(summary=summary,floors=rows,violations=violations,
                                               paired_comparison=paired,provenance=provenance))
     text = ["# Balance check: 10,000 seeds" if n==10000 else f"# Balance check: {n:,} seeds", "",
-            f"Frozen omniscient-v2; seeds 1..{expected_runs}; validated and reconciled telemetry.", "",
+            f"Maintained omniscient-v2; seeds 1..{expected_runs}; validated and reconciled telemetry.", "",
             f"**{len(violations)} descent floors outside their design bands.**", "",
-            "Bands are broad design goals. LOW/HIGH uses the unrounded point estimate; "
-            "the 95% Wilson interval shows finite-sample uncertainty. Overall escape and ascent have no numerical targets.", "",
+            "Bands are broad design goals. LOW/HIGH uses the unrounded point estimate. "
+            + ("This is the complete deterministic seed population; sampling intervals are omitted. " if census else
+               "The 95% Wilson interval shows finite-sample uncertainty. ")
+            + "Overall escape and ascent have no numerical targets.", "",
             "## Outcomes", ""]
     text += table(["Metric","Result"],[(k.replace("_"," "),fmt(v)) for k,v in summary.items()])
     if paired:
@@ -271,6 +275,8 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
           fmt(float(burden.loc[name,"damage_per_engagement"])) if row.engaged else "n/a",
           fmt(float(burden.loc[name,"hit_pct"])) if row.monster_attacks else "n/a",fmt(float(row.deaths_caused/n)))
          for name,row in monsters.iterrows()])
+    import ranged_report
+    text += ["", ranged_report.report(data, out)]
     text += ["", "## Definitions and provenance", "",
              "Mortality = failed visits / entered visits; reach uses all starting runs. "
              "Simulator failures invalidate the report and are never counted as deaths. "
@@ -289,7 +295,7 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
              "all typed item/monster counters, and death causes. Raw streams and manifest remain in the parent directory.", "",
              f"Build revision: {manifest['git_sha']}; dirty: {manifest['git_dirty']}. "
              "summary.json records current workspace source hashes, the executable hash when available, "
-             "and all eight CSV hashes. Workspace hashes alone do not establish the source of an externally supplied executable.", ""]
+             "and all nine CSV hashes. Workspace hashes alone do not establish the source of an externally supplied executable.", ""]
     report = "\n".join(text)
     (out/"summary.md").write_text(report,encoding="utf-8")
     (out/"summary.txt").write_text(report,encoding="utf-8")

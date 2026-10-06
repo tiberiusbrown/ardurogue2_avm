@@ -11,9 +11,20 @@ namespace rogue::generation {
 enum Archetype : uint8_t { CHAMBERS, WARREN, FORTRESS, RUINS, ARCHETYPES };
 enum Purpose : uint16_t {
     LAYOUT = 0x4a31, LOOPS = 0xb275, DOOR_SELECTION = 0x7d19,
-    STAIRS = 0xe893, ENCOUNTERS = 0x19c7, SUPPLIES = 0x635b,
+    STAIRS = 0xe893, ENCOUNTERS = 0x19c7, SUPPLIES = 0x635b, AMMO_QUANTITY = 0x4d71,
     EQUIPMENT = 0xd421
 };
+
+constexpr uint8_t FOOD_WEIGHT = 15, AMMO_WEIGHT = 5;
+constexpr uint8_t ARROW_BUNDLE_MIN = 2, ARROW_BUNDLE_MAX = 3;
+static_assert(FOOD_WEIGHT + AMMO_WEIGHT == 20, "supply boundaries must remain fixed");
+constexpr uint8_t weapon_type_for_roll(uint8_t chance, uint8_t floor)
+{
+    uint8_t heavy = floor < 4 ? 2 : floor < 8 ? floor : floor < 10 ? 10 : 20;
+    return chance < 25 ? DAGGER : chance < 39 ? SPEAR : chance < 45 ? SHORT_BOW :
+        chance < 71 ? LONG_SWORD : chance < 75 ? LONG_BOW :
+        chance < 100 - heavy ? MACE : TWO_HANDED_SWORD;
+}
 
 uint16_t floor_seed(Purpose purpose);
 Archetype archetype(uint16_t layout_seed);

@@ -55,10 +55,28 @@ int equipment_score(Item i) {
     }
 }
 int slot_score(int s) { return s < INVENTORY ? equipment_score(game.inventory[s]) : 0; }
+int best_melee() {
+    int best = NONE;
+    for(int s=0;s<INVENTORY;++s) if(is_weapon(game.inventory[s].type) && !is_bow(game.inventory[s].type) &&
+        equipment_score(game.inventory[s]) > slot_score(best)) best=s;
+    return best;
+}
+int bow_score(Item i) {
+    if(!is_bow(i.type) || item_is_cursed(i)) return 0;
+    auto w=ranged_weapon_definition(i.type);
+    return 5*(w.minimum_damage+w.maximum_damage)+3*w.accuracy+2*w.range+3*equipment_enchant(i);
+}
+int best_bow() {
+    int best=NONE;
+    for(int s=0;s<INVENTORY;++s) if(bow_score(game.inventory[s]) > (best==NONE ? 0 : bow_score(game.inventory[best]))) best=s;
+    return best;
+}
+bool bow_equipped() { return game.weapon_slot < INVENTORY && is_bow(game.inventory[game.weapon_slot].type); }
 bool upgrade(Item i) {
     if(!equipment_score(i)) return false;
     int s = NONE;
-    if(is_weapon(i.type)) s = game.weapon_slot;
+    if(is_bow(i.type)) return false;
+    if(is_weapon(i.type)) s = bow_equipped() ? best_melee() : game.weapon_slot;
     else if(is_armor(i.type)) s = game.armor_slot;
     else if(is_amulet(i.type)) s = game.amulet_slot;
     else if(is_ring(i.type)) {
@@ -70,6 +88,14 @@ bool upgrade(Item i) {
 }
 int value(Item i) {
     if(i.type == YENDOR_AMULET) return 10000;
+    if(is_bow(i.type)) {
+        int best=best_bow();
+        return bow_score(i) > (best==NONE ? 0 : bow_score(game.inventory[best])) ? 100+bow_score(i) : 0;
+    }
+    if(is_ammo(i.type)) {
+        int n=quantity(ARROWS);
+        return n >= 24 ? 0 : best_bow()!=NONE ? (n<5 ? 170 : 95) : n<8 ? 45 : 0;
+    }
     if(is_equipment(i.type) || is_ring(i.type) || is_amulet(i.type))
         return upgrade(i) ? 100+equipment_score(i) : 0;
     if(is_wand(i.type)) {
@@ -81,8 +107,8 @@ int value(Item i) {
         case WAND_FORCE: return 45 + 4*wand_charges(i);
         case WAND_TELEPORT: return 65 + 5*wand_charges(i);
         case WAND_POLYMORPH: return 30 + 3*wand_charges(i);
-        // Digging carves terrain but does not move/control anyone. This frozen
-        // oracle deliberately gives speculative shortcuts no tactical value.
+        // Digging carves terrain but does not move/control anyone. The policy
+        // deliberately gives speculative shortcuts no tactical value.
         case WAND_DIGGING: return 0;
         default: return 0;
         }
@@ -116,21 +142,31 @@ int discard_value(int s) {
     // Retaining stocked food has value even when the desired supply cap was
     // reached. Using acquisition value here caused food/scroll swap cycles.
     if(i.type == FOOD) return 70 + 20*item_value(i);
-    return value(i) + ((i.type == FOOD || is_potion(i.type) || is_scroll(i.type)) ? item_value(i)*5 : 0);
+    if(is_bow(i.type)) return s==best_bow() ? (quantity(ARROWS) ? 150+bow_score(i) : 95) : 0;
+    if(is_ammo(i.type)) return best_bow()!=NONE ? 120+std::min(24,int(item_value(i)))*4 : 45;
+    if(bow_equipped() && s==best_melee()) return 180+equipment_score(i);
+    return value(i) + (is_stackable(i.type) ? item_value(i)*5 : 0);
 }
 bool fits(Item incoming) {
     int capacity = 0;
-    bool stack = incoming.type == FOOD || is_potion(incoming.type) || is_scroll(incoming.type);
+    bool stack = is_stackable(incoming.type);
     for(Item i : game.inventory) {
         if(!i.type) return true;
-        if(stack && i.type == incoming.type) capacity += ITEM_VALUE_MASK-item_value(i);
+        if(stack && i.type == incoming.type) capacity += maximum_stack(i.type)-item_value(i);
     }
     return stack && capacity >= item_value(incoming);
 }
 int replacement(Item i) {
     int best = -1, worst = value(i);
-    for(int s = 0; s < INVENTORY; ++s)
+    for(int s = 0; s < INVENTORY; ++s) {
+        // Bow and ammo are complementary slots. An ammo acquisition must not
+        // remove its only useful launcher; a bow must not remove its last ammo.
+        // Otherwise their acquisition values reverse after each accepted swap.
+        if(is_ammo(i.type) && s==best_bow()) continue;
+        if(is_bow(i.type) && is_ammo(game.inventory[s].type) &&
+           quantity(ARROWS)==item_value(game.inventory[s])) continue;
         if(game.inventory[s].type && discard_value(s) < worst) { best = s; worst = discard_value(s); }
+    }
     return best;
 }
 Action pickup(int index) {
@@ -164,6 +200,49 @@ int offensive_pressure(const Monster& m) {
     int speed = std::max(1,int(info.speed)*(monster_effect(m,MON_SLOWED) ? 2 : 1));
     if(cost > speed) pressure += pressure/2;
     return pressure;
+}
+// Deterministic expected-value estimates; only production resolves attacks.
+int estimated_damage(Item weapon, uint8_t target, bool ranged) {
+    int low,high;
+    if(ranged) { auto w=ranged_weapon_definition(weapon.type); low=w.minimum_damage; high=w.maximum_damage; }
+    else { auto w=weapon_definition(weapon.type); low=w.minimum_damage; high=w.maximum_damage; }
+    int mean=(low+high)*2 + equipment_enchant(weapon); // quarters of HP
+    return std::max(4,mean+4*strength_damage_bonus(player_strength())-3*monster_armor(target));
+}
+bool bow_opportunity(Action& choice, int bow) {
+    if(bow==NONE || quantity(ARROWS)==0) return false;
+    int supply=quantity(ARROWS), best=0, melee=best_melee();
+    auto w=ranged_weapon_definition(game.inventory[bow].type);
+    bool ready=game.weapon_slot==bow;
+    for(int d=0;d<4;++d) {
+        auto ray=scan_ray(game.player,dxs[d],dys[d],w.range);
+        if(ray.monster==NONE || !player_can_see_monster(ray.monster)) continue;
+        const auto& m=game.monsters[ray.monster];
+        if(!can_see(m.pos) || !hostile(m) || m.type==BAT) continue;
+        int pressure=offensive_pressure(m);
+        if((supply<=4 && pressure<7 && m.type!=LORD) || (supply<=12 && pressure<4 && m.type!=LORD)) continue;
+        int damage=estimated_damage(game.inventory[bow],m.type,true);
+        int melee_damage=estimated_damage(melee==NONE ? Item{NO_ITEM,0} : game.inventory[melee],m.type,false);
+        // Pay both equipment turns only when the approach leaves useful firing time.
+        int budget=std::max(1,int(game.speed)-amulet_bonus(AMULET_SPEED))*(game.slowed ? 2 : 1);
+        int enemy_speed=std::max(1,int(monster_speed(m.type))*(monster_effect(m,MON_SLOWED) ? 2 : 1));
+        int approach=controlled(m) || (monster_flags(m.type)&MON_NOMOVE) ? 0 : (budget+enemy_speed-1)/enemy_speed;
+        if(!ready && ray.steps < 2*approach+2) continue;
+        if(ray.steps<=2 && melee!=NONE && damage<melee_damage) continue;
+        int accuracy=player_ranged_accuracy(game.inventory[bow].type);
+        int expected=damage*(2*accuracy+1)/(2*accuracy+monster_dexterity(m.type)+1);
+        // Armor can make a shot little more than a provocation (notably Dragons).
+        // Reserve that shot for a likely finishing blow, rather than wasting a swap.
+        if(expected<8 && 4*m.hp>expected) continue;
+        int score=expected+2*pressure+ray.steps-(ready ? 0 : 8);
+        if(!ready && score<20) continue;
+        if(score<=best) continue;
+        best=score;
+        choice=ready ? Action{} : use(bow,"equip bow for visible target");
+        if(ready) { choice.kind=ActionKind::Throw; choice.slot=static_cast<uint8_t>(find(ARROWS)); choice.dx=dxs[d]; choice.dy=dys[d]; choice.goal="shoot visible threat"; }
+        choice.destination=m.pos;
+    }
+    return best>0;
 }
 struct Danger {
     int adjacent=0, nearby=0, pressure=0;
@@ -391,6 +470,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     int upgrade_slot = -1, upgrade_score = 0;
     for(int s = 0; s < INVENTORY; ++s) {
         Item i = game.inventory[s];
+        if(bow_equipped() && is_weapon(i.type)) continue;
         if(!equipped(s) && upgrade(i) && equipment_score(i) > upgrade_score) {
             upgrade_slot = s; upgrade_score = equipment_score(i);
         }
@@ -435,6 +515,18 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
             a.slot = static_cast<uint8_t>(s); a.dx = dxs[d]; a.dy = dys[d];
             if(is_wand(type) && !wand_needs_direction(i)) a.dx = a.dy = 0;
             a.goal = "ranged damage"; a.destination = m.pos; return a;
+        }
+    }
+    // This branch is unreachable in old-content replacement controls.
+    int bow=best_bow();
+    if(bow!=NONE) {
+        Action shot;
+        if(bow_cooldown) --bow_cooldown;
+        if(!bow_cooldown && bow_opportunity(shot,bow) && (bow_equipped() || adjacent<0)) { bow_idle=0; return shot; }
+        if(bow_equipped()) {
+            ++bow_idle;
+            int melee=best_melee();
+            if(melee!=NONE && (adjacent>=0 || bow_idle>=2)) { bow_idle=0; bow_cooldown=4; return use(melee,"restore melee weapon"); }
         }
     }
     if(adjacent >= 0) {

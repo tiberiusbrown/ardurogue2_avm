@@ -20,6 +20,19 @@ Keep all items of the same group contiguous in the `ItemType` enum so group
 predicates such as `is_weapon`, `is_armor`, `is_potion`, `is_ring`, `is_amulet`,
 `is_scroll`, and `is_wand` can use simple inclusive range tests.
 
+# Ammunition and projectiles
+
+`ARROWS` uses all eight `Item::info` bits for unsigned quantity, including the
+bits otherwise named curse/identification. Use `item_value`, `set_item_value`,
+`item_is_cursed`, `item_is_identified`, `maximum_stack` and `is_stackable`; never
+mask arrow quantities or OR flags into ammo. Keep the Ammo enum group contiguous.
+Bows are equipment in the single weapon slot; their melee and ranged definitions
+are separate. Ranged attacks reuse `scan_ray` and physical combat. The bow range
+cap is `MAX_BOW_RANGE == MAX_LIGHT_RADIUS`; light does not alter physical range.
+Resolve Throw/Shoot after the UI frame unwinds, as for wands. No projectile or
+telemetry fields belong in `Game`. Quantity generation uses `AMMO_QUANTITY`,
+leaving supplies/equipment/placement and gameplay RNG isolated.
+
 # Turn performance
 
 Use this project's ignored `build/` directory for objects, `ardurogue2.elf`,
@@ -43,7 +56,7 @@ correctness tests and rerun the full suite on the final ELF until all cases pass
 For gameplay/content changes affecting difficulty or player power, run native
 correctness tests and paired balance validation per [sim/BALANCE.md](sim/BALANCE.md).
 
-- **Seeds:** Use identical effective seeds and frozen `omniscient-v2` in both
+- **Seeds:** Use identical effective seeds and maintained `omniscient-v2` in both
   variants: `1..10000` routinely; `1..65535` for substantial changes, ambiguous
   results, or final validation when practical. `SIM_STUCK`/`SIM_ERROR` invalidate
   data; they are not deaths.
@@ -52,8 +65,12 @@ correctness tests and paired balance validation per [sim/BALANCE.md](sim/BALANCE
   variants. Treat additive availability separately; never resynchronize RNG
   after divergence.
 - **Agent compatibility:** With new content removed/replaced, verify old-content
-  results, action hashes, and relevant telemetry match the frozen reference.
-  Document defects; behavior changes require a new agent version and reference.
+  results, action hashes, and relevant telemetry match the previous reference where mechanically possible.
+  Document defects; new mechanics may extend `omniscient-v2` in place. The
+  automatic `agent_policy_hash` in each build manifest identifies the exact
+  policy. Baseline/candidate content comparisons require identical policy hashes.
+  Represent new mechanics competently before trusting balance conclusions;
+  after a policy extension, establish a fresh reference balance run.
 - **Analysis:** Prioritize practical effect sizes, floor survival, death causes,
   and relevant item/monster metrics. Use FDR-adjusted q-values for exploratory
   reports (default `q <= 0.05`). Observational associations are not causal;

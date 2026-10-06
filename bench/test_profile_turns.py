@@ -19,11 +19,11 @@ class TurnBenchmarks(unittest.TestCase):
         cases = turns.read_benchmarks(Path(__file__).with_name("bench.cpp"))
         self.assertEqual(cases, turns.BENCHMARKS)
         self.assertEqual([case.index for case in cases], list(range(len(cases))))
-        self.assertEqual(len(cases), 30)
+        self.assertEqual(len(cases), 36)
         names = {case.name for case in cases}
         self.assertIn("equip_cursed_amulet", names)
         self.assertTrue(names.isdisjoint({"descend", "throw_harming", "wand_force", "wand_fire"}))
-        self.assertEqual(sum(case.setup == "browse" for case in cases), 9)
+        self.assertEqual(sum(case.setup in ("browse", "projectile_browse") for case in cases), 10)
 
     def test_contract_needs_no_save_definition(self):
         with tempfile.TemporaryDirectory() as raw:
