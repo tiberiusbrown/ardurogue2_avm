@@ -47,7 +47,7 @@ enum ItemIconCategory : uint8_t {
     ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ITEM_ICON_CATEGORIES
 };
 static const uint16_t PROGMEM item_icons[] = {
-    0x0000, 0x6f69, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
+    0x0000, 0x8421, 0x9429, 0x0bb0, 0x04f4, 0x0f90,
     0x0606, 0x0aaa, 0x01b3, 0x1248
 };
 static_assert(sizeof(item_icons) / sizeof(item_icons[0]) == ITEM_ICON_CATEGORIES,
