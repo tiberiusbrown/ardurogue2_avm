@@ -28,6 +28,7 @@ int group(uint8_t t) {
 }
 }
 Rule parse_rule(const std::string& text) {
+    if(text=="no-map-features") { Rule r; r.no_features=true; return r; }
     if(text=="ordinary-items") {
         Rule r; r.ordinary_items=true; return r;
     }
@@ -65,7 +66,7 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
-        if(r.ordinary_items) continue;
+        if(r.ordinary_items || r.no_features) continue;
         if((r.floor>=0 && r.floor!=g.floor) || (r.direction>=0 && r.direction!=int(bool(g.has_amulet)))) continue;
         unsigned count=0;
         // Stable slot order, no PRNG, and each rule's cap is per entered visit.
@@ -92,6 +93,10 @@ void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vecto
             r.monster ? monster_name(r.from) : item_name(r.from),
             r.remove ? "NONE" : r.monster ? monster_name(r.to) : item_name(r.to),count});
     }
+}
+bool RuleExperiment::features_enabled() const {
+    for(const auto& r:rules) if(r.no_features) return false;
+    return true;
 }
 bool RuleExperiment::artifacts_enabled() const {
     for(const auto& r:rules) if(r.ordinary_items) return false;

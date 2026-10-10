@@ -52,7 +52,23 @@ using namespace rogue;
     X(hammer_heavy, "Hammer heavy hit and force knockback", play, RIGHT, room, HAMMER_OF_RUIN, 0, 0) \
     X(reprisal, "Monster melee hit and turn-free counterattack", wait, A, room, RING_REPRISAL, 0, 0) \
     X(phoenix, "Lethal starvation consumes Phoenix Heart", wait, A, room, AMULET_PHOENIX_HEART, 0, 0) \
-    X(titan_speed, "Titan Plate effective speed with an active monster", wait, A, room, TITAN_PLATE, 0, 0)
+    X(titan_speed, "Titan Plate effective speed with an active monster", wait, A, room, TITAN_PLATE, 0, 0) \
+    X(trap_spike, "Enter a hidden spike trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_poison, "Enter a hidden poison dart trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_flame, "Enter a hidden flame trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_frost, "Enter a hidden frost trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_snare, "Enter a hidden snare trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_teleport, "Enter a hidden teleport trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_confusion, "Enter a hidden confusion trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_drain, "Enter a hidden magic drain trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_summoning, "Enter a hidden summoning trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(trap_rust, "Enter a hidden rust trap", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(feature_holy, "Holy pulse against twelve unholy monsters", play, RIGHT, room, NO_ITEM, 0, 0) \
+    X(feature_spring, "Accept a healing spring before the movement turn", feature, A, room, NO_ITEM, 0, 0) \
+    X(feature_forge, "Forge item choice before the movement turn", feature_item, A, room, LONG_SWORD, 0, 0) \
+    X(feature_search, "Search with eight hidden neighboring traps", wait, A, room, NO_ITEM, 0, 0) \
+    X(feature_dense, "Move with twelve visible features and enemies", play, RIGHT, dense, NO_ITEM, 0, 0) \
+    X(trap_phoenix, "Lethal spike trap consumes Phoenix Heart", play, RIGHT, room, AMULET_PHOENIX_HEART, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -193,7 +209,38 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
             set_wand_modifier(game.inventory[0], WAND_NORMAL);
         }
     }
+    if(scenario >= Case::trap_spike && scenario <= Case::trap_rust)
+        game.features[0] = {{33,16}, static_cast<uint8_t>(FEATURE_SPIKE_TRAP + 2 *
+            (static_cast<uint8_t>(scenario) - static_cast<uint8_t>(Case::trap_spike)) + MAP_FEATURE_HIDDEN)};
     switch(scenario) {
+    case Case::trap_rust:
+        game.inventory[1]=make_equipment(LONG_SWORD,0); game.weapon_slot=1;
+        break;
+    case Case::trap_phoenix:
+        game.amulet_slot=0; game.hp=1;
+        game.features[0]={{33,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        break;
+    case Case::feature_holy:
+        game.features[0]={{33,16},FEATURE_HOLY_SYMBOL};
+        for(uint8_t i=0;i<MONSTERS;++i) {
+            add_monster(i,{static_cast<uint8_t>(32+i%4),static_cast<uint8_t>(i<4 ? 14 : 16+i/4)},i==11 ? LORD : ZOMBIE);
+            game.monsters[i].stun=15;
+        }
+        break;
+    case Case::feature_spring: game.hp=10; game.features[0]={{33,16},FEATURE_HEALING_SPRING}; break;
+    case Case::feature_forge: game.features[0]={{33,16},FEATURE_ENCHANTED_FORGE}; break;
+    case Case::feature_search: {
+        uint8_t i=0;
+        for(int8_t dy=-1;dy<=1;++dy) for(int8_t dx=-1;dx<=1;++dx) {
+            if(!dx && !dy) continue;
+            game.features[i++]={{static_cast<uint8_t>(32+dx),static_cast<uint8_t>(16+dy)},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        }
+        break;
+    }
+    case Case::feature_dense:
+        for(uint8_t i=0;i<MAP_FEATURES;++i)
+            game.features[i]={{static_cast<uint8_t>(28+i%4),static_cast<uint8_t>(12+i/4)},static_cast<uint8_t>(FEATURE_FOUNTAIN+2*(i%9))};
+        break;
     case Case::inventory_open_full:
     case Case::inventory_down_full:
     case Case::inventory_up_full:

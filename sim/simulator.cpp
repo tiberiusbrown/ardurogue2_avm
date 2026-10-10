@@ -88,10 +88,14 @@ bool dispatch(const Action& a) {
     case ActionKind::Move: {
         if(!cardinal(a)) return false;
         Game before = game;
-        move_player(a.dx,a.dy);
+        begin_player_move(a.dx,a.dy);
+        if(session.pending_move) {
+            uint8_t id = observed_feature_at(game, game.player);
+            complete_player_move(choose_feature_choice(feature_type(id)));
+        }
         return std::memcmp(&before,&game,sizeof game) != 0;
     }
-    case ActionKind::Wait: end_turn(); return true;
+    case ActionKind::Wait: wait_search(); return true;
     case ActionKind::Take: {
         if(game.paralyzed || !ground_here(a.target)) return false;
         PickupResult result = take_item(a.target);

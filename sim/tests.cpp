@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
+#include "features.hpp"
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -63,6 +64,14 @@ void entry_state_report() {
     Collector cursed; cursed.enter_floor();
     check(cursed.data.floors.back().entry_ring_invisibility && !cursed.data.floors.back().entry_invisible,
         "worn invisibility ring was confused with effective invisibility");
+}
+void sacrifice_accounting() {
+    arena(); game.inventory[0]={ARROWS,200};
+    game.features[0]={game.player,FEATURE_SACRIFICIAL_ALTAR};
+    Collector c; CollectScope scope(c); c.enter_floor();
+    check(resolve_feature(0,{true,0}),"arrow sacrifice rejected");
+    check(c.data.ranged.sacrificed==200 && c.data.items[ARROWS].consumed==200 &&
+        !game.inventory[0].type,"arrow sacrifice lost stack units in telemetry");
 }
 void policy_regressions() {
     arena(); OmniscientAgent a;
@@ -262,8 +271,8 @@ void experiments() {
 }
 int main() {
     try {
-        static_assert(sizeof(Game)==774 && SAVE_VERSION==25,"native saved layout changed");
-        check_v2_policy(); determinism(); entry_state_report(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
+        static_assert(sizeof(Game)==810 && SAVE_VERSION==26,"native saved layout changed");
+        check_v2_policy(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

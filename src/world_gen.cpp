@@ -697,6 +697,10 @@ void make_floor()
     memset(game.doors, 0, sizeof game.doors);
     memset(game.monsters, 0, sizeof game.monsters);
     memset(game.ground, 0, sizeof game.ground);
+    memset(game.features, 0, sizeof game.features);
+    session.forced_entry = false;
+    session.pending_move = false;
+    session.pending_feature = NONE;
     game.door_count = 0;
 #if !defined(__AVM__)
     generation::diagnostics = {};
@@ -716,6 +720,7 @@ void make_floor()
     progress(94);
     populate_items(floor_seed(SUPPLIES), floor_seed(EQUIPMENT));
     game.player = game.has_amulet ? game.down : game.up;
+    populate_features(floor_seed(MAP_FEATURE_DOMAIN));
     memset(game.explored, 0, sizeof game.explored);
 // Controlled host experiments see complete population, before exposure scans.
 #if defined(ARDUROGUE2_SIM)

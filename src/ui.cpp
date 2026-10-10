@@ -1,6 +1,7 @@
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
+#include "features.hpp"
 #include "inventory_view.hpp"
 #include "persistence.hpp"
 #include "render.hpp"
@@ -281,8 +282,8 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
             case 0:
                 ui.mode = PLAY;
                 status_clear();
-                status(F("You wait."));
-                end_turn();
+                status(F("You wait and search."));
+                wait_search();
                 break;
             case 1: {
                 ui.mode = PLAY;
@@ -377,7 +378,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                     direction == AVM_BUTTON_R ? 1 : 0;
         int8_t dy = direction == AVM_BUTTON_U ? -1 :
                     direction == AVM_BUTTON_D ? 1 : 0;
-        move_player(dx, dy);
+        begin_player_move(dx, dy);
         moved = !session.ended && game.player != old;
     } else if(edges & AVM_BUTTON_A) {
         status_clear();
@@ -405,3 +406,36 @@ __attribute__((noinline)) bool yesno(const char AVM_PROGMEM* prompt_text, Item i
     return yesno_modal(prompt_text, &item);
 }
 } // namespace rogue
+
+namespace rogue {
+static const char PROGMEM* feature_prompt(uint8_t type) {
+    switch(type) {
+    case FEATURE_FOUNTAIN: return F("Drink from the fountain?");
+    case FEATURE_HEALING_SPRING: return F("Drink from the healing spring?");
+    case FEATURE_ALTAR: return F("Pray at the altar?");
+    case FEATURE_SACRIFICIAL_ALTAR: return F("Make an offering?");
+    case FEATURE_ENCHANTED_FORGE: return F("Use the enchanted forge?");
+    case FEATURE_STATUE: return F("Investigate the statue?");
+    case FEATURE_SARCOPHAGUS: return F("Open the sarcophagus?");
+    case FEATURE_RUNESTONE: return F("Touch the runestone?");
+    default: return F("Dip an item into the pool?");
+    }
+}
+static bool sacrifice_filter(uint8_t type) { return type != YENDOR_AMULET; }
+static bool pool_filter(uint8_t type) { return is_equipment(type) || is_wand(type) || is_ring(type) || is_amulet(type); }
+FeatureChoice prompt_feature() {
+    FeatureChoice choice;
+    uint8_t index = session.pending_feature;
+    if(!session.pending_move || index >= MAP_FEATURES || session.ended) return choice;
+    uint8_t type = feature_type(game.features[index].id);
+    choice.accept = yesno(feature_prompt(type));
+    if(choice.accept && (type == FEATURE_SACRIFICIAL_ALTAR || type == FEATURE_ENCHANTED_FORGE || type == FEATURE_ALCHEMICAL_POOL)) {
+        choice.slot = choose_item(F("Choose an item:"), type == FEATURE_ENCHANTED_FORGE ? is_equipment :
+            type == FEATURE_ALCHEMICAL_POOL ? pool_filter : sacrifice_filter);
+        if(choice.slot != NONE && !feature_accepts_item(type, choice.slot)) {
+            status(F("That item cannot be offered.")); choice.slot = NONE;
+        }
+    }
+    return choice;
+}
+}

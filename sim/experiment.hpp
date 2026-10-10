@@ -18,9 +18,10 @@ public:
     virtual ~Experiment() = default;
     virtual void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const = 0;
     virtual bool artifacts_enabled() const { return true; }
+    virtual bool features_enabled() const { return true; }
 };
 struct Rule {
-    bool monster=false, remove=false, ordinary_items=false;
+    bool monster=false, remove=false, ordinary_items=false, no_features=false;
     uint8_t from=0, to=0;
     int floor=-1, direction=-1, maximum=65535, info=-1; // -1 default, -2 preserve
 };
@@ -29,6 +30,7 @@ public:
     std::vector<Rule> rules;
     void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const override;
     bool artifacts_enabled() const override;
+    bool features_enabled() const override;
 };
 Rule parse_rule(const std::string&);
 void after_floor_generation();

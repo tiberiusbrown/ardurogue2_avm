@@ -1,5 +1,7 @@
 #include "app_state.hpp"
 #include "game.hpp"
+#include "features.hpp"
+#include "feature_icons.hpp"
 #include "game_internal.hpp"
 #include "render.hpp"
 #include "status.hpp"
@@ -40,6 +42,7 @@ static bool check_arrow_animation()
 {
     using namespace rogue;
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.ground, 0, sizeof game.ground);
@@ -79,6 +82,7 @@ static bool check_effect_sprites()
 {
     using namespace rogue;
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.ground, 0, sizeof game.ground);
@@ -248,6 +252,7 @@ static bool check_sprite_artwork()
         0x0bf0, 0x0f52, 0x0f9f, 0x07a0, 0x0f2c, 0x0f2f, 0x09f9,
         0x01f1, 0x069d, 0xf996, 0x0e5e, 0x0f88};
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.ground, 0, sizeof game.ground);
@@ -291,6 +296,7 @@ static bool check_shared_icons()
     const uint16_t expected[MIMIC_APPEARANCE_COUNT] = {0x01b3, 0x0bb0, 0x0606, 0x0aaa, 0x1248};
     uint8_t disguised[sizeof __avm_framebuffer], revealed[sizeof __avm_framebuffer];
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.ground, 0, sizeof game.ground);
@@ -405,6 +411,7 @@ static bool check_terrain_rows()
     uint32_t random = 0x4312;
     for(unsigned pattern = 0; pattern < 24; ++pattern) {
         start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
         std::memset(game.monsters, 0, sizeof game.monsters);
         std::memset(game.ground, 0, sizeof game.ground);
         game.door_count = 0;
@@ -481,6 +488,7 @@ static bool check_deferred_pages()
 {
     using namespace rogue;
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     ui = {};
     ui.mode = PLAY;
     render_play();
@@ -532,6 +540,7 @@ static bool check_generation_loading()
 {
     using namespace rogue;
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     // The animation must be safe even while explored contains BFS scratch
     // and door coordinates contain the generator's temporary priority bits.
     std::memset(game.explored, 0xa5, sizeof game.explored);
@@ -579,6 +588,7 @@ static bool check_full_map_pixels()
     const Position positions[] = {{0, 0}, {63, 0}, {0, 31}, {63, 31}, {32, 16}};
     for(Position pos : positions) for(uint8_t pattern : {uint8_t(0), uint8_t(0x55), uint8_t(0xff)}) {
         start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
         game.player = pos;
         std::memset(game.explored, pattern, sizeof game.explored);
         uint8_t expected[1024] = {};
@@ -610,6 +620,7 @@ static bool check_direction_prompt()
 {
     using namespace rogue;
     start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
     std::memset(game.ground, 0, sizeof game.ground);
@@ -646,9 +657,53 @@ static bool check_direction_prompt()
     return true;
 }
 
+static bool check_feature_rendering()
+{
+    using namespace rogue;
+    game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+    game.player={20,15}; game.up={2,2}; game.down={50,25}; game.hp=game.max_hp=100;
+    game.hunger=220; game.speed=4; game.random_state=123;
+    game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+    render_play(); uint8_t empty[1024]; std::memcpy(empty,__avm_framebuffer,sizeof empty);
+    // Every hidden frame leaves terrain intact; all visible silhouettes draw.
+    for(uint8_t type=2;type<=FEATURE_HOLY_SYMBOL;type+=2) {
+        game.features[0]={{22,15},uint8_t(type+1)}; render_play();
+        if(std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+        game.features[0].id=type; render_play();
+        if(!std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    }
+    game.features[0]={{22,15},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    reveal_feature(0); render_play(); if(!std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    remove_feature(0); render_play(); if(std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    // Item and monster overwrite the feature's same four-by-four tile.
+    for(bool monster : {false,true}) {
+        if(monster) game.monsters[0]={{22,15},GOBLIN,100,0,{0,0},MON_AGGRO};
+        else game.ground[0]={{22,15},{FOOD,1}};
+        render_play(); uint8_t occupied[1024]; std::memcpy(occupied,__avm_framebuffer,sizeof occupied);
+        game.features[0]={{22,15},FEATURE_FOUNTAIN}; render_play();
+        if(std::memcmp(occupied,__avm_framebuffer,sizeof occupied)) return false;
+        game.features[0]={}; game.monsters[0]={}; game.ground[0]={};
+    }
+    game.features[0]={game.player,FEATURE_FOUNTAIN}; render_play();
+    if(std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    game.features[0]={};
+    // A previously explored feature persists beyond sight behind a wall.
+    unsigned cell=15*MAP_W+21; game.walls[cell>>3]|=uint8_t(1u<<(cell&7));
+    explore({23,15}); render_play(); std::memcpy(empty,__avm_framebuffer,sizeof empty);
+    game.features[0]={{23,15},FEATURE_FOUNTAIN}; render_play();
+    if(can_see({23,15}) || !std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    game.features[0]={}; ui.mode=FULL_MAP; render(); std::memcpy(empty,__avm_framebuffer,sizeof empty);
+    game.features[0]={{23,15},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN}; render();
+    if(std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    reveal_feature(0); render(); if(!std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    remove_feature(0); render(); if(std::memcmp(empty,__avm_framebuffer,sizeof empty)) return false;
+    return true;
+}
+
 int main()
 {
     using namespace rogue;
+    if(!check_feature_rendering()) { std::fprintf(stderr,"Feature visibility, atlas or rendering priority failed\n"); return 1; }
     if(!check_direction_prompt()) {
         std::fprintf(stderr, "Direction prompt hid the dungeon or changed game state\n");
         return 1;
@@ -694,6 +749,7 @@ int main()
     bool failed = false;
     for(unsigned i = 0; i < sizeof expected / sizeof expected[0]; ++i) {
         start_new(0x4312);
+    std::memset(game.features, 0, sizeof game.features);
         if(i < 6) game.player = positions[i];
         else if(i == 6) game.player = game.up;
         else if(i == 7) game.player = game.down;

@@ -131,9 +131,9 @@ containing existing `runs.csv` cannot be overwritten; choose fresh directories.
 and seals raw CSVs with SHA-256 hashes. `--simulator` additionally records the
 executable path/hash. `factors` defaults to `RUN/factors/`.
 
-## Telemetry schema 3
+## Telemetry schema 4
 
-All eight deterministic streams merge in requested-seed order and are identical
+All nine deterministic streams merge in requested-seed order and are identical
 between serial and parallel execution. A descriptor table supplies headers,
 writers and merging; header-only sparse streams are valid.
 
@@ -145,6 +145,8 @@ writers and merging; header-only sparse streams are valid.
 | monsters.csv | Whole-run typed generated/encountered/engaged/killed, attacks/damage/hits/deaths/status aggregates |
 | visit_items.csv | Sparse typed visit activity: generated/reached/picked_up/used/consumed/equipped/dropped/discarded, charges/drunk/thrown/read/equipped turns and wand identities |
 | visit_monsters.csv | Sparse typed visit activity: generated/encountered/engaged/killed, player_attacks/damage_to_monster, monster_attacks/monster_hits/damage_to_player/deaths_caused, poison/confusion/paralysis/fire |
+| ranged.csv | Arrow generation, acquisition, fired/thrown/sacrificed/carried units, bow occupancy/switches, shot distance/target metrics and descent droughts |
+| features.csv | Sparse visit/even-type generated, discovered, activated, declined, damage, deaths, spawned and holy_damage counters |
 | interventions.csv | Sparse applied replacements/removals with visit, experiment, variant, operation, from/to type and count |
 
 Generated item units retain production stack semantics; equipment/wands are
@@ -354,7 +356,7 @@ compiler, command/options, ordered intervention rules. Reconfigure before final
 validation to refresh build provenance.
 
 Python `ab` additionally records executable absolute path/SHA-256, hashes of all
-eight CSVs, experiment specification and its SHA-256, dependency versions, and
+nine CSVs, experiment specification and its SHA-256, dependency versions, and
 deterministic result SHA-256. `summarize --simulator` can seal direct simulator
 runs equivalently. Paths, timestamps, command spelling and job count are excluded
 from result identity. Effective population, executable, behavior options,
@@ -453,3 +455,21 @@ persistent state in normal AVM builds.
 See [the implementation and validation report](../docs/ARTIFACTS.md) for results.
 The [initial nine-artifact report](../docs/ARTIFACTS_INITIAL_2026-10-10.md) retains
 the original constants, comparator rules and measurements before tuning.
+
+## Map-feature paired removal
+
+The host-only `no-map-features` rule skips the isolated feature generator while
+retaining all other mechanics. Use one candidate executable and its identical
+maintained policy hash for both variants; do not resynchronize RNG after entry
+effects diverge. Schema 4 includes exit hunger and sacrificed arrow quantities.
+
+```text
+python sim/balance.py ab --control-exe build/native/sim/ardurogue2_sim --treatment-exe build/native/sim/ardurogue2_sim --seeds 1:10000 --jobs 8 --experiment map-features --control-intervention no-map-features --output build/map-features-validated-10k
+python sim/balance.py ab --control-exe build/native/sim/ardurogue2_sim --treatment-exe build/native/sim/ardurogue2_sim --all-seeds --jobs 8 --experiment map-features-census --control-intervention no-map-features --output build/map-features-validated-all
+```
+
+Inspect discovery/activation exposure and direct trap deaths separately from
+subsequent combat and starvation. Holy damage and curse-removal associations
+are descriptive; survivors have more opportunities to use these features.
+Retain discordant traces and check old-content control action hashes before
+accepting interpretation. See [the feature report](../docs/MAP_FEATURES.md).

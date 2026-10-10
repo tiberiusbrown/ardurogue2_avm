@@ -35,9 +35,9 @@ bit, and an identified bit. Arrows use all eight info bits as unsigned quantity
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 24 stores one active floor in a 773-byte AVM `Game`. Generation
+Save version 26 stores one active floor in an 809-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 23 and older saves are incompatible; no migration is attempted.
+Version 25 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
@@ -321,7 +321,7 @@ about 1.6 HP per landed hit.
 | Pickup or stairs prompt | A/B | Confirm or cancel the action |
 | Dungeon | B | Open the action menu |
 | Status prompt | A | Continue a long message after `[more]` |
-| Action menu | Up/Down, A | Choose wait, use item, drop item, Throw/Shoot, full map, save and exit, or abandon |
+| Action menu | Up/Down, A | Choose Wait/Search, use item, drop item, Throw/Shoot, full map, save and exit, or abandon |
 | Item selection | Up/Down, A | Select an item for the chosen action |
 | Item selection | B | Cancel selection |
 | Throw/Shoot selection | Up/Down, A | Choose arrows or a potion; Ammo appears first |
@@ -364,8 +364,15 @@ automatically before building this project.
 
 ## Source layout
 
+Twenty map features include ten reusable hidden traps, nine single-use
+interactive objects and a reusable holy symbol. Wait/Search can discover adjacent
+traps; movement triggers traps and offers object prompts before the enemy turn.
+See [map features and validation](docs/MAP_FEATURES.md) for the full roster,
+generation, save encoding and simulator results.
+
 `src/model.hpp` defines the saved game layout. `src/game.hpp` exposes gameplay
 actions, and `src/game_internal.hpp` shares helpers between gameplay modules.
+`src/features.cpp` implements positioned feature effects and shared choices.
 `src/state.cpp`, `src/combat.cpp`, and `src/items.cpp` implement run state,
 combat and turns, and inventory behavior. `src/combat_math.cpp` contains the
 shared hit, weapon-roll, STR, absorption, and MR arithmetic. `src/world.cpp`
@@ -412,12 +419,11 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
-The AVM build uses a 773-byte saved layout and two-byte items, eight-byte
+The AVM build uses an 809-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. With the current SDK, the build reports a
-complete maximum stack bound of 244 bytes and zero analysis gaps, on the
-wand/teleport/status pagination/terrain drawing path. This fits the 256-byte VM stack
-with twelve bytes to spare; future changes should continue checking the linker
-report. The saved and ordinary data sections total 876 of 1,024 bytes. The
+complete maximum stack bound of 256 bytes and zero analysis gaps. This uses the
+full 256-byte VM stack; future changes must continue checking the linker
+report. The saved and ordinary data sections total 915 of 1,024 bytes. The
 renderer reuses transient row scratch outside the saved layout to keep
 pagination within the stack limit. Floor generation keeps its 48-byte room
 array on the stack; rendering uses line of sight without room metadata.

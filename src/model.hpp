@@ -36,7 +36,7 @@ constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 25;
+constexpr uint8_t SAVE_VERSION = 26;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -167,11 +167,35 @@ static_assert(offsetof(Position, x) == 0 && offsetof(Position, y) == 1,
 
 // Map y uses only five bits; its high bit records an open door.
 struct Door { Position pos; };
+constexpr uint8_t MAP_FEATURES = 12;
+constexpr uint8_t MAP_FEATURE_HIDDEN = 0x01;
+enum MapFeatureType : uint8_t {
+    FEATURE_NONE = 0, FEATURE_SPIKE_TRAP = 2, FEATURE_POISON_DART_TRAP = 4,
+    FEATURE_FLAME_TRAP = 6, FEATURE_FROST_TRAP = 8, FEATURE_SNARE_TRAP = 10,
+    FEATURE_TELEPORT_TRAP = 12, FEATURE_CONFUSION_TRAP = 14,
+    FEATURE_MAGIC_DRAIN_TRAP = 16, FEATURE_SUMMONING_TRAP = 18,
+    FEATURE_RUST_TRAP = 20, FEATURE_FOUNTAIN = 22, FEATURE_HEALING_SPRING = 24,
+    FEATURE_ALTAR = 26, FEATURE_SACRIFICIAL_ALTAR = 28, FEATURE_ENCHANTED_FORGE = 30,
+    FEATURE_STATUE = 32, FEATURE_SARCOPHAGUS = 34, FEATURE_RUNESTONE = 36,
+    FEATURE_ALCHEMICAL_POOL = 38, FEATURE_HOLY_SYMBOL = 40
+};
+constexpr uint8_t FEATURE_TYPES = 20;
+constexpr uint8_t feature_type(uint8_t id) { return id & ~MAP_FEATURE_HIDDEN; }
+constexpr bool feature_is_trap(uint8_t id) {
+    return feature_type(id) >= FEATURE_SPIKE_TRAP && feature_type(id) <= FEATURE_RUST_TRAP;
+}
+constexpr bool feature_is_hidden(uint8_t id) { return (id & MAP_FEATURE_HIDDEN) != 0; }
+constexpr bool undead_or_demonic(uint8_t type) {
+    return type == ZOMBIE || type == PHANTOM || type == INCUBUS || type == ANGEL || type == LORD;
+}
+struct MapFeature { Position pos; uint8_t id; };
+static_assert(sizeof(MapFeature) == 3, "feature save layout changed");
 // Four independent four-bit effects: confusion, slowing, invisibility, weakness.
 // Paralysis uses stun. Two bytes per monster keep the image within AVM RAM.
 struct Monster { Position pos; uint8_t type, hp, stun, effects[2], state; };
 constexpr uint8_t MON_AGGRO = 1;
 constexpr uint8_t MON_AFRAID = 0x40;
+constexpr uint8_t MON_TRAP_SUMMONED = 0x80;
 enum MimicAppearance : uint8_t {
     MIMIC_SCROLL, MIMIC_POTION, MIMIC_AMULET, MIMIC_RING, MIMIC_WAND,
     MIMIC_APPEARANCE_COUNT
@@ -181,6 +205,8 @@ constexpr uint8_t MIMIC_APPEARANCE_MASK = 0x0e;
 static_assert((MIMIC_APPEARANCE_MASK & (MON_AGGRO | MON_AFRAID)) == 0 &&
               MIMIC_APPEARANCE_COUNT <= (MIMIC_APPEARANCE_MASK >> MIMIC_APPEARANCE_SHIFT) + 1,
               "mimic appearance overlaps monster state flags");
+static_assert((MON_TRAP_SUMMONED & (MIMIC_APPEARANCE_MASK | MON_AGGRO | MON_AFRAID)) == 0,
+              "summoned flag overlaps monster state");
 constexpr MimicAppearance mimic_appearance(const Monster& monster)
 {
     uint8_t appearance = (monster.state & MIMIC_APPEARANCE_MASK) >> MIMIC_APPEARANCE_SHIFT;
@@ -358,6 +384,7 @@ struct Game {
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
     uint8_t identified_items[6];
+    MapFeature features[MAP_FEATURES];
 };
 
 enum RunResult : uint8_t {
@@ -370,13 +397,16 @@ struct Session {
     uint8_t repeat_slot;
     RunResult result;
     bool ended;
+    uint8_t pending_feature = NONE;
+    bool pending_move = false;
+    bool forced_entry = false;
 };
 
 extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 773, "Game saved layout changed");
+static_assert(sizeof(Game) == 809, "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -397,6 +427,7 @@ static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, magic_resistance) == 751 &&
               offsetof(Game, identified_items) == 767,
               "game save offsets changed");
+static_assert(offsetof(Game, features) == 773, "features must append to saved layout");
 static_assert(POTION_COUNT == 10 && SCROLL_COUNT == 9 &&
               RING_COUNT == 10 && AMULET_COUNT == 10 && WAND_COUNT == 7,
               "item table counts changed");

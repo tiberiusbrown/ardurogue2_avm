@@ -69,9 +69,9 @@ set(ARDUROGUE2_ELF "${ARDUROGUE2_BUILD_DIR}/ardurogue2.elf")
 set(ARDUROGUE2_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/ardurogue2.arduboy")
 
 set(ARDUROGUE2_SOURCES
-    main state combat combat_math items world world_gen world_gen_population persistence status render ui)
+    main state features combat combat_math items world world_gen world_gen_population persistence status render ui)
 set(ARDUROGUE2_HEADERS
-    model game game_internal world app_state persistence status render ui
+    model features feature_icons game game_internal world app_state persistence status render ui
     inventory_view combat_math ray_sight_generated world_gen world_gen_templates sim_hooks)
 set(ARDUROGUE2_HEADER_FILES)
 foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)

@@ -9,10 +9,12 @@ add_executable(game_native
     combat_checks.cpp
     weapon_checks.cpp
     bow_checks.cpp
+    feature_checks.cpp
     artifact_checks.cpp
     bench_checks.cpp
     generation_checks.cpp
     ../bench/bench.cpp
+    ../src/features.cpp
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
@@ -27,6 +29,7 @@ target_include_directories(game_native PRIVATE ../src)
 
 add_test(NAME game_native COMMAND game_native)
 add_test(NAME artifacts COMMAND game_native --artifacts)
+add_test(NAME map_features COMMAND game_native --map-features)
 add_test(NAME floor_generation_bulk COMMAND game_native --floor-bulk 128)
 
 add_executable(inventory_view_native inventory_view_native.cpp)
@@ -42,6 +45,7 @@ add_test(NAME format_native COMMAND format_native)
 add_executable(ui_native
     ui_native.cpp
     ../src/ui.cpp
+    ../src/features.cpp
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
@@ -58,6 +62,7 @@ add_executable(render_native
     render_native.cpp
     ../src/render.cpp
     ../src/status.cpp
+    ../src/features.cpp
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp

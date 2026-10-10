@@ -3,6 +3,7 @@
 #include "world.hpp"
 #include <algorithm>
 #include <cstdlib>
+#include <queue>
 
 namespace sim {
 using namespace rogue;
@@ -68,6 +69,7 @@ int equipment_score(Item i) {
 }
 int slot_score(int s) { return s < INVENTORY ? equipment_score(game.inventory[s]) : 0; }
 int best_melee() {
+    if(game.weapon_slot < INVENTORY && is_bow(game.inventory[game.weapon_slot].type) && item_is_cursed(game.inventory[game.weapon_slot])) return NONE;
     int best = NONE;
     for(int s=0;s<INVENTORY;++s) if(is_weapon(game.inventory[s].type) && !is_bow(game.inventory[s].type) &&
         equipment_score(game.inventory[s]) > slot_score(best)) best=s;
@@ -241,6 +243,7 @@ int estimated_damage(Item weapon, uint8_t target, bool ranged) {
     return damage;
 }
 bool bow_opportunity(Action& choice, int bow) {
+    if(game.weapon_slot != bow && game.weapon_slot < INVENTORY && item_is_cursed(game.inventory[game.weapon_slot])) return false;
     if(bow==NONE || quantity(ARROWS)==0) return false;
     int supply=quantity(ARROWS), best=0, melee=best_melee();
     auto w=ranged_weapon_definition(game.inventory[bow].type);
@@ -438,6 +441,38 @@ Paths::Paths(bool allow_monsters) {
     std::array<bool, MAP_W*MAP_H> occupied{};
     for(const Monster& m : game.monsters) if(m.type) occupied[cell(m.pos)] = true;
     std::array<int, MAP_W*MAP_H> queue{};
+    std::array<int, MAP_W*MAP_H> penalty{};
+    bool traps = false;
+    int pressure = 0;
+    for(const Monster& m : game.monsters) if(m.type && square_contains(m.pos, game.player, 2)) ++pressure;
+    for(const MapFeature& f : observed_features(game)) if(feature_is_trap(f.id)) {
+        penalty[cell(f.pos)] = pressure ? 3 : f.id == FEATURE_TELEPORT_TRAP ? 60 :
+            f.id == FEATURE_CONFUSION_TRAP ? 25 : game.hp < 10 ? 20 : 10;
+        if(f.id == FEATURE_FLAME_TRAP && player_fire_effect() > 0) penalty[cell(f.pos)] = 0;
+        traps = traps || penalty[cell(f.pos)] != 0;
+    }
+    if(traps) {
+        using Node = std::pair<int, int>;
+        std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pending;
+        std::array<int, MAP_W * MAP_H> costs; costs.fill(-1);
+        int root = cell(game.player); distance[root] = 0; costs[root] = 0; pending.push({0, root});
+        while(!pending.empty()) {
+            auto [cost, at] = pending.top(); pending.pop();
+            if(cost != costs[at]) continue;
+            if(at != root && occupied[at] && !allow_monsters) continue;
+            for(int d = 0; d < 4; ++d) {
+                int nx = at % MAP_W + dxs[d], ny = at / MAP_W + dys[d];
+                if(wall_at(int16_t(nx), int16_t(ny))) continue;
+                int next = ny * MAP_W + nx, new_cost = cost + 1 + penalty[next];
+                if(costs[next] >= 0 && costs[next] <= new_cost) continue;
+                costs[next] = new_cost;
+                distance[next] = static_cast<int16_t>(distance[at] + 1);
+                first[next] = at == root ? int8_t(d) : first[at];
+                pending.push({new_cost, next});
+            }
+        }
+        return;
+    }
     int begin = 0, end = 0, root = cell(game.player);
     queue[end++] = root; distance[root] = 0;
     while(begin < end) {
@@ -471,6 +506,22 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         if(d <= 5 && can_see(m.pos)) ++threats;
         if(d == 1 && (adjacent < 0 || m.hp < game.monsters[adjacent].hp)) adjacent = i;
     }
+    if(game.confused && !threats && feature_is_trap(observed_feature_at(game, game.player))) {
+        Action a; a.goal = "recover senses on a discovered trap"; return a;
+    }
+    if(feature_floor != game.floor) { feature_floor = game.floor; holy_entries = feature_steps = 0; feature_attempted.fill(false); }
+    // A bounded nearby holy opportunity can beat a dangerous melee exchange.
+    if(holy_entries < 3) for(const MapFeature& f : observed_features(game)) {
+        if(f.id != FEATURE_HOLY_SYMBOL || distance(f.pos, game.player) != 1) continue;
+        bool target = false;
+        for(const Monster& m : game.monsters)
+            if(undead_or_demonic(m.type) && square_contains(f.pos, m.pos, 2) && !(m.state & MON_AFRAID)) target = true;
+        if(target && monster_at(f.pos) == NONE) {
+            ++holy_entries; Action a; a.kind = ActionKind::Move;
+            a.dx = int8_t(int(f.pos.x) - game.player.x); a.dy = int8_t(int(f.pos.y) - game.player.y);
+            a.goal = "holy pulse against unholy threats"; a.destination = f.pos; return a;
+        }
+    }
     int healing = find(POTION_HEALING);
     Danger risk = danger();
     if(retreat_floor != game.floor) { retreat_floor = game.floor; retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
@@ -495,6 +546,9 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
             retreat_origin = game.player; ++retreat_steps; return choice;
         }
     }
+    int uncurse = find(SCROLL_REMOVE_CURSE);
+    if(uncurse >= 0) for(uint8_t s = 0; s < INVENTORY; ++s)
+        if(equipped(s) && item_is_cursed(game.inventory[s])) return use(uncurse, "free cursed equipment", s);
     int food = find(FOOD);
     if(food >= 0 && game.hunger < (adjacent >= 0 ? 15 : 100)) return use(food,"eat before starvation");
     // Equipping even in danger is worthwhile for an obvious weapon/armor gain.
@@ -599,6 +653,18 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     // blockers are resolved by the combat priorities above. Treating moving
     // monsters as impassable made alternative corridor routes oscillate.
     Paths paths(true);
+    // Limit optional detours to nearby visible features and available food.
+    auto features = observed_features(game);
+    if(!threats && game.hunger > 60 && feature_steps < 16) for(unsigned i = 0; i < features.size(); ++i) {
+        const MapFeature& f = features[i];
+        if(feature_attempted[i]) continue;
+        if(f.id < FEATURE_FOUNTAIN || f.id > FEATURE_ALCHEMICAL_POOL || f.pos == game.player) continue;
+        int d = paths.to(f.pos);
+        if(d <= 0 || d > 8 || !choose_feature_choice(f.id).accept) continue;
+        ++feature_steps;
+        if(d == 1) feature_attempted[i] = true;
+        return paths.move_to(f.pos, "use nearby dungeon feature");
+    }
     // On ascent preserve resources and go directly to the surface.
     if(game.has_amulet) {
         if(game.player == game.up) { Action a; a.kind = ActionKind::Stairs; a.goal = "ascend and escape"; return a; }
@@ -627,7 +693,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         int target = -1, nearest = 10000;
         for(int i = 0; i < MONSTERS; ++i) {
             const Monster& m = game.monsters[i]; int d = paths.to(m.pos);
-            if(m.type > BAT && m.type <= GOBLIN && d > 0 && d <= 16 && d < nearest) { nearest = d; target = i; }
+            if(!(m.state & MON_TRAP_SUMMONED) && m.type > BAT && m.type <= GOBLIN && d > 0 && d <= 16 && d < nearest) { nearest = d; target = i; }
         }
         if(target >= 0) return paths.move_to(game.monsters[target].pos,"gain early combat experience");
     }
@@ -636,5 +702,40 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     }
     if(paths.to(game.down) > 0) return paths.move_to(game.down,"descend");
     return Paths(true).move_to(game.down,"descend through blocking monster");
+}
+}
+
+namespace sim {
+rogue::FeatureChoice choose_feature_choice(uint8_t type) {
+    using namespace rogue;
+    FeatureChoice choice;
+    if(type < FEATURE_FOUNTAIN || type > FEATURE_ALCHEMICAL_POOL || game.paralyzed) return choice;
+    bool pressure = false;
+    for(const Monster& m : game.monsters)
+        if(m.type && distance(m.pos, game.player) <= 2) pressure = true;
+    if(type == FEATURE_HEALING_SPRING) choice.accept = game.hp < player_max_hp() || game.weakened || game.confused || game.slowed;
+    else if(type == FEATURE_FOUNTAIN) choice.accept = game.hp >= 10 && (game.hp < player_max_hp() || game.hunger < 180 || game.weakened);
+    else choice.accept = !pressure && game.hp >= 10;
+    if(type == FEATURE_ENCHANTED_FORGE || type == FEATURE_ALCHEMICAL_POOL) {
+        int best = -1;
+        for(uint8_t s = 0; s < INVENTORY; ++s) if(feature_accepts_item(type, s)) {
+            const Item& i = game.inventory[s];
+            if(type == FEATURE_ENCHANTED_FORGE && equipment_enchant(i) == MAX_EQUIPMENT_ENCHANT) continue;
+            int score = is_equipment(i.type) ? equipment_score(i) + (equipped(s) ? 100 : 0) :
+                is_wand(i.type) && !wand_afflicted(i) ? 60 - wand_charges(i) : 0;
+            if(score > best) { best = score; choice.slot = s; }
+        }
+        choice.accept = choice.accept && choice.slot != NONE;
+    } else if(type == FEATURE_SACRIFICIAL_ALTAR) {
+        int least = 10000;
+        for(uint8_t s = 0; s < INVENTORY; ++s) if(feature_accepts_item(type, s) && !equipped(s)) {
+            Item i = game.inventory[s];
+            if(i.type == FOOD || i.type == POTION_HEALING || is_artifact(i.type)) continue;
+            int score = value(i);
+            if(score < least) { least = score; choice.slot = s; }
+        }
+        choice.accept = choice.accept && least <= 0;
+    }
+    return choice;
 }
 }

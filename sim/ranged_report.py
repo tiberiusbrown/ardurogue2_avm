@@ -12,7 +12,7 @@ def reconcile(data):
     for field, item_field in [('generated', 'generated'), ('picked', 'picked_up'), ('carried', 'carried')]:
         if not np.array_equal(r[field], ammo[item_field]):
             raise ValueError(f'ranged/item {field} does not reconcile')
-    if not (r.fired + r.thrown).eq(ammo.consumed).all():
+    if not (r.fired + r.thrown + r.sacrificed).eq(ammo.consumed).all():
         raise ValueError('arrow consumption does not reconcile')
     if not ammo.picked_up.eq(ammo.consumed + ammo.dropped + ammo.discarded + ammo.carried).all():
         raise ValueError('arrow inventory conservation failed')
@@ -38,7 +38,7 @@ def report(data, output):
     n = len(r)
     shots = int(r.fired.sum())
     hits = int((r.short_hits + r.long_hits).sum())
-    s = {c: float(r[c].mean()) for c in ['bundles', 'generated', 'picked', 'fired', 'thrown', 'carried',
+    s = {c: float(r[c].mean()) for c in ['bundles', 'generated', 'picked', 'fired', 'thrown', 'sacrificed', 'carried',
         'bow_turns', 'switches_to', 'switches_away', 'generation_gap', 'acquisition_gap']}
     s.update(hit_pct=100*hits/shots if shots else 0,
         damage_per_run=float((r.short_damage+r.long_damage).mean()),

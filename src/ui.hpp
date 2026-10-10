@@ -2,6 +2,7 @@
 
 #include <avm.h>
 #include "inventory_view.hpp"
+#include "features.hpp"
 
 namespace rogue {
 
@@ -15,6 +16,7 @@ enum InputAction : uint8_t {
 InputAction handle_input(uint8_t buttons);
 void prompt_ground_items();
 void prompt_stairs();
+FeatureChoice prompt_feature();
 
 // Returns an inventory slot, or NONE when canceled or no item matches.
 uint8_t choose_item(const char AVM_PROGMEM* prompt_text,

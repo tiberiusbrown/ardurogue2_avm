@@ -45,7 +45,7 @@ build/sim-native/sim/ardurogue2_sim --seed 4 --max-actions 5 --trace
 Ranges are inclusive. Seeds must fit the production 16-bit API; batches never
 wrap. Production maps seed zero to `0xace1`, so CSV records both the requested
 `seed` and `effective_seed`. Without `--output`, stdout contains `runs.csv`.
-With `--output`, the directory receives eight CSV files and `manifest.json` (see
+With `--output`, the directory receives nine CSV files and `manifest.json` (see
 `BALANCE.md` for schemas). Trace is restricted
 to one seed and goes to stderr, keeping CSV parseable. `--no-telemetry` disables
 aggregate collection for isolation diagnostics; run/floor action and turn
@@ -54,7 +54,7 @@ counts, safety checks and tracing continue to work.
 `--jobs N` runs a batch in 1..64 separate worker processes (default 1), capped
 at the number of seeds. Production `Game` and `session` are global, so processes
 isolate them and each seed's RNG. Contiguous seed chunks merge in ascending
-seed order; all eight CSVs are byte-identical to serial execution. Workers use
+seed order; all nine CSVs are byte-identical to serial execution. Workers use
 temporary directories, which the parent removes after joining them. Only the
 parent writes final output. Tracing still requires one seed and runs serially.
 Windows workers start without visible console windows; POSIX uses `posix_spawnp`.
@@ -88,11 +88,12 @@ Existing files changed: root `README.md` links these instructions; root
 `CMakeLists.txt` adds the host-only subdirectory
 and the production hook-header build dependency; `src/state.cpp`,
 `src/combat.cpp`, `src/items.cpp`, `src/world_gen.cpp` gain gated hooks.
-`src/model.hpp`, persistence code, save version and saved fields are unchanged.
+Instrumentation adds no saved fields. The map-feature gameplay addition appends
+36 bytes to `Game` and uses save version 26; see the feature report below.
 
 The simulator library compiles and links `state.cpp`, `combat.cpp`,
 `combat_math.cpp`, `items.cpp`, `world.cpp`, `world_gen.cpp` and
-`world_gen_population.cpp`. It does not link `main.cpp`, `ui.cpp`, `render.cpp`,
+`world_gen_population.cpp` and `features.cpp`. It does not link `main.cpp`, `ui.cpp`, `render.cpp`,
 `status.cpp` or persistence. Normal SDK configurations never enter `sim/`.
 
 The runner owns execution, counters and output. Agents return choices and never
@@ -101,18 +102,19 @@ pickup with an optional full-pack replacement, explicit ground swap, stairs,
 inventory use with an optional target slot, potion throwing, directional or
 immediate wand use, and dropping with the production discard-confirmation flag.
 Dispatch validates cardinal moves and current-tile pickups, then calls only
-the production APIs. Waiting calls `end_turn()` directly; `action()` is a UI
+the production APIs. Waiting calls `wait_search()`; `action()` is a UI
 repeat-equipment operation and would be inappropriate for waiting.
 
 Future policies can implement `Agent` without modifying the runner or CSV
-collectors. The current context exposes the full read-only world for the
-omniscient policy; a future restricted observation layer can sit at that
-interface. No normal-information agent or experimental management is included.
+collectors. The current context exposes the read-only world with hidden map features
+erased, including both their IDs and positions. The feature policy uses the
+same filtered `observed_features` interface; future policies must retain this
+guarantee. No normal-information agent or experimental management is included.
 
 ## Maintained omniscient-v2 policy
 
 `omniscient-v2` is the maintained omniscient balance policy. New production
-mechanics may extend it in place. CMake automatically hashes `agent.hpp` and
+mechanics may extend it in place. CMake automatically hashes `agent.hpp`, `features.hpp` and
 `omniscient_agent.cpp` with SHA-256, combines those hashes and records the
 result as `agent_policy_hash` in every manifest. Incremental builds refresh it.
 Content comparisons require matching policy hashes; the Python paired framework
@@ -279,7 +281,7 @@ and [RESULTS.md](RESULTS.md) for the historical v1 validation. CTest verifies:
 * doors/occupancy, current-tile pickup, full-pack swap and cursed removability;
 * ring and food swap loop regressions, overkill accounting and death causes;
 * action/path/rejection/inventory safety and RNG-mutation/agent-error detection;
-* CLI validation, both batch syntaxes and byte-identical eight-stream CSV output.
+* CLI validation, both batch syntaxes and byte-identical nine-stream CSV output.
 * all fire modifiers, immunity and exhaustive byte-coordinate square coverage;
 * tactical wand emergencies, modifier groups, afflicted/trivial declines and
   polymorph decisions independent of RNG state;
@@ -315,8 +317,23 @@ never. Gaps include reached terminal death floors and exclude ascent (no supply
 generation). Acquisition gaps while owning any bow may include deliberately
 stocked/cursed bows and are descriptive, not proof of exhausted ammunition.
 
-All eight descriptor-managed streams, plus optional entry_state.csv, merge in
+All nine descriptor-managed streams, plus optional entry_state.csv, merge in
 seed order. `ranged_report.py` reconciles consumption, inventory conservation,
 floor generation/acquisition and typed shot breakdowns. `check_balance.py`
 exports ranged usage, first discovery/acquisition, gap distribution summaries,
 firing distance and target breakdowns alongside the ordinary scorecard.
+
+## Positioned map features
+
+Schema 4 adds the ninth stream, `features.csv`: sparse visit/type counters for
+generation, discovery, activation, decline, damage, direct deaths, spawned
+monsters and holy damage. Floor records add exit hunger. Ranged records add
+sacrificed arrow units so fired + thrown + sacrificed equals consumption.
+
+Movement gathers explicit feature choices after entering and resolves through
+the production resolver before the enemy turn. The maintained policy avoids
+known traps with weighted routing, uses nearby beneficial features within a
+food/detour budget, limits holy re-entry, and respects cursed equipment. Hidden
+traps never inform route penalties or choices. `no-map-features` disables only
+the dedicated generation domain for same-executable, same-policy controls.
+See [map-feature results](../docs/MAP_FEATURES.md).

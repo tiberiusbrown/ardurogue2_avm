@@ -1,6 +1,7 @@
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
+#include "feature_icons.hpp"
 #include "render.hpp"
 #include "status.hpp"
 #include "world.hpp"
@@ -486,6 +487,9 @@ __attribute__((noinline)) static void draw_view_objects(const uint16_t sight[13]
     if(game.floor < FLOORS - 1 &&
        screen_tile(game.down, sx, sy) && explored(game.down))
         avm_draw_sprite_overwrite(sx * 5, sy * 5, map_icons, DOWN_STAIRS_ICON);
+    for(const MapFeature& feature : game.features)
+        if(feature.id && screen_tile(feature.pos, sx, sy) && explored(feature.pos))
+            avm_draw_sprite_self_masked(sx * 5, sy * 5, feature_icons, feature.id);
     for(const GroundItem& ground : game.ground)
         if(ground.item.type && in_sight(ground.pos, sight, sx, sy))
             avm_draw_sprite_overwrite(sx * 5, sy * 5, item_icons,
@@ -626,7 +630,7 @@ __attribute__((noinline)) static void render_title()
 __attribute__((noinline)) static void render_menu()
 {
     static const char AVM_PROGMEM* const AVM_PROGMEM names[] = {
-        F("WAIT"), F("USE ITEM"), F("DROP ITEM"), F("Throw/Shoot"),
+        F("WAIT/SEARCH"), F("USE ITEM"), F("DROP ITEM"), F("Throw/Shoot"),
         F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON")
     };
     avm_draw_text_P(10, 8, F("ACTION MENU"));
@@ -710,6 +714,9 @@ __attribute__((noinline)) static void render_full_map()
                 avm_draw_filled_rect_white(x * 2, y * 2, 1, 1);
             }
         }
+    for(const MapFeature& feature : game.features)
+        if(feature.id && !feature_is_hidden(feature.id) && explored(feature.pos))
+            avm_draw_filled_rect_white(feature.pos.x * 2, feature.pos.y * 2, 2, 2);
     avm_draw_filled_rect_white(game.player.x * 2, game.player.y * 2, 1, 1);
     avm_draw_filled_rect_white(game.player.x * 2 + 1, game.player.y * 2 + 1, 1, 1);
 }

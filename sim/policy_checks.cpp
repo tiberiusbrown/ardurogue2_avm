@@ -163,6 +163,39 @@ void retreat_and_inventory() {
 }
 }
 void check_v2_policy() {
+    {
+        OmniscientAgent a;
+        arena(); game.player={10,10}; game.down={14,10}; game.hp=game.max_hp=50;
+        Game empty = game;
+        auto normal=choose(a);
+        check(normal.kind==ActionKind::Move && normal.dx==1 && normal.dy==0, "empty shortest path fixture");
+        for(uint8_t type=FEATURE_SPIKE_TRAP;type<=FEATURE_RUST_TRAP;type+=2) {
+            game=empty; a.reset(); game.features[0]={{11,10},uint8_t(type|MAP_FEATURE_HIDDEN)};
+            auto view=observed_features(game);
+            DecisionContext context(game,0,0);
+            check(view[0].id==0 && view[0].pos==Position{0,0} && context.world.features[0].id==0 &&
+                context.world.features[0].pos==Position{0,0}, "hidden type/position leaked through observation");
+            auto hidden=choose(a);
+            check(hidden.kind==normal.kind && hidden.dx==normal.dx && hidden.dy==normal.dy &&
+                hidden.goal==normal.goal && hidden.destination==normal.destination, "agent routed around hidden trap");
+            game.features[0].pos={12,11}; a.reset(); hidden=choose(a);
+            check(hidden.dx==normal.dx && hidden.dy==normal.dy, "agent distinguished relocated hidden trap");
+        }
+        game=empty; a.reset(); game.features[0]={{11,10},FEATURE_SPIKE_TRAP};
+        auto discovered=choose(a);
+        check(discovered.kind==ActionKind::Move && discovered.dx!=1, "agent failed discovered trap detour");
+        game=empty; a.reset(); game.hp=20; game.features[0]={{10,11},FEATURE_HEALING_SPRING};
+        auto spring=choose(a);
+        check(spring.kind==ActionKind::Move && spring.dy==1 && spring.dx==0, "visible beneficial feature ignored");
+        check(dispatch(spring) && !game.features[0].id && game.hp==45 && game.turns==1, "simulator feature production resolver/turn");
+        game=empty; a.reset(); game.weapon_slot=0; game.inventory[0]=make_equipment(LONG_SWORD,0);
+        game.inventory[0].info|=ITEM_CURSED; game.inventory[1]=make_equipment(LONG_BOW,0);
+        game.inventory[2]={ARROWS,20}; monster(HOBGOBLIN,{14,10});
+        check(!(choose(a).kind==ActionKind::Use && choose(a).slot==1), "cursed weapon caused rejected bow switch");
+        game.inventory[0]=make_equipment(SHORT_BOW,0); game.inventory[0].info|=ITEM_CURSED; a.reset();
+        check(!(choose(a).kind==ActionKind::Use && choose(a).slot==1), "cursed bow caused rejected replacement");
+    }
+
     fire_checks(); tactical_wands(); retreat_and_inventory();
     using namespace rogue; using namespace sim;
     OmniscientAgent agent;
@@ -242,6 +275,19 @@ void check_v2_policy() {
     game.inventory[0]=make_equipment(TWO_HANDED_SWORD,7); game.weapon_slot=0;
     game.inventory[1]=make_equipment(LONG_BOW,-7); game.inventory[2]={ARROWS,20};
     a=choose(agent); check(!(a.kind==ActionKind::Use && a.slot==1),"bow equipped for a close shot it would reject next turn");
+    // Forge/pool curses can affect a weapon already equipped. A ranged
+    // opportunity must not repeatedly request an impossible replacement.
+    for(uint8_t current : {uint8_t(DAGGER),uint8_t(SHORT_BOW),uint8_t(LONG_BOW)}) {
+        arena(); agent.reset(); monster(HOBGOBLIN,{15,10});
+        game.inventory[0]=make_equipment(current,0); game.inventory[0].info|=ITEM_CURSED;
+        game.weapon_slot=0; game.inventory[1]=make_equipment(LONG_BOW,7);
+        game.inventory[2]={ARROWS,20}; game.inventory[3]=make_equipment(TWO_HANDED_SWORD,7);
+        a=choose(agent);
+        check(!(a.kind==ActionKind::Use && (a.slot==1 || a.slot==3)),"feature-cursed weapon replacement loop");
+        for(auto& m:game.monsters) m={};
+        game.inventory[4]={SCROLL_REMOVE_CURSE,1}; agent.reset(); a=choose(agent);
+        check(a.kind==ActionKind::Use && a.slot==4 && a.target==0,"feature-cursed weapon failed to use available cure");
+    }
     // Full-census regressions: complementary bow/ammo slots caused reverse
     // swaps for seeds 39396/41956. Neither pickup may strand its counterpart.
     for(uint8_t bow : {uint8_t(SHORT_BOW), uint8_t(LONG_BOW)}) {

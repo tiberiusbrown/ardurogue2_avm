@@ -79,7 +79,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  sizeof(Game) == 774 && sizeof(Item) == 2,
+                  sizeof(Game) == 810 && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -2635,6 +2635,7 @@ void check_combat_rules();
 void print_armor_distributions();
 void print_weapon_distributions();
 void check_weapon_and_equipment_rules();
+void check_map_features();
 void check_artifacts();
 void check_benchmark_scenarios();
 
@@ -2642,6 +2643,9 @@ bool generation_command(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
+    if(argc == 2 && std::strcmp(argv[1], "--map-features") == 0) {
+        check_map_features(); return 0;
+    }
     if(argc == 2 && std::strcmp(argv[1], "--artifacts") == 0) {
         check_artifacts(); return 0;
     }
@@ -2670,6 +2674,7 @@ int main(int argc, char** argv)
     check_unreliable_wand();
     extern void check_bows();
     check_bows();
+    check_map_features();
     check_startup_save_state();
     check_floor_generation_snapshots();
     check_new_run_state();

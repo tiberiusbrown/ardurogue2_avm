@@ -54,6 +54,7 @@ void animate_fire_burst(Position center);
 void animate_spreading_rays(Position origin, const uint8_t steps[4]);
 void animate_fire_bursts(const Position* centers, uint8_t count,
                          bool powerful);
+bool teleport_player();
 void apply_monster_potion(uint8_t type, uint8_t index);
 
 } // namespace rogue

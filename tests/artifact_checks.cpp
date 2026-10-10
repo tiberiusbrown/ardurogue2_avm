@@ -423,7 +423,7 @@ void hearts()
 void artifact_generation()
 {
     using namespace rogue::generation;
-    static_assert(sizeof(Item) == 2 && sizeof(Game) == 774 && SAVE_VERSION == 25 &&
+    static_assert(sizeof(Item) == 2 && sizeof(Game) == 810 && SAVE_VERSION == 26 &&
                   WEAPON_LAST + 1 == ARMOR_FIRST && ARMOR_LAST + 1 == YENDOR_AMULET &&
                   RING_LAST + 1 == AMULET_FIRST && AMULET_LAST + 1 == SCROLL_FIRST,
                   "artifact groups or saved layout changed");

@@ -35,7 +35,11 @@ extern "C" int main()
             static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0)) {
             InputAction input = handle_input(buttons);
-            if(input == INPUT_MOVED) {
+            if(session.pending_move) {
+                FeatureChoice choice = prompt_feature();
+                complete_player_move(choice);
+            }
+            if(input == INPUT_MOVED && !session.ended) {
                 prompt_ground_items();
                 prompt_stairs();
             } else if(input >= INPUT_PROJECTILE_UP && input <= INPUT_PROJECTILE_LEFT) {

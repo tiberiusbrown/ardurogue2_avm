@@ -183,7 +183,8 @@ static void clear_equipment_slot(uint8_t slot)
 void destroy_inventory_item(uint8_t slot)
 {
     if(slot >= INVENTORY) return;
-    SIM_EVENT(sim::EventKind::Consumed, NONE, game.inventory[slot].type);
+    SIM_EVENT(sim::EventKind::Consumed, NONE, game.inventory[slot].type,
+              is_stackable(game.inventory[slot].type) ? item_value(game.inventory[slot]) : 1);
     clear_equipment_slot(slot);
     game.inventory[slot] = {NO_ITEM, 0};
     if(session.repeat_slot == slot) session.repeat_slot = NONE;
@@ -341,7 +342,7 @@ __attribute__((noinline)) static bool legal_teleport_position(Position pos,
         (!player || item_at(pos) == NONE);
 }
 
-static bool teleport_player();
+bool teleport_player();
 
 static void scroll_effect(uint8_t type, uint8_t target_slot)
 {
@@ -439,18 +440,31 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
     if(!found) status(F("Nothing happens."));
 }
 
-static bool teleport_player()
+bool teleport_player()
 {
     for(uint8_t attempt = 0; attempt < 100; ++attempt) {
         Position pos = {
             static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
             static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
-        if(legal_teleport_position(pos, true)) {
+        if(pos != game.player && legal_teleport_position(pos, true)) {
             game.player = pos;
             status(F("You teleport!"));
             return true;
         }
     }
+    // Sparse custom floors must still teleport when an alternative exists.
+    // Prefer the same prompt-free destinations; relax stairs/items only if needed.
+    uint16_t start = static_cast<uint16_t>(game.player.y * MAP_W + game.player.x);
+    for(uint8_t pass = 0; pass < 2; ++pass)
+        for(uint16_t n = 1; n < MAP_W * MAP_H; ++n) {
+            uint16_t cell = static_cast<uint16_t>((start + n) & 2047);
+            Position pos{static_cast<uint8_t>(cell & 63), static_cast<uint8_t>(cell >> 6)};
+            if(pass == 0 ? !legal_teleport_position(pos, true) :
+               blocked(pos.x, pos.y) || monster_at(pos) != NONE) continue;
+            game.player = pos;
+            status(F("You teleport!"));
+            return true;
+        }
     status(F("Nothing happens."));
     return false;
 }

@@ -12,7 +12,7 @@ enum Archetype : uint8_t { CHAMBERS, WARREN, FORTRESS, RUINS, ARCHETYPES };
 enum Purpose : uint16_t {
     LAYOUT = 0x4a31, LOOPS = 0xb275, DOOR_SELECTION = 0x7d19,
     STAIRS = 0xe893, ENCOUNTERS = 0x19c7, SUPPLIES = 0x635b, AMMO_QUANTITY = 0x4d71,
-    EQUIPMENT = 0xd421, ARTIFACTS = 0xac57
+    EQUIPMENT = 0xd421, ARTIFACTS = 0xac57, MAP_FEATURE_DOMAIN = 0x37e9
 };
 
 constexpr uint8_t ARTIFACT_SELECTION_DENOMINATOR = 128;
@@ -41,6 +41,12 @@ void trim_dangling_passages();
 void finalize_doors(uint16_t seed);
 void choose_stairs(uint16_t seed);
 void populate_monsters(uint16_t seed);
+void populate_features(uint16_t seed);
+uint8_t encounter_type(uint8_t floor, uint16_t& seed);
+Item useful_item(uint16_t& seed);
+constexpr uint8_t FEATURE_TRAP_WEIGHT = 55, FEATURE_INTERACTIVE_WEIGHT = 40;
+constexpr uint8_t HOLY_BASE_WEIGHT = 5, HOLY_SPAWN_BONUS = 5;
+constexpr uint8_t holy_symbol_weight(uint8_t count) { return HOLY_BASE_WEIGHT + count * HOLY_SPAWN_BONUS; }
 void populate_items(uint16_t seed, uint16_t equipment_seed);
 void populate_ordinary_items(uint16_t seed, uint16_t equipment_seed);
 

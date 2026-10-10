@@ -27,11 +27,11 @@ int main(int argc, char** argv) {
                 std::cout << "ardurogue2_sim [--seed N | --seeds FIRST:LAST | --all-seeds | --count N --start-seed N]\n"
                     "  [--output DIRECTORY] [--jobs N] [--trace] [--max-actions N] [--no-telemetry] [--entry-state]\n"
                     "Seeds are unsigned 16-bit; ranges are inclusive. Trace goes to stderr.\n"
-                    "Without --output, runs.csv goes to stdout. With --output eight CSVs and manifest.json are written.\n"
+                    "Without --output, runs.csv goes to stdout. With --output nine CSVs and manifest.json are written.\n"
                     "--entry-state adds entry_state.csv for balance reports; requires --output and telemetry.\n"
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"
-                    "Also replace-monster, remove-item:FROM and remove-monster:FROM.\n"
+                    "Also replace-monster, remove-item:FROM, remove-monster:FROM, ordinary-items and no-map-features.\n"
                     "--jobs uses 1..64 isolated processes (default 1); CSV remains in seed order.\n";
                 return 0;
             } else if(arg=="--all-seeds") {

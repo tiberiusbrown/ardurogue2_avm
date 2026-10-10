@@ -15,6 +15,11 @@ Collector* collector = nullptr;
 Cause cause = Cause::Other;
 uint8_t cause_type = 0;
 template<class T> struct Field { const char* name; uint64_t T::* member; };
+const Field<FeatureMetrics> feature_fields[] = {
+    {"generated",&FeatureMetrics::generated},{"discovered",&FeatureMetrics::discovered},
+    {"activated",&FeatureMetrics::activated},{"declined",&FeatureMetrics::declined},
+    {"damage",&FeatureMetrics::damage},{"deaths",&FeatureMetrics::deaths},
+    {"spawned",&FeatureMetrics::spawned},{"holy_damage",&FeatureMetrics::holy_damage}};
 const Field<ItemMetrics> item_fields[] = {
     {"generated",&ItemMetrics::generated},{"reached",&ItemMetrics::reached},
     {"picked_up",&ItemMetrics::picked_up},{"used",&ItemMetrics::used},{"consumed",&ItemMetrics::consumed},
@@ -70,6 +75,9 @@ void after_floor_generation() {
     auto rng=rogue::game.random_state;
     collector->experiment->apply(rogue::game,{rogue::game.run_seed,collector->data.floors_entered+1},collector->data.interventions);
     if(rogue::game.random_state!=rng) throw std::runtime_error("experiment consumed gameplay RNG");
+}
+bool features_enabled() {
+    return !collector || !collector->experiment || collector->experiment->features_enabled();
 }
 bool artifacts_enabled() {
     return !collector || !collector->experiment || collector->experiment->artifacts_enabled();
@@ -171,6 +179,10 @@ void Collector::enter_floor() {
         }
     }
     for(const auto& m : g.monsters) if(m.type) ++data.monsters[m.type].generated;
+    for(const auto& feature : g.features) if(feature.id) {
+        unsigned t = rogue::feature_type(feature.id)/2;
+        ++data.features[t].generated; ++data.floors.back().features[t].generated;
+    }
 }
 void Collector::close_floor(bool exited) {
     if(data.floors.empty() || data.floors.back().exited) return;
@@ -186,6 +198,7 @@ void Collector::close_floor(bool exited) {
         f.items[i].*(field.member)=data.items[i].*(field.member)-entry_items[i].*(field.member);
     for(size_t i=0;i<data.monsters.size();++i) for(const auto& field:monster_fields)
         f.monsters[i].*(field.member)=data.monsters[i].*(field.member)-entry_monsters[i].*(field.member);
+    f.exit_hunger = rogue::game.hunger;
     f.exit_hp = rogue::game.hp; f.exit_level = rogue::game.level;
     if(exited) { f.exited = true; ++data.floors_exited; }
 }
@@ -227,6 +240,8 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     }
     if(k == EventKind::PlayerDamage && amount) {
         switch(cause) {
+        case Cause::Trap: data.death_cause = "trap:"+std::to_string(cause_type); break;
+        case Cause::Feature: data.death_cause = "feature:"+std::to_string(cause_type); break;
         case Cause::Monster: data.death_cause = monster_name(cause_type); break;
         case Cause::Starvation: data.death_cause = "starvation"; break;
         case Cause::Item: data.death_cause = std::string("item:")+item_name(cause_type); break;
@@ -243,6 +258,18 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     }
     if(!enabled) return;
     FloorMetrics* f = data.floors.empty() ? nullptr : &data.floors.back();
+    auto feature_metric = [&](uint8_t id, uint64_t FeatureMetrics::*member, uint64_t value) {
+        if(id > rogue::FEATURE_HOLY_SYMBOL) return;
+        data.features[id / 2].*member += value;
+        if(f) f->features[id / 2].*member += value;
+    };
+    if(k == EventKind::PlayerDamage && (cause == Cause::Trap || cause == Cause::Feature)) {
+        feature_metric(cause_type, &FeatureMetrics::damage, amount);
+        bool phoenix = rogue::game.amulet_slot < rogue::INVENTORY &&
+            rogue::game.inventory[rogue::game.amulet_slot].type == rogue::AMULET_PHOENIX_HEART &&
+            !rogue::item_is_cursed(rogue::game.inventory[rogue::game.amulet_slot]);
+        if(amount >= rogue::game.hp && !phoenix) feature_metric(cause_type, &FeatureMetrics::deaths, 1);
+    }
     auto engage = [&] {
         if(index < rogue::MONSTERS && !engaged[index]) {
             engaged[index] = true; ++data.monsters[type].engaged;
@@ -250,6 +277,15 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
     };
     switch(k) {
+    case EventKind::FeatureDiscovered: feature_metric(type, &FeatureMetrics::discovered, 1); break;
+    case EventKind::FeatureActivated: feature_metric(type, &FeatureMetrics::activated, 1); break;
+    case EventKind::FeatureDeclined: feature_metric(type, &FeatureMetrics::declined, 1); break;
+    case EventKind::HolyDamage: feature_metric(type, &FeatureMetrics::holy_damage, amount); break;
+    case EventKind::FeatureSpawn:
+        feature_metric(cause_type, &FeatureMetrics::spawned, 1);
+        ++data.monsters[type].generated;
+        if(index < rogue::MONSTERS) encountered[index] = engaged[index] = false;
+        break;
     case EventKind::ArrowFired:
         ++data.items[rogue::ARROWS].used; ++data.items[rogue::ARROWS].consumed;
         if(f) ++f->consumables;
@@ -331,7 +367,11 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(rogue::is_scroll(type)) ++data.items[type].scrolls_read;
         if(f && (type == rogue::FOOD || rogue::is_potion(type) || rogue::is_scroll(type))) ++f->consumables;
         break;
-    case EventKind::Consumed: data.items[type].consumed += amount; break;
+    case EventKind::Consumed:
+        data.items[type].consumed += amount;
+        if(type == rogue::ARROWS && cause == Cause::Feature && cause_type == rogue::FEATURE_SACRIFICIAL_ALTAR)
+            data.ranged.sacrificed += amount;
+        break;
     case EventKind::PotionThrown:
         ++data.items[type].used; ++data.items[type].thrown;
         if(f) ++f->consumables;
@@ -352,7 +392,7 @@ void write_runs_header(std::ostream& o) {
     o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash\n";
 }
 void write_floors_header(std::ostream& o) {
-    o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
+    o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,exit_hunger,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
     for(int i=0;i<16;++i) o<<",feature_family_"<<i;
     o<<'\n';
 }
@@ -372,7 +412,7 @@ void write_floors(std::ostream& o, const RunMetrics& r) {
     for(const auto& f : r.floors) { visit_key(o,r,f); o << ',' << f.entry_hp << ',' << f.exit_hp << ',' << f.entry_level << ','
       << f.exit_level << ',' << f.actions << ',' << f.turns << ',' << f.kills << ',' << f.damage_taken << ','
       << f.damage_dealt << ',' << f.pickups << ',' << f.consumables << ',' << f.exited
-      << ',' << f.entry_max_hp << ',' << f.entry_strength << ',' << f.entry_dexterity << ',' << f.entry_speed
+      << ',' << f.exit_hunger << ',' << f.entry_max_hp << ',' << f.entry_strength << ',' << f.entry_dexterity << ',' << f.entry_speed
       << ',' << f.entry_hunger << ',' << f.entry_armor_rating << ',' << f.entry_food_units << ',' << f.entry_healing_units
       << ',' << f.entry_weapon_type << ',' << f.entry_weapon_enchant << ',' << f.entry_armor_type << ',' << f.entry_armor_enchant
       << ',' << f.arrow_bundles << ',' << f.arrow_generated << ',' << f.arrow_picked << ',' << f.bow_owned
@@ -429,7 +469,7 @@ void write_entry_state(std::ostream& o,const RunMetrics& r) {
     }
 }
 void write_ranged_header(std::ostream& o) {
-    o << "seed,effective_seed,agent,bundles,generated,picked,fired,thrown,carried,bow_turns,switches_to,switches_away,first_generated,first_picked,generation_gap,acquisition_gap";
+    o << "seed,effective_seed,agent,bundles,generated,picked,fired,thrown,sacrificed,carried,bow_turns,switches_to,switches_away,first_generated,first_picked,generation_gap,acquisition_gap";
     for(const char* bow:{"short","long"}) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << bow << '_' << field;
     for(int d=0;d<=6;++d) for(const char* field:{"shots","hits","damage","kills"}) o << ",distance" << d << '_' << field;
     for(int t=1;t<=rogue::LORD;++t) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << monster_name(t) << '_' << field;
@@ -438,7 +478,7 @@ void write_ranged_header(std::ostream& o) {
 void write_ranged(std::ostream& o,const RunMetrics& r) {
     key(o,r); const auto& m=r.ranged;
     o << ',' << m.bundles << ',' << m.generated << ',' << m.picked << ',' << m.fired << ',' << m.thrown
-      << ',' << m.carried << ',' << m.bow_turns << ',' << m.switches_to << ',' << m.switches_away
+      << ',' << m.sacrificed << ',' << m.carried << ',' << m.bow_turns << ',' << m.switches_to << ',' << m.switches_away
       << ',' << m.first_generated << ',' << m.first_picked << ',' << m.generation_gap << ',' << m.acquisition_gap;
     auto shot=[&](const ShotMetrics& s) { o << ',' << s.shots << ',' << s.hits << ',' << s.damage << ',' << s.kills; };
     for(auto s:m.bows) shot(s);
@@ -446,11 +486,21 @@ void write_ranged(std::ostream& o,const RunMetrics& r) {
     for(int t=1;t<=rogue::LORD;++t) shot(m.targets[t]);
     o << '\n';
 }
+void write_features_header(std::ostream& o) {
+    o << "seed,effective_seed,agent,visit,floor,direction,feature_type"; field_header(o,feature_fields);
+}
+void write_features(std::ostream& o, const RunMetrics& r) {
+    for(const auto& f : r.floors) for(unsigned t = 1; t <= rogue::FEATURE_TYPES; ++t) {
+        if(!active(f.features[t],feature_fields)) continue;
+        visit_key(o,r,f); o << ',' << t*2; field_values(o,f.features[t],feature_fields);
+    }
+}
 const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
     {"runs.csv",write_runs_header,write_run},{"floors.csv",write_floors_header,write_floors},
     {"items.csv",write_items_header,write_items},{"monsters.csv",write_monsters_header,write_monsters},
     {"visit_items.csv",write_visit_items_header,write_visit_items},
     {"visit_monsters.csv",write_visit_monsters_header,write_visit_monsters},
     {"interventions.csv",write_interventions_header,write_interventions},
-    {"ranged.csv",write_ranged_header,write_ranged}}};
+    {"ranged.csv",write_ranged_header,write_ranged},
+    {"features.csv",write_features_header,write_features}}};
 }

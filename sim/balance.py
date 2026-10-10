@@ -22,8 +22,8 @@ from scipy import linalg, special, stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-SCHEMA = 3
-STREAMS = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions", "ranged")
+SCHEMA = 4
+STREAMS = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions", "ranged", "features")
 NOTICE = ("Adjusted observational association is not proof of causation. "
           "Controlled A/B interventions are preferred for causal balance conclusions.")
 BASE_NUMERIC = ("entry_hp_fraction", "entry_level", "entry_strength", "entry_dexterity",

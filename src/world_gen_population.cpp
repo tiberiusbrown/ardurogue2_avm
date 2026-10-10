@@ -1,4 +1,5 @@
 #include "world_gen.hpp"
+#include "features.hpp"
 #include "world.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
@@ -181,6 +182,25 @@ __attribute__((noinline)) void populate_monsters(uint16_t seed)
     }
 }
 
+uint8_t encounter_type(uint8_t floor, uint16_t& seed)
+{
+    for(uint8_t n = 0; n < 32; ++n) {
+        uint8_t type = floor_monsters[floor][floor_roll(seed, 12)];
+        if(type) return type;
+    }
+    return floor_monsters[floor][0];
+}
+
+Item useful_item(uint16_t& seed)
+{
+    switch(floor_roll(seed, 4)) {
+    case 0: return {FOOD, 1};
+    case 1: return {floor_potion_type(seed), 1};
+    case 2: return make_equipment(floor_weapon_type(seed), 0);
+    default: return {static_cast<uint8_t>(SCROLL_FIRST + floor_roll(seed, SCROLL_COUNT)), 1};
+    }
+}
+
 uint8_t artifact_type(uint8_t index)
 {
     static const uint8_t PROGMEM types[ARTIFACT_COUNT] = {
@@ -309,6 +329,65 @@ void populate_items(uint16_t seed, uint16_t equipment_seed)
     if(!sim::artifacts_enabled()) return;
 #endif
     place_artifacts();
+}
+
+static uint8_t feature_geometry(uint8_t type)
+{
+    switch(type) {
+    case FEATURE_FLAME_TRAP: return JUNCTION | CORRIDOR;
+    case FEATURE_SNARE_TRAP: return CORRIDOR | CORNER;
+    case FEATURE_TELEPORT_TRAP: return JUNCTION;
+    case FEATURE_MAGIC_DRAIN_TRAP: return DEAD_END | CORRIDOR;
+    case FEATURE_SUMMONING_TRAP: return OPEN | JUNCTION;
+    case FEATURE_HOLY_SYMBOL: return OPEN | ROOMY;
+    case FEATURE_HEALING_SPRING: case FEATURE_SACRIFICIAL_ALTAR:
+    case FEATURE_ENCHANTED_FORGE: case FEATURE_SARCOPHAGUS: return DEAD_END;
+    case FEATURE_RUNESTONE: return NEAR_WALL | DEAD_END;
+    default: return feature_is_trap(type) ? CORRIDOR : OPEN;
+    }
+}
+__attribute__((noinline)) void populate_features(uint16_t seed)
+{
+#if defined(ARDUROGUE2_SIM)
+    if(!sim::features_enabled()) return;
+#endif
+    uint8_t unholy = 0;
+    for(const Monster& m : game.monsters) if(undead_or_demonic(m.type)) ++unholy;
+    uint8_t holy_weight = holy_symbol_weight(unholy);
+    bool holy_placed = false;
+    uint8_t count = 4 + floor_roll(seed, 5);
+    for(uint8_t slot = 0; slot < count; ++slot) {
+        uint8_t weight = holy_placed ? 0 : holy_weight;
+        uint8_t chance = floor_roll(seed, FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT + weight);
+        uint8_t type = chance < FEATURE_TRAP_WEIGHT ? 2 + 2 * floor_roll(seed, 10) :
+            chance < FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT ? 22 + 2 * floor_roll(seed, 9) : FEATURE_HOLY_SYMBOL;
+        uint16_t start = next_random(seed) & 2047, stride = next_random(seed) | 1;
+        uint8_t wanted = feature_geometry(type);
+        Position chosen{NONE, NONE};
+        // Relax spacing first, then geometry. Spawn safety remains mandatory.
+        for(uint8_t pass = 0; pass < 3 && chosen.x == NONE; ++pass) {
+            uint16_t cell = start;
+            for(uint16_t n = 0; n < 2048; ++n, cell = (cell + stride) & 2047) {
+                if(!(n & 63)) progress();
+                Position pos{static_cast<uint8_t>(cell & 63), static_cast<uint8_t>(cell >> 6)};
+                if(wall_at(pos.x, pos.y) || (pass < 2 && !(geometry(pos) & wanted))) continue;
+                if(pos == game.player || pos == game.up || pos == game.down || door_at(pos) != NONE ||
+                   monster_at(pos) != NONE || item_at(pos) != NONE || feature_at(pos) != NONE) continue;
+                int16_t dx = pos.x > game.player.x ? pos.x - game.player.x : game.player.x - pos.x;
+                int16_t dy = pos.y > game.player.y ? pos.y - game.player.y : game.player.y - pos.y;
+                if(feature_is_trap(type) && dx + dy <= 3) continue;
+                bool close = false;
+                if(pass == 0) for(const MapFeature& f : game.features)
+                    if(f.id && distance_squared(pos, f.pos) < 9) { close = true; break; }
+                if(close) continue;
+                // Layout generation has already connected every passable tile.
+                chosen = pos; break;
+            }
+        }
+        if(chosen.x == NONE) continue;
+        game.features[slot] = {chosen, static_cast<uint8_t>(type | (feature_is_trap(type) ? MAP_FEATURE_HIDDEN : 0))};
+        if(type == FEATURE_HOLY_SYMBOL) holy_placed = true;
+    }
 }
 
 } // namespace rogue::generation

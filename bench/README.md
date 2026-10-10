@@ -181,3 +181,10 @@ python bench/test_profile_turns.py
 ```
 
 Bow integration extends the suite to 36 cases: arrow hit/miss/kill/empty, bow equipping and the Throw/Shoot picker. The benchmark arrow renderer retains production render setup and excludes the timed animation frames. The ordinary image keeps the complete 60 ms/tile animation.
+
+Map features extend the final suite to **58 cases**: all ten traps, a holy pulse
+with twelve unholy targets, healing-spring acceptance, forge item selection,
+searching eight adjacent traps, dense feature rendering and a lethal trap with
+Phoenix revival. Choices are prepared before timing; submitted acceptance or
+item selection includes the production effect, enemy turn and final rendering.
+All 58 final cases meet 100 ms; see [the validation report](../docs/MAP_FEATURES.md).

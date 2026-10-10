@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include "features.hpp"
 #include "game_internal.hpp"
 #include "status.hpp"
 #include "world.hpp"
@@ -380,6 +381,7 @@ void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful)
 void force_player(int8_t dx, int8_t dy)
 {
     RayResult path = scan_ray(game.player, dx, dy, 8);
+    Position origin = game.player;
     game.player = path.monster != NONE ? path.before : path.end;
     if(path.blocker || path.monster != NONE) {
         if(amulet_bonus(AMULET_IRONBLOOD) <= 0 && game.paralyzed < 4)
@@ -388,6 +390,7 @@ void force_player(int8_t dx, int8_t dy)
             game.monsters[path.monster].stun = 4;
         status(F("You crash into an obstacle!"));
     } else status(F("You are blasted back!"));
+    if(game.player != origin) session.forced_entry = true;
 }
 
 // Resolve breath after the movement/decision frame unwinds. Item-aware
@@ -556,6 +559,7 @@ static void enemy_turn(uint8_t player_speed)
             uint8_t action = advance_monster_action(i);
             if(action == 2) monster_fire(i);
             else if(action == 1) retaliate_monster(i);
+            resolve_forced_entry();
             finish_monster_turn(i);
             budget = static_cast<uint8_t>(budget - speed);
         }
@@ -563,6 +567,7 @@ static void enemy_turn(uint8_t player_speed)
             uint8_t action = advance_monster_action(i);
             if(action == 2) monster_fire(i);
             else if(action == 1) retaliate_monster(i);
+            resolve_forced_entry();
             finish_monster_turn(i);
         }
     }
@@ -583,6 +588,8 @@ uint8_t player_speed_cost()
 
 void end_turn()
 {
+    resolve_forced_entry();
+    if(session.ended) return;
     SIM_EVENT(sim::EventKind::Turn);
     uint8_t player_speed = player_speed_cost();
     ++game.turns;
@@ -629,12 +636,13 @@ void defeat_monster(uint8_t index)
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::MonsterKilled, index, target.type);
     leave_yendor(target);
-    uint8_t xp = monster_xp(target.type);
-    game.score += static_cast<uint16_t>(5 + xp * 3);
+    bool summoned = (target.state & MON_TRAP_SUMMONED) != 0;
+    uint8_t xp = summoned ? 0 : monster_xp(target.type);
+    if(!summoned) game.score += static_cast<uint16_t>(5 + xp * 3);
     status(F("You defeat"));
     status(target, '.');
     target.type = NO_MONSTER;
-    gain_xp(xp);
+    if(xp) gain_xp(xp);
 }
 
 // Compute rolls in a shallow frame; none of these temporaries survive messages,
@@ -757,10 +765,24 @@ __attribute__((noinline)) static bool apply_move(int8_t dx, int8_t dy)
     return true;
 }
 
+void begin_player_move(int8_t dx, int8_t dy)
+{
+    if(session.pending_move || session.ended) return;
+    Position origin = game.player;
+    if(!apply_move(dx, dy)) return;
+    bool forced = session.forced_entry;
+    resolve_forced_entry();
+    session.pending_feature = NONE;
+    if(!forced && game.player != origin) activate_entry_feature(feature_at(game.player));
+    if(session.ended) return;
+    if(session.pending_feature != NONE) session.pending_move = true;
+    else end_turn();
+}
+
 void move_player(int8_t dx, int8_t dy)
 {
-    if(apply_move(dx, dy))
-        end_turn();
+    begin_player_move(dx, dy);
+    complete_player_move();
 }
 
 void apply_monster_potion(uint8_t type, uint8_t index)

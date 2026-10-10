@@ -190,3 +190,15 @@ Final production ELF SHA-256:
 
 Final benchmark ELF SHA-256:
 `5ec394d769dd1d19bb94979a391f31b51ae2ff71239f6f89ef3393b3f70c30c9`.
+
+## Positioned map-feature population
+
+After ordinary monsters, items and initial player placement, the independent
+`MAP_FEATURE_DOMAIN` (`0x37e9`) populates 4–8 map features in twelve fixed slots.
+Traps/interactive category weights are 55/40; holy weight is 5 plus 5 per
+actual generated undead/demonic monster, with at most one symbol per floor.
+A deterministic cell permutation first honors geometry and spacing, then
+relaxes spacing, then geometry. Every pass retains spawn safety and excludes
+occupied items, monsters, doors, stairs and features; traps stay beyond
+Manhattan distance three from the starting player. Gameplay and other generation
+RNG domains remain untouched. See [the complete roster and placement table](MAP_FEATURES.md).

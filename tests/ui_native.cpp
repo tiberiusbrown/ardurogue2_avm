@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 
 uint8_t avm_test_buttons[16] = {};
 uint8_t avm_test_button_count = 0;
@@ -242,6 +243,26 @@ int main()
     ui.previous_buttons = ui.held_direction = 0;
     require(choose_item(F("Choose"), is_equipment) == NONE && last_inventory_total == 0,
             "empty filtered modal retained row metadata");
-    std::puts("equipment, scroll, wand, and inventory UI flow passed");
+    // Run the same deferred feature input/resolver lifecycle as main.cpp.
+    for(uint8_t type : {uint8_t(FEATURE_HEALING_SPRING), uint8_t(FEATURE_ENCHANTED_FORGE), uint8_t(FEATURE_SACRIFICIAL_ALTAR), uint8_t(FEATURE_ALCHEMICAL_POOL)}) {
+        for(unsigned response = 0; response < 3; ++response) {
+            game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+            game.hp=20; game.max_hp=100; game.hunger=220; game.speed=4; game.random_state=123;
+            game.player={10,10}; game.up={2,2}; game.down={40,20};
+            game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+            game.inventory[0]=make_equipment(LONG_SWORD,0);
+            game.features[0]={{11,10},type};
+            require(handle_input(AVM_BUTTON_R)==INPUT_MOVED && session.pending_move && !game.turns,
+                "feature input resolved before modal frame unwound");
+            const uint8_t buttons[]={0,uint8_t(response==0 ? AVM_BUTTON_B : AVM_BUTTON_A),0,uint8_t(response==1 ? AVM_BUTTON_B : AVM_BUTTON_A)};
+            std::memcpy(avm_test_buttons,buttons,sizeof buttons); avm_test_button_count=sizeof buttons; avm_test_button_index=0;
+            FeatureChoice choice=prompt_feature();
+            require(!game.turns && game.features[0].id==type,"feature modal changed production state/turn");
+            complete_player_move(choice);
+            bool consumed=response!=0 && (type==FEATURE_HEALING_SPRING || response==2);
+            require(game.turns==1 && bool(game.features[0].id)==!consumed,"feature yes/no/target cancel turn or consumption");
+        }
+    }
+    std::puts("equipment, scroll, wand, inventory and feature UI flow passed");
     return 0;
 }

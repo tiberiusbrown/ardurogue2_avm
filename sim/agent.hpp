@@ -1,5 +1,6 @@
 #pragma once
 #include "game.hpp"
+#include "features.hpp"
 #include <array>
 #include <string>
 
@@ -17,7 +18,14 @@ struct Action {
 };
 // Policy receives a read-only state, never the runner, metrics or trace sink.
 // Future frontends may provide a restricted observation to other policies.
-struct DecisionContext { const rogue::Game& world; uint64_t actions, turns; };
+struct DecisionContext {
+    rogue::Game world;
+    uint64_t actions, turns;
+    DecisionContext(const rogue::Game& source, uint64_t actions, uint64_t turns)
+        : world(source), actions(actions), turns(turns) {
+        for(auto& feature : world.features) feature = rogue::observed_feature(feature);
+    }
+};
 class Agent {
 public:
     virtual ~Agent() = default;
@@ -40,13 +48,22 @@ class OmniscientAgent final : public Agent {
     uint8_t retreat_floor = rogue::NONE;
     unsigned retreat_steps = 0;
     unsigned bow_idle = 0, bow_cooldown = 0;
+    unsigned holy_entries = 0, feature_steps = 0;
+    std::array<bool, rogue::MAP_FEATURES> feature_attempted{};
+    uint8_t feature_floor = rogue::NONE;
     uint16_t retreat_threats = 0;
 public:
     // Maintained balance policy. The automatic build hash identifies its exact
     // implementation; establish a fresh reference after extending mechanics.
     const char* name() const override { return "omniscient-v2"; }
-    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = 0; }
+    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = 0; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); }
     Action choose_action(const DecisionContext&) override;
 };
+rogue::FeatureChoice choose_feature_choice(uint8_t type);
+inline std::array<rogue::MapFeature, rogue::MAP_FEATURES> observed_features(const rogue::Game& source) {
+    std::array<rogue::MapFeature, rogue::MAP_FEATURES> result{};
+    for(size_t i = 0; i < result.size(); ++i) result[i] = rogue::observed_feature(source.features[i]);
+    return result;
+}
 std::string action_text(const Action&);
 }

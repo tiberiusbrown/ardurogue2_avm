@@ -57,7 +57,7 @@ def read_benchmarks(path):
                   for index, (name, description, setup, button, terrain, item, down, up) in enumerate(entries))
     require(all((case.setup in ("browse", "projectile_browse") and case.button in ("A", "DOWN", "UP") and
                  (case.button != "A" or not (case.down or case.up))) or
-                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile") and
+                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile", "feature", "feature_item") and
                  case.button in ("RIGHT", "A") and not (case.down or case.up))
                 for case in cases), "unsupported benchmark input preparation")
     return cases
@@ -96,6 +96,8 @@ def state_fields(case):
         "digging_wall": "(game.walls[(16 * MAP_W + 35) >> 3] & (1u << (35 & 7))) != 0",
     }
     fields = {key: re.sub(r'\b(game|MAP_W)\b', r'rogue::\1', expr) for key, expr in fields.items()}
+    if case.name.startswith(("trap_", "feature_")):
+        fields["feature_id"] = "rogue::game.features[0].id"
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
     if case.name == "storm_splash":
@@ -166,7 +168,7 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
             commands += press("DOWN")
     if case.setup in ("browse", "projectile_browse"):
         commands += ["breakpoint disable 3",
-                     f"breakpoint set --file ui.cpp --line {contract['item_idle']}"]
+                     f"breakpoint set --file ui.cpp --line {contract['item_idle']}", "breakpoint list 4"]
         if case.button != "A":
             commands += press("A")
             for button, count in (("DOWN", case.down), ("UP", case.up)):
@@ -182,6 +184,13 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         ]
         if case.setup in ("wand", "projectile"):
             commands += press("A")  # Confirm slot; stop after direction prompt is ready.
+    if case.setup in ("feature", "feature_item"):
+        commands += ["breakpoint disable 3", f"breakpoint set --file ui.cpp --line {contract['yesno_idle']}",
+                     "avm button set RIGHT", run, "avm button set", run, "breakpoint disable 4"]
+        if case.setup == "feature_item":
+            commands += [f"breakpoint set --file ui.cpp --line {contract['item_idle']}",
+                         "avm button set A", run, "avm button set", run, "breakpoint disable 5"]
+        commands += ["breakpoint enable 3"]
     commands += [
         *snapshot(),
         *([f"avm display save {quote(folder / 'before.pgm')} --mode logical"] if case.setup in ("browse", "projectile_browse") else []),
@@ -216,6 +225,13 @@ def validate_outcome(case, before, after, explored):
     position_after = (after["x"], after["y"])
     if case.item != "NO_ITEM":
         require(before["expected_item"], "compiled scenario prepared the wrong item")
+    if case.name.startswith("trap_"):
+        require(after["feature_id"] == (before["feature_id"] & ~1), "trap was not revealed/retained")
+    if case.name in ("feature_spring", "feature_forge"):
+        require(after["feature_id"] == 0, "interactive feature was not consumed")
+    if case.name == "feature_spring": require(after["hp"] > before["hp"], "spring did not heal")
+    if case.name == "feature_holy": require(after["monster_hp"] < before["monster_hp"], "holy pulse did not damage monster")
+    if case.name == "trap_phoenix": require(after["hp"] == 100 and after["amulet"] == 255, "trap resurrection failed")
     if case.name.startswith("move_"):
         require(position_after == (before["x"] + 1, before["y"]), "player did not move right")
     if case.name == "attack_hit":
@@ -358,7 +374,8 @@ def validate_sample(case, contract, folder, output):
     ready, start, end = times
     if case.setup in ("browse", "projectile_browse"):
         modal_pcs = re.findall(r'^Breakpoint 4:.*address = (0x[0-9a-fA-F]+)', output, re.M)
-        require(len(modal_pcs) == 1 and end["pc"] == int(modal_pcs[0], 16),
+        modal_pcs += re.findall(r'^\s*4\.\d+:.*address = (?:.*?\[)?(0x[0-9a-fA-F]+)', output, re.M)
+        require(modal_pcs and end["pc"] in {int(pc, 16) for pc in modal_pcs},
                 "stopped before inventory display returned to the modal input loop")
     else:
         require(end["pc"] == ready["pc"], "stopped before final render returned to main input loop")

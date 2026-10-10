@@ -21,19 +21,23 @@ struct MonsterMetrics {
 };
 struct ShotMetrics { uint64_t shots=0, hits=0, damage=0, kills=0; };
 struct RangedMetrics {
-    uint64_t bundles=0, generated=0, picked=0, fired=0, thrown=0, carried=0,
+    uint64_t bundles=0, generated=0, picked=0, fired=0, thrown=0, sacrificed=0, carried=0,
         bow_turns=0, switches_to=0, switches_away=0,
         first_generated=255, first_picked=255, generation_gap=0, acquisition_gap=0;
     std::array<ShotMetrics,2> bows{};
     std::array<ShotMetrics,7> distances{}; // 0 records an adjacent blocker.
     std::array<ShotMetrics,rogue::LORD+1> targets{};
 };
+struct FeatureMetrics {
+    uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0;
+};
 struct FloorMetrics {
+    std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     int floor=0, visit=0;
     uint64_t arrow_bundles=0, arrow_generated=0, arrow_picked=0;
     bool bow_owned=false;
     bool ascent=false, exited=false;
-    int entry_hp=0, exit_hp=0, entry_level=0, exit_level=0;
+    int entry_hp=0, exit_hp=0, entry_level=0, exit_level=0, exit_hunger=0;
     int entry_max_hp=0, entry_strength=0, entry_dexterity=0, entry_speed=0,
         entry_hunger=0, entry_armor_rating=0, entry_food_units=0, entry_healing_units=0,
         entry_weapon_type=0, entry_weapon_enchant=0, entry_armor_type=0, entry_armor_enchant=0;
@@ -50,6 +54,7 @@ struct FloorMetrics {
         pickups=0, consumables=0;
 };
 struct RunMetrics {
+    std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     RangedMetrics ranged;
     uint16_t seed=0, effective_seed=0;
     std::string agent, result, reason, death_cause;
@@ -112,8 +117,8 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=3;
-inline constexpr size_t CSV_STREAM_COUNT=8;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=4;
+inline constexpr size_t CSV_STREAM_COUNT=9;
 void write_ranged_header(std::ostream&);
 void write_ranged(std::ostream&, const RunMetrics&);
 extern const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams;
