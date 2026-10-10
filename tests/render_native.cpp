@@ -606,9 +606,53 @@ static bool check_full_map_pixels()
     return true;
 }
 
+static bool check_direction_prompt()
+{
+    using namespace rogue;
+    start_new(0x4312);
+    std::memset(game.walls, 0, sizeof game.walls);
+    std::memset(game.monsters, 0, sizeof game.monsters);
+    std::memset(game.ground, 0, sizeof game.ground);
+    game.player = {20, 15};
+    game.door_count = 0;
+    game.monsters[0] = {{22, 15}, GOBLIN, 8, 0, {0, 0}, MON_AGGRO};
+    render_play();
+    uint8_t dungeon[1024];
+    std::memcpy(dungeon, __avm_framebuffer, sizeof dungeon);
+    const uint8_t types[] = {POTION_HARMING, ARROWS, WAND_FIRE};
+    for(uint8_t type : types) {
+        game.inventory[0] = {type, 3};
+        ui.selection = 0;
+        ui.mode = is_wand(type) ? WAND_DIRECTION : PROJECTILE_DIRECTION;
+        Game before = game;
+        unsigned displays = avm_test_displays;
+        // The picker leaves a full-screen inventory behind; the prompt must
+        // rebuild the dungeon, including the player and visible monsters.
+        std::memset(__avm_framebuffer, 0xa5, sizeof __avm_framebuffer);
+        render();
+        for(unsigned page = 0; page < 8; ++page)
+            if(std::memcmp(dungeon + page * 128,
+                           __avm_framebuffer + page * 128, 65)) return false;
+        if(std::memcmp(&game, &before, sizeof game) || ui.dirty ||
+           avm_test_displays != displays + 1) return false;
+        // The stats above the prompt remain the ordinary dungeon stats.
+        for(unsigned y = 0; y < 23; ++y)
+            for(unsigned x = 65; x < 128; ++x) {
+                unsigned index = (y / 8) * 128 + x;
+                if((dungeon[index] ^ __avm_framebuffer[index]) & (1u << (y % 8)))
+                    return false;
+            }
+    }
+    return true;
+}
+
 int main()
 {
     using namespace rogue;
+    if(!check_direction_prompt()) {
+        std::fprintf(stderr, "Direction prompt hid the dungeon or changed game state\n");
+        return 1;
+    }
     if(!check_arrow_animation() || !check_effect_sprites()) {
         std::fprintf(stderr, "Arrow direction, cadence, restoration or state/RNG isolation failed\n");
         return 1;

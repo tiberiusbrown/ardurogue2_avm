@@ -685,13 +685,15 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
     }
 }
 
-__attribute__((noinline)) static void render_throw_direction()
+__attribute__((noinline)) static void render_direction_prompt()
 {
-    avm_draw_text_P(8, 12, ui.mode == WAND_DIRECTION
-        ? F("USE WAND") : F("Throw/Shoot"));
-    draw_item_text(8, 27, game.inventory[ui.selection]);
-    avm_draw_text_P(8, 43, F("D-PAD: DIRECTION"));
-    avm_draw_text_P(8, 56, F("B: BACK"));
+    render_play();
+    status_clear();
+    avm_draw_text_P(66, 30, ui.mode == WAND_DIRECTION
+        ? F("Use wand?") : F("Throw/Shoot?"));
+    avm_draw_text_P(66, 42, F("D-pad:"));
+    avm_draw_text_P(66, 49, F("Direction"));
+    avm_draw_text_P(66, 63, F("B: Back"));
 }
 
 __attribute__((noinline)) static void render_full_map()
@@ -730,8 +732,8 @@ __attribute__((noinline)) void render()
     case TITLE: render_title(); break;
     case PLAY: render_play(); break;
     case MENU: render_menu(); break;
-    case PROJECTILE_DIRECTION: render_throw_direction(); break;
-    case WAND_DIRECTION: render_throw_direction(); break;
+    case PROJECTILE_DIRECTION: render_direction_prompt(); break;
+    case WAND_DIRECTION: render_direction_prompt(); break;
     case FULL_MAP: render_full_map(); break;
     case END: render_end(); break;
     }
