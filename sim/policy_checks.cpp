@@ -166,6 +166,53 @@ void check_v2_policy() {
     fire_checks(); tactical_wands(); retreat_and_inventory();
     using namespace rogue; using namespace sim;
     OmniscientAgent agent;
+    for(uint8_t type : {uint8_t(STORMBRINGER), uint8_t(GLASS_SWORD), uint8_t(HAMMER_OF_RUIN),
+            uint8_t(DRAGONHIDE), uint8_t(TITAN_PLATE), uint8_t(RING_INVISIBILITY), uint8_t(RING_REPRISAL), uint8_t(RING_HUNT),
+            uint8_t(AMULET_PHOENIX_HEART), uint8_t(AMULET_HEART_OF_GIANT)}) {
+        arena(); agent.reset();
+        game.inventory[0] = is_equipment(type) ? make_equipment(type, 0) : Item{type, 1};
+        auto artifact_action = choose(agent);
+        check(artifact_action.kind == ActionKind::Use && artifact_action.slot == 0,
+              "agent did not value artifact equipment");
+        game.inventory[0].info |= ITEM_CURSED;
+        check(choose(agent).kind != ActionKind::Use, "agent equipped cursed artifact");
+    }
+    // An artifact must remain an upgrade when ordinary top-tier equipment is
+    // already worn, including a Hunt without arrows (its passive benefits apply).
+    for(uint8_t type : {uint8_t(STORMBRINGER), uint8_t(GLASS_SWORD), uint8_t(HAMMER_OF_RUIN),
+            uint8_t(DRAGONHIDE), uint8_t(TITAN_PLATE), uint8_t(RING_INVISIBILITY), uint8_t(RING_REPRISAL), uint8_t(RING_HUNT),
+            uint8_t(AMULET_PHOENIX_HEART), uint8_t(AMULET_HEART_OF_GIANT)}) {
+        arena(); agent.reset();
+        game.inventory[0] = is_equipment(type) ? make_equipment(type, 0) : Item{type, 1};
+        if(is_weapon(type)) { game.inventory[1] = make_equipment(TWO_HANDED_SWORD, 0); game.weapon_slot = 1; }
+        else if(is_armor(type)) { game.inventory[1] = make_equipment(PLATE_MAIL, 0); game.armor_slot = 1; }
+        else if(is_amulet(type)) { game.inventory[1] = {AMULET_SPEED, 1}; game.amulet_slot = 1; }
+        else {
+            game.inventory[1] = game.inventory[2] = {RING_PROTECTION, 1};
+            game.ring_slots[0] = 1; game.ring_slots[1] = 2;
+        }
+        auto upgrade_action = choose(agent);
+        if(is_ring(type)) {
+            check(upgrade_action.kind == ActionKind::Use &&
+                  (upgrade_action.slot == 1 || upgrade_action.slot == 2),
+                  "artifact policy did not remove the weaker ordinary ring");
+            check(dispatch(upgrade_action), "ordinary ring removal failed");
+            upgrade_action = choose(agent);
+        }
+        check(upgrade_action.kind == ActionKind::Use && upgrade_action.slot == 0,
+              "artifact policy failed to upgrade ordinary top-tier equipment");
+    }
+    arena(); agent.reset(); wand(WAND_FIRE); monster(ORC, {11,10});
+    game.inventory[1] = make_equipment(DRAGONHIDE, 0); game.armor_slot = 1;
+    check(fire(choose(agent)), "agent ignored Dragonhide immunity for point-blank fire");
+    arena(); agent.reset();
+    for(auto& item : game.inventory) item = {SCROLL_IDENTIFY, 1};
+    game.inventory[1] = {ARROWS, 6}; game.ground[0] = {game.player, {RING_HUNT, 1}};
+    auto hunt_action = choose(agent);
+    check(!(hunt_action.kind == ActionKind::Take && hunt_action.slot == 1), "Hunt displaced its only arrows");
+    check(dispatch(hunt_action), "Hunt acquisition failed");
+    auto next_action = choose(agent);
+    check(next_action.kind != ActionKind::Take, "Hunt acquisition reversed immediately");
     arena(); monster(HOBGOBLIN,{15,10});
     game.inventory[0]=make_equipment(SPEAR,0); game.weapon_slot=0;
     game.inventory[1]=make_equipment(LONG_BOW,0); game.inventory[2]={ARROWS,20};

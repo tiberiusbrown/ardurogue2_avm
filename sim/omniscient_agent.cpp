@@ -30,9 +30,17 @@ int equipment_score(Item i) {
     if(!i.type || item_is_cursed(i)) return 0;
     if(is_weapon(i.type)) {
         auto w = weapon_definition(i.type);
-        return 5 * (w.minimum_damage+w.maximum_damage) + 3*w.accuracy + 3*equipment_enchant(i);
+        int score = 5 * (w.minimum_damage+w.maximum_damage) + 3*w.accuracy + 3*equipment_enchant(i);
+        if(i.type == STORMBRINGER) score += 10; // Splash, less the life cost.
+        if(i.type == HAMMER_OF_RUIN) score += 18; // Heavy hits and control.
+        if(i.type == GLASS_SWORD) score -= 4; // Keep a fallback when it breaks.
+        return score;
     }
-    if(is_armor(i.type)) return 15*armor_definition(i.type).rating + 3*equipment_enchant(i);
+    if(is_armor(i.type)) {
+        int score = 15*armor_definition(i.type).rating + 3*equipment_enchant(i);
+        if(i.type == DRAGONHIDE) score += game.floor >= 11 ? 45 : 20;
+        return score;
+    }
     int n = item_value(i);
     switch(i.type) {
     case RING_PROTECTION: return 65+15*n;
@@ -40,6 +48,8 @@ int equipment_score(Item i) {
     case RING_STRENGTH: return 45+8*n;
     case RING_DEXTERITY: return 50+8*n;
     case RING_ATTACK: return 40+8*n;
+    case RING_REPRISAL: return 125; // Protection and counters.
+    case RING_HUNT: return quantity(ARROWS) ? 130 : 95;
     case RING_FIRE_IMMUNITY: return game.floor >= 11 ? 85 : 55;
     case RING_SUSTENANCE: return 35;
     case RING_SEE_INVISIBLE: return 15;
@@ -48,6 +58,8 @@ int equipment_score(Item i) {
     case AMULET_CLARITY: return 65;
     case AMULET_VAMPIRE: return 80;
     case AMULET_VITALITY: return 55+10*n;
+    case AMULET_PHOENIX_HEART: return 185;
+    case AMULET_HEART_OF_GIANT: return 190;
     case AMULET_WISDOM: return 60;
     case AMULET_REGENERATION: return 40;
     case AMULET_CONSERVATION: return 35;
@@ -59,6 +71,16 @@ int best_melee() {
     int best = NONE;
     for(int s=0;s<INVENTORY;++s) if(is_weapon(game.inventory[s].type) && !is_bow(game.inventory[s].type) &&
         equipment_score(game.inventory[s]) > slot_score(best)) best=s;
+    return best;
+}
+int glass_fallback() {
+    if(find(GLASS_SWORD)<0) return NONE;
+    int best=NONE;
+    for(int s=0;s<INVENTORY;++s) {
+        auto i=game.inventory[s];
+        if(is_weapon(i.type) && !is_bow(i.type) && i.type!=GLASS_SWORD &&
+           equipment_score(i)>slot_score(best)) best=s;
+    }
     return best;
 }
 int bow_score(Item i) {
@@ -145,6 +167,7 @@ int discard_value(int s) {
     if(is_bow(i.type)) return s==best_bow() ? (quantity(ARROWS) ? 150+bow_score(i) : 95) : 0;
     if(is_ammo(i.type)) return best_bow()!=NONE ? 120+std::min(24,int(item_value(i)))*4 : 45;
     if(bow_equipped() && s==best_melee()) return 180+equipment_score(i);
+    if(s==glass_fallback()) return 150+equipment_score(i);
     return value(i) + (is_stackable(i.type) ? item_value(i)*5 : 0);
 }
 bool fits(Item incoming) {
@@ -163,6 +186,11 @@ int replacement(Item i) {
         // remove its only useful launcher; a bow must not remove its last ammo.
         // Otherwise their acquisition values reverse after each accepted swap.
         if(is_ammo(i.type) && s==best_bow()) continue;
+        // Hunt and its arrows are complementary too. Trading either for the
+        // other changes Hunt's value and otherwise produces reverse-swap loops.
+        if(is_ammo(i.type) && game.inventory[s].type==RING_HUNT) continue;
+        if(i.type==RING_HUNT && is_ammo(game.inventory[s].type) &&
+           quantity(ARROWS)==item_value(game.inventory[s])) continue;
         if(is_bow(i.type) && is_ammo(game.inventory[s].type) &&
            quantity(ARROWS)==item_value(game.inventory[s])) continue;
         if(game.inventory[s].type && discard_value(s) < worst) { best = s; worst = discard_value(s); }
@@ -193,10 +221,10 @@ int offensive_pressure(const Monster& m) {
     auto info = monster_info(m.type);
     int pressure = std::max(1,int(info.strength)+1-player_armor_rating()/2);
     if(monster_effect(m,MON_WEAKENED)) pressure = (pressure+1)/2;
-    if(info.flags & MON_FIRE_BREATH) pressure += ring_bonus(RING_FIRE_IMMUNITY) > 0 ? 0 : 4;
+    if(info.flags & MON_FIRE_BREATH) pressure += player_fire_effect() > 0 ? 0 : player_fire_effect() < 0 ? 8 : 4;
     if((info.flags & MON_PARALYZE_HIT) && amulet_bonus(AMULET_IRONBLOOD) <= 0) pressure += 2;
     if((info.flags & MON_CONFUSE_HIT) && amulet_bonus(AMULET_CLARITY) <= 0) pressure += 2;
-    int cost = std::max(1,int(game.speed)-amulet_bonus(AMULET_SPEED))*(game.slowed ? 2 : 1);
+    int cost = player_speed_cost();
     int speed = std::max(1,int(info.speed)*(monster_effect(m,MON_SLOWED) ? 2 : 1));
     if(cost > speed) pressure += pressure/2;
     return pressure;
@@ -207,7 +235,10 @@ int estimated_damage(Item weapon, uint8_t target, bool ranged) {
     if(ranged) { auto w=ranged_weapon_definition(weapon.type); low=w.minimum_damage; high=w.maximum_damage; }
     else { auto w=weapon_definition(weapon.type); low=w.minimum_damage; high=w.maximum_damage; }
     int mean=(low+high)*2 + equipment_enchant(weapon); // quarters of HP
-    return std::max(4,mean+4*strength_damage_bonus(player_strength())-3*monster_armor(target));
+    int damage = std::max(4,mean+4*strength_damage_bonus(player_strength()) +
+        (ranged ? 4*artifact_ring_bonus(RING_HUNT, 6, -4) : 0) -3*monster_armor(target));
+    if(!ranged && weapon.type == HAMMER_OF_RUIN) damage += damage/3;
+    return damage;
 }
 bool bow_opportunity(Action& choice, int bow) {
     if(bow==NONE || quantity(ARROWS)==0) return false;
@@ -224,7 +255,7 @@ bool bow_opportunity(Action& choice, int bow) {
         int damage=estimated_damage(game.inventory[bow],m.type,true);
         int melee_damage=estimated_damage(melee==NONE ? Item{NO_ITEM,0} : game.inventory[melee],m.type,false);
         // Pay both equipment turns only when the approach leaves useful firing time.
-        int budget=std::max(1,int(game.speed)-amulet_bonus(AMULET_SPEED))*(game.slowed ? 2 : 1);
+        int budget=player_speed_cost();
         int enemy_speed=std::max(1,int(monster_speed(m.type))*(monster_effect(m,MON_SLOWED) ? 2 : 1));
         int approach=controlled(m) || (monster_flags(m.type)&MON_NOMOVE) ? 0 : (budget+enemy_speed-1)/enemy_speed;
         if(!ready && ray.steps < 2*approach+2) continue;
@@ -268,7 +299,7 @@ Danger danger() {
 }
 bool fire_safe(Item wand, int d) {
     if(wand_afflicted(wand) || !wand_charges(wand)) return false;
-    if(ring_bonus(RING_FIRE_IMMUNITY) > 0) return true;
+    if(player_fire_effect() > 0) return true;
     int rays = wand_spreads(wand) ? 4 : 1;
     for(int n = 0; n < rays; ++n) {
         int direction = rays == 4 ? n : d;

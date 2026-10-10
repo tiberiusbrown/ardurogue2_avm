@@ -28,6 +28,9 @@ int group(uint8_t t) {
 }
 }
 Rule parse_rule(const std::string& text) {
+    if(text=="ordinary-items") {
+        Rule r; r.ordinary_items=true; return r;
+    }
     std::istringstream in(text); std::vector<std::string> fields; std::string part;
     while(std::getline(in,part,':')) fields.push_back(part);
     if(fields.size()<2) throw std::runtime_error("intervention requires operation:FROM[:TO][:key=value...]");
@@ -62,6 +65,7 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
+        if(r.ordinary_items) continue;
         if((r.floor>=0 && r.floor!=g.floor) || (r.direction>=0 && r.direction!=int(bool(g.has_amulet)))) continue;
         unsigned count=0;
         // Stable slot order, no PRNG, and each rule's cap is per entered visit.
@@ -88,5 +92,9 @@ void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vecto
             r.monster ? monster_name(r.from) : item_name(r.from),
             r.remove ? "NONE" : r.monster ? monster_name(r.to) : item_name(r.to),count});
     }
+}
+bool RuleExperiment::artifacts_enabled() const {
+    for(const auto& r:rules) if(r.ordinary_items) return false;
+    return true;
 }
 }

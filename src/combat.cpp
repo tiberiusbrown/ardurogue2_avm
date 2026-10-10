@@ -148,11 +148,21 @@ static bool can_monster_move(uint8_t x, uint8_t y, uint8_t door)
 
 void hurt_player(uint8_t damage)
 {
+    if(!game.hp) return;
     SIM_EVENT(sim::EventKind::PlayerDamage, NONE, 0,
               damage < game.hp ? damage : game.hp);
     game.hp = damage >= game.hp ? 0 : static_cast<uint8_t>(game.hp - damage);
-    if(!game.hp)
-        finish(DEATH);
+    if(!game.hp) {
+        uint8_t slot = game.amulet_slot;
+        if(slot < INVENTORY && game.inventory[slot].type == AMULET_PHOENIX_HEART &&
+           !item_is_cursed(game.inventory[slot])) {
+            Item heart = game.inventory[slot];
+            identify_type(heart.type);
+            destroy_inventory_item(slot); // Consume before restoring life or resolving another event.
+            game.hp = player_max_hp();
+            status_capitalize(); status(heart); status(F("revives you!"));
+        } else finish(DEATH);
+    }
 }
 
 uint8_t player_strength()
@@ -183,7 +193,7 @@ uint8_t player_ranged_accuracy(uint8_t bow_type)
 {
     uint8_t experience = game.level ? (game.level - 1) / 3 : 0;
     return clamp_combat_stat(static_cast<int16_t>(player_dexterity()) + experience +
-                            ring_bonus(RING_ATTACK) + ranged_weapon_definition(bow_type).accuracy);
+                            ring_bonus(RING_ATTACK) + artifact_ring_bonus(RING_HUNT, 8, -6) + ranged_weapon_definition(bow_type).accuracy);
 }
 
 uint8_t player_armor_rating()
@@ -207,9 +217,27 @@ void player_take_magic_damage(uint8_t damage, uint8_t power)
             magic_save(game.magic_resistance, power)));
 }
 
+// Positive immunity wins even when another equipped item is vulnerable.
+int8_t player_fire_effect()
+{
+    bool vulnerable = false;
+    if(game.armor_slot < INVENTORY && game.inventory[game.armor_slot].type == DRAGONHIDE) {
+        if(!item_is_cursed(game.inventory[game.armor_slot])) return 1;
+        vulnerable = true;
+    }
+    for(uint8_t slot : game.ring_slots) {
+        if(slot >= INVENTORY) continue;
+        const Item& item = game.inventory[slot];
+        if(item.type != RING_FIRE_IMMUNITY || !item_value(item)) continue;
+        if(!item_is_cursed(item)) return 1;
+        vulnerable = true;
+    }
+    return vulnerable ? -1 : 0;
+}
+
 void player_take_fire_damage(uint8_t damage, uint8_t power)
 {
-    int8_t fire = ring_bonus(RING_FIRE_IMMUNITY);
+    int8_t fire = player_fire_effect();
     if(fire > 0) {
         status(F("The flames do not affect you."));
         return;
@@ -323,11 +351,78 @@ __attribute__((noinline)) static void move_monster(
         monster.pos.y = ny;
 }
 
-static void advance_monster(uint8_t index)
+__attribute__((noinline)) static uint8_t force_monster_path(
+    uint8_t index, int8_t dx, int8_t dy, bool powerful)
+{
+    Monster& target = game.monsters[index];
+    RayResult path = scan_ray(target.pos, dx, dy, powerful ? 16 : 8);
+    target.pos = path.monster != NONE ? path.before : path.end;
+    return path.monster != NONE ? path.monster : path.blocker ? MONSTERS : NONE;
+}
+
+void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful)
+{
+    Monster& target = game.monsters[index];
+    monster_status(target, F("is blasted back!"));
+    uint8_t collision = force_monster_path(index, dx, dy, powerful);
+    uint8_t stun = powerful ? 8 : 4;
+    if(collision < MONSTERS) {
+        monster_status(target, F("crashes into"));
+        status(game.monsters[collision], '!');
+        target.stun = stun;
+        game.monsters[collision].stun = stun;
+    } else if(collision == MONSTERS) {
+        monster_status(target, F("hits a wall!"));
+        target.stun = stun;
+    }
+}
+
+void force_player(int8_t dx, int8_t dy)
+{
+    RayResult path = scan_ray(game.player, dx, dy, 8);
+    game.player = path.monster != NONE ? path.before : path.end;
+    if(path.blocker || path.monster != NONE) {
+        if(amulet_bonus(AMULET_IRONBLOOD) <= 0 && game.paralyzed < 4)
+            game.paralyzed = 4;
+        if(path.monster != NONE && game.monsters[path.monster].stun < 4)
+            game.monsters[path.monster].stun = 4;
+        status(F("You crash into an obstacle!"));
+    } else status(F("You are blasted back!"));
+}
+
+// Resolve breath after the movement/decision frame unwinds. Item-aware
+// resurrection messages can page and redraw, so keep this damage path shallow.
+__attribute__((noinline)) static void monster_fire(uint8_t index)
 {
     Monster& monster = game.monsters[index];
+    uint8_t range = distance(monster.pos, game.player);
+    status_capitalize();
+    status(monster);
+    status(F("breathes fire!"));
+    int8_t dx = monster.pos.x == game.player.x ? 0 :
+        monster.pos.x < game.player.x ? 1 : -1;
+    int8_t dy = monster.pos.y == game.player.y ? 0 :
+        monster.pos.y < game.player.y ? 1 : -1;
+    animate_ray(monster.pos, dx, dy, range);
+    animate_fire_burst(game.player);
+    uint8_t damage = static_cast<uint8_t>(6 + roll(8));
+    SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
+    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+              static_cast<uint8_t>(sim::Special::Fire));
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope fire_source(sim::Cause::Fire, monster.type);
+#endif
+    SIM_EVENT(sim::EventKind::MonsterHit, index, monster.type);
+    player_take_fire_damage(damage, 12);
+    fire_burst_damage(game.player, false);
+}
+
+__attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
+{
+    bool melee_damage = false;
+    Monster& monster = game.monsters[index];
     if(!monster.type)
-        return;
+        return false;
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope damage_source(sim::Cause::Monster, monster.type);
 #endif
@@ -347,25 +442,7 @@ static void advance_monster(uint8_t index)
             pursuing = false;
         if(!afraid && pursuing && !confused && (info.flags & MON_FIRE_BREATH) &&
            fire_line_clear(monster) && roll(3) == 0) {
-            status_capitalize();
-            status(monster);
-            status(F("breathes fire!"));
-            int8_t dx = monster.pos.x == game.player.x ? 0 :
-                monster.pos.x < game.player.x ? 1 : -1;
-            int8_t dy = monster.pos.y == game.player.y ? 0 :
-                monster.pos.y < game.player.y ? 1 : -1;
-            animate_ray(monster.pos, dx, dy, range);
-            animate_fire_burst(game.player);
-            uint8_t damage = static_cast<uint8_t>(6 + roll(8));
-            SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
-            SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
-                      static_cast<uint8_t>(sim::Special::Fire));
-#if defined(ARDUROGUE2_SIM)
-            sim::DamageScope fire_source(sim::Cause::Fire, monster.type);
-#endif
-            SIM_EVENT(sim::EventKind::MonsterHit, index, monster.type);
-            player_take_fire_damage(damage, 12);
-            fire_burst_damage(game.player, false);
+            return 2;
         } else if(range == 1 && pursuing && !confused && !afraid) {
             SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
             if(physical_attack_hits(info.dexterity, player_dexterity())) {
@@ -375,6 +452,7 @@ static void advance_monster(uint8_t index)
                     raw = static_cast<uint8_t>((raw + 1) / 2);
                 uint8_t damage = physical_damage_after_armor(raw,
                     armor_absorption(player_armor_rating(), player_armor_enchant()));
+                melee_damage = damage && game.hp;
                 hurt_player(damage);
                 status_capitalize();
                 status(monster);
@@ -414,6 +492,7 @@ static void advance_monster(uint8_t index)
                               static_cast<uint8_t>(sim::Special::Paralysis));
                     status(F("You are paralyzed!"));
                 }
+
             }
         } else if(afraid || confused || (pursuing && range <= 8) ||
                   (monster.type == BAT && !(monster.state & MON_AGGRO)) ||
@@ -423,13 +502,43 @@ static void advance_monster(uint8_t index)
             move_monster(monster, info.flags, afraid, confused, pursuing, range);
         }
     }
-    if((info.flags & MON_REGENS) && monster.hp < info.health &&
+    return melee_damage;
+}
+
+__attribute__((noinline)) static void finish_monster_turn(uint8_t index)
+{
+    Monster& monster = game.monsters[index];
+    if(!monster.type) return;
+    uint8_t maximum = monster_health(monster.type);
+    if((monster_flags(monster.type) & MON_REGENS) && monster.hp < maximum &&
        roll(8) == 0) {
         uint16_t healed = static_cast<uint16_t>(monster.hp) + 3;
-        monster.hp = healed > info.health ? info.health :
+        monster.hp = healed > maximum ? maximum :
             static_cast<uint8_t>(healed);
     }
     age_monster_effects(monster);
+}
+
+// Unwind movement/status temporaries before a turn-free player attack. This
+// preserves hit status processing and keeps retaliation inside the AVM stack.
+// Regeneration and effect aging follow retaliation only if the attacker survives.
+__attribute__((noinline)) static void retaliate_monster(uint8_t index)
+{
+    if(session.ended || !game.hp) return;
+    for(uint8_t slot : game.ring_slots) {
+        if(!game.monsters[index].type) return;
+        if(slot >= INVENTORY || game.inventory[slot].type != RING_REPRISAL) continue;
+        bool cursed = item_is_cursed(game.inventory[slot]);
+        if(roll(cursed ? 4 : 2)) continue;
+        if(cursed) {
+#if defined(ARDUROGUE2_SIM)
+            sim::DamageScope recoil_source(sim::Cause::Item, RING_REPRISAL);
+#endif
+            hurt_player(1);
+            status(F("Your cursed ring bites you!"));
+        } else attack_monster(index);
+        if(session.ended) return;
+    }
 }
 
 static void enemy_turn(uint8_t player_speed)
@@ -443,24 +552,39 @@ static void enemy_turn(uint8_t player_speed)
             speed = static_cast<uint8_t>(speed * 2);
         if(!speed) speed = 1;
         uint8_t budget = player_speed;
-        while(budget >= speed && !session.ended) {
-            advance_monster(i);
+        while(budget >= speed && !session.ended && monster.type) {
+            uint8_t action = advance_monster_action(i);
+            if(action == 2) monster_fire(i);
+            else if(action == 1) retaliate_monster(i);
+            finish_monster_turn(i);
             budget = static_cast<uint8_t>(budget - speed);
         }
-        if(budget && !session.ended && roll(speed) < budget)
-            advance_monster(i);
+        if(budget && !session.ended && monster.type && roll(speed) < budget) {
+            uint8_t action = advance_monster_action(i);
+            if(action == 2) monster_fire(i);
+            else if(action == 1) retaliate_monster(i);
+            finish_monster_turn(i);
+        }
     }
+}
+
+uint8_t player_speed_cost()
+{
+    int16_t cost = static_cast<int16_t>(game.speed) - amulet_bonus(AMULET_SPEED);
+    if(game.amulet_slot < INVENTORY &&
+       (game.inventory[game.amulet_slot].type == AMULET_PHOENIX_HEART ||
+        game.inventory[game.amulet_slot].type == AMULET_HEART_OF_GIANT) &&
+       !item_is_cursed(game.inventory[game.amulet_slot])) cost -= 2;
+    if(game.armor_slot < INVENTORY && game.inventory[game.armor_slot].type == TITAN_PLATE)
+        cost += item_is_cursed(game.inventory[game.armor_slot]) ? 4 : 0;
+    if(game.slowed) cost *= 2;
+    return static_cast<uint8_t>(cost < 1 ? 1 : cost > 255 ? 255 : cost);
 }
 
 void end_turn()
 {
     SIM_EVENT(sim::EventKind::Turn);
-    int16_t effective_speed = static_cast<int16_t>(game.speed) -
-        amulet_bonus(AMULET_SPEED);
-    if(game.slowed)
-        effective_speed = static_cast<int16_t>(effective_speed * 2);
-    if(effective_speed < 1) effective_speed = 1;
-    uint8_t player_speed = static_cast<uint8_t>(effective_speed);
+    uint8_t player_speed = player_speed_cost();
     ++game.turns;
     int8_t sustenance = ring_bonus(RING_SUSTENANCE);
     bool hunger_tick = sustenance > 0 ? game.turns % 6 == 0 :
@@ -471,13 +595,9 @@ void end_turn()
 #if defined(ARDUROGUE2_SIM)
         sim::DamageScope damage_source(sim::Cause::Starvation);
 #endif
-        SIM_EVENT(sim::EventKind::PlayerDamage, NONE, 0, 1);
-        --game.hp;
         status(F("You are starving!"));
-        if(game.hp == 0) {
-            finish(DEATH);
-            return;
-        }
+        hurt_player(1);
+        if(session.ended) return;
     }
     enemy_turn(player_speed);
     if(game.confused && !--game.confused)
@@ -517,34 +637,60 @@ void defeat_monster(uint8_t index)
     gain_xp(xp);
 }
 
-static void attack_monster(uint8_t index)
+// Compute rolls in a shallow frame; none of these temporaries survive messages,
+// resurrection, splash or knockback. Bit 8 marks a heavy hit; zero is a miss.
+__attribute__((noinline)) static uint16_t melee_damage(uint8_t index, uint8_t type)
 {
+    const Monster& target = game.monsters[index];
+    if(!physical_attack_hits(player_accuracy(), monster_dexterity(target.type))) return 0;
+    WeaponDefinition weapon = weapon_definition(type);
+    uint8_t raw = physical_raw_damage(weapon_damage_roll(weapon.minimum_damage,
+        weapon.maximum_damage, is_weapon(type) ? equipment_enchant(game.inventory[game.weapon_slot]) : 0),
+        player_strength());
+    uint8_t damage = physical_damage_after_armor(raw, armor_absorption(monster_armor(target.type), 0));
+    if(type == HAMMER_OF_RUIN && !roll(3)) return 256u | saturating_double(damage);
+    return damage;
+}
+
+__attribute__((noinline)) void attack_monster(uint8_t index)
+{
+    if(index >= MONSTERS || !game.monsters[index].type || !game.hp || session.ended) return;
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
-    MonsterInfo info = monster_info(target.type);
-    if(!physical_attack_hits(player_accuracy(), info.dexterity)) {
+    bool armed = game.weapon_slot < INVENTORY &&
+        is_weapon(game.inventory[game.weapon_slot].type);
+    uint8_t slot = game.weapon_slot;
+    uint8_t type = armed ? game.inventory[slot].type : static_cast<uint8_t>(NO_ITEM);
+    bool cursed = armed && item_is_cursed(game.inventory[slot]);
+    Position origin = target.pos;
+    int8_t dx = origin.x == game.player.x ? 0 : origin.x > game.player.x ? 1 : -1;
+    int8_t dy = origin.y == game.player.y ? 0 : origin.y > game.player.y ? 1 : -1;
+    uint16_t result = melee_damage(index, type);
+    if(!result) {
         status(F("You miss"));
         status(target, '.');
         return;
     }
-    bool armed = game.weapon_slot < INVENTORY &&
-        is_weapon(game.inventory[game.weapon_slot].type);
-    WeaponDefinition weapon = weapon_definition(armed ? game.inventory[game.weapon_slot].type : NO_ITEM);
-    uint8_t weapon_roll = weapon_damage_roll(
-        weapon.minimum_damage, weapon.maximum_damage,
-        armed ? equipment_enchant(game.inventory[game.weapon_slot]) : 0);
-    uint8_t raw = physical_raw_damage(weapon_roll, player_strength());
-    uint8_t damage = physical_damage_after_armor(raw,
-        armor_absorption(info.armor, 0));
-    SIM_EVENT(sim::EventKind::MonsterDamage, index, target.type,
-              damage < target.hp ? damage : target.hp, true);
-    if(damage >= target.hp) {
-        defeat_monster(index);
-    } else {
-        target.hp -= damage;
+    bool heavy = result > 255;
+    uint8_t damage = static_cast<uint8_t>(result);
+    damage_monster(index, damage, true);
+    if(target.type) {
         status(F("You hit"));
         status(target, '.');
+        if(heavy) force_monster(index, dx, dy);
+    }
+    // Primary resolution, splash/monster knockback, life drain, then weapon costs.
+    // Splash bypasses melee resolution, so it cannot recurse into weapon effects.
+    if(type == STORMBRINGER) {
+        for(uint8_t i = 0; i < MONSTERS; ++i) {
+            const Monster& other = game.monsters[i];
+            if(i == index || !other.type || !other.hp || distance(origin, other.pos) != 1) continue;
+            uint8_t splash = physical_damage_after_armor(static_cast<uint8_t>(3 + roll(4)),
+                armor_absorption(monster_armor(other.type), 0));
+            SIM_EVENT(sim::EventKind::PlayerAttack, i, other.type);
+            damage_monster(i, splash, true);
+        }
     }
     int8_t vampire_bonus = amulet_bonus(AMULET_VAMPIRE);
     if(vampire_bonus > 0 && game.hp < player_max_hp()) {
@@ -556,6 +702,23 @@ static void attack_monster(uint8_t index)
 #endif
         hurt_player(1);
         status(F("Your amulet drains your life."));
+    }
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope weapon_source(sim::Cause::Item, type);
+#endif
+    if(type == STORMBRINGER && (cursed || roll(16) == 0)) {
+        hurt_player(cursed ? static_cast<uint8_t>(1 + roll(2)) : 1);
+        status_capitalize(); status(game.inventory[slot]); status(F("drinks your life!"));
+    } else if(type == GLASS_SWORD) {
+        bool shattered = cursed ? roll(16) == 0 :
+            static_cast<uint8_t>(next_random(game.random_state)) == 0;
+        if(shattered) {
+            Item sword = game.inventory[slot];
+            destroy_inventory_item(slot);
+            status_capitalize(); status(sword); status(F("shatters!"));
+        }
+    } else if(type == HAMMER_OF_RUIN && cursed && !session.ended && roll(4) == 0) {
+        force_player(-dx, -dy);
     }
 }
 

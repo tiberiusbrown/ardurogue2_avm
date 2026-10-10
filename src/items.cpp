@@ -179,6 +179,16 @@ static void clear_equipment_slot(uint8_t slot)
         game.hp = maximum;
 }
 
+// Destruction/consumption may remove cursed equipment and never creates a ground item.
+void destroy_inventory_item(uint8_t slot)
+{
+    if(slot >= INVENTORY) return;
+    SIM_EVENT(sim::EventKind::Consumed, NONE, game.inventory[slot].type);
+    clear_equipment_slot(slot);
+    game.inventory[slot] = {NO_ITEM, 0};
+    if(session.repeat_slot == slot) session.repeat_slot = NONE;
+}
+
 static bool remove_equipment_slot(uint8_t slot)
 {
     if(!item_is_equipped(slot)) return false;
@@ -555,11 +565,8 @@ __attribute__((noinline)) static bool apply_inventory(
             uint8_t base = static_cast<uint8_t>(player_max_hp() / 8 + 1);
             uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
             if(damage > 10) damage = 10;
-            SIM_EVENT(sim::EventKind::PlayerDamage, NONE, 0,
-                      damage < game.hp ? damage : game.hp);
-            game.hp = damage >= game.hp ? 0 : game.hp - damage;
             status(F("The potion harms you!"));
-            if(!game.hp) finish(DEATH);
+            hurt_player(damage);
             break;
         }
         case POTION_POISON:
@@ -690,6 +697,8 @@ __attribute__((noinline)) static bool apply_arrow(uint8_t slot, int8_t dx, int8_
             int8_t enchant = bow == NO_ITEM ? 0 : equipment_enchant(game.inventory[game.weapon_slot]);
             uint8_t raw = physical_raw_damage(weapon_damage_roll(ranged.minimum_damage,
                 ranged.maximum_damage, enchant), player_strength());
+            int16_t adjusted = static_cast<int16_t>(raw) + artifact_ring_bonus(RING_HUNT, 6, -4);
+            raw = static_cast<uint8_t>(adjusted < 1 ? 1 : adjusted > 255 ? 255 : adjusted);
             damage = physical_damage_after_armor(raw, armor_absorption(monster_armor(target.type), 0));
         }
         SIM_EVENT(sim::EventKind::ArrowTarget, ray.monster, bow, damage,
@@ -725,25 +734,6 @@ static bool teleport_monster(uint8_t index)
     }
     status(F("Nothing happens."));
     return false;
-}
-
-static void force_monster(uint8_t index, int8_t dx, int8_t dy,
-                          bool powerful)
-{
-    Monster& target = game.monsters[index];
-    monster_status(target, F("is blasted back!"));
-    RayResult path = scan_ray(target.pos, dx, dy, powerful ? 16 : 8);
-    target.pos = path.monster != NONE ? path.before : path.end;
-    uint8_t stun = powerful ? 8 : 4;
-    if(path.monster != NONE) {
-        monster_status(target, F("crashes into"));
-        status(game.monsters[path.monster], '!');
-        target.stun = stun;
-        game.monsters[path.monster].stun = stun;
-    } else if(path.blocker) {
-        monster_status(target, F("hits a wall!"));
-        target.stun = stun;
-    }
 }
 
 static bool in_wand_area(Position pos, Position center)
@@ -845,26 +835,14 @@ static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
 
 static const int8_t PROGMEM wand_directions[] = {0, -1, 1, 0, 0, 1, -1, 0};
 
-static void force_player()
-{
-    uint8_t direction = roll(4);
-    int8_t dx = wand_directions[direction * 2];
-    int8_t dy = wand_directions[direction * 2 + 1];
-    RayResult path = scan_ray(game.player, dx, dy, 8);
-    game.player = path.monster != NONE ? path.before : path.end;
-    if(path.blocker || path.monster != NONE) {
-        if(amulet_bonus(AMULET_IRONBLOOD) <= 0 && game.paralyzed < 4)
-            game.paralyzed = 4;
-        if(path.monster != NONE && game.monsters[path.monster].stun < 4)
-            game.monsters[path.monster].stun = 4;
-        status(F("You crash into an obstacle!"));
-    } else status(F("You are blasted back!"));
-}
-
 static void cursed_wand_effect(uint8_t type)
 {
     switch(type) {
-    case WAND_FORCE: force_player(); break;
+    case WAND_FORCE: {
+        uint8_t direction = roll(4);
+        force_player(wand_directions[direction * 2], wand_directions[direction * 2 + 1]);
+        break;
+    }
     case WAND_TELEPORT: teleport_player(); break;
     case WAND_DIGGING:
         status(F("The wand digs into you!"));
@@ -1033,7 +1011,7 @@ __attribute__((noinline)) static bool apply_drop(uint8_t slot, bool discard)
         return false;
     Item& item = game.inventory[slot];
     if(item.type == YENDOR_AMULET) {
-        status(F("You cannot drop the amulet of Yendor."));
+        status(F("You cannot drop")); status(item, '.');
         return false;
     }
     if(item.type == NO_ITEM)

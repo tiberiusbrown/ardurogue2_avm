@@ -46,7 +46,13 @@ using namespace rogue;
     X(inventory_up_wands, "Scroll up through seven visible long wand names", browse, UP, room, NO_ITEM, 15, 6) \
     X(inventory_open_singletons, "Open all ten groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
     X(inventory_down_singletons, "Scroll down across the last of ten singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
-    X(inventory_up_singletons, "Scroll up across singleton group headers near the bottom", browse, UP, room, NO_ITEM, 8, 3)
+    X(inventory_up_singletons, "Scroll up across singleton group headers near the bottom", browse, UP, room, NO_ITEM, 8, 3) \
+    X(storm_splash, "Stormbringer hits with three splash targets and cursed life cost", play, RIGHT, room, STORMBRINGER, 0, 0) \
+    X(glass_break, "Glass Sword hits then shatters", play, RIGHT, room, GLASS_SWORD, 0, 0) \
+    X(hammer_heavy, "Hammer heavy hit and force knockback", play, RIGHT, room, HAMMER_OF_RUIN, 0, 0) \
+    X(reprisal, "Monster melee hit and turn-free counterattack", wait, A, room, RING_REPRISAL, 0, 0) \
+    X(phoenix, "Lethal starvation consumes Phoenix Heart", wait, A, room, AMULET_PHOENIX_HEART, 0, 0) \
+    X(titan_speed, "Titan Plate effective speed with an active monster", wait, A, room, TITAN_PLATE, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -220,6 +226,48 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         }
         break;
     }
+    case Case::storm_splash:
+    case Case::glass_break:
+    case Case::hammer_heavy: {
+        game.weapon_slot = 0; game.dexterity = MAX_PHYSICAL_STAT; game.speed = 1;
+        if(scenario == Case::hammer_heavy)
+            for(uint8_t x = 38; x <= 42; ++x) carve(x, 16);
+        add_monster(0, {33, 16}, SNAKE, 100); game.monsters[0].stun = 15;
+        if(scenario == Case::storm_splash) {
+            game.inventory[0].info |= ITEM_CURSED;
+            add_monster(1, {34, 16}, SNAKE); add_monster(2, {33, 15}, SNAKE); add_monster(3, {33, 17}, SNAKE);
+            game.monsters[1].stun = game.monsters[2].stun = game.monsters[3].stun = 15;
+        }
+        for(uint16_t seed = 1;; ++seed) {
+            game.random_state = seed;
+            if(!physical_attack_hits(player_accuracy(), monster_dexterity(SNAKE))) continue;
+            WeaponDefinition w = weapon_definition(item);
+            weapon_damage_roll(w.minimum_damage, w.maximum_damage, 0);
+            if(scenario == Case::glass_break && static_cast<uint8_t>(next_random(game.random_state))) continue;
+            if(scenario == Case::hammer_heavy && roll(3)) continue;
+            game.random_state = seed; break;
+        }
+        break;
+    }
+    case Case::reprisal: {
+        game.ring_slots[0] = 0; game.inventory[1] = make_equipment(DAGGER, 0); game.weapon_slot = 1;
+        game.speed = monster_speed(PHANTOM); add_monster(0, {33, 16}, PHANTOM); game.monsters[0].stun = 0;
+        for(uint16_t seed = 1;; ++seed) {
+            game.random_state = seed;
+            if(!physical_attack_hits(monster_dexterity(PHANTOM), player_dexterity())) continue;
+            roll(3);
+            armor_absorption(player_armor_rating(), 0);
+            if(roll(2) || !physical_attack_hits(player_accuracy(), monster_dexterity(PHANTOM))) continue;
+            game.random_state = seed; break;
+        }
+        break;
+    }
+    case Case::phoenix:
+        game.amulet_slot = 0; game.hp = 1; game.hunger = 0; game.turns = 255;
+        break;
+    case Case::titan_speed:
+        game.armor_slot = 0; add_monster(0, {38, 16});
+        break;
     case Case::open_door:
         game.doors[0] = {{33, 16}};
         game.door_count = 1;

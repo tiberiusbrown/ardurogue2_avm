@@ -316,9 +316,11 @@ static void check_equipment_roster_text()
 {
     using namespace rogue;
     const uint8_t types[] = {DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD,
-        LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL};
+        LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL,
+        STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN, DRAGONHIDE, TITAN_PLATE};
     const char* names[] = {"dagger", "spear", "long sword", "mace", "two-handed sword",
-        "leather armor", "ring mail", "scale mail", "chain mail", "splint mail", "plate mail"};
+        "leather armor", "ring mail", "scale mail", "chain mail", "splint mail", "plate mail",
+        "Stormbringer", "Glass Sword", "Hammer of Ruin", "Dragonhide", "Titan Plate"};
     for(unsigned i = 0; i < sizeof types; ++i) {
         for(int8_t enchant = -5; enchant <= 5; ++enchant) {
             for(unsigned cursed = 0; cursed < 2; ++cursed) {
@@ -422,6 +424,30 @@ static void check_cursed_equipment()
     }
 }
 
+static void check_artifact_jewelry()
+{
+    using namespace rogue;
+    const uint8_t types[] = {RING_INVISIBILITY, RING_REPRISAL, RING_HUNT, AMULET_PHOENIX_HEART, AMULET_HEART_OF_GIANT};
+    const char* names[] = {"Ring of Invisibility", "Ring of Reprisal", "Ring of the Hunt", "Phoenix Heart", "Heart of the Giant"};
+    for(unsigned i = 0; i < sizeof types; ++i) {
+        for(bool cursed : {false, true}) {
+            Item item{types[i], static_cast<uint8_t>(1 | (cursed ? ITEM_CURSED : 0))};
+            char text[ITEM_TEXT_CAPACITY]; other_known[item.type] = false;
+            format_item(item, text);
+            if(std::strcmp(text, is_ring(item.type) ? "diamond ring" : "diamond amulet")) std::exit(1);
+            check_drawn_item(item);
+            other_known[item.type] = true; item.info |= ITEM_IDENTIFIED;
+            std::string expected = cursed ? "cursed " : ""; expected += names[i];
+            format_item(item, text);
+            if(text != expected) std::exit(1);
+            check_drawn_item(item);
+            std::string message = "a " + expected + ".";
+            check_status_item(item, '.', message.c_str());
+            message = "the " + expected + "?"; check_status_item(item, '?', message.c_str());
+        }
+    }
+}
+
 int main()
 {
     using namespace rogue;
@@ -514,6 +540,7 @@ int main()
     check_item_status();
     check_equipment_roster_text();
     check_cursed_equipment();
+    check_artifact_jewelry();
     check_status_paging();
     std::puts("streaming status and item text passed");
     return 0;

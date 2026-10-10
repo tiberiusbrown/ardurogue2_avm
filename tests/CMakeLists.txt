@@ -9,6 +9,7 @@ add_executable(game_native
     combat_checks.cpp
     weapon_checks.cpp
     bow_checks.cpp
+    artifact_checks.cpp
     bench_checks.cpp
     generation_checks.cpp
     ../bench/bench.cpp
@@ -25,6 +26,7 @@ target_compile_features(game_native PRIVATE cxx_std_17)
 target_include_directories(game_native PRIVATE ../src)
 
 add_test(NAME game_native COMMAND game_native)
+add_test(NAME artifacts COMMAND game_native --artifacts)
 add_test(NAME floor_generation_bulk COMMAND game_native --floor-bulk 128)
 
 add_executable(inventory_view_native inventory_view_native.cpp)

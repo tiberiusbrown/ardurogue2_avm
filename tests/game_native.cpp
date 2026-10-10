@@ -11,6 +11,7 @@
 #include <string>
 
 static std::string status_text;
+static rogue::Item last_status_item = {};
 static int ray_animations = 0, burst_animations = 0;
 static int spreading_animations = 0, multi_burst_animations = 0;
 static uint8_t spreading_steps[4] = {}, multi_burst_count = 0;
@@ -35,8 +36,8 @@ void status(const char* words, char punctuation) {
     if(punctuation) status_text += punctuation;
     status_text += ' ';
 }
-void status(Item) {}
-void status(Item, char) {}
+void status(Item item) { last_status_item = item; }
+void status(Item item, char) { last_status_item = item; }
 void status(const Monster&) {}
 void status(const Monster&, char) {}
 void status_number(uint8_t) {}
@@ -166,8 +167,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x8292003fu, 0xe8bf145du}, {0x16353963u, 0x6c365cb5u},
-        {0xe114ffcbu, 0xfb40913eu}, {0x50fd706au, 0x8e2b6476u}
+        {0x752f2639u, 0xe8bf145du}, {0x2f581d6eu, 0x6c365cb5u},
+        {0xed59ca05u, 0xfb40913eu}, {0x4badb54au, 0x8e2b6476u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -566,7 +567,7 @@ void check_rogue_progression()
             "new run did not begin on the first descending floor");
     status_text.clear();
     require(!take_stairs() && game.floor == 0 && !session.ended &&
-            status_text.find("Yendor Amulet") != std::string::npos,
+            status_text.find("closed until you find") != std::string::npos && last_status_item.type == YENDOR_AMULET,
             "upward stairs were available before Yendor");
 
     game.hp = 12;
@@ -2634,12 +2635,16 @@ void check_combat_rules();
 void print_armor_distributions();
 void print_weapon_distributions();
 void check_weapon_and_equipment_rules();
+void check_artifacts();
 void check_benchmark_scenarios();
 
 bool generation_command(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
+    if(argc == 2 && std::strcmp(argv[1], "--artifacts") == 0) {
+        check_artifacts(); return 0;
+    }
     if(generation_command(argc, argv)) return 0;
     if(argc == 2 && std::strcmp(argv[1], "--combat-distributions") == 0) {
         print_weapon_distributions();

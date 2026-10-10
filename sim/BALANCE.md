@@ -402,3 +402,54 @@ uses all 65535 unique effective seeds, ordinary scorecard, factors, controlled
 bow A/B, native tests, serial/parallel byte equality, stream isolation and AVM
 size/complete stack/100 ms turn benchmarks. Historical documents are retained
 with their original data and agent identity.
+
+## Rare artifact validation
+
+Artifacts replace ordinary generated objects in existing ground slots. Two
+controls answer different questions using the same maintained policy and binary:
+
+- `--intervention ordinary-items` skips only the artifact post-processing pass.
+  Ordinary supplies, equipment, positions and gameplay RNG are preserved. This
+  measures natural replacement availability within the current ordinary roster.
+  Invisibility is now an artifact: its former 2% ordinary-ring outcome becomes
+  protection without changing the generation draws. For a legacy compatibility
+  audit, replace legacy invisibility rings with protection before comparing to
+  the candidate's `ordinary-items` run. The flag is host-only and is recorded in the
+  experiment manifest; there are no slot interventions to put in the ledger.
+- Replace each naturally scheduled artifact with a mundane comparator, preserving
+  its instance state. This controls the scheduled location, enchantment and curse
+  while comparing capabilities. Every substitution appears in the normal ledger.
+
+Comparator rules for the strengthened artifacts, using the strongest ordinary
+category alternatives under the maintained policy:
+
+```text
+replace-item:STORMBRINGER:TWO_HANDED_SWORD:info=preserve
+replace-item:GLASS_SWORD:TWO_HANDED_SWORD:info=preserve
+replace-item:HAMMER_OF_RUIN:TWO_HANDED_SWORD:info=preserve
+replace-item:DRAGONHIDE:PLATE_MAIL:info=preserve
+replace-item:TITAN_PLATE:PLATE_MAIL:info=preserve
+replace-item:RING_INVISIBILITY:RING_PROTECTION:info=preserve
+replace-item:RING_REPRISAL:RING_PROTECTION:info=preserve
+replace-item:RING_HUNT:RING_PROTECTION:info=preserve
+replace-item:AMULET_PHOENIX_HEART:AMULET_SPEED:info=preserve
+replace-item:AMULET_HEART_OF_GIANT:AMULET_SPEED:info=preserve
+```
+
+The native `artifacts` test checks scheduling and equipment-state frequencies over
+all 65,535 effective seeds and placement/ordinary-stream equality on generated
+floors. Typed generated/reached/picked-up/equipped/consumed counters measure
+availability, discovery, usage, shattering and resurrection. Generation on visited
+floors must be distinguished from run-wide scheduling; dying before a scheduled
+floor explains a missing generated object.
+
+The agent values all ten artifacts, accounts for effective speed and Dragonhide
+fire immunity, includes Hunt in ranged damage estimates, retains a Glass Sword
+fallback, and keeps Hunt and arrows together to avoid reverse-swap cycles. Cursed
+artifacts remain excluded by its existing equipment policy, so native tests are
+the primary evidence for cursed mechanics. There are no simulator hooks or extra
+persistent state in normal AVM builds.
+
+See [the implementation and validation report](../docs/ARTIFACTS.md) for results.
+The [initial nine-artifact report](../docs/ARTIFACTS_INITIAL_2026-10-10.md) retains
+the original constants, comparator rules and measurements before tuning.

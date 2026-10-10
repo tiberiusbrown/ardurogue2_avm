@@ -71,15 +71,18 @@ void after_floor_generation() {
     collector->experiment->apply(rogue::game,{rogue::game.run_seed,collector->data.floors_entered+1},collector->data.interventions);
     if(rogue::game.random_state!=rng) throw std::runtime_error("experiment consumed gameplay RNG");
 }
+bool artifacts_enabled() {
+    return !collector || !collector->experiment || collector->experiment->artifacts_enabled();
+}
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
         "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY",
-        "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","CHAIN_MAIL","LEATHER_ARMOR",
-        "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","YENDOR_AMULET","RING_SEE_INVISIBLE",
+        "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","STORMBRINGER","GLASS_SWORD","HAMMER_OF_RUIN","CHAIN_MAIL","LEATHER_ARMOR",
+        "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
-        "RING_SUSTENANCE","RING_INVISIBILITY","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
-        "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM",
+        "RING_SUSTENANCE","RING_INVISIBILITY","RING_REPRISAL","RING_HUNT","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
+        "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT",
         "SCROLL_IDENTIFY","SCROLL_ENCHANT","SCROLL_REMOVE_CURSE","SCROLL_TELEPORT","SCROLL_MAPPING",
         "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","WAND_FORCE",
         "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH"};
@@ -116,9 +119,7 @@ void Collector::enter_floor() {
     f.entry_max_hp=rogue::player_max_hp(); f.entry_strength=rogue::player_strength();
     f.entry_dexterity=rogue::player_dexterity();
     // Exactly end_turn's effective enemy-turn budget (no separate speed model).
-    int speed=int(g.speed)-rogue::amulet_bonus(rogue::AMULET_SPEED);
-    if(g.slowed) speed*=2;
-    f.entry_speed=uint8_t(std::max(1,speed)); f.entry_hunger=g.hunger;
+    f.entry_speed=rogue::player_speed_cost(); f.entry_hunger=g.hunger;
     f.entry_armor_rating=rogue::player_armor_rating(); f.entry_armor_enchant=rogue::player_armor_enchant();
     if(g.weapon_slot<rogue::INVENTORY) {
         auto i=g.inventory[g.weapon_slot]; f.entry_weapon_type=i.type; f.entry_weapon_enchant=rogue::equipment_enchant(i);
@@ -234,7 +235,10 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
         if(enabled && cause_type && (cause == Cause::Monster || cause == Cause::Fire)) {
             data.monsters[cause_type].player_damage += amount;
-            if(amount >= rogue::game.hp) ++data.monsters[cause_type].deaths;
+            if(amount >= rogue::game.hp && !(rogue::game.amulet_slot < rogue::INVENTORY &&
+                rogue::game.inventory[rogue::game.amulet_slot].type == rogue::AMULET_PHOENIX_HEART &&
+                !rogue::item_is_cursed(rogue::game.inventory[rogue::game.amulet_slot])))
+                ++data.monsters[cause_type].deaths;
         }
     }
     if(!enabled) return;

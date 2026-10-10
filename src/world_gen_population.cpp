@@ -2,6 +2,7 @@
 #include "world.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
+#include "sim_hooks.hpp"
 
 namespace rogue::generation {
 
@@ -72,14 +73,14 @@ static uint8_t floor_ring_type(uint16_t& seed)
         chance < 68 ? RING_FIRE_IMMUNITY :
         chance < 83 ? RING_ATTACK :
         chance < 98 ? RING_SUSTENANCE :
-        RING_INVISIBILITY;
+        RING_PROTECTION; // Invisibility now uses the unique artifact schedule.
 }
 
 static uint8_t floor_amulet_type(uint16_t& seed)
 {
     uint8_t chance = floor_roll(seed, 16);
     if(chance == 8) return AMULET_VAMPIRE;
-    return static_cast<uint8_t>(AMULET_FIRST + chance % AMULET_COUNT);
+    return static_cast<uint8_t>(AMULET_FIRST + chance % (AMULET_WISDOM - AMULET_FIRST + 1));
 }
 
 static uint8_t floor_potion_type(uint16_t& seed)
@@ -180,7 +181,77 @@ __attribute__((noinline)) void populate_monsters(uint16_t seed)
     }
 }
 
-__attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_seed)
+uint8_t artifact_type(uint8_t index)
+{
+    static const uint8_t PROGMEM types[ARTIFACT_COUNT] = {
+        STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN, DRAGONHIDE, TITAN_PLATE,
+        RING_INVISIBILITY, RING_REPRISAL, RING_HUNT, AMULET_PHOENIX_HEART, AMULET_HEART_OF_GIANT
+    };
+    return index < ARTIFACT_COUNT ? types[index] : static_cast<uint8_t>(NO_ITEM);
+}
+
+static uint16_t artifact_seed(uint16_t run_seed, uint8_t type)
+{
+    // Run-wide domain, independent of floor, ascent and all ordinary streams.
+    uint32_t value = static_cast<uint32_t>(run_seed) + type * 0x9e3779b9u + ARTIFACTS;
+    value = (value ^ (value >> 16)) * 0x7feb352du;
+    value = (value ^ (value >> 15)) * 0x846ca68bu;
+    return static_cast<uint16_t>(value ^ (value >> 16));
+}
+
+uint8_t artifact_floor(uint16_t run_seed, uint8_t type)
+{
+    if(!is_artifact(type)) return NONE;
+    uint16_t seed = artifact_seed(run_seed, type);
+    if(floor_roll(seed, ARTIFACT_SELECTION_DENOMINATOR)) return NONE;
+    return static_cast<uint8_t>(ARTIFACT_FIRST_FLOOR +
+        floor_roll(seed, ARTIFACT_LAST_FLOOR - ARTIFACT_FIRST_FLOOR + 1));
+}
+
+static Item artifact_item(uint8_t type)
+{
+    uint16_t seed = artifact_seed(game.run_seed, type);
+    // Separate equipment outputs from the two scheduling draws.
+    next_random(seed);
+    next_random(seed);
+    if(is_equipment(type)) {
+        uint8_t chance = floor_equipment_roll(seed, 100);
+        Item item = make_equipment(type, chance < 5 ? -2 : chance < 15 ? -1 :
+            chance < 85 ? 0 : chance < 95 ? 1 : 2);
+        if(!floor_equipment_roll(seed, ARTIFACT_CURSE_DENOMINATOR)) item.info |= ITEM_CURSED;
+        return item;
+    }
+    return {type, static_cast<uint8_t>(1 |
+        (!floor_equipment_roll(seed, ARTIFACT_CURSE_DENOMINATOR) ? ITEM_CURSED : 0))};
+}
+
+__attribute__((noinline)) static void place_artifacts()
+{
+    if(game.floor < ARTIFACT_FIRST_FLOOR || game.floor > ARTIFACT_LAST_FLOOR) return;
+    uint16_t seed = floor_seed(ARTIFACTS);
+    for(uint8_t a = 0; a < ARTIFACT_COUNT; ++a) {
+        uint8_t type = artifact_type(a);
+        if(artifact_floor(game.run_seed, type) != game.floor) continue;
+        uint8_t start = floor_roll(seed, GROUND_ITEMS);
+        uint8_t selected = NONE;
+        for(uint8_t pass = 0; pass < 2 && selected == NONE; ++pass) {
+            for(uint8_t n = 0; n < GROUND_ITEMS; ++n) {
+                uint8_t slot = static_cast<uint8_t>((start + n) % GROUND_ITEMS);
+                uint8_t old = game.ground[slot].item.type;
+                if(!old || old == YENDOR_AMULET || is_artifact(old) ||
+                   (slot == GROUND_ITEMS - 1 && game.floor == FLOORS - 1)) continue;
+                if(!pass && (old == FOOD || old == ARROWS)) continue;
+                selected = slot;
+                break;
+            }
+        }
+        // All eligible production floors have sixteen accessible occupied slots,
+        // and there are only ten artifacts. Previously placed types are skipped.
+        if(selected != NONE) game.ground[selected].item = artifact_item(type);
+    }
+}
+
+__attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t equipment_seed)
 {
     // Fresh ascent threats, but no replenishing ordinary supplies. Slot 15 on
     // the final descent remains reserved for the defeated Lord's Yendor drop.
@@ -228,6 +299,16 @@ __attribute__((noinline)) void populate_items(uint16_t seed, uint16_t equipment_
         Position pos = select_tile(placement, preference, false);
         if(pos.x != NONE) game.ground[i] = {pos, {type, info}};
     }
+}
+
+void populate_items(uint16_t seed, uint16_t equipment_seed)
+{
+    populate_ordinary_items(seed, equipment_seed);
+    if(game.has_amulet) return;
+#if defined(ARDUROGUE2_SIM)
+    if(!sim::artifacts_enabled()) return;
+#endif
+    place_artifacts();
 }
 
 } // namespace rogue::generation

@@ -36,7 +36,7 @@ constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 24;
+constexpr uint8_t SAVE_VERSION = 25;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -49,21 +49,25 @@ enum ItemType : uint8_t {
     POTION_LAST = POTION_INVISIBILITY,
     WEAPON_FIRST,
     LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
-    WEAPON_LAST = LONG_BOW,
+    STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN,
+    WEAPON_LAST = HAMMER_OF_RUIN,
     ARMOR_FIRST,
     CHAIN_MAIL = ARMOR_FIRST, LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, SPLINT_MAIL, PLATE_MAIL,
-    ARMOR_LAST = PLATE_MAIL,
+    DRAGONHIDE, TITAN_PLATE,
+    ARMOR_LAST = TITAN_PLATE,
     YENDOR_AMULET,
     RING_FIRST,
     RING_SEE_INVISIBLE = RING_FIRST, RING_STRENGTH, RING_DEXTERITY,
     RING_PROTECTION, RING_FIRE_IMMUNITY, RING_ATTACK,
     RING_SUSTENANCE, RING_INVISIBILITY,
-    RING_LAST = RING_INVISIBILITY,
+    RING_REPRISAL, RING_HUNT,
+    RING_LAST = RING_HUNT,
     AMULET_FIRST,
     AMULET_SPEED = AMULET_FIRST, AMULET_CLARITY, AMULET_CONSERVATION,
     AMULET_REGENERATION, AMULET_VAMPIRE, AMULET_IRONBLOOD,
     AMULET_VITALITY, AMULET_WISDOM,
-    AMULET_LAST = AMULET_WISDOM,
+    AMULET_PHOENIX_HEART, AMULET_HEART_OF_GIANT,
+    AMULET_LAST = AMULET_HEART_OF_GIANT,
     SCROLL_FIRST,
     SCROLL_IDENTIFY = SCROLL_FIRST, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE,
     SCROLL_TELEPORT, SCROLL_MAPPING, SCROLL_FEAR,
@@ -91,6 +95,14 @@ constexpr bool is_armor(uint8_t type)
     return type >= ARMOR_FIRST && type <= ARMOR_LAST;
 }
 constexpr bool is_equipment(uint8_t type) { return is_weapon(type) || is_armor(type); }
+constexpr bool is_artifact(uint8_t type)
+{
+    return (type >= STORMBRINGER && type <= HAMMER_OF_RUIN) ||
+           (type >= DRAGONHIDE && type <= TITAN_PLATE) ||
+           (type >= RING_INVISIBILITY && type <= RING_HUNT) ||
+           (type >= AMULET_PHOENIX_HEART && type <= AMULET_HEART_OF_GIANT);
+}
+constexpr uint8_t ARTIFACT_COUNT = 10;
 constexpr bool is_potion(uint8_t type)
 {
     return type >= POTION_FIRST && type <= POTION_LAST;
@@ -210,6 +222,9 @@ constexpr WeaponDefinition weapon_definition(uint8_t type)
     case LONG_SWORD: return {2, 6, 0};
     case MACE: return {3, 7, -1};
     case TWO_HANDED_SWORD: return {4, 8, -2};
+    case STORMBRINGER: return {6, 10, 2};
+    case GLASS_SWORD: return {8, 14, 4};
+    case HAMMER_OF_RUIN: return {6, 10, 1};
     default: return {UNARMED_MIN_DAMAGE, UNARMED_MAX_DAMAGE, 0};
     }
 }
@@ -222,6 +237,8 @@ constexpr ArmorDefinition armor_definition(uint8_t type)
     case CHAIN_MAIL: return {4};
     case SPLINT_MAIL: return {5};
     case PLATE_MAIL: return {6};
+    case DRAGONHIDE: return {7};
+    case TITAN_PLATE: return {12};
     default: return {0};
     }
 }
@@ -381,7 +398,10 @@ static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, identified_items) == 767,
               "game save offsets changed");
 static_assert(POTION_COUNT == 10 && SCROLL_COUNT == 9 &&
-              RING_COUNT == 8 && AMULET_COUNT == 8 && WAND_COUNT == 7,
+              RING_COUNT == 10 && AMULET_COUNT == 10 && WAND_COUNT == 7,
               "item table counts changed");
+static_assert(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 46 &&
+              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
+                  sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 
 } // namespace rogue

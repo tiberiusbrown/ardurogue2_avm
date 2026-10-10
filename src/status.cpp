@@ -175,11 +175,13 @@ static const char PROGMEM* const PROGMEM potion_color_names[] = {
 };
 static const char PROGMEM* const PROGMEM ring_names[] = {
     F("see invisible"), F("strength"), F("dexterity"), F("protection"),
-    F("fire immunity"), F("attack"), F("sustenance"), F("invisibility")
+    F("fire immunity"), F("attack"), F("sustenance"), F("Invisibility"),
+    F("Reprisal"), F("the Hunt")
 };
 static const char PROGMEM* const PROGMEM amulet_names[] = {
     F("speed"), F("clarity"), F("conservation"), F("regeneration"),
-    F("the vampire"), F("ironblood"), F("vitality"), F("wisdom")
+    F("the vampire"), F("ironblood"), F("vitality"), F("wisdom"),
+    F("Phoenix Heart"), F("Heart of the Giant")
 };
 static const char PROGMEM* const PROGMEM scroll_names[] = {
     F("identify"), F("enchanting"), F("remove curse"),
@@ -193,7 +195,8 @@ static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
 };
 static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
     F("diamond"), F("ruby"), F("emerald"), F("topaz"),
-    F("gold"), F("silver"), F("platinum"), F("iron")
+    F("gold"), F("silver"), F("platinum"), F("iron"),
+    F("sapphire"), F("opal")
 };
 static const char PROGMEM* const PROGMEM wand_names[] = {
     F("force"), F("teleportation"), F("digging"), F("fire"),
@@ -207,6 +210,12 @@ static const char PROGMEM* const PROGMEM wand_descriptors[] = {
     F("long"), F("short"), F("slender"), F("thick"),
     F("twisted"), F("curved"), F("glossy")
 };
+
+static_assert(sizeof(ring_names) / sizeof(*ring_names) == RING_COUNT &&
+              sizeof(amulet_names) / sizeof(*amulet_names) == AMULET_COUNT &&
+              sizeof(jewel_descriptors) / sizeof(*jewel_descriptors) >= RING_COUNT &&
+              sizeof(jewel_descriptors) / sizeof(*jewel_descriptors) >= AMULET_COUNT,
+              "jewelry naming tables too small");
 
 const char PROGMEM* ring_name(uint8_t type)
 {
@@ -353,111 +362,138 @@ const char AVM_PROGMEM* equipment_name(uint8_t type)
     case CHAIN_MAIL: return F("chain mail");
     case SPLINT_MAIL: return F("splint mail");
     case PLATE_MAIL: return F("plate mail");
+    case STORMBRINGER: return F("Stormbringer");
+    case GLASS_SWORD: return F("Glass Sword");
+    case HAMMER_OF_RUIN: return F("Hammer of Ruin");
+    case DRAGONHIDE: return F("Dragonhide");
+    case TITAN_PLATE: return F("Titan Plate");
     default: return F("equipment");
     }
 }
 
 template<typename Output>
-void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
+__attribute__((noinline)) void emit_amulet(Item item, ItemTextStyle style, Output& text, char suffix)
 {
     bool known = item_type_identified(item.type);
-    bool cursed = !is_wand(item.type) && item_is_identified(item) &&
-        item_is_cursed(item);
-    if(is_potion(item.type) || is_scroll(item.type)) {
-        const char AVM_PROGMEM* first_word = known
-            ? (is_scroll(item.type) ? F("scroll") : F("potion"))
-            : (is_scroll(item.type)
-                ? scroll_descriptors[item_appearance(item.type)]
-                : potion_color_names[item_appearance(item.type)]);
-        uint8_t quantity = item_value(item);
-        bool plural = quantity > 1 && style != PROMPT_ITEM;
-        if(plural) text.number(quantity);
-        else if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) text.word(article_for(first_word));
-        if(known) {
-            text.word(is_scroll(item.type)
-                ? (plural ? F("scrolls") : F("scroll"))
-                : (plural ? F("potions") : F("potion")));
-            text.word(F("of"));
-            text.final_word(is_scroll(item.type)
-                ? scroll_names[item.type - SCROLL_FIRST]
-                : potion_effect_names[item.type - POTION_FIRST], suffix);
-        } else {
-            text.word(first_word);
-            text.final_word(is_scroll(item.type)
-                ? (plural ? F("scrolls") : F("scroll"))
-                : (plural ? F("potions") : F("potion")), suffix);
-        }
-        return;
-    }
-    if(is_ring(item.type)) {
-        const char AVM_PROGMEM* first_word = known
-            ? F("ring") : jewel_descriptors[item_appearance(item.type)];
-        if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM)
-            text.word(cursed ? F("a") : article_for(first_word));
-        if(cursed) text.word(F("cursed"));
-        if(known) {
+    bool cursed = item_is_identified(item) && item_is_cursed(item);
+    const char AVM_PROGMEM* first_word = known
+        ? (is_artifact(item.type) ? amulet_name(item.type) : F("amulet"))
+        : jewel_descriptors[item_appearance(item.type)];
+    if(style == PROMPT_ITEM) text.word(F("the"));
+    else if(style == STATUS_ITEM)
+        text.word(cursed ? F("a") : article_for(first_word));
+    if(cursed) text.word(F("cursed"));
+    if(known) {
+        if(!is_artifact(item.type)) {
             text.word(first_word);
             text.word(F("of"));
-            text.final_word(ring_name(item.type), suffix);
-        } else {
-            text.word(first_word);
-            text.final_word(F("ring"), suffix);
         }
-        return;
+        text.final_word(amulet_name(item.type), suffix);
+    } else {
+        text.word(first_word);
+        text.final_word(F("amulet"), suffix);
     }
-    if(is_amulet(item.type)) {
-        const char AVM_PROGMEM* first_word = known
-            ? F("amulet") : jewel_descriptors[item_appearance(item.type)];
-        if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM)
-            text.word(cursed ? F("a") : article_for(first_word));
-        if(cursed) text.word(F("cursed"));
-        if(known) {
-            text.word(first_word);
-            text.word(F("of"));
-            text.final_word(amulet_name(item.type), suffix);
-        } else {
-            text.word(first_word);
-            text.final_word(F("amulet"), suffix);
-        }
-        return;
+    return;
+}
+
+template<typename Output>
+__attribute__((noinline)) void emit_equipment(Item item, ItemTextStyle style, Output& text, char suffix)
+{
+    bool cursed = item_is_identified(item) && item_is_cursed(item);
+    const char AVM_PROGMEM* name = equipment_name(item.type);
+    bool has_bonus = item_is_identified(item) && equipment_enchant(item);
+    if(style == PROMPT_ITEM) text.word(F("the"));
+    else if(style == STATUS_ITEM && is_weapon(item.type))
+        text.word(article_for(cursed ? F("cursed") : name));
+    if(cursed) text.word(F("cursed"));
+    text.final_word(name, has_bonus ? 0 : suffix);
+    if(has_bonus) text.final_bonus(equipment_enchant(item), suffix);
+    return;
+}
+
+template<typename Output>
+__attribute__((noinline)) void emit_consumable(Item item, ItemTextStyle style, Output& text, char suffix)
+{
+    bool known = item_type_identified(item.type);
+    const char AVM_PROGMEM* first_word = known
+        ? (is_scroll(item.type) ? F("scroll") : F("potion"))
+        : (is_scroll(item.type)
+            ? scroll_descriptors[item_appearance(item.type)]
+            : potion_color_names[item_appearance(item.type)]);
+    uint8_t quantity = item_value(item);
+    bool plural = quantity > 1 && style != PROMPT_ITEM;
+    if(plural) text.number(quantity);
+    else if(style == PROMPT_ITEM) text.word(F("the"));
+    else if(style == STATUS_ITEM) text.word(article_for(first_word));
+    if(known) {
+        text.word(is_scroll(item.type)
+            ? (plural ? F("scrolls") : F("scroll"))
+            : (plural ? F("potions") : F("potion")));
+        text.word(F("of"));
+        text.final_word(is_scroll(item.type)
+            ? scroll_names[item.type - SCROLL_FIRST]
+            : potion_effect_names[item.type - POTION_FIRST], suffix);
+    } else {
+        text.word(first_word);
+        text.final_word(is_scroll(item.type)
+            ? (plural ? F("scrolls") : F("scroll"))
+            : (plural ? F("potions") : F("potion")), suffix);
     }
-    if(is_wand(item.type)) {
-        bool individual = known && item_is_identified(item);
-        WandModifier modifier = individual ? wand_modifier(item) : WAND_NORMAL;
-        const char AVM_PROGMEM* first_word = !known
-            ? wand_descriptors[item_appearance(item.type)]
-            : modifier == WAND_NORMAL ? F("wand") :
-              wand_modifier_names[modifier];
-        if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM) text.word(article_for(first_word));
-        if(known) {
-            if(modifier != WAND_NORMAL) text.word(first_word);
-            text.word(F("wand"));
-            text.word(F("of"));
-            if(individual && style == INVENTORY_ITEM) {
-                text.words(wand_names[item.type - WAND_FIRST]);
-                text.final_number(wand_charges(item), suffix);
-            } else text.final_word(wand_names[item.type - WAND_FIRST], suffix);
-        } else {
-            text.word(first_word);
-            text.final_word(F("wand"), suffix);
-        }
-        return;
+    return;
+}
+
+template<typename Output>
+__attribute__((noinline)) void emit_ring(Item item, ItemTextStyle style, Output& text, char suffix)
+{
+    bool known = item_type_identified(item.type);
+    bool cursed = item_is_identified(item) && item_is_cursed(item);
+    const char AVM_PROGMEM* first_word = known
+        ? F("ring") : jewel_descriptors[item_appearance(item.type)];
+    if(style == PROMPT_ITEM) text.word(F("the"));
+    else if(style == STATUS_ITEM)
+        text.word(cursed ? F("a") : article_for(first_word));
+    if(cursed) text.word(F("cursed"));
+    if(known) {
+        text.word(is_artifact(item.type) ? F("Ring") : first_word);
+        text.word(F("of"));
+        text.final_word(ring_name(item.type), suffix);
+    } else {
+        text.word(first_word);
+        text.final_word(F("ring"), suffix);
     }
-    if(is_equipment(item.type)) {
-        const char AVM_PROGMEM* name = equipment_name(item.type);
-        bool has_bonus = item_is_identified(item) && equipment_enchant(item);
-        if(style == PROMPT_ITEM) text.word(F("the"));
-        else if(style == STATUS_ITEM && is_weapon(item.type))
-            text.word(article_for(cursed ? F("cursed") : name));
-        if(cursed) text.word(F("cursed"));
-        text.final_word(name, has_bonus ? 0 : suffix);
-        if(has_bonus) text.final_bonus(equipment_enchant(item), suffix);
-        return;
+    return;
+}
+
+template<typename Output>
+__attribute__((noinline)) void emit_wand(Item item, ItemTextStyle style, Output& text, char suffix)
+{
+    bool known = item_type_identified(item.type);
+    bool individual = known && item_is_identified(item);
+    WandModifier modifier = individual ? wand_modifier(item) : WAND_NORMAL;
+    const char AVM_PROGMEM* first_word = !known
+        ? wand_descriptors[item_appearance(item.type)]
+        : modifier == WAND_NORMAL ? F("wand") :
+          wand_modifier_names[modifier];
+    if(style == PROMPT_ITEM) text.word(F("the"));
+    else if(style == STATUS_ITEM) text.word(article_for(first_word));
+    if(known) {
+        if(modifier != WAND_NORMAL) text.word(first_word);
+        text.word(F("wand"));
+        text.word(F("of"));
+        if(individual && style == INVENTORY_ITEM) {
+            text.words(wand_names[item.type - WAND_FIRST]);
+            text.final_number(wand_charges(item), suffix);
+        } else text.final_word(wand_names[item.type - WAND_FIRST], suffix);
+    } else {
+        text.word(first_word);
+        text.final_word(F("wand"), suffix);
     }
+    return;
+}
+
+template<typename Output>
+void emit_other_item(Item item, ItemTextStyle style, Output& text, char suffix)
+{
     switch(item.type) {
     case ARROWS:
         if(style == PROMPT_ITEM) text.word(F("the"));
@@ -484,6 +520,17 @@ void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
         text.final_word(F("item"), suffix);
         break;
     }
+}
+
+template<typename Output>
+__attribute__((always_inline)) inline void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
+{
+    if(is_amulet(item.type)) emit_amulet(item, style, text, suffix);
+    else if(is_equipment(item.type)) emit_equipment(item, style, text, suffix);
+    else if(is_ring(item.type)) emit_ring(item, style, text, suffix);
+    else if(is_wand(item.type)) emit_wand(item, style, text, suffix);
+    else if(is_potion(item.type) || is_scroll(item.type)) emit_consumable(item, style, text, suffix);
+    else emit_other_item(item, style, text, suffix);
 }
 
 } // namespace
@@ -549,7 +596,10 @@ void rogue::status(const char PROGMEM* words, char punctuation)
 
 void rogue::status(Item item)
 {
-    status(item, 0);
+    // This common combat form has a fixed style/suffix. Specializing the shared
+    // emitter here keeps its frame shallow when an item effect pages status.
+    StatusItemText text;
+    emit_item(item, STATUS_ITEM, text, 0);
 }
 
 void rogue::status(Item item, char punctuation)

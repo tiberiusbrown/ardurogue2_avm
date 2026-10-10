@@ -29,6 +29,15 @@ void set_monster_effect(Monster& monster, MonsterEffect effect,
 void defeat_monster(uint8_t index);
 void damage_monster(uint8_t index, uint8_t damage, bool player_attack);
 void hurt_player(uint8_t damage);
+// Turn-free melee resolution; only successful hits activate weapon effects.
+void attack_monster(uint8_t index);
+void destroy_inventory_item(uint8_t slot);
+void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful = false);
+void force_player(int8_t dx, int8_t dy);
+uint8_t player_speed_cost();
+// Artifact ring modifiers have fixed magnitude, independent of instance value.
+int8_t artifact_ring_bonus(uint8_t type, int8_t positive, int8_t negative);
+int8_t player_fire_effect();
 uint8_t player_strength();
 uint8_t player_dexterity();
 uint8_t player_accuracy();

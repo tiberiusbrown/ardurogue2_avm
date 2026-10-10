@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include <cmath>
 
 using namespace rogue;
 void require(bool condition, const char* reason);
@@ -14,10 +15,11 @@ static constexpr unsigned SAMPLES = 100000;
 struct WeaponCase { uint8_t type, minimum, maximum; int8_t accuracy; };
 static constexpr WeaponCase weapons[] = {
     {DAGGER, 1, 4, 2}, {SPEAR, 2, 5, 1}, {LONG_SWORD, 2, 6, 0},
-    {MACE, 3, 7, -1}, {TWO_HANDED_SWORD, 4, 8, -2}, {SHORT_BOW, 1, 2, -2}, {LONG_BOW, 1, 2, -2}
+    {MACE, 3, 7, -1}, {TWO_HANDED_SWORD, 4, 8, -2}, {SHORT_BOW, 1, 2, -2}, {LONG_BOW, 1, 2, -2},
+    {STORMBRINGER, 6, 10, 2}, {GLASS_SWORD, 8, 14, 4}, {HAMMER_OF_RUIN, 6, 10, 1}
 };
 static constexpr uint8_t armors[] = {
-    LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL
+    LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, CHAIN_MAIL, SPLINT_MAIL, PLATE_MAIL, DRAGONHIDE, TITAN_PLATE
 };
 static constexpr uint8_t equipment_types[] = {
     DAGGER, SPEAR, LONG_SWORD, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
@@ -38,6 +40,8 @@ static bool expected_armor(uint8_t type)
 
 static uint8_t expected_rating(uint8_t type)
 {
+    if(type == DRAGONHIDE) return 7;
+    if(type == TITAN_PLATE) return 12;
     for(unsigned i = 0; i < sizeof armors; ++i)
         if(armors[i] == type) return static_cast<uint8_t>(i + 1);
     return 0;
@@ -45,9 +49,9 @@ static uint8_t expected_rating(uint8_t type)
 
 static void check_equipment_definitions_and_ranges()
 {
-    static_assert(LONG_SWORD == 13 && WEAPON_LAST - WEAPON_FIRST + 1 == 7 &&
+    static_assert(LONG_SWORD == 13 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
-                  POTION_COUNT == 10 && RING_COUNT == 8 && AMULET_COUNT == 8 &&
+                  POTION_COUNT == 10 && RING_COUNT == 10 && AMULET_COUNT == 10 &&
                   SCROLL_COUNT == 9 && WAND_COUNT == 7,
                   "item groups are no longer contiguous or changed size");
     for(const auto& weapon : weapons) {
@@ -524,9 +528,12 @@ static void check_generated_equipment()
     }
     unsigned invisible = ring_counts[RING_INVISIBILITY - RING_SEE_INVISIBLE];
     unsigned immunity = ring_counts[RING_FIRE_IMMUNITY - RING_SEE_INVISIBLE];
-    require(invisible * 100 > rings * 1 && invisible * 100 < rings * 3 &&
+    const double invisibility_expected = 4096.0 / rogue::generation::ARTIFACT_SELECTION_DENOMINATOR;
+    const double invisibility_tolerance = 5 * std::sqrt(invisibility_expected *
+        (1 - 1.0 / rogue::generation::ARTIFACT_SELECTION_DENOMINATOR)) + 1;
+    require(std::abs(invisible - invisibility_expected) <= invisibility_tolerance &&
             immunity * 100 > rings * 11 && immunity * 100 < rings * 15,
-            "permanent invisibility is not rarer than its defensive comparator");
+            "invisibility artifact rarity or ordinary fire-immunity distribution changed");
     unsigned amulets = 0;
     for(unsigned count : amulet_counts) {
         require(count != 0, "generation omitted an amulet type");

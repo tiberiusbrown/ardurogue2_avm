@@ -23,10 +23,12 @@ void check_benchmark_scenarios()
     for(uint8_t index = 0; index < bench_count(); ++index) {
         bench_case = index;
         bench_setup();
-        require(game.valid && !game.turns && !session.ended &&
+        require(game.valid && (game.turns == 0 || game.turns == 255) && !session.ended &&
                 !wall_at(game.player.x, game.player.y), "benchmark setup is not playable");
-        require((game.weapon_slot == NONE || (game.weapon_slot == 1 && is_bow(game.inventory[1].type))) && game.armor_slot == NONE &&
-                game.amulet_slot == NONE && game.ring_slots[0] == NONE &&
+        require((game.weapon_slot == NONE || is_weapon(game.inventory[game.weapon_slot].type)) &&
+                (game.armor_slot == NONE || is_artifact(game.inventory[game.armor_slot].type)) &&
+                (game.amulet_slot == NONE || is_artifact(game.inventory[game.amulet_slot].type)) &&
+                (game.ring_slots[0] == NONE || is_artifact(game.inventory[game.ring_slots[0]].type)) &&
                 game.ring_slots[1] == NONE, "benchmark equipment must start unequipped");
         Game first = game;
         bench_setup();

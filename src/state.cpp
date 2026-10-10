@@ -32,6 +32,9 @@ int8_t ring_bonus(uint8_t type)
             if(item.type == type)
                 bonus += item_is_cursed(item)
                     ? -item_value(item) : item_value(item);
+            else if(type == RING_PROTECTION &&
+                    (item.type == RING_REPRISAL || item.type == RING_HUNT) && !item_is_cursed(item))
+                bonus += 2;
         }
     }
     if(bonus > 127) bonus = 127;
@@ -56,9 +59,24 @@ uint8_t player_max_hp()
     int16_t maximum = static_cast<int16_t>(game.max_hp) +
         static_cast<int16_t>(amulet_bonus(AMULET_VITALITY)) * 5 -
         game.vamp_drain;
+    if(game.amulet_slot < INVENTORY &&
+       game.inventory[game.amulet_slot].type == AMULET_HEART_OF_GIANT)
+        maximum += item_is_cursed(game.inventory[game.amulet_slot]) ? -12 : 40;
+    else if(game.amulet_slot < INVENTORY &&
+            game.inventory[game.amulet_slot].type == AMULET_PHOENIX_HEART &&
+            !item_is_cursed(game.inventory[game.amulet_slot])) maximum += 20;
     if(maximum < 1) maximum = 1;
     if(maximum > 255) maximum = 255;
     return static_cast<uint8_t>(maximum);
+}
+
+int8_t artifact_ring_bonus(uint8_t type, int8_t positive, int8_t negative)
+{
+    int8_t value = 0;
+    for(uint8_t slot : game.ring_slots)
+        if(slot < INVENTORY && game.inventory[slot].type == type)
+            value += item_is_cursed(game.inventory[slot]) ? negative : positive;
+    return value;
 }
 
 uint8_t player_light_radius()
@@ -304,7 +322,8 @@ bool take_stairs()
     if(game.paralyzed) return false;
     if(game.player == game.up) {
         if(!game.has_amulet) {
-            status(F("The way up is closed until you find the Yendor Amulet."));
+            status(F("The way up is closed until you find"));
+            status(Item{YENDOR_AMULET, 1}, '.');
             return false;
         }
         if(game.floor) change_floor(-1);
@@ -316,8 +335,10 @@ bool take_stairs()
         change_floor(1);
         return true;
     }
-    if(game.has_amulet && game.player == game.down)
-        status(F("The Yendor Amulet calls you toward the surface."));
+    if(game.has_amulet && game.player == game.down) {
+        status_capitalize(); status(Item{YENDOR_AMULET, 1});
+        status(F("calls you toward the surface."));
+    }
     return false;
 }
 

@@ -145,7 +145,8 @@ __attribute__((noinline)) void prompt_stairs()
     const char AVM_PROGMEM* question = nullptr;
     if(game.player == game.up) {
         if(!game.has_amulet) {
-            status(F("The way up is closed until you find the Yendor Amulet."));
+            status(F("The way up is closed until you find"));
+            status(Item{YENDOR_AMULET, 1}, '.');
             return;
         }
         question = game.floor ? F("Go upstairs?") :
@@ -153,7 +154,8 @@ __attribute__((noinline)) void prompt_stairs()
     } else if(game.floor < FLOORS - 1 &&
               game.player == game.down) {
         if(game.has_amulet) {
-            status(F("The Yendor Amulet calls you toward the surface."));
+            status_capitalize(); status(Item{YENDOR_AMULET, 1});
+            status(F("calls you toward the surface."));
             return;
         }
         question = F("Go downstairs?");

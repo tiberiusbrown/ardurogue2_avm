@@ -33,7 +33,7 @@ void hit_seed(bool hit) {
 }
 
 void check_bows() {
-    static_assert(sizeof(Item)==2 && sizeof(Game)==774 && SAVE_VERSION==24,"bow enlarged saved state");
+    static_assert(sizeof(Item)==2 && sizeof(Game)==774 && SAVE_VERSION==25,"saved state changed");
     for(unsigned t=0;t<=255;++t) {
         require(is_ammo(t)==(t==ARROWS),"ammo range overlaps another category");
         require(is_bow(t)==(t==SHORT_BOW || t==LONG_BOW),"bow range overlaps another category");

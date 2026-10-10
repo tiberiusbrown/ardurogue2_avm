@@ -8,6 +8,11 @@ and `avm_draw_text`; use those overloads. ArduRogue 2's own `status_word` also
 provides a flash-string overload. RAM buffers remain appropriate for text
 constructed at runtime.
 
+Do not hardcode item names into status strings. Use the item-aware status methods
+(`status(item)` or `status(item, punctuation)`) to format item names, identification,
+curse, enchantment and articles consistently. Copy an Item before destroying it
+when a later message must describe the consumed or broken item.
+
 # Equipment
 
 Equipment type/subtype definitions determine inherent damage range, accuracy,

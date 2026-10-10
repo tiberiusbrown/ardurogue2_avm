@@ -12,8 +12,15 @@ enum Archetype : uint8_t { CHAMBERS, WARREN, FORTRESS, RUINS, ARCHETYPES };
 enum Purpose : uint16_t {
     LAYOUT = 0x4a31, LOOPS = 0xb275, DOOR_SELECTION = 0x7d19,
     STAIRS = 0xe893, ENCOUNTERS = 0x19c7, SUPPLIES = 0x635b, AMMO_QUANTITY = 0x4d71,
-    EQUIPMENT = 0xd421
+    EQUIPMENT = 0xd421, ARTIFACTS = 0xac57
 };
+
+constexpr uint8_t ARTIFACT_SELECTION_DENOMINATOR = 128;
+constexpr uint8_t ARTIFACT_FIRST_FLOOR = 4, ARTIFACT_LAST_FLOOR = 14;
+constexpr uint8_t ARTIFACT_CURSE_DENOMINATOR = 8;
+uint8_t artifact_type(uint8_t index);
+// NONE means this type was not selected for the run. No gameplay RNG consumed.
+uint8_t artifact_floor(uint16_t run_seed, uint8_t type);
 
 constexpr uint8_t FOOD_WEIGHT = 15, AMMO_WEIGHT = 5;
 constexpr uint8_t ARROW_BUNDLE_MIN = 2, ARROW_BUNDLE_MAX = 3;
@@ -35,6 +42,7 @@ void finalize_doors(uint16_t seed);
 void choose_stairs(uint16_t seed);
 void populate_monsters(uint16_t seed);
 void populate_items(uint16_t seed, uint16_t equipment_seed);
+void populate_ordinary_items(uint16_t seed, uint16_t equipment_seed);
 
 // Yield visual progress during bounded chunks of generation work. The host
 // generator has no frontend, timer, or dependency on AVM drawing APIs.

@@ -21,11 +21,11 @@ import tempfile
 
 CLOCK_HZ = 16_000_000
 DEFAULT_GOAL_MS = 100.0
-INVENTORY_RANGES = (("LONG_SWORD", "LONG_BOW", "WEAPONS"),
+INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("ARROWS", "ARROWS", "AMMO"),
-                    ("CHAIN_MAIL", "PLATE_MAIL", "ARMORS"),
-                    ("RING_SEE_INVISIBLE", "RING_INVISIBILITY", "RINGS"),
-                    ("AMULET_SPEED", "AMULET_WISDOM", "AMULETS"),
+                    ("CHAIN_MAIL", "TITAN_PLATE", "ARMORS"),
+                    ("RING_SEE_INVISIBLE", "RING_HUNT", "RINGS"),
+                    ("AMULET_SPEED", "AMULET_HEART_OF_GIANT", "AMULETS"),
                     ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
                     ("POTION_HEALING", "POTION_INVISIBILITY", "POTIONS"),
                     ("SCROLL_IDENTIFY", "SCROLL_MASS_POISON", "SCROLLS"))
@@ -98,10 +98,16 @@ def state_fields(case):
     fields = {key: re.sub(r'\b(game|MAP_W)\b', r'rogue::\1', expr) for key, expr in fields.items()}
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
+    if case.name == "storm_splash":
+        for i in (1, 2, 3): fields[f"splash_hp_{i}"] = f"rogue::game.monsters[{i}].hp"
+    if case.name == "glass_break":
+        fields["weapon_empty"] = "rogue::game.weapon_slot == rogue::NONE"
+    if case.name == "hammer_heavy":
+        fields["monster_x"] = "rogue::game.monsters[0].pos.x"
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(POTION_INVISIBILITY - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_INVISIBILITY - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_INVISIBILITY - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_HUNT - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
@@ -222,6 +228,18 @@ def validate_outcome(case, before, after, explored):
         require(after["door_open"] and position_after == position_before, "door was not opened in place")
     if case.name in ("eat_food", "drink_healing", "scroll_mapping", "scroll_teleport", "drop_food"):
         require(after["item_type"] == 0, "consumable/drop was not used")
+    if case.name in ("storm_splash", "glass_break", "hammer_heavy", "reprisal"):
+        require(after["monster_hp"] < before["monster_hp"], "artifact scenario did not hit")
+    if case.name == "storm_splash":
+        require(after["hp"] < before["hp"] and all(after[f"splash_hp_{i}"] < before[f"splash_hp_{i}"] for i in (1, 2, 3)),
+                "Stormbringer splash or life cost missing")
+    if case.name == "glass_break":
+        require(after["weapon_empty"] and not after["item_type"] and not after["item_info"], "Glass Sword did not shatter")
+    if case.name == "reprisal": require(after["hp"] < before["hp"], "Reprisal attacker did not hit")
+    if case.name == "hammer_heavy":
+        require(after["monster_x"] > before["monster_x"], "Hammer target was not knocked back")
+    if case.name == "phoenix":
+        require(after["hp"] == 100 and not after["item_type"] and after["amulet"] == 255, "Phoenix Heart failed")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
     for name, slot in (("equip_weapon", "weapon"), ("equip_bow", "weapon"), ("equip_armor", "armor")):

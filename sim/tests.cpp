@@ -226,6 +226,14 @@ void experiments() {
     game.ground[2]={{9,7},make_equipment(DAGGER,-1)};
     game.monsters[0]={{4,6},SNAKE,1,6,{255,255},MON_AGGRO};
     auto exp=std::make_shared<RuleExperiment>();
+    check(exp->artifacts_enabled(), "artifacts unexpectedly disabled by default");
+    exp->rules={parse_rule("ordinary-items")};
+    check(!exp->artifacts_enabled(), "ordinary-items experiment did not disable artifact post-processing");
+    for(uint8_t type : {uint8_t(STORMBRINGER),uint8_t(GLASS_SWORD),uint8_t(HAMMER_OF_RUIN),
+            uint8_t(DRAGONHIDE),uint8_t(TITAN_PLATE),uint8_t(RING_INVISIBILITY),uint8_t(RING_REPRISAL),uint8_t(RING_HUNT),
+            uint8_t(AMULET_PHOENIX_HEART),uint8_t(AMULET_HEART_OF_GIANT)})
+        check(parse_rule(std::string("remove-item:")+item_name(type)).from == type,
+              "artifact telemetry/intervention name missing");
     exp->rules={parse_rule("replace-item:HEALING:FOOD:floor=2:direction=descent:max=1"),
         parse_rule("replace-item:DAGGER:SPEAR:info=preserve"),parse_rule("replace-monster:SNAKE:MIMIC")};
     Collector c; c.experiment=exp; CollectScope scope(c); auto rng=game.random_state;
@@ -254,7 +262,7 @@ void experiments() {
 }
 int main() {
     try {
-        static_assert(sizeof(Game)==774 && SAVE_VERSION==24,"native saved layout changed");
+        static_assert(sizeof(Game)==774 && SAVE_VERSION==25,"native saved layout changed");
         check_v2_policy(); determinism(); entry_state_report(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
