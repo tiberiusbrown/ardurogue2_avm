@@ -8,9 +8,13 @@
 #include <cstring>
 #include <array>
 #include <cstdio>
+#include <string>
 
 using namespace rogue;
 void require(bool, const char*);
+void reset_feature_status();
+unsigned feature_monster_names();
+const std::string& feature_status_text();
 namespace {
 void arena(uint8_t type = FEATURE_NONE) {
     game = {}; session = {NONE, DEATH, false};
@@ -313,6 +317,180 @@ void teleport_topology() {
         require(game.paralyzed>= (floor<4 ? 1 : 2) && game.paralyzed<= (floor<4 ? 2 : 3),"depth snare duration");
     }
 }
+
+void monster_traps() {
+    auto setup=[](uint8_t trap, uint8_t kind=GOBLIN, Position pos={12,10}) {
+        arena(); game.monsters[0]={pos,kind,100,0,{0,0},0};
+        game.features[0]={pos,uint8_t(trap|MAP_FEATURE_HIDDEN)};
+    };
+    for(unsigned seed=1;seed<=256;++seed) for(uint8_t depth: {uint8_t(0),uint8_t(1),uint8_t(3),uint8_t(4),uint8_t(15)})
+        for(uint8_t trap=FEATURE_SPIKE_TRAP;trap<=FEATURE_RUST_TRAP;trap+=2) {
+            setup(trap); game.floor=depth; game.random_state=uint16_t(seed);
+            Monster before=game.monsters[0]; activate_monster_trap(0); const auto& m=game.monsters[0];
+            require(game.features[0].id==trap && game.turns==0 && game.hp==100 && !game.score && !game.xp,
+                    "monster trap altered player/turn/feature state");
+            require(!(m.state&MON_AGGRO),"environmental damage provoked aggression");
+            unsigned damage=100-m.hp;
+            if(trap==FEATURE_SPIKE_TRAP || trap==FEATURE_POISON_DART_TRAP || trap==FEATURE_RUST_TRAP) {
+                game.random_state=uint16_t(seed);
+                uint8_t raw=trap==FEATURE_SPIKE_TRAP ? (depth<2 ? 2+roll(3) : 3+roll(5)) :
+                    trap==FEATURE_POISON_DART_TRAP ? 1+roll(depth<2 ? 2:3) : 2+roll(3);
+                require(damage==physical_damage_after_armor(raw,armor_absorption(monster_armor(GOBLIN),0)),"monster physical trap armor/roll");
+            }
+            if(trap==FEATURE_POISON_DART_TRAP) require(monster_effect(m,MON_WEAKENED)==15,"dart weakness packing");
+            if(trap==FEATURE_FLAME_TRAP) require(damage>=(depth<4 ? 3:5) && damage<=(depth<4 ? 5:9),"monster flame range");
+            if(trap==FEATURE_FROST_TRAP) require(damage>=(depth<4 ? 2:3) && damage<=(depth<4 ? 4:6) &&
+                monster_effect(m,MON_SLOWED)>=6 && monster_effect(m,MON_SLOWED)<=10,"monster frost damage/slow");
+            if(trap==FEATURE_MAGIC_DRAIN_TRAP) require(damage>=3 && damage<=6,"monster backlash range");
+            if(trap==FEATURE_CONFUSION_TRAP) require(monster_effect(m,MON_CONFUSED)>=5 && monster_effect(m,MON_CONFUSED)<=8,"monster confusion packing");
+            if(trap==FEATURE_SNARE_TRAP) require(m.stun>=2 && m.stun<=3 && !damage && m.state==before.state,"monster snare");
+            if(trap==FEATURE_TELEPORT_TRAP) require(m.pos!=before.pos && !blocked(m.pos.x,m.pos.y) && m.pos!=game.player &&
+                m.pos!=game.up && m.pos!=game.down && m.hp==before.hp && m.effects[0]==0 && m.effects[1]==0,"monster teleport invariants");
+            if(trap==FEATURE_SUMMONING_TRAP) {
+                unsigned count=0;
+                for(unsigned i=1;i<MONSTERS;++i) if(game.monsters[i].type) {
+                    ++count; const auto& spawn=game.monsters[i];
+                    require(square_contains(before.pos,spawn.pos,2) && spawn.pos!=game.player && !blocked(spawn.pos.x,spawn.pos.y) &&
+                        (spawn.state&MON_TRAP_SUMMONED) && monster_at(spawn.pos)==i,"monster-origin summon");
+                }
+                require(count>=1 && count<=2 && !damage,"monster summon count");
+            }
+        }
+    setup(FEATURE_FLAME_TRAP,DRAGON); activate_monster_trap(0); require(game.monsters[0].hp==100,"dragon trap immunity");
+    for(uint8_t trap: {uint8_t(FEATURE_CONFUSION_TRAP),uint8_t(FEATURE_FROST_TRAP),uint8_t(FEATURE_SNARE_TRAP)}) {
+        setup(trap); game.monsters[0].effects[0]=255; game.monsters[0].effects[1]=255; game.monsters[0].stun=15;
+        activate_monster_trap(0); require(game.monsters[0].effects[0]==255 && game.monsters[0].effects[1]==255 &&
+            game.monsters[0].stun==15,"trap shortened packed status/stun");
+    }
+    for(uint8_t trap: {uint8_t(FEATURE_SPIKE_TRAP),uint8_t(FEATURE_POISON_DART_TRAP),uint8_t(FEATURE_FLAME_TRAP),
+        uint8_t(FEATURE_FROST_TRAP),uint8_t(FEATURE_MAGIC_DRAIN_TRAP),uint8_t(FEATURE_RUST_TRAP)}) {
+        for(uint8_t hp: {uint8_t(0),uint8_t(1)}) {
+            setup(trap,LORD); game.monsters[0].hp=hp; activate_monster_trap(0);
+            require(!game.monsters[0].type && !game.score && !game.xp && game.ground[15].item.type==YENDOR_AMULET &&
+                game.ground[15].pos==Position{12,10},"environmental Lord death/Yendor/underflow");
+            auto ground=game.ground[15]; activate_monster_trap(0);
+            require(!std::memcmp(&ground,&game.ground[15],sizeof ground),"duplicate Yendor");
+        }
+    }
+    setup(FEATURE_SPIKE_TRAP); game.monsters[0].hp=1; game.monsters[0].state=MON_TRAP_SUMMONED; activate_monster_trap(0);
+    require(!game.monsters[0].type && !game.score && !game.xp,"summoned trap kill credit");
+    setup(FEATURE_SUMMONING_TRAP);
+    for(uint8_t i=1;i<MONSTERS;++i) game.monsters[i]={{uint8_t(20+i),20},GOBLIN,42,7,{255,255},MON_AGGRO};
+    Game full=game; activate_monster_trap(0);
+    require(!std::memcmp(full.monsters,game.monsters,sizeof game.monsters),"full summon overwrote monster");
+    game.monsters[1].type=0; activate_monster_trap(0);
+    require(game.monsters[1].type && game.monsters[1].hp==monster_health(game.monsters[1].type) &&
+        !game.monsters[1].stun && !game.monsters[1].effects[0] && !game.monsters[1].effects[1],"summon reused stale monster state");
+    setup(FEATURE_TELEPORT_TRAP); std::memset(game.walls,255,sizeof game.walls);
+    carve(12,10); carve(13,10); carve(14,10); game.doors[0].pos={13,10}; game.door_count=1;
+    game.features[1]={{14,10},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    game.monsters[0].stun=9; game.monsters[0].effects[0]=0xa7; game.monsters[0].effects[1]=0xc5;
+    activate_monster_trap(0);
+    require(game.monsters[0].pos==Position{14,10} && game.monsters[0].hp==100 && game.monsters[0].stun==9 &&
+        game.monsters[0].effects[0]==0xa7 && game.monsters[0].effects[1]==0xc5 && feature_is_hidden(game.features[1].id),"sparse teleport/destination recursion");
+    game.up={12,10}; game.down={14,10}; game.monsters[0].pos={12,10};
+    require(teleport_monster(0,false) && game.monsters[0].pos==Position{14,10},"teleport stair fallback");
+    game.monsters[1]={{12,10},GOBLIN,10,0,{0,0},0};
+    require(!teleport_monster(0,false) && game.monsters[0].pos==Position{14,10},"sealed teleport overlap/origin");
+    setup(FEATURE_SPIKE_TRAP,GOBLIN,{40,20}); reset_feature_status(); activate_monster_trap(0);
+    require(feature_status_text().empty() && !feature_monster_names(),"offscreen trap message");
+    require(game.monsters[0].hp<100 && feature_is_hidden(game.features[0].id),"offscreen monster revealed trap");
+    setup(FEATURE_SPIKE_TRAP,PHANTOM); reset_feature_status(); activate_monster_trap(0);
+    require(!feature_monster_names() && feature_status_text().find("A trap activates!")!=std::string::npos,"invisible monster identity leak");
+    require(!feature_is_hidden(game.features[0].id) && !player_can_see_monster(0),"invisible monster must reveal visible tile");
+    setup(FEATURE_SPIKE_TRAP); reset_feature_status(); activate_monster_trap(0);
+    require(feature_monster_names()==1,"visible trap monster feedback");
+    game.monsters[0].hp=1; reset_feature_status(); activate_monster_trap(0);
+    require(feature_status_text().find("dies in a trap!")!=std::string::npos && feature_status_text().find("You defeat")==std::string::npos,"trap death feedback");
+    game.player={40,20}; activate_monster_trap(0); require(game.features[0].id==FEATURE_SPIKE_TRAP,"revealed trap rehidden");
+    Game invalid=game; activate_monster_trap(NONE); activate_monster_trap(MONSTERS);
+    require(!std::memcmp(&invalid,&game,sizeof game),"invalid monster trap index");
+    setup(FEATURE_HOLY_SYMBOL); Game holy=game; activate_monster_trap(0);
+    require(!std::memcmp(&holy,&game,sizeof game),"monster activated nontrap");
+}
+void monster_entry_checks() {
+    auto setup=[](Position pos={12,10},uint8_t kind=GOBLIN) {
+        arena(); game.monsters[0]={pos,kind,100,0,{0,0},MON_AGGRO};
+        game.features[0]={{11,10},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    };
+    setup(); end_turn(); require(game.monsters[0].pos==Position{11,10} && game.monsters[0].hp<100 &&
+        game.features[0].id==FEATURE_SPIKE_TRAP && game.turns==1,"ordinary pursuit trap entry");
+    setup(); game.features[0].id=FEATURE_SPIKE_TRAP; end_turn(); require(game.monsters[0].pos==Position{11,10},"discovered trap avoidance");
+    setup({11,10}); end_turn(); require(game.monsters[0].hp==100 && feature_is_hidden(game.features[0].id),"stationary attack trap");
+    setup({11,10}); game.monsters[0].stun=2; end_turn(); require(game.monsters[0].hp==100 && game.monsters[0].stun==1,"stationary stun trap");
+    setup({11,10},MIMIC); game.monsters[0].state=0; end_turn(); require(game.monsters[0].hp==100,"immobile monster trap");
+    setup(); game.walls[(10*MAP_W+11)>>3]|=uint8_t(1u<<(11&7)); end_turn();
+    require(game.monsters[0].hp==100 && game.monsters[0].pos==Position{12,10},"blocked movement trap");
+    setup(); game.doors[0].pos={11,10}; game.door_count=1; end_turn();
+    require(door_open(0) && game.monsters[0].hp==100 && game.monsters[0].pos==Position{12,10},"door opening trap");
+    for(bool confused: {false,true}) {
+        bool tested=false;
+        for(unsigned seed=1;seed<200 && !tested;++seed) {
+            setup({12,10},BAT); game.monsters[0].state=0; game.speed=6; game.random_state=uint16_t(seed);
+            if(confused) set_monster_effect(game.monsters[0],MON_CONFUSED,8);
+            end_turn(); if(game.monsters[0].pos==Position{11,10}) {
+                require(game.monsters[0].hp<100 && game.features[0].id==FEATURE_SPIKE_TRAP,"wandering/confused trap entry"); tested=true;
+            }
+        }
+        require(tested,"random entry seed coverage");
+    }
+    setup({12,10}); game.monsters[0].state=MON_AFRAID; game.features[0].pos={13,10}; end_turn();
+    require(game.monsters[0].pos==Position{13,10} && game.monsters[0].hp<100,"fleeing trap entry");
+    uint8_t hp=game.monsters[0].hp; game.player={20,10}; game.monsters[0].state=MON_AGGRO;
+    end_turn(); require(game.monsters[0].pos==Position{14,10},"trap exit"); game.player={10,10}; end_turn();
+    require(game.monsters[0].pos==Position{13,10} && game.monsters[0].hp<hp,"trap reentry");
+    setup({12,10}); game.features[0].pos={15,10}; game.features[1]={{13,10},FEATURE_MAGIC_DRAIN_TRAP|MAP_FEATURE_HIDDEN};
+    game.walls[(10*MAP_W+16)>>3]|=uint8_t(1u<<(16&7)); force_monster(0,1,0);
+    require(game.monsters[0].pos==Position{15,10} && game.monsters[0].hp>=93 && game.monsters[0].hp<=97 &&
+        game.features[0].id==FEATURE_SPIKE_TRAP && feature_is_hidden(game.features[1].id) && game.monsters[0].stun==4,"knockback final tile only");
+    setup({12,10}); game.features[0].pos={12,10}; game.walls[(10*MAP_W+13)>>3]|=uint8_t(1u<<(13&7)); force_monster(0,1,0);
+    require(game.monsters[0].hp==100 && feature_is_hidden(game.features[0].id),"failed knockback trap");
+    setup(); game.speed=24; game.monsters[0].hp=1; end_turn();
+    require(!game.monsters[0].type && game.hp==100 && game.turns==1 && !game.score && !game.xp,"dead fast monster continued actions");
+    setup({12,10},TROLL); game.speed=24; game.monsters[0].hp=1; end_turn(); require(!game.monsters[0].type,"trap-killed troll regenerated");
+    setup(); game.speed=24; game.features[0].id=FEATURE_SNARE_TRAP|MAP_FEATURE_HIDDEN; end_turn();
+    require(game.monsters[0].pos==Position{11,10} && game.monsters[0].hp==100,
+        "snared fast monster continued moving");
+    // Exercise the public wand and melee entry points, including deferred rays.
+    setup(); game.monsters[0].stun=15; game.speed=1;
+    game.walls[(10*MAP_W+17)>>3]|=uint8_t(1u<<(17&7));
+    game.features[0].pos={16,10}; game.features[1]={{13,10},FEATURE_MAGIC_DRAIN_TRAP|MAP_FEATURE_HIDDEN};
+    game.inventory[0]={WAND_FORCE,0}; set_wand_charges(game.inventory[0],3);
+    require(use_wand(0,1,0) && game.monsters[0].pos==Position{16,10} && game.monsters[0].hp<100 &&
+        game.features[0].id==FEATURE_SPIKE_TRAP && feature_is_hidden(game.features[1].id),"wand landing trap integration");
+    bool hammer=false;
+    for(unsigned seed=1;seed<500 && !hammer;++seed) {
+        setup({11,10},SNAKE); game.monsters[0].stun=15; game.features[0].pos={15,10};
+        game.walls[(10*MAP_W+16)>>3]|=uint8_t(1u<<(16&7));
+        game.inventory[0]=make_equipment(HAMMER_OF_RUIN,0); game.weapon_slot=0; game.random_state=uint16_t(seed);
+        attack_monster(0);
+        if(game.monsters[0].pos==Position{15,10}) {
+            require(game.features[0].id==FEATURE_SPIKE_TRAP,"Hammer landing trap integration"); hammer=true;
+        }
+    }
+    require(hammer,"Hammer heavy hit coverage");
+    setup({11,10}); game.monsters[0].stun=15; game.features[0].pos={11,10}; game.speed=1;
+    game.inventory[0]={WAND_POLYMORPH,0}; set_wand_charges(game.inventory[0],3);
+    require(use_wand(0,1,0) && feature_is_hidden(game.features[0].id),"stationary polymorph triggered trap");
+
+    // A summoned monster waits until the next enemy turn, even in a reused
+    // higher slot. Its fresh packed duration remains untouched this turn.
+    setup(); game.speed=4; game.features[0].id=FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN;
+    for(uint8_t i=1;i<MAP_FEATURES;++i) game.features[i]={{uint8_t(8+i%5),uint8_t(8+i/5)},FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN};
+    end_turn(); unsigned count=0;
+    for(uint8_t i=1;i<MONSTERS;++i) if(game.monsters[i].type) {
+        ++count; require(game.monsters[i].hp==monster_health(game.monsters[i].type) && (game.monsters[i].state&MON_TRAP_SUMMONED),"new summon action/state");
+    }
+    require(count>=1 && count<=2,"new summon recursively acted this turn");
+    // Assigning/generated monsters is not an entry event.
+    setup({11,10},MIMIC); game.monsters[0].state=MON_TRAP_SUMMONED; end_turn(); require(game.monsters[0].hp==100,"spawn triggered trap");
+    // No-feature and unrelated feature movement are byte-identical, including RNG.
+    for(unsigned seed=1;seed<=256;++seed) {
+        setup(); game.features[0]={}; game.random_state=uint16_t(seed); Game start=game;
+        end_turn(); Game empty=game; game=start; game.features[0]={{40,20},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN}; end_turn();
+        game.features[0]={}; require(!std::memcmp(&empty,&game,sizeof game),"unrelated trap changed movement/status/RNG");
+    }
+}
 void generation_checks() {
     unsigned roster[FEATURE_TYPES + 1] = {}; unsigned archetypes[4] = {};
     for(uint16_t seed = 1; seed <= 4096; ++seed) {
@@ -401,5 +579,5 @@ void generation_checks() {
 void check_map_features() {
     static_assert(sizeof(MapFeature) == 3 && sizeof(Game) == 810 && offsetof(Game, features) == 773, "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
-    teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
+    monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
 }

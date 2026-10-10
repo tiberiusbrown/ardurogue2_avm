@@ -96,10 +96,16 @@ def state_fields(case):
         "digging_wall": "(game.walls[(16 * MAP_W + 35) >> 3] & (1u << (35 & 7))) != 0",
     }
     fields = {key: re.sub(r'\b(game|MAP_W)\b', r'rogue::\1', expr) for key, expr in fields.items()}
-    if case.name.startswith(("trap_", "feature_")):
+    if case.name.startswith(("trap_", "feature_", "monster_trap_")):
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
+    if case.name.startswith("monster_trap_"):
+        fields["monster_x"] = "rogue::game.monsters[0].pos.x"
+        fields["monster_y"] = "rogue::game.monsters[0].pos.y"
+        for i in range(1, 4):
+            fields[f"other_type_{i}"] = f"rogue::game.monsters[{i}].type"
+            fields[f"other_hp_{i}"] = f"rogue::game.monsters[{i}].hp"
     if case.name == "storm_splash":
         for i in (1, 2, 3): fields[f"splash_hp_{i}"] = f"rogue::game.monsters[{i}].hp"
     if case.name == "glass_break":
@@ -232,6 +238,20 @@ def validate_outcome(case, before, after, explored):
     if case.name == "feature_spring": require(after["hp"] > before["hp"], "spring did not heal")
     if case.name == "feature_holy": require(after["monster_hp"] < before["monster_hp"], "holy pulse did not damage monster")
     if case.name == "trap_phoenix": require(after["hp"] == 100 and after["amulet"] == 255, "trap resurrection failed")
+    if case.name.startswith("monster_trap_"):
+        require(after["feature_id"] == (before["feature_id"] & ~1), "monster landing trap not revealed/retained")
+        if case.name in ("monster_trap_multi", "monster_trap_force", "monster_trap_hammer", "monster_trap_spread"):
+            require(after["monster_hp"] < before["monster_hp"], "monster trap damage missing")
+        if case.name in ("monster_trap_multi", "monster_trap_spread"):
+            require(all(after[f"other_hp_{i}"] < before[f"other_hp_{i}"] for i in range(1,4)), "multiple monster trap damage missing")
+        if case.name == "monster_trap_busy":
+            require(after["other_hp_2"] < before["other_hp_2"], "busy monster trap damage missing")
+        if case.name == "monster_trap_kills":
+            require(after["monster_type"] == 0 and all(after[f"other_type_{i}"] == 0 for i in range(1,4)) and after["score"] == before["score"], "environmental kills/credit missing")
+        if case.name == "monster_trap_teleport":
+            require((after["monster_x"], after["monster_y"]) != (33,16) and after["monster_hp"] == before["monster_hp"], "monster teleport missing")
+        if case.name == "monster_trap_summon":
+            require(after["other_type_1"] != 0 and after["monster_hp"] == before["monster_hp"], "monster summons missing")
     if case.name.startswith("move_"):
         require(position_after == (before["x"] + 1, before["y"]), "player did not move right")
     if case.name == "attack_hit":
@@ -357,13 +377,17 @@ def validate_browsing(case, before, before_frame, after_frame):
                         "inventory viewport did not scroll to the intended grouped rows")
 
 
-def validate_sample(case, contract, folder, output):
+def validate_sample(case, contract, folder, output, more_pcs=(), completed_after=None):
     values = [int(value) for value in re.findall(r"\(unsigned int\) \$\d+ = (\d+)", output)]
     fields = list(state_fields(case))
     require(len(values) == 2 + 2 * len(fields) and values[:2] == [case.index, case.index],
             "missing compiled case selection or typed state capture")
     before = dict(zip(fields, values[2:2 + len(fields)]))
     after = dict(zip(fields, values[2 + len(fields):]))
+    if completed_after is not None:
+        require(set(completed_after) == set(fields), "missing completed-turn state fields")
+        (folder / "boundary.json").write_text(json.dumps(after, indent=2) + "\n", encoding="utf-8")
+        after = completed_after
     records = records_from(output)
     require(not any(record.get("ok") is False for record in records), "debugger command failed")
     stops = [record for record in records if "requested_cycles" in record]
@@ -378,7 +402,7 @@ def validate_sample(case, contract, folder, output):
         require(modal_pcs and end["pc"] in {int(pc, 16) for pc in modal_pcs},
                 "stopped before inventory display returned to the modal input loop")
     else:
-        require(end["pc"] == ready["pc"], "stopped before final render returned to main input loop")
+        require(end["pc"] == ready["pc"] or end["pc"] in more_pcs, "stopped before final render or displayed [more] input boundary")
     profile = json.loads((folder / "turn.avmp").read_text(encoding="utf-8"))
     window = profile["window"]
     cycles = int(window["end_cycle"]) - int(window["start_cycle"])
@@ -390,9 +414,9 @@ def validate_sample(case, contract, folder, output):
             sum(int(row["cycles"]) for row in profile["pcs"]) == cycles,
             "profile and input-to-ready clock interval do not reconcile")
     renderer = "_ZN5rogue16render_inventoryE" if case.setup in ("browse", "projectile_browse") else "_ZN5rogue6renderEv"
-    require(any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
+    require(end["pc"] in more_pcs or any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
             "the measured turn did not execute the final render")
-    require(not any(("rogue::animate_" in row["function"] and case.setup != "projectile") or
+    require(not any(("rogue::animate_" in row["function"] and case.setup not in ("projectile", "wand")) or
                     row["linkage"] == "_ZN5rogue10make_floorEv" or
                     row["function"].lstrip(":").startswith("bench_") or
                     Path(row.get("file", "").replace("\\", "/")).name == "bench.cpp"
@@ -412,11 +436,91 @@ def validate_sample(case, contract, folder, output):
             "start_pc": start["pc"], "end_pc": end["pc"],
             "profile": str(folder / "turn.avmp"), "identity": profile["identity"],
             "start_state_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest(),
-            "display_hash": profile["end_display_hash"]}
+            "display_hash": profile["end_display_hash"],
+            "endpoint": "more" if end["pc"] in more_pcs else "ready"}
+
+
+def run_paginated(case, contract, folder, lldb, elf, native, deadline_ms, timeout):
+    """Measure every input-to-page/ready interval; acknowledge all status pages.
+
+    Waits for acknowledgment lie outside profile windows. The final snapshot
+    still validates the complete turn, including effects occurring after pages.
+    """
+    script = make_commands(case, contract, folder, native, deadline_ms)
+    prefix, tail = script.split("avm profile start", 1)
+    snapshot_start = tail.index("expr --")
+    final_commands = tail[snapshot_start:]
+    lines = (Path(contract["source_dir"]) / "status.cpp").read_text().splitlines()
+    more_line = next(i + 1 for i, line in enumerate(lines) if "while(avm_buttons() & AVM_BUTTON_A)" in line)
+    boundary_command = f"breakpoint set --file status.cpp --line {more_line}\nbreakpoint list"
+    replay = ""
+    segments, first, logs, ready_pc, more_pcs = [], None, [], None, set()
+    for page in range(32):
+        name = "turn" if page == 0 else f"page-{page}"
+        button = case.button if page == 0 else "A"
+        commands = prefix + boundary_command + "\n" + replay + "\n".join([
+            "avm time" if page else "", "avm profile start" + (" --native" if native else ""),
+            "avm button set " + button, f"avm run-for {deadline_ms}ms", "avm time", "avm profile stop",
+            f"avm profile save {quote(folder / (name + '.avmp'))}", "avm profile report --top 12"]) + "\n" + (final_commands if page == 0 else final_commands.replace("frame.pgm", f"page-{page}-frame.pgm"))
+        command_file = folder / (name + '.lldb')
+        command_file.write_text(commands, encoding="utf-8")
+        run = subprocess.run([str(lldb), "--batch", "--source", str(command_file), str(elf)],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout)
+        output = run.stdout
+        logs.append(output)
+        (folder / (name + '.log')).write_text(output, encoding="utf-8")
+        require(run.returncode in (0, 1) and "error:" not in output and
+                not any(r.get("ok") is False for r in records_from(output)), "debugger failed; see page log")
+        clocks = [r for r in records_from(output) if "seconds_since_reset" in r]
+        if page == 0:
+            ready_pc = clocks[0]["pc"]
+            more_id = int(re.search(r"\(lldb\) " + re.escape(boundary_command.splitlines()[0]) + r"\nBreakpoint (\d+):", output)[1])
+            # The list includes all inline instances of this source breakpoint.
+            more_pcs = {int(address,16) for address in re.findall(
+                rf"^\s*{more_id}(?:\.\d+)?:.*address = (?:.*?\[)?(0x[0-9a-fA-F]+)", output, re.M)}
+            more_pcs.update(int(address,16) for address in re.findall(
+                rf"^Breakpoint {more_id}:.*address = (0x[0-9a-fA-F]+)", output, re.M))
+            first = output
+        start, end = clocks[-2:]
+        profile = json.loads((folder / (name + '.avmp')).read_text())
+        window = profile["window"]
+        require(window["complete"] and window["stop_reason"] == "breakpoint" and
+                int(window["partial_cycles"]) == 0 and int(window["discontinuities"]) == 0,
+                "page profile window is incomplete")
+        cycles = end["cycles"] - start["cycles"]
+        require(cycles > 0 and int(window["start_cycle"]) == start["cycles"] and
+                int(window["end_cycle"]) == end["cycles"] and
+                sum(int(row["cycles"]) for row in profile["pcs"]) == cycles,
+                "page clock and profile do not reconcile")
+        require(end["pc"] == ready_pc or end["pc"] in more_pcs, "unexpected page input boundary")
+        segments.append({"page": page, "cycles": cycles, "ms": cycles * 1000 / CLOCK_HZ,
+                         "start_cycle": start["cycles"], "end_cycle": end["cycles"],
+                         "start_pc": start["pc"], "end_pc": end["pc"],
+                         "display_hash": profile["end_display_hash"],
+                         "endpoint": "ready" if end["pc"] == ready_pc else "more",
+                         "profile": str(folder / (name + '.avmp'))})
+        require(run.returncode == 0 or end["pc"] in more_pcs, "debugger exited abnormally at final readiness")
+        if end["pc"] == ready_pc: break
+        replay += (f"avm button set {button}\navm run-for {deadline_ms}ms\n"
+                   f"breakpoint disable {more_id}\navm button set\navm run-for 1ms\nbreakpoint enable {more_id}\n")
+    else:
+        raise ValueError("turn exceeded 32 status pages")
+    # Validate the first measured interval and the independently captured final
+    # state after all pages; retain the partial boundary state separately.
+    values = [int(value) for value in re.findall(r"\(unsigned int\) \$\d+ = (\d+)", output)]
+    fields = list(state_fields(case))
+    require(len(values) == 2 + 2 * len(fields), "missing final page state capture")
+    completed = dict(zip(fields, values[-len(fields):]))
+    measurement = validate_sample(case, contract, folder, first, more_pcs, completed)
+    worst = max(segments, key=lambda segment: segment["cycles"])
+    measurement.update({key: value for key, value in worst.items() if key != "page"})
+    measurement.update(computation_ms=sum(s["ms"] for s in segments), segments=segments)
+    (folder / "lldb.log").write_text("\n".join(logs), encoding="utf-8")
+    return measurement
 
 
 def write_summary(folder, cases, goal_ms, elf, contract):
-    summary = {"schema": 2, "metric": "input-to-ready elapsed emulated cycles",
+    summary = {"schema": 3, "metric": "input-to-ready or displayed [more] elapsed emulated cycles",
                "clock_hz": CLOCK_HZ, "goal_ms": goal_ms, "elf": str(elf),
                "source_bench_sha256": contract["bench_sha256"], "benchmarks": cases}
     (folder / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -426,7 +530,7 @@ def write_summary(folder, cases, goal_ms, elf, contract):
         for case in cases:
             writer.writerow((case["name"], case["cycles"], case["ms"], goal_ms, case["meets_goal"]))
     lines = [f"# Turn benchmarks: {goal_ms:g} ms limit", "",
-             "Elapsed emulated time at 16 MHz, from submitted button to the main input wait after final render/display.", "",
+             "Elapsed emulated time at 16 MHz, from submitted button to readiness or a displayed [more] prompt. Paginated turns report the largest segment; every page is acknowledged and the completed turn is validated.", "",
              "| Benchmark | Cycles | ms | Goal |", "| --- | ---: | ---: | --- |"]
     for case in cases:
         lines.append(f"| {case['name']} | {case['cycles']} | {case['ms']:.3f} | {'PASS' if case['meets_goal'] else 'OVER'} |")
@@ -461,6 +565,7 @@ def main(argv=None):
     lldb = args.lldb or (args.sdk_root / "bin" / ("avm-lldb" + suffix) if args.sdk_root else shutil.which("avm-lldb"))
     require(args.emit_only or (lldb and Path(lldb).is_file()), "provide --lldb or --sdk-root, or put avm-lldb on PATH")
     contract = source_contract(args.source_dir.resolve())
+    contract["source_dir"] = str(args.source_dir.resolve())
     cases = [case for case in BENCHMARKS if not args.benchmark or case.name in args.benchmark]
     args.output.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-")
@@ -475,16 +580,20 @@ def main(argv=None):
         if args.emit_only:
             continue
         try:
-            run = subprocess.run([str(Path(lldb).resolve()), "--batch", "--source", str(commands), str(args.elf.resolve())],
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
-            (case_dir / "lldb.log").write_text(run.stdout, encoding="utf-8")
-            require(run.returncode == 0, f"avm-lldb exited {run.returncode}; see {case_dir / 'lldb.log'}")
-            measurement = validate_sample(case, contract, case_dir, run.stdout)
+            if case.name.startswith("monster_trap_"):
+                measurement = run_paginated(case, contract, case_dir, Path(lldb).resolve(), args.elf.resolve(),
+                                            args.native, args.deadline_ms, args.timeout)
+            else:
+                run = subprocess.run([str(Path(lldb).resolve()), "--batch", "--source", str(commands), str(args.elf.resolve())],
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
+                (case_dir / "lldb.log").write_text(run.stdout, encoding="utf-8")
+                require(run.returncode == 0, f"avm-lldb exited {run.returncode}; see {case_dir / 'lldb.log'}")
+                measurement = validate_sample(case, contract, case_dir, run.stdout)
             meets_goal = measurement["ms"] <= args.goal_ms
             print(f"{case.name:22} {measurement['ms']:9.3f} ms  {'PASS' if meets_goal else 'OVER'}", flush=True)
             if args.html:
                 profiler = Path(lldb).resolve().with_name("avm-prof" + suffix)
-                subprocess.run([str(profiler), "report", str(case_dir / "turn.avmp"), "--html", str(case_dir / "profile.html")],
+                subprocess.run([str(profiler), "report", measurement["profile"], "--html", str(case_dir / "profile.html")],
                                check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=args.timeout)
         except (ValueError, subprocess.SubprocessError) as error:
             (case_dir / "error.txt").write_text(str(error) + "\n", encoding="utf-8")

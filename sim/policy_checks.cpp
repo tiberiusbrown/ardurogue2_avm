@@ -174,6 +174,21 @@ void retreat_and_inventory() {
 }
 void check_v2_policy() {
     {
+        OmniscientAgent agent; arena(); agent.reset();
+        for(auto& item:game.inventory) item={POTION_HEALING,1};
+        game.inventory[0]=make_equipment(SHORT_BOW,0);
+        game.ground[0]={game.player,{WAND_FIRE,10}};
+        auto choice=agent.choose_pickup({game,0,0});
+        check(choice.kind==ActionKind::Wait,"unarmed bow/wand reverse swap regression");
+        // A substantially better wand may replace the bow, but the bow must
+        // then fail the reverse acquisition comparison.
+        game.ground[0].item={WAND_STRIKING,15};
+        choice=agent.choose_pickup({game,0,0});
+        check(choice.kind==ActionKind::Take && choice.slot==0 && dispatch(choice),"valuable wand/bow replacement failed");
+        check(agent.choose_pickup({game,1,1}).kind==ActionKind::Wait,"bow reverse acquisition loop");
+    }
+
+    {
         OmniscientAgent agent;
         arena(); game.floor=4; game.has_amulet=1; game.player={10,10}; game.up={14,10}; game.down={50,30};
         std::memset(game.walls,0xff,sizeof game.walls);

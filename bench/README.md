@@ -35,7 +35,7 @@ The normal `ardurogue2.elf` and root `.arduboy` do not include the benchmark cod
 
 ## Run
 
-Build the game and run all 30 cases once:
+Build the game and run all 66 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
@@ -188,3 +188,24 @@ searching eight adjacent traps, dense feature rendering and a lethal trap with
 Phoenix revival. Choices are prepared before timing; submitted acceptance or
 item selection includes the production effect, enemy turn and final rendering.
 All 58 final cases meet 100 ms; see [the validation report](../docs/MAP_FEATURES.md).
+
+## Monster trap workloads and status pages
+
+Eight additional cases cover four monster entries, four environmental kills,
+teleport, summoning, force-wand knockback, Hammer knockback, a busy late-floor
+turn with twelve monsters, and four spreading-force landings. Production keeps
+all witnessed status messages. The profiler measures each input through the
+next displayed `[more]` prompt or final main-loop readiness, then acknowledges
+pages using actual release/A inputs and validates the completed turn. The summary
+reports the worst segment, with every segment and total computation time retained
+in schema-3 JSON. A displayed prompt is an input boundary; waiting for human
+acknowledgment is excluded. Total computation across multiple pages can exceed
+100 ms while each response remains within the input-response budget.
+
+Each page is replayed deterministically from the compiled fixture in a fresh
+batch debugger session before its profile window. This avoids relying on LLDB
+Python bindings or asynchronous debugger behavior. Captures and scripts are
+retained for every page. Animation drawing/delays for wand rays are omitted only
+in BENCH builds, as for other excluded animation; production animation is intact.
+All original 58 cases retain their existing final-render endpoints. See
+[the monster-trap measurements](../docs/MONSTER_TRAPS_2026-10-10.md).

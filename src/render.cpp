@@ -159,6 +159,9 @@ static void animation_tile(int16_t x, int16_t y)
 __attribute__((noinline)) void animate_ray(Position origin, int8_t dx,
                                            int8_t dy, uint8_t steps)
 {
+#if defined(ARDUROGUE2_BENCH)
+    (void)origin; (void)dx; (void)dy; (void)steps;
+#else
     render_play();
     int16_t x = origin.x, y = origin.y;
     for(uint8_t step = 0; step < steps; ++step) {
@@ -168,6 +171,7 @@ __attribute__((noinline)) void animate_ray(Position origin, int8_t dx,
     }
     render_play();
     avm_display(false);
+#endif
 }
 
 // Four 4x4 arrow frames, one for each cardinal direction.
@@ -217,6 +221,7 @@ __attribute__((noinline)) void animate_fire_burst(Position center)
     avm_display(false);
 }
 
+#if !defined(ARDUROGUE2_BENCH)
 __attribute__((noinline)) static void draw_spreading_rays(
     Position origin, const uint8_t steps[4])
 {
@@ -236,13 +241,19 @@ __attribute__((noinline)) static void draw_spreading_rays(
     }
 }
 
+#endif
+
 __attribute__((noinline)) void animate_spreading_rays(
     Position origin, const uint8_t steps[4])
 {
+#if defined(ARDUROGUE2_BENCH)
+    (void)origin; (void)steps;
+#else
     render_play();
     draw_spreading_rays(origin, steps);
     render_play();
     avm_display(false);
+#endif
 }
 
 __attribute__((noinline)) static void draw_fire_bursts(

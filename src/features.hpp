@@ -19,6 +19,8 @@ uint8_t observed_feature_at(const Game& source, Position pos);
 void reveal_feature(uint8_t index);
 void remove_feature(uint8_t index);
 void activate_entry_feature(uint8_t index, bool forced = false);
+// Tile entry only; spawning and teleporting never call this resolver.
+void activate_monster_trap(uint8_t monster_index);
 void resolve_forced_entry();
 void search_traps();
 void wait_search();

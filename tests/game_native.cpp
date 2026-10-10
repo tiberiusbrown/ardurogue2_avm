@@ -11,6 +11,10 @@
 #include <string>
 
 static std::string status_text;
+static unsigned monster_status_count=0;
+void reset_feature_status() { status_text.clear(); monster_status_count=0; }
+unsigned feature_monster_names() { return monster_status_count; }
+const std::string& feature_status_text() { return status_text; }
 static rogue::Item last_status_item = {};
 static int ray_animations = 0, burst_animations = 0;
 static int spreading_animations = 0, multi_burst_animations = 0;
@@ -38,8 +42,9 @@ void status(const char* words, char punctuation) {
 }
 void status(Item item) { last_status_item = item; }
 void status(Item item, char) { last_status_item = item; }
-void status(const Monster&) {}
-void status(const Monster&, char) {}
+void status(const Monster&) { ++monster_status_count; }
+void status(const Monster&, char) { ++monster_status_count; }
+
 void status_number(uint8_t) {}
 void status_number(uint8_t, char) {}
 void animate_arrow(Position, int8_t, int8_t, uint8_t) {}

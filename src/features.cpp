@@ -57,6 +57,19 @@ static void physical_damage(uint8_t raw) {
     hurt_player(physical_damage_after_armor(raw,
         armor_absorption(player_armor_rating(), player_armor_enchant())));
 }
+// The four damaging player traps share their depth rolls with monsters.
+static uint8_t trap_damage_roll(uint8_t type) {
+    uint8_t depth = trap_tuning_depth();
+    switch(type) {
+    case FEATURE_SPIKE_TRAP: return depth < 2 ? OPENING_SPIKE_MIN + roll(OPENING_SPIKE_ROLL) : 3 + roll(5);
+    case FEATURE_POISON_DART_TRAP: return 1 + roll(depth < 2 ? OPENING_DART_ROLL : 3);
+    case FEATURE_FLAME_TRAP: return depth < 4 ? MIDDLE_FLAME_MIN + roll(MIDDLE_FLAME_ROLL) : 5 + roll(5);
+    case FEATURE_FROST_TRAP: return depth < 4 ? MIDDLE_FROST_MIN + roll(MIDDLE_FROST_ROLL) : 3 + roll(4);
+    case FEATURE_MAGIC_DRAIN_TRAP: return 3 + roll(4);
+    case FEATURE_RUST_TRAP: return 2 + roll(3);
+    default: return 0;
+    }
+}
 static void weaken() { if(game.weakened < 3) ++game.weakened; }
 static void confuse(bool trap = false) {
     if(amulet_bonus(AMULET_CLARITY) <= 0) {
@@ -114,18 +127,18 @@ static void improve_equipped() {
     else set_equipment_enchant(game.inventory[slot], equipment_enchant(game.inventory[slot]) + 1);
 }
 // Only bounded local work during activation, never a map-sized gameplay scan.
-static bool summon(bool trap, bool undead = false) {
+static bool summon(Position origin, bool trap, bool undead = false, bool visible = true) {
     uint8_t slot = NONE;
     for(uint8_t i = 0; i < MONSTERS; ++i) if(!game.monsters[i].type) { slot = i; break; }
     if(slot == NONE) return false;
     uint8_t start = roll(25);
     for(uint8_t n = 0; n < 25; ++n) {
         uint8_t cell = static_cast<uint8_t>((start + n) % 25);
-        int16_t x = game.player.x + static_cast<int16_t>(cell % 5) - 2;
-        int16_t y = game.player.y + static_cast<int16_t>(cell / 5) - 2;
+        int16_t x = origin.x + static_cast<int16_t>(cell % 5) - 2;
+        int16_t y = origin.y + static_cast<int16_t>(cell / 5) - 2;
         Position pos{static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
         if(blocked(x, y) || pos == game.player || monster_at(pos) != NONE ||
-           !can_see(pos)) continue;
+           (visible && !can_see(pos))) continue;
         uint8_t type = undead ? (game.floor >= 4 ? PHANTOM : ZOMBIE) :
             generation::encounter_type(game.floor, game.random_state);
         Monster monster{pos, type, monster_health(type), 0, {0, 0},
@@ -146,6 +159,88 @@ static void gift_item() {
     SIM_EVENT(sim::EventKind::GeneratedItem, slot, item.type, is_stackable(item.type) ? item_value(item) : 1);
     status(F("You discover")); status(item, '.');
 }
+// Formatting and paging run after effect/placement temporaries have unwound.
+__attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_t type, bool lethal) {
+    const Monster& monster = game.monsters[index];
+    if(!can_see(monster.pos)) return;
+    if(!player_can_see_monster(index)) {
+        status(F("A trap activates!"));
+        return;
+    }
+    if(lethal) { monster_status(monster, F("dies in a trap!")); return; }
+    switch(type) {
+    case FEATURE_SPIKE_TRAP: monster_status(monster, F("is struck by spikes!")); break;
+    case FEATURE_POISON_DART_TRAP: monster_status(monster, F("is poisoned!")); break;
+    case FEATURE_FLAME_TRAP: monster_status(monster, monster.type == DRAGON ? F("ignores the flames!") : F("is burned!")); break;
+    case FEATURE_FROST_TRAP: monster_status(monster, F("is chilled!")); break;
+    case FEATURE_SNARE_TRAP: monster_status(monster, F("is caught in a snare!")); break;
+    case FEATURE_TELEPORT_TRAP: monster_status(monster, F("triggers a teleport trap!")); break;
+    case FEATURE_CONFUSION_TRAP: monster_status(monster, F("is confused!")); break;
+    case FEATURE_MAGIC_DRAIN_TRAP: monster_status(monster, F("is struck by magic!")); break;
+    case FEATURE_SUMMONING_TRAP: status(F("A trap calls monsters!")); break;
+    case FEATURE_RUST_TRAP: monster_status(monster, F("is splashed by acid!")); break;
+    default: break;
+    }
+}
+static void trap_effect(Monster& monster, MonsterEffect effect, uint8_t duration, uint8_t type) {
+    (void)type;
+    if(monster_effect(monster, effect) < duration) {
+        set_monster_effect(monster, effect, duration);
+        SIM_EVENT(sim::EventKind::MonsterTrapStatus, NONE, type, 1, effect);
+    }
+}
+__attribute__((noinline)) void activate_monster_trap(uint8_t index) {
+#if defined(ARDUROGUE2_SIM)
+    if(!sim::monster_traps_enabled()) return;
+#endif
+    if(index >= MONSTERS || !game.monsters[index].type) return;
+    Monster& monster = game.monsters[index];
+    uint8_t feature = feature_at(monster.pos);
+    if(feature == NONE || !feature_is_trap(game.features[feature].id)) return;
+    uint8_t type = feature_type(game.features[feature].id);
+    if(can_see(monster.pos)) reveal_feature(feature);
+    SIM_EVENT(sim::EventKind::MonsterTrapActivated, index, type);
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope source(sim::Cause::MonsterTrap, type);
+#endif
+    if(type == FEATURE_TELEPORT_TRAP) {
+        // Report at the origin while the monster is still observable.
+        monster_trap_message(index, type, false);
+        bool moved = teleport_monster(index, false);
+        SIM_EVENT(sim::EventKind::MonsterTrapTeleport, index, type, moved);
+        (void)moved;
+        return;
+    }
+    if(type == FEATURE_SUMMONING_TRAP) {
+        monster_trap_message(index, type, false);
+        uint8_t count = 1 + roll(2);
+        while(count--) summon(monster.pos, true, false, false);
+        return;
+    }
+    uint8_t damage = trap_damage_roll(type);
+    if(type == FEATURE_SPIKE_TRAP || type == FEATURE_POISON_DART_TRAP || type == FEATURE_RUST_TRAP)
+        damage = physical_damage_after_armor(damage, armor_absorption(monster_armor(monster.type), 0));
+    if(type == FEATURE_FLAME_TRAP && monster.type == DRAGON) damage = 0;
+    bool lethal = damage >= monster.hp;
+    // Status formats the live monster; death clears its type after the message.
+    monster_trap_message(index, type, lethal);
+    if(damage || !monster.hp) damage_monster(index, damage, false);
+    if(!monster.type) return;
+    switch(type) {
+    case FEATURE_POISON_DART_TRAP: trap_effect(monster, MON_WEAKENED, 15, type); break;
+    case FEATURE_FROST_TRAP: trap_effect(monster, MON_SLOWED, 6 + roll(5), type); break;
+    case FEATURE_CONFUSION_TRAP: trap_effect(monster, MON_CONFUSED, 5 + roll(4), type); break;
+    case FEATURE_SNARE_TRAP: {
+        uint8_t duration = 2 + roll(2);
+        if(monster.stun < duration) {
+            monster.stun = duration;
+            SIM_EVENT(sim::EventKind::MonsterTrapStatus, index, type, 1, 4);
+        }
+        break;
+    }
+    default: break;
+    }
+}
 __attribute__((noinline)) void activate_entry_feature(uint8_t index, bool forced) {
     if(index >= MAP_FEATURES || session.ended) return;
     uint8_t type = feature_type(game.features[index].id);
@@ -157,14 +252,14 @@ __attribute__((noinline)) void activate_entry_feature(uint8_t index, bool forced
 #endif
         switch(type) {
         case FEATURE_SPIKE_TRAP:
-            status(F("You step on a spike trap!")); physical_damage(trap_tuning_depth() < 2 ? OPENING_SPIKE_MIN + roll(OPENING_SPIKE_ROLL) : 3 + roll(5)); break;
+            status(F("You step on a spike trap!")); physical_damage(trap_damage_roll(type)); break;
         case FEATURE_POISON_DART_TRAP:
-            status(F("A poisoned dart strikes you!")); physical_damage(1 + roll(trap_tuning_depth() < 2 ? OPENING_DART_ROLL : 3));
+            status(F("A poisoned dart strikes you!")); physical_damage(trap_damage_roll(type));
             if(!session.ended) weaken(); break;
         case FEATURE_FLAME_TRAP:
-            status(F("Flames erupt beneath you!")); player_take_fire_damage(trap_tuning_depth() < 4 ? MIDDLE_FLAME_MIN + roll(MIDDLE_FLAME_ROLL) : 5 + roll(5), 6); break;
+            status(F("Flames erupt beneath you!")); player_take_fire_damage(trap_damage_roll(type), 6); break;
         case FEATURE_FROST_TRAP:
-            status(F("Freezing air surrounds you!")); player_take_magic_damage(trap_tuning_depth() < 4 ? MIDDLE_FROST_MIN + roll(MIDDLE_FROST_ROLL) : 3 + roll(4), 6);
+            status(F("Freezing air surrounds you!")); player_take_magic_damage(trap_damage_roll(type), 6);
             if(!session.ended && !magic_save(game.magic_resistance, 6)) {
                 uint8_t duration = 4 + roll(4);
                 if(game.slowed < duration) game.slowed = duration;
@@ -191,7 +286,7 @@ __attribute__((noinline)) void activate_entry_feature(uint8_t index, bool forced
         }
         case FEATURE_SUMMONING_TRAP: {
             status(F("Monsters answer a sinister call!")); uint8_t count = 1 + roll(2);
-            while(count--) summon(true); break;
+            while(count--) summon(game.player, true); break;
         }
         case FEATURE_RUST_TRAP: {
             status(F("Corrosive liquid splashes over your equipment!")); uint8_t slot = random_equipped();
@@ -236,7 +331,7 @@ static void fountain() {
     else if(outcome < 85) {
         uint8_t& stat = roll(2) ? game.strength : game.dexterity;
         if(stat < 12) ++stat; else blessing();
-    } else if(outcome < 90) { if(!summon(false)) blessing(); }
+    } else if(outcome < 90) { if(!summon(game.player, false)) blessing(); }
     else if(outcome < 95) random_identify();
     else teleport_player();
 }
@@ -290,7 +385,7 @@ __attribute__((noinline)) bool resolve_feature(uint8_t index, FeatureChoice choi
         else if(outcome < 5) random_uncurse();
         else if(outcome == 5) random_identify();
         else if(outcome == 6) { if(roll(2)) weaken(); else confuse(); }
-        else if(!summon(false)) blessing();
+        else if(!summon(game.player, false)) blessing();
         break;
     }
     case FEATURE_SACRIFICIAL_ALTAR: sacrifice(choice.slot); break;
@@ -301,13 +396,13 @@ __attribute__((noinline)) bool resolve_feature(uint8_t index, FeatureChoice choi
     }
     case FEATURE_STATUE: {
         uint8_t outcome = roll(4);
-        if(outcome < 2) { if(!summon(false)) blessing(); }
+        if(outcome < 2) { if(!summon(game.player, false)) blessing(); }
         else if(outcome == 2) gift_item();
         else { blessing(); cure(); } break;
     }
     case FEATURE_SARCOPHAGUS: {
         uint8_t outcome = roll(4);
-        if(outcome < 2) { if(!summon(false, true)) blessing(); }
+        if(outcome < 2) { if(!summon(game.player, false, true)) blessing(); }
         else if(outcome == 2) gift_item();
         else game.score += 25; break;
     }

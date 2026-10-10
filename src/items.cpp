@@ -743,22 +743,45 @@ __attribute__((noinline)) bool throw_or_shoot(uint8_t slot, int8_t dx, int8_t dy
     return true;
 }
 
-static bool teleport_monster(uint8_t index)
+__attribute__((noinline)) static bool relocate_monster(uint8_t index)
 {
+    if(index >= MONSTERS || !game.monsters[index].type) return false;
     Monster& target = game.monsters[index];
+    Position destination{NONE, NONE};
     for(uint8_t attempt = 0; attempt < 100; ++attempt) {
         Position pos = {
             static_cast<uint8_t>(next_random(game.random_state) % MAP_W),
             static_cast<uint8_t>(next_random(game.random_state) % MAP_H)};
-        if(!legal_teleport_position(pos, false))
-            continue;
-        target.pos = pos;
-        set_monster_effect(target, MON_CONFUSED, 8);
-        monster_status(target, F("disappears!"));
-        return true;
+        if(legal_teleport_position(pos, false)) { destination = pos; break; }
     }
-    status(F("Nothing happens."));
-    return false;
+    if(destination.x == NONE) {
+        // Bounded fallback, first preferring non-stair tiles. Occupancy rejects
+        // the original tile as well as other monsters and the player.
+        for(uint8_t y = 0; y < MAP_H; ++y) {
+            for(uint8_t x = 0; x < MAP_W; ++x) {
+                Position pos{x, y};
+                if(blocked(x, y) || pos == game.player || monster_at(pos) != NONE) continue;
+                if(pos != game.up && pos != game.down) { destination = pos; break; }
+                if(destination.x == NONE) destination = pos;
+            }
+            if(destination.x != NONE && destination != game.up && destination != game.down) break;
+        }
+    }
+    if(destination.x == NONE) return false;
+    target.pos = destination;
+    return true;
+}
+// Placement work unwinds before wand feedback; traps use relocation alone.
+bool teleport_monster(uint8_t index, bool wand)
+{
+    bool moved = relocate_monster(index);
+    if(wand) {
+        if(moved) {
+            set_monster_effect(game.monsters[index], MON_CONFUSED, 8);
+            monster_status(game.monsters[index], F("disappears!"));
+        } else status(F("Nothing happens."));
+    }
+    return moved;
 }
 
 static bool in_wand_area(Position pos, Position center)
@@ -807,7 +830,7 @@ static void dig_ray(int8_t dx, int8_t dy, bool powerful)
 }
 
 static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
-                             int8_t dx, int8_t dy, bool powerful)
+                             bool powerful)
 {
     if(powerful && (type == WAND_TELEPORT || type == WAND_ICE ||
                     type == WAND_POLYMORPH)) {
@@ -835,9 +858,6 @@ static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
     target.state |= MON_AGGRO;
     SIM_EVENT(sim::EventKind::PlayerAttack, hit, target.type);
     switch(type) {
-    case WAND_FORCE:
-        force_monster(hit, dx, dy, powerful);
-        break;
     case WAND_TELEPORT:
         teleport_monster(hit);
         break;
@@ -856,6 +876,7 @@ static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
         break;
     default: break;
     }
+    return;
 }
 
 static const int8_t PROGMEM wand_directions[] = {0, -1, 1, 0, 0, 1, -1, 0};
@@ -925,23 +946,36 @@ __attribute__((noinline)) static void resolve_all_fire_rays(bool powerful)
         fire_burst_damage(ends[i], true, wand_fire_radius(powerful));
 }
 
-__attribute__((noinline)) static void resolve_all_other_rays(
-    uint8_t type, bool powerful)
+__attribute__((noinline)) static uint16_t resolve_all_force_rays(bool powerful)
+{
+    uint8_t hits[4];
+    for(uint8_t i = 0; i < 4; ++i)
+        hits[i] = scan_ray(game.player, wand_directions[i * 2], wand_directions[i * 2 + 1], 6).monster;
+    uint16_t landings = 0;
+    for(uint8_t i = 0; i < 4; ++i) {
+        uint8_t hit = hits[i];
+        if(hit == NONE || !game.monsters[hit].type) continue;
+        SIM_EVENT(sim::EventKind::PlayerAttack, hit, game.monsters[hit].type);
+        game.monsters[hit].state |= MON_AGGRO;
+        if(force_monster_move(hit, wand_directions[i * 2], wand_directions[i * 2 + 1], powerful))
+            landings |= uint16_t(1u << hit);
+    }
+    return landings;
+}
+__attribute__((noinline)) static void resolve_all_other_rays(uint8_t type, bool powerful)
 {
     Position ends[4];
     uint8_t hits[4];
     for(uint8_t i = 0; i < 4; ++i) {
-        RayResult ray = scan_ray(game.player, wand_directions[i * 2],
-                                 wand_directions[i * 2 + 1], 6);
+        RayResult ray = scan_ray(game.player, wand_directions[i * 2], wand_directions[i * 2 + 1], 6);
         ends[i] = ray.end;
         hits[i] = ray.monster;
     }
     for(uint8_t i = 0; i < 4 && !session.ended; ++i)
-        resolve_wand_ray(type, ends[i], hits[i], wand_directions[i * 2],
-                         wand_directions[i * 2 + 1], powerful);
+        resolve_wand_ray(type, ends[i], hits[i], powerful);
 }
 
-__attribute__((noinline)) static void single_wand_ray(
+__attribute__((noinline)) static uint16_t single_wand_ray(
     uint8_t type, int8_t dx, int8_t dy, bool powerful)
 {
     RayResult ray = scan_ray(game.player, dx, dy, 6);
@@ -950,7 +984,13 @@ __attribute__((noinline)) static void single_wand_ray(
         if(powerful) animate_fire_bursts(&ray.end, 1, true);
         else animate_fire_burst(ray.end);
         fire_burst_damage(ray.end, true, wand_fire_radius(powerful));
-    } else resolve_wand_ray(type, ray.end, ray.monster, dx, dy, powerful);
+    } else if(type == WAND_FORCE && ray.monster != NONE) {
+        uint8_t hit = ray.monster;
+        SIM_EVENT(sim::EventKind::PlayerAttack, hit, game.monsters[hit].type);
+        game.monsters[hit].state |= MON_AGGRO;
+        return force_monster_move(hit, dx, dy, powerful) ? uint16_t(1u << hit) : 0;
+    } else resolve_wand_ray(type, ray.end, ray.monster, powerful);
+    return 0;
 }
 
 // Separate validation/identification, ray effects and turn resolution so their
@@ -985,7 +1025,7 @@ __attribute__((noinline)) static bool prepare_wand(uint8_t slot, int8_t dx, int8
     }
     return true;
 }
-__attribute__((noinline)) static void apply_wand_effect(uint8_t slot, int8_t dx, int8_t dy)
+__attribute__((noinline)) static uint16_t apply_wand_effect(uint8_t slot, int8_t dx, int8_t dy)
 {
     const Item& item = game.inventory[slot];
     uint8_t type = item.type;
@@ -1009,9 +1049,11 @@ __attribute__((noinline)) static void apply_wand_effect(uint8_t slot, int8_t dx,
         } else if(spreading) {
             animate_all_wand_rays();
             if(type == WAND_FIRE) resolve_all_fire_rays(powerful);
+            else if(type == WAND_FORCE) return resolve_all_force_rays(powerful);
             else resolve_all_other_rays(type, powerful);
-        } else single_wand_ray(type, dx, dy, powerful);
+        } else return single_wand_ray(type, dx, dy, powerful);
     }
+    return 0;
 }
 __attribute__((noinline)) static void finish_wand(uint8_t slot)
 {
@@ -1032,7 +1074,9 @@ __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
     sim::DamageScope damage_source(sim::Cause::Item, slot < INVENTORY ? game.inventory[slot].type : NO_ITEM);
 #endif
     if(!prepare_wand(slot, dx, dy)) return false;
-    apply_wand_effect(slot, dx, dy);
+    uint16_t landings = apply_wand_effect(slot, dx, dy);
+    for(uint8_t i = 0; i < MONSTERS; ++i)
+        if(landings & (1u << i)) activate_monster_trap(i);
     finish_wand(slot);
     if(!session.ended) end_turn();
     return true;

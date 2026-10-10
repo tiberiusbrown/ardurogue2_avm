@@ -74,6 +74,7 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
         if(session.result == ESCAPED) c.close_floor(true);
     }
     r.effective_seed = game.run_seed; r.score = game.score; r.final_floor = game.floor;
+    r.xp = game.xp; r.final_hunger = game.hunger;
     r.hp = game.hp; r.max_hp = player_max_hp(); r.level = game.level; r.has_yendor = game.has_amulet;
     if(r.result != "death") r.death_cause.clear();
     else if(r.death_cause.empty()) r.death_cause = "other";

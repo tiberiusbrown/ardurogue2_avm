@@ -15,7 +15,8 @@ there is no migration.
 
 Zero is an empty slot. Types are the even IDs 2 through 40. Bit 0 (`0x01`)
 means hidden, so hidden spike ID 3 becomes visible spike ID 2. Every trap
-starts hidden. Triggering reveals it before effects; Wait/Search gives each
+starts hidden. Player entry reveals it before effects; monster entry reveals it
+only when `can_see()` confirms the tile is currently visible. Wait/Search gives each
 hidden trap in the eight neighboring cells an independent 1/4 discovery chance.
 Searching consumes one normal turn, does not activate traps, and consumes no
 search RNG when no eligible trap is nearby. Revealed traps stay visible and
@@ -54,6 +55,47 @@ failure simply limits the number summoned. Phoenix Heart uses normal lethal
 damage handling. Teleport's bounded random search falls back to deterministic
 passable tiles, relaxing stair/item avoidance only if necessary; closed doors,
 walls, monsters and the original position remain excluded.
+
+### Monster trap effects
+
+Monsters activate traps on successful ordinary movement, including pursuit,
+wandering, confusion and fear. They use their existing local movement decisions
+and never deliberately avoid hidden or discovered traps. Stationary attacks,
+stun, blocked moves, opening a door, generation, summoning, teleport arrivals and
+stationary polymorph do not activate traps. Leaving and returning activates the
+same permanent trap again. Wand and Hammer knockback activates only the final
+landing tile, after the movement/combat scratch frames unwind; spreading force
+rays defer their landing effects with a temporary local mask.
+
+| Trap | Monster effect |
+| --- | --- |
+| Spike | Same depth-tuned raw damage as the player; inherent armor absorption |
+| Poison dart | Same depth-tuned physical damage and armor; surviving monster gains existing permanent weakened effect |
+| Flame | Same depth-tuned raw fire damage; dragons immune; no player equipment or MR |
+| Frost | Same depth-tuned raw damage, bypassing armor; survivor slowed for 6–10 status ticks |
+| Snare | Stun for 2–3 monster actions; preserve longer stun |
+| Teleport | Same-floor passable unoccupied destination, excluding player/origin; avoid stairs where possible; bounded fallback; preserve HP/effects, no wand confusion or arrival activation |
+| Confusion | 5–8 packed status ticks, preserving longer confusion |
+| Magic drain | 3–6 magical backlash damage, bypassing physical armor |
+| Summoning | Attempt 1–2 nearby floor-roster hostile monsters centered on the trigger; respect terrain/capacity; no arrival activation |
+| Rust | 2–4 physical corrosive damage with inherent armor absorption; no armor mutation |
+
+Monster slow/confusion durations use the existing four-bit fields; weakness uses
+existing permanent weakness semantics. Snare uses the existing stun byte. No new
+persistent state, avoidance memory or per-cell lookup table is required.
+
+Trap damage is environmental: `damage_monster(index, damage, false)` records
+ordinary monster damage/death once, without PlayerAttack, aggression, XP or kill
+score. Lord death retains the normal Yendor drop. `MON_TRAP_SUMMONED` monsters
+remain worth zero XP/score for every death source. A local live-slot mask stops
+killed monsters' remaining actions/status aging/regeneration and prevents newly
+summoned monsters from acting in reused slots during the same enemy turn.
+
+Visible tile activation permanently clears exactly hidden bit 0, even for an
+invisible monster. Offscreen activation keeps hidden traps hidden and produces
+no trap feedback. Named feedback also checks monster detection; an undetectable
+monster on a visible tile produces only “A trap activates!” All witnessed status
+messages are retained, with normal `[more]` paging when the panel fills.
 
 Each interactive object asks its own yes/no question on entry. Forge, pool and
 sacrifice also use a filtered inventory picker. Declining or canceling preserves
@@ -152,7 +194,8 @@ unwinds, then `complete_player_move` resolves it and completes the movement turn
 plus any accepted pickup turns.
 Cancellation still completes that movement turn. Fatal traps stop turn processing.
 Knockback queues its final landing activation until the combat frame unwinds,
-without an extra turn or teleport recursion. Monsters do not activate features.
+without an extra turn or teleport recursion. Monster entry activates traps as
+described below; monsters do not activate interactive objects or holy symbols.
 The five feature/pickup session bytes are unsaved; telemetry adds no AVM RAM.
 
 The simulator uses the same resolver. `DecisionContext` erases both ID and
@@ -169,14 +212,24 @@ budgets, and limits intentional holy entries. It does not deliberately farm
 summoning traps. New feature curses exposed two bow-switch loops; guards now
 respect a cursed equipped bow/weapon and available curse removal.
 
-Telemetry schema 4 adds sparse `features.csv`, per visit and even feature type:
+Telemetry schema 5 retains sparse `features.csv`, per visit and even feature type:
 generated, discovered, activated, declined, damage, deaths, spawned and holy
 damage, repeated activations, maximum entries on one trap per visit, and actual
 teleport displacement. `floors.csv` adds exit hunger, move attempts, generated
 unholy population and available holy geometry. Trap/feature damage scopes distinguish
 direct causes; summons reset host monster identity. `ranged.csv` distinguishes
 entire arrow stacks sacrificed from arrows fired/thrown, preserving conservation.
-Counters and policy scratch live only in native host structures.
+Schema 5 appends separate `monster_activated`, `monster_damage`, `monster_killed`,
+`monster_teleported`, `monster_status` and `monster_spawned` counters. Existing
+activation/damage/death/spawn/repetition/displacement counters retain their player
+meaning; `monster_status` counts successful extensions/additions. Ordinary typed
+monster totals include these environmental events once. Run records append final
+residual XP and hunger. Counters and policy scratch live only in native host structures.
+
+## Monster interaction validation
+
+See [the monster-trap report](MONSTER_TRAPS_2026-10-10.md) for the current
+implementation, complete stack proof, 66 workloads and paired balance results.
 
 ## Current tuning validation
 

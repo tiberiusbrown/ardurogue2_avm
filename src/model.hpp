@@ -193,6 +193,7 @@ static_assert(sizeof(MapFeature) == 3, "feature save layout changed");
 // Four independent four-bit effects: confusion, slowing, invisibility, weakness.
 // Paralysis uses stun. Two bytes per monster keep the image within AVM RAM.
 struct Monster { Position pos; uint8_t type, hp, stun, effects[2], state; };
+static_assert(sizeof(Monster) == 8, "monster save layout changed");
 constexpr uint8_t MON_AGGRO = 1;
 constexpr uint8_t MON_AFRAID = 0x40;
 constexpr uint8_t MON_TRAP_SUMMONED = 0x80;

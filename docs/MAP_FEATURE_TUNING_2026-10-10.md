@@ -269,3 +269,10 @@ The complete feature system still lowers maintained-policy escapes relative to n
 Evidence is retained under `build/feature-tuning/`: `pickup-first-10k/` (twelve 10k variants, scorecard, paired JSON/Markdown, compatibility and trace audits), `pickup-first-census/` (two full-census variants and paired report), `holy-generation.csv` (independent conditioned generation), `bench-final-gift-offer/20261010T222105Z-we69gbxn/` (all 58 final SDK profiles), and `final-provenance.json` (source/artifact hashes and verification logs). Historical reports and raw runs are preserved.
 
 Changed files cover generation (`world_gen.hpp`, `world_gen_population.cpp`), entry/effect/stack phases (`features.*`, `combat.cpp`, `items.cpp`, `model.hpp`, `main.cpp`, `ui.cpp`), terrain rendering (`render.cpp`), host policy/interventions/telemetry and CLI (`sim/*`, `sim_hooks.hpp`), new experiment/audit tools, native/UI/policy regressions, documentation and the rebuilt package. No unrelated artifact or ordinary-generation constants changed.
+
+## Subsequent monster interaction
+
+The original tuned baseline above remains the control for
+[monster trap interactions](MONSTER_TRAPS_2026-10-10.md). That implementation
+preserves generation, player tuning, save version 26 and artifact availability,
+and adds a same-executable `no-monster-traps` control with schema-5 telemetry.

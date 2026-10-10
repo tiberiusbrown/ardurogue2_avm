@@ -30,6 +30,7 @@ struct RangedMetrics {
 };
 struct FeatureMetrics {
     uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0, repeated=0, max_entries=0, displacement=0;
+    uint64_t monster_activated=0, monster_damage=0, monster_killed=0, monster_teleported=0, monster_status=0, monster_spawned=0;
 };
 struct FloorMetrics {
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
@@ -61,7 +62,7 @@ struct RunMetrics {
     uint16_t seed=0, effective_seed=0;
     std::string agent, result, reason, death_cause;
     uint64_t actions=0, turns=0, action_hash=14695981039346656037ull;
-    int score=0, deepest=0, final_floor=0, level=0, hp=0, max_hp=0,
+    int xp=0, final_hunger=0, score=0, deepest=0, final_floor=0, level=0, hp=0, max_hp=0,
         floors_entered=0, floors_exited=0;
     bool has_yendor=false, stuck=false;
     std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> items{};
@@ -120,7 +121,7 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=4;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=5;
 inline constexpr size_t CSV_STREAM_COUNT=9;
 void write_ranged_header(std::ostream&);
 void write_ranged(std::ostream&, const RunMetrics&);

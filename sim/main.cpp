@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
                     "--entry-state adds entry_state.csv for balance reports; requires --output and telemetry.\n"
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"
-                    "Also replace-monster, remove-item:FROM, remove-monster:FROM, ordinary-items and no-map-features.\n"
+                    "Also replace-monster, remove-item:FROM, remove-monster:FROM, ordinary-items, no-map-features and no-monster-traps.\n"
                     "Features: remove-feature:TYPE[:floor=N][:direction=...][:max=N], no-teleport-traps,\n"
                     "no-early-damaging-traps, interactive-features-only, traps-only.\n"
                     "Generation controls: original-teleport-placement, original-early-traps, original-holy-generation.\n"

@@ -325,7 +325,7 @@ firing distance and target breakdowns alongside the ordinary scorecard.
 
 ## Positioned map features
 
-Schema 4 adds the ninth stream, `features.csv`: sparse visit/type counters for
+Schema 5 retains the ninth stream, `features.csv`: sparse visit/type counters for
 generation, discovery, activation, decline, damage, direct deaths, spawned
 monsters and holy damage. Additive counters track repeated activations, maximum
 same-trap entries per visit and actual teleport displacements. Floor records add
@@ -351,3 +351,25 @@ without replacement or RNG resynchronization. `feature_generation_audit` exports
 an independent Holy generation census by depth, archetype, unholy count and
 geometry, avoiding survivor selection from visited floors. See
 [the tuning report](../docs/MAP_FEATURE_TUNING_2026-10-10.md).
+
+Monster entry uses the production trap resolver. `features.csv` appends
+`monster_activated`, `monster_damage` (effective HP loss), `monster_killed`,
+`monster_teleported` (successful relocations), `monster_status` (status additions
+or extensions, including stun), and `monster_spawned` (successful summons).
+Existing feature counters retain player-triggered meanings. Typed monster damage
+and kills include environmental events once; floor `damage_dealt` remains
+player-attributed damage. Environmental kills grant no player XP/score.
+`runs.csv` appends final residual `xp` and `final_hunger`; interpret residual XP
+alongside final level. No telemetry is stored in Game or production RAM.
+
+`no-monster-traps` disables only monster entry activation, retaining ordinary
+feature generation and player effects. Use it as the control for paired
+same-policy, same-seed validation. `monster_trap_report.py` streams supplementary
+population, encounter, resource and per-trap results from schema-5 paired outputs.
+See [the monster-trap report](../docs/MONSTER_TRAPS_2026-10-10.md).
+
+Monster-trap census validation exposed a pre-existing full-pack bow/wand reversal
+without ammunition (seed 54808). The maintained agent now values retaining its
+best bow at least as highly as reacquiring it. This corrects inventory progress;
+hidden observations, trap routing and monster behavior are unchanged. Both
+control and treatment validation use this same corrected policy.

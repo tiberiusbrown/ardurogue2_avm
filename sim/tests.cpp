@@ -215,7 +215,100 @@ void competence() {
         for(const auto& i:r.items) equipment+=i.equipped;
     }
     check(leaves>0 && deep>0 && wins>0 && kills && food && healing && equipment,"agent competence regression");
+    auto swap_regression=run(54808,a); check(!swap_regression.stuck,"monster-trap census bow/wand loop regressed");
     std::cout << "fixed seeds 1..32: left floor 0=" << leaves << " deep=" << deep << " escapes=" << wins << '\n';
+}
+
+void monster_trap_slot_reuse() {
+    unsigned tested=0;
+    for(uint16_t seed=1;seed<=256;++seed) {
+        arena(); game.floor=4; game.random_state=seed;
+        if(roll(3)) continue;
+        game.random_state=seed;
+        for(uint8_t i=0;i<MONSTERS;++i)
+            game.monsters[i]={{uint8_t(20+i),20},GOBLIN,100,15,{0,0},MON_AGGRO};
+        game.monsters[0]={{4,7},DRAGON,100,0,{0,0},MON_AGGRO};
+        game.monsters[1]={{6,4},GOBLIN,100,0,{0,0},MON_AGGRO};
+        game.monsters[5]={{5,5},GOBLIN,1,15,{0,0},MON_AGGRO};
+        game.features[0]={{5,4},FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN};
+        Collector collector; CollectScope scope(collector); collector.enter_floor();
+        end_turn();
+        check(game.monsters[5].type && (game.monsters[5].state&MON_TRAP_SUMMONED) &&
+            game.monsters[5].hp==monster_health(game.monsters[5].type) && !game.monsters[5].stun,
+            "summon did not safely reuse the future slot killed by breath");
+        uint64_t attacks=0; for(const auto& m:collector.data.monsters) attacks+=m.attacks;
+        check(attacks==1 && collector.data.monsters[GOBLIN].killed==1 &&
+            collector.data.features[FEATURE_SUMMONING_TRAP/2].monster_spawned==1,
+            "reused future slot inherited an enemy action this turn");
+        ++tested;
+    }
+    check(tested>64,"slot reuse breath/summon seed coverage");
+}
+void monster_trap_forced_holy_reuse() {
+    unsigned tested=0;
+    for(uint16_t seed=1;seed<=2048;++seed) {
+        arena(); game.player={10,10}; game.speed=monster_speed(PHANTOM); game.random_state=seed;
+        game.inventory[0]=make_equipment(HAMMER_OF_RUIN,0); game.inventory[0].info|=ITEM_CURSED; game.weapon_slot=0;
+        game.inventory[1]={RING_REPRISAL,1}; game.ring_slots[0]=1;
+        for(uint8_t i=0;i<MONSTERS;++i)
+            game.monsters[i]={{uint8_t(20+i),20},GOBLIN,100,15,{0,0},MON_AGGRO};
+        game.monsters[0]={{11,10},PHANTOM,100,0,{0,0},MON_AGGRO};
+        game.monsters[1]={{4,11},GOBLIN,100,0,{0,0},MON_AGGRO};
+        game.monsters[5]={{2,11},PHANTOM,1,15,{0,0},MON_AGGRO};
+        game.features[0]={{2,10},FEATURE_HOLY_SYMBOL};
+        game.features[1]={{3,11},FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN};
+        Collector collector; CollectScope scope(collector); collector.enter_floor(); end_turn();
+        const auto& replacement=game.monsters[5];
+        if(collector.data.features[FEATURE_HOLY_SYMBOL/2].activated &&
+           (replacement.state&MON_TRAP_SUMMONED) && replacement.type!=GOBLIN) {
+            check(replacement.hp==monster_health(replacement.type) &&
+                !collector.data.monsters[replacement.type].attacks,
+                "forced Holy kill/summon reused a future action budget");
+            ++tested;
+        }
+    }
+    check(tested>=8,"forced Holy kill/summon seed coverage");
+}
+void monster_trap_telemetry() {
+    for(uint8_t trap=FEATURE_SPIKE_TRAP;trap<=FEATURE_RUST_TRAP;trap+=2) {
+        arena(); game.floor=4; game.monsters[0]={{5,4},GOBLIN,100,0,{0,0},0};
+        game.features[0]={{5,4},uint8_t(trap|MAP_FEATURE_HIDDEN)};
+        Collector c; CollectScope scope(c); c.enter_floor();
+        activate_monster_trap(0);
+        const auto& fm=c.data.features[trap/2];
+        check(fm.monster_activated==1 && !fm.activated && !fm.damage && !fm.deaths && !fm.spawned && !fm.displacement,
+            "monster event corrupted player feature telemetry");
+        check(c.data.monsters[GOBLIN].damage_taken==fm.monster_damage && fm.monster_damage==100-game.monsters[0].hp &&
+            !c.data.monsters[GOBLIN].engaged && !c.data.monsters[GOBLIN].player_attacks,"monster damage duplicated/engaged trap");
+        check(fm.monster_teleported==unsigned(trap==FEATURE_TELEPORT_TRAP),"trap teleport counter");
+        bool effect=trap==FEATURE_FROST_TRAP || trap==FEATURE_POISON_DART_TRAP || trap==FEATURE_SNARE_TRAP || trap==FEATURE_CONFUSION_TRAP;
+        check(fm.monster_status==unsigned(effect),"trap status counter");
+        if(trap==FEATURE_SUMMONING_TRAP) {
+            unsigned spawned=0; for(unsigned i=1;i<MONSTERS;++i) spawned+=bool(game.monsters[i].type);
+            check(fm.monster_spawned==spawned && spawned>=1 && spawned<=2,"monster summon telemetry");
+        }
+        check(fm.monster_activated==c.data.floors.back().features[trap/2].monster_activated,"visit activation counter");
+        c.close_floor(false);
+        std::ostringstream csv; for(const auto& stream:csv_streams) if(std::string(stream.name)=="features.csv") { stream.header(csv); stream.rows(csv,c.data); }
+        check(csv.str().find("monster_activated,monster_damage,monster_killed,monster_teleported,monster_status,monster_spawned")!=std::string::npos,
+            "monster feature CSV schema");
+    }
+    arena(); game.monsters[0]={{5,4},LORD,1,0,{0,0},0}; game.features[0]={{5,4},FEATURE_MAGIC_DRAIN_TRAP|MAP_FEATURE_HIDDEN};
+    Collector c; CollectScope scope(c); c.enter_floor(); activate_monster_trap(0);
+    check(c.data.features[FEATURE_MAGIC_DRAIN_TRAP/2].monster_killed==1 && c.data.features[FEATURE_MAGIC_DRAIN_TRAP/2].monster_damage==1 &&
+        c.data.monsters[LORD].killed==1 && c.data.monsters[LORD].damage_taken==1 && !c.data.monsters[LORD].player_attacks && !game.score && !game.xp &&
+        c.data.items[YENDOR_AMULET].generated==1 && game.ground[15].item.type==YENDOR_AMULET,"trap lethal attribution/Yendor telemetry");
+    arena(); game.monsters[0]={{5,4},GOBLIN,100,0,{0,0},0}; game.features[0]={{5,4},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    auto control=std::make_shared<RuleExperiment>(); control->rules={parse_rule("no-monster-traps")}; c.experiment=control;
+    Game before=game; activate_monster_trap(0); after_floor_generation();
+    check(!std::memcmp(&before,&game,sizeof game) && control->features_enabled() && control->artifacts_enabled(),"monster-only ablation changed state/RNG/generation");
+    // Identical no-feature policy/actions/RNG with the toggle in either state.
+    for(uint16_t seed=1;seed<=32;++seed) {
+        OmniscientAgent a; Options o; auto e=std::make_shared<RuleExperiment>(); e->rules={parse_rule("no-map-features")}; o.experiment=e;
+        auto enabled=run(seed,a,o); Game end=game;
+        e->rules.push_back(parse_rule("no-monster-traps")); auto disabled=run(seed,a,o);
+        check(all_metrics(enabled)==all_metrics(disabled) && !std::memcmp(&end,&game,sizeof game),"no-feature toggle altered movement/combat/RNG");
+    }
 }
 class RngExperiment final:public Experiment {
 public:
@@ -295,7 +388,7 @@ void experiments() {
 int main() {
     try {
         static_assert(sizeof(Game)==810 && SAVE_VERSION==26,"native saved layout changed");
-        check_v2_policy(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
+        monster_trap_slot_reuse(); monster_trap_forced_holy_reuse(); monster_trap_telemetry(); check_v2_policy(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

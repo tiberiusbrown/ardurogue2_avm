@@ -33,6 +33,8 @@ void hurt_player(uint8_t damage);
 void attack_monster(uint8_t index);
 void destroy_inventory_item(uint8_t slot);
 void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful = false);
+// Movement/collision phase returns whether a landing needs trap resolution.
+bool force_monster_move(uint8_t index, int8_t dx, int8_t dy, bool powerful = false);
 void force_player(int8_t dx, int8_t dy);
 uint8_t player_speed_cost();
 // Artifact ring modifiers have fixed magnitude, independent of instance value.
@@ -55,6 +57,7 @@ void animate_spreading_rays(Position origin, const uint8_t steps[4]);
 void animate_fire_bursts(const Position* centers, uint8_t count,
                          bool powerful);
 bool teleport_player();
+bool teleport_monster(uint8_t index, bool wand = true);
 void apply_monster_potion(uint8_t type, uint8_t index);
 
 } // namespace rogue

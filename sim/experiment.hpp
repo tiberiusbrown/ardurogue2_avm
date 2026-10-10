@@ -19,12 +19,13 @@ public:
     virtual ~Experiment() = default;
     virtual void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const = 0;
     virtual bool artifacts_enabled() const { return true; }
+    virtual bool monster_traps_enabled() const { return true; }
     virtual bool features_enabled() const { return true; }
     virtual bool original_features(FeatureVariant) const { return false; }
 };
 struct Rule {
     bool monster=false, remove=false, ordinary_items=false, no_features=false;
-    bool feature=false;
+    bool feature=false, no_monster_traps=false;
     int feature_mode=-1; // 0 teleport, 1 early damage, 2 interactive only, 3 traps only
     int original=-1; // FeatureVariant, host only
     uint8_t from=0, to=0;
@@ -36,6 +37,7 @@ public:
     void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const override;
     bool artifacts_enabled() const override;
     bool features_enabled() const override;
+    bool monster_traps_enabled() const override;
     bool original_features(FeatureVariant) const override;
 };
 Rule parse_rule(const std::string&);

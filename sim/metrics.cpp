@@ -20,7 +20,10 @@ const Field<FeatureMetrics> feature_fields[] = {
     {"activated",&FeatureMetrics::activated},{"declined",&FeatureMetrics::declined},
     {"damage",&FeatureMetrics::damage},{"deaths",&FeatureMetrics::deaths},
     {"spawned",&FeatureMetrics::spawned},{"holy_damage",&FeatureMetrics::holy_damage},{"repeated",&FeatureMetrics::repeated},
-    {"max_entries",&FeatureMetrics::max_entries},{"displacement",&FeatureMetrics::displacement}};
+    {"max_entries",&FeatureMetrics::max_entries},{"displacement",&FeatureMetrics::displacement},
+    {"monster_activated",&FeatureMetrics::monster_activated},{"monster_damage",&FeatureMetrics::monster_damage},
+    {"monster_killed",&FeatureMetrics::monster_killed},{"monster_teleported",&FeatureMetrics::monster_teleported},
+    {"monster_status",&FeatureMetrics::monster_status},{"monster_spawned",&FeatureMetrics::monster_spawned}};
 const Field<ItemMetrics> item_fields[] = {
     {"generated",&ItemMetrics::generated},{"reached",&ItemMetrics::reached},
     {"picked_up",&ItemMetrics::picked_up},{"used",&ItemMetrics::used},{"consumed",&ItemMetrics::consumed},
@@ -76,6 +79,9 @@ void after_floor_generation() {
     auto rng=rogue::game.random_state;
     collector->experiment->apply(rogue::game,{rogue::game.run_seed,collector->data.floors_entered+1},collector->data.interventions);
     if(rogue::game.random_state!=rng) throw std::runtime_error("experiment consumed gameplay RNG");
+}
+bool monster_traps_enabled() {
+    return !collector || !collector->experiment || collector->experiment->monster_traps_enabled();
 }
 bool features_enabled() {
     return !collector || !collector->experiment || collector->experiment->features_enabled();
@@ -290,6 +296,9 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
     };
     switch(k) {
+    case EventKind::MonsterTrapActivated: feature_metric(type, &FeatureMetrics::monster_activated, 1); break;
+    case EventKind::MonsterTrapTeleport: feature_metric(type, &FeatureMetrics::monster_teleported, amount); break;
+    case EventKind::MonsterTrapStatus: feature_metric(type, &FeatureMetrics::monster_status, amount); break;
     case EventKind::FeatureDiscovered: feature_metric(type, &FeatureMetrics::discovered, 1); break;
     case EventKind::FeatureActivated:
         feature_metric(type, &FeatureMetrics::activated, 1);
@@ -304,7 +313,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::FeatureDeclined: feature_metric(type, &FeatureMetrics::declined, 1); break;
     case EventKind::HolyDamage: feature_metric(type, &FeatureMetrics::holy_damage, amount); break;
     case EventKind::FeatureSpawn:
-        feature_metric(cause_type, &FeatureMetrics::spawned, 1);
+        feature_metric(cause_type, cause == Cause::MonsterTrap ? &FeatureMetrics::monster_spawned : &FeatureMetrics::spawned, 1);
         ++data.monsters[type].generated;
         if(index < rogue::MONSTERS) encountered[index] = engaged[index] = false;
         break;
@@ -333,10 +342,13 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::PlayerDamage: if(f) f->damage_taken += amount; break;
     case EventKind::PlayerAttack: ++data.monsters[type].player_attacks; engage(); break;
     case EventKind::MonsterDamage:
+        if(cause == Cause::MonsterTrap) feature_metric(cause_type, &FeatureMetrics::monster_damage, amount);
         data.monsters[type].damage_taken += amount;
         if(detail) { engage(); if(f) f->damage_dealt += amount; }
         break;
-    case EventKind::MonsterKilled: ++data.monsters[type].killed; if(f) ++f->kills; break;
+    case EventKind::MonsterKilled:
+        if(cause == Cause::MonsterTrap) feature_metric(cause_type, &FeatureMetrics::monster_killed, 1);
+        ++data.monsters[type].killed; if(f) ++f->kills; break;
     case EventKind::MonsterAttack: ++data.monsters[type].attacks; engage(); break;
     case EventKind::MonsterHit: ++data.monsters[type].hits; break;
     case EventKind::Special:
@@ -411,7 +423,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     }
 }
 void write_runs_header(std::ostream& o) {
-    o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash\n";
+    o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash,xp,final_hunger\n";
 }
 void write_floors_header(std::ostream& o) {
     o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,exit_hunger,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
@@ -428,7 +440,7 @@ void write_run(std::ostream& o, const RunMetrics& r) {
     o << r.seed << ',' << r.effective_seed << ',' << r.agent << ',' << r.result << ',' << r.actions << ',' << r.turns
       << ',' << r.score << ',' << r.deepest << ',' << r.final_floor << ',' << r.level << ',' << r.hp << ',' << r.max_hp
       << ',' << r.has_yendor << ',' << r.floors_entered << ',' << r.floors_exited << ',' << r.stuck << ','
-      << csv(r.reason) << ',' << csv(r.death_cause) << ',' << r.action_hash << '\n';
+      << csv(r.reason) << ',' << csv(r.death_cause) << ',' << r.action_hash << ',' << r.xp << ',' << r.final_hunger << '\n';
 }
 void write_floors(std::ostream& o, const RunMetrics& r) {
     for(const auto& f : r.floors) { visit_key(o,r,f); o << ',' << f.entry_hp << ',' << f.exit_hp << ',' << f.entry_level << ','

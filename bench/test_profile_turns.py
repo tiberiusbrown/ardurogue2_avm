@@ -19,7 +19,7 @@ class TurnBenchmarks(unittest.TestCase):
         cases = turns.read_benchmarks(Path(__file__).with_name("bench.cpp"))
         self.assertEqual(cases, turns.BENCHMARKS)
         self.assertEqual([case.index for case in cases], list(range(len(cases))))
-        self.assertEqual(len(cases), 58)
+        self.assertEqual(len(cases), 66)
         names = {case.name for case in cases}
         self.assertIn("equip_cursed_amulet", names)
         self.assertTrue(names.isdisjoint({"descend", "throw_harming", "wand_force", "wand_fire"}))
@@ -111,6 +111,25 @@ class TurnBenchmarks(unittest.TestCase):
             for name, pixels in (("before.pgm", before_frame), ("frame.pgm", after_frame)):
                 (folder / name).write_bytes(b"P5\n128 64\n255\n" + pixels)
         return turns.validate_sample(case, self.contract, folder, output)
+
+    def test_more_boundary_keeps_full_turn_validation(self):
+        case, before, after, profile, records = self.sample()
+        records[-1]["pc"] = 12345
+        profile["pcs"][0]["linkage"] = "status_word"
+        with tempfile.TemporaryDirectory() as raw:
+            folder = Path(raw)
+            (folder / "turn.avmp").write_text(json.dumps(profile), encoding="utf-8")
+            (folder / "explored.bin").write_bytes(b"\xff" * 256)
+            values = [case.index,case.index,*before.values(),*after.values()]
+            output = "\n".join(f"(unsigned int) ${i} = {value}" for i,value in enumerate(values))
+            output += "\n" + "\n".join(json.dumps(record) for record in records)
+            measured = turns.validate_sample(case,self.contract,folder,output,more_pcs=(12345,))
+            self.assertEqual(measured["endpoint"], "more")
+            with self.assertRaisesRegex(ValueError,"render or displayed"):
+                turns.validate_sample(case,self.contract,folder,output)
+            # Explicitly test complete-turn outcome independently of page timing.
+            with self.assertRaisesRegex(ValueError,"completed game turn"):
+                turns.validate_outcome(case,before,dict(after,turns=0),b"")
 
     def browse_frames(self, case):
         def frame(top, selected):

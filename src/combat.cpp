@@ -315,7 +315,7 @@ __attribute__((noinline)) static bool fire_line_clear(const Monster& monster)
 }
 
 // Movement's coordinate and door temporaries are not live during fire animation.
-__attribute__((noinline)) static void move_monster(
+__attribute__((noinline)) static bool move_monster(
     Monster& monster, uint16_t flags, bool afraid, bool confused,
     bool pursuing, uint8_t range)
 {
@@ -339,17 +339,18 @@ __attribute__((noinline)) static void move_monster(
     uint8_t xdoor = dx && nx < MAP_W ? door_at({nx, monster.pos.y}) : NONE;
     if((flags & MON_OPENER) && xdoor != NONE && !door_open(xdoor)) {
         open_door(xdoor);
-        return;
+        return false;
     }
     uint8_t ydoor = dy && ny < MAP_H ? door_at({monster.pos.x, ny}) : NONE;
     if((flags & MON_OPENER) && ydoor != NONE && !door_open(ydoor)) {
         open_door(ydoor);
-        return;
+        return false;
     }
     if(dx && can_monster_move(nx, monster.pos.y, xdoor))
-        monster.pos.x = nx;
+        { monster.pos.x = nx; return true; }
     else if(dy && can_monster_move(monster.pos.x, ny, ydoor))
-        monster.pos.y = ny;
+        { monster.pos.y = ny; return true; }
+    return false;
 }
 
 __attribute__((noinline)) static uint8_t force_monster_path(
@@ -361,9 +362,11 @@ __attribute__((noinline)) static uint8_t force_monster_path(
     return path.monster != NONE ? path.monster : path.blocker ? MONSTERS : NONE;
 }
 
-void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful)
+__attribute__((noinline)) bool force_monster_move(uint8_t index, int8_t dx, int8_t dy, bool powerful)
 {
+    if(index >= MONSTERS || !game.monsters[index].type) return false;
     Monster& target = game.monsters[index];
+    Position origin = target.pos;
     monster_status(target, F("is blasted back!"));
     uint8_t collision = force_monster_path(index, dx, dy, powerful);
     uint8_t stun = powerful ? 8 : 4;
@@ -376,6 +379,12 @@ void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful)
         monster_status(target, F("hits a wall!"));
         target.stun = stun;
     }
+    return target.pos != origin;
+}
+
+void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful)
+{
+    if(force_monster_move(index, dx, dy, powerful)) activate_monster_trap(index);
 }
 
 void force_player(int8_t dx, int8_t dy)
@@ -420,16 +429,77 @@ __attribute__((noinline)) static void monster_fire(uint8_t index)
     fire_burst_damage(game.player, false);
 }
 
+// Melee effects run after the action decision frame has unwound, like breath.
+__attribute__((noinline)) static bool monster_melee(uint8_t index)
+{
+    Monster& monster = game.monsters[index];
+    MonsterInfo info = monster_info(monster.type);
+    bool melee_damage = false;
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope damage_source(sim::Cause::Monster, monster.type);
+#endif
+    SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
+    if(physical_attack_hits(info.dexterity, player_dexterity())) {
+        SIM_EVENT(sim::EventKind::MonsterHit, index, monster.type);
+        uint8_t raw = static_cast<uint8_t>(info.strength + roll(3));
+        if(monster_effect(monster, MON_WEAKENED))
+            raw = static_cast<uint8_t>((raw + 1) / 2);
+        uint8_t damage = physical_damage_after_armor(raw,
+            armor_absorption(player_armor_rating(), player_armor_enchant()));
+        melee_damage = damage && game.hp;
+        hurt_player(damage);
+        status_capitalize();
+        status(monster);
+        status(F("hits you!"));
+        if(info.flags & MON_VAMPIRE) {
+            game.vamp_drain = static_cast<uint8_t>(game.vamp_drain + 3);
+            if(game.vamp_drain >= game.max_hp)
+                game.vamp_drain = static_cast<uint8_t>(game.max_hp - 1);
+            if(game.hp > player_max_hp())
+                game.hp = player_max_hp();
+            uint8_t maximum = info.health;
+            uint16_t healed = static_cast<uint16_t>(monster.hp) + 3;
+            monster.hp = healed > maximum ? maximum :
+                static_cast<uint8_t>(healed);
+            status(F("Your life force drains away!"));
+        }
+        if(!session.ended && (info.flags & MON_CONFUSE_HIT) &&
+           roll(4) == 0 && !game.confused &&
+           amulet_bonus(AMULET_CLARITY) <= 0) {
+            game.confused = static_cast<uint8_t>(4 + roll(4));
+            SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                      static_cast<uint8_t>(sim::Special::Confusion));
+            status(F("You feel confused."));
+        }
+        if(!session.ended && (info.flags & MON_POISON) &&
+           roll(4) == 0 && !game.weakened) {
+            game.weakened = 1;
+            SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                      static_cast<uint8_t>(sim::Special::Poison));
+            status(F("You feel weaker."));
+        }
+        if(!session.ended && (info.flags & MON_PARALYZE_HIT) &&
+           roll(4) == 0 && !game.paralyzed &&
+           amulet_bonus(AMULET_IRONBLOOD) <= 0) {
+            game.paralyzed = static_cast<uint8_t>(3 + roll(4));
+            SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
+                      static_cast<uint8_t>(sim::Special::Paralysis));
+            status(F("You are paralyzed!"));
+        }
+
+    }
+    return melee_damage;
+}
+
 __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
 {
-    bool melee_damage = false;
     Monster& monster = game.monsters[index];
     if(!monster.type)
         return false;
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope damage_source(sim::Cause::Monster, monster.type);
 #endif
-    MonsterInfo info = monster_info(monster.type);
+    uint16_t flags = monster_flags(monster.type);
     bool confused = monster_effect(monster, MON_CONFUSED) != 0;
     bool afraid = (monster.state & MON_AFRAID) != 0;
     if(afraid && roll(32) == 0)
@@ -438,74 +508,25 @@ __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
         --monster.stun;
         if(!monster.stun)
             monster_status(monster, F("can move again."));
-    } else if(!(info.flags & MON_NOMOVE) || (monster.state & MON_AGGRO)) {
+    } else if(!(flags & MON_NOMOVE) || (monster.state & MON_AGGRO)) {
         uint8_t range = distance(monster.pos, game.player);
-        bool pursuing = (info.flags & MON_MEAN) || (monster.state & MON_AGGRO);
-        if(player_is_invisible() && !(info.flags & MON_SEE_INVIS))
+        bool pursuing = (flags & MON_MEAN) || (monster.state & MON_AGGRO);
+        if(player_is_invisible() && !(flags & MON_SEE_INVIS))
             pursuing = false;
-        if(!afraid && pursuing && !confused && (info.flags & MON_FIRE_BREATH) &&
+        if(!afraid && pursuing && !confused && (flags & MON_FIRE_BREATH) &&
            fire_line_clear(monster) && roll(3) == 0) {
             return 2;
         } else if(range == 1 && pursuing && !confused && !afraid) {
-            SIM_EVENT(sim::EventKind::MonsterAttack, index, monster.type);
-            if(physical_attack_hits(info.dexterity, player_dexterity())) {
-                SIM_EVENT(sim::EventKind::MonsterHit, index, monster.type);
-                uint8_t raw = static_cast<uint8_t>(info.strength + roll(3));
-                if(monster_effect(monster, MON_WEAKENED))
-                    raw = static_cast<uint8_t>((raw + 1) / 2);
-                uint8_t damage = physical_damage_after_armor(raw,
-                    armor_absorption(player_armor_rating(), player_armor_enchant()));
-                melee_damage = damage && game.hp;
-                hurt_player(damage);
-                status_capitalize();
-                status(monster);
-                status(F("hits you!"));
-                if(info.flags & MON_VAMPIRE) {
-                    game.vamp_drain = static_cast<uint8_t>(game.vamp_drain + 3);
-                    if(game.vamp_drain >= game.max_hp)
-                        game.vamp_drain = static_cast<uint8_t>(game.max_hp - 1);
-                    if(game.hp > player_max_hp())
-                        game.hp = player_max_hp();
-                    uint8_t maximum = info.health;
-                    uint16_t healed = static_cast<uint16_t>(monster.hp) + 3;
-                    monster.hp = healed > maximum ? maximum :
-                        static_cast<uint8_t>(healed);
-                    status(F("Your life force drains away!"));
-                }
-                if(!session.ended && (info.flags & MON_CONFUSE_HIT) &&
-                   roll(4) == 0 && !game.confused &&
-                   amulet_bonus(AMULET_CLARITY) <= 0) {
-                    game.confused = static_cast<uint8_t>(4 + roll(4));
-                    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
-                              static_cast<uint8_t>(sim::Special::Confusion));
-                    status(F("You feel confused."));
-                }
-                if(!session.ended && (info.flags & MON_POISON) &&
-                   roll(4) == 0 && !game.weakened) {
-                    game.weakened = 1;
-                    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
-                              static_cast<uint8_t>(sim::Special::Poison));
-                    status(F("You feel weaker."));
-                }
-                if(!session.ended && (info.flags & MON_PARALYZE_HIT) &&
-                   roll(4) == 0 && !game.paralyzed &&
-                   amulet_bonus(AMULET_IRONBLOOD) <= 0) {
-                    game.paralyzed = static_cast<uint8_t>(3 + roll(4));
-                    SIM_EVENT(sim::EventKind::Special, index, monster.type, 1,
-                              static_cast<uint8_t>(sim::Special::Paralysis));
-                    status(F("You are paralyzed!"));
-                }
-
-            }
+            return 4;
         } else if(afraid || confused || (pursuing && range <= 8) ||
                   (monster.type == BAT && !(monster.state & MON_AGGRO)) ||
                   roll(4) == 0) {
             // Passive bats try one random direction each turn, as in ArduRogue.
             // Movement rejects occupied tiles, including the player's tile.
-            move_monster(monster, info.flags, afraid, confused, pursuing, range);
+            if(move_monster(monster, flags, afraid, confused, pursuing, range)) return 3;
         }
     }
-    return melee_damage;
+    return 0;
 }
 
 __attribute__((noinline)) static void finish_monster_turn(uint8_t index)
@@ -545,31 +566,54 @@ __attribute__((noinline)) static void retaliate_monster(uint8_t index)
     if(!session.ended) retaliate_ring(index, game.ring_slots[1]);
 }
 
+// Only monsters present when the turn began are eligible. Clear killed slots
+// before any summoning phase can reuse them; no identity state is saved.
+__attribute__((noinline)) static uint16_t living_monsters()
+{
+    uint16_t mask = 0;
+    for(uint8_t i = 0; i < MONSTERS; ++i)
+        if(game.monsters[i].type) mask |= uint16_t(1u << i);
+    return mask;
+}
 static void enemy_turn(uint8_t player_speed)
 {
+    uint16_t eligible = living_monsters();
     for(uint8_t i = 0; i < MONSTERS && !session.ended; ++i) {
-        Monster& monster = game.monsters[i];
-        if(!monster.type)
-            continue;
-        uint8_t speed = monster_speed(monster.type);
-        if(monster_effect(monster, MON_SLOWED))
-            speed = static_cast<uint8_t>(speed * 2);
+        if(!(eligible & (1u << i)) || !game.monsters[i].type) continue;
+        uint8_t speed = monster_speed(game.monsters[i].type);
+        if(monster_effect(game.monsters[i], MON_SLOWED)) speed = static_cast<uint8_t>(speed * 2);
         if(!speed) speed = 1;
         uint8_t budget = player_speed;
-        while(budget >= speed && !session.ended && monster.type) {
+        while(budget >= speed && !session.ended && (eligible & (1u << i)) && game.monsters[i].type) {
             uint8_t action = advance_monster_action(i);
-            if(action == 2) monster_fire(i);
-            else if(action == 1) retaliate_monster(i);
-            resolve_forced_entry();
-            finish_monster_turn(i);
+            if(action == 3) activate_monster_trap(i);
+            else if(action == 2) { monster_fire(i); eligible &= living_monsters(); }
+            else if(action == 4) {
+                if(monster_melee(i)) retaliate_monster(i);
+                eligible &= living_monsters();
+            }
+            if(!game.monsters[i].type) eligible &= static_cast<uint16_t>(~(1u << i));
+            if(session.forced_entry) {
+                resolve_forced_entry();
+                eligible &= living_monsters();
+            }
+            if(eligible & (1u << i)) finish_monster_turn(i);
             budget = static_cast<uint8_t>(budget - speed);
         }
-        if(budget && !session.ended && monster.type && roll(speed) < budget) {
+        if(budget && !session.ended && (eligible & (1u << i)) && game.monsters[i].type && roll(speed) < budget) {
             uint8_t action = advance_monster_action(i);
-            if(action == 2) monster_fire(i);
-            else if(action == 1) retaliate_monster(i);
-            resolve_forced_entry();
-            finish_monster_turn(i);
+            if(action == 3) activate_monster_trap(i);
+            else if(action == 2) { monster_fire(i); eligible &= living_monsters(); }
+            else if(action == 4) {
+                if(monster_melee(i)) retaliate_monster(i);
+                eligible &= living_monsters();
+            }
+            if(!game.monsters[i].type) eligible &= static_cast<uint16_t>(~(1u << i));
+            if(session.forced_entry) {
+                resolve_forced_entry();
+                eligible &= living_monsters();
+            }
+            if(eligible & (1u << i)) finish_monster_turn(i);
         }
     }
 }
@@ -661,9 +705,9 @@ __attribute__((noinline)) static uint16_t melee_damage(uint8_t index, uint8_t ty
     return damage;
 }
 
-__attribute__((noinline)) void attack_monster(uint8_t index)
+__attribute__((noinline)) static bool apply_monster_attack(uint8_t index)
 {
-    if(index >= MONSTERS || !game.monsters[index].type || !game.hp || session.ended) return;
+    if(index >= MONSTERS || !game.monsters[index].type || !game.hp || session.ended) return false;
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
@@ -679,15 +723,16 @@ __attribute__((noinline)) void attack_monster(uint8_t index)
     if(!result) {
         status(F("You miss"));
         status(target, '.');
-        return;
+        return false;
     }
+    bool moved = false;
     bool heavy = result > 255;
     uint8_t damage = static_cast<uint8_t>(result);
     damage_monster(index, damage, true);
     if(target.type) {
         status(F("You hit"));
         status(target, '.');
-        if(heavy) force_monster(index, dx, dy);
+        if(heavy) moved = force_monster_move(index, dx, dy);
     }
     // Primary resolution, splash/monster knockback, life drain, then weapon costs.
     // Splash bypasses melee resolution, so it cannot recurse into weapon effects.
@@ -729,6 +774,12 @@ __attribute__((noinline)) void attack_monster(uint8_t index)
     } else if(type == HAMMER_OF_RUIN && cursed && !session.ended && roll(4) == 0) {
         force_player(-dx, -dy);
     }
+    return moved;
+}
+
+void attack_monster(uint8_t index)
+{
+    if(apply_monster_attack(index)) activate_monster_trap(index);
 }
 
 // Resolve movement and combat before entering the deeper enemy-turn stack.

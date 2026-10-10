@@ -367,6 +367,9 @@ automatically before building this project.
 Twenty map features include ten reusable hidden traps, nine single-use
 interactive objects and a reusable holy symbol. Wait/Search can discover adjacent
 traps; movement triggers traps and offers object prompts before the enemy turn.
+Monsters also trigger traps on movement and final knockback landings. They do
+not avoid known traps; environmental kills grant no player XP/score. Visible
+activations reveal traps without exposing invisible monster identities.
 See [map features and validation](docs/MAP_FEATURES.md) for the full roster,
 generation, save encoding and simulator results.
 

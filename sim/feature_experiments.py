@@ -82,7 +82,7 @@ def summarize(path):
             f[name] += int(r.get(name, 0))
         if exited:
             for name in ("entry_hp", "exit_hp", "entry_hunger", "exit_hunger", "entry_level", "exit_level"):
-                f[name] += int(r[name])
+                f[name] += int(r.get(name, 0))
         seed, visit = int(r["effective_seed"]), int(r["visit"])
         last_visit[seed] = visit
         # Visited-floor distributions are descriptive; use the independent
@@ -95,7 +95,7 @@ def summarize(path):
     for r in rows(path / "features.csv"):
         t = int(r["feature_type"])
         f = features[str(t)]
-        for name in ("generated", "discovered", "activated", "declined", "damage", "deaths", "spawned", "holy_damage", "repeated", "displacement"):
+        for name in ("generated", "discovered", "activated", "declined", "damage", "deaths", "spawned", "holy_damage", "repeated", "displacement", "monster_activated", "monster_damage", "monster_killed", "monster_teleported", "monster_status", "monster_spawned"):
             f[name] += int(r.get(name, 0))
         f["max_entries"] = max(f["max_entries"], int(r.get("max_entries", 0)))
         seed, visit = int(r["effective_seed"]), int(r["visit"])

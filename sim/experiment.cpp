@@ -37,6 +37,7 @@ Rule parse_rule(const std::string& text) {
     for(int i=0;i<4;++i) if(text==(i==0 ? "no-teleport-traps" : i==1 ? "no-early-damaging-traps" : i==2 ? "interactive-features-only" : "traps-only")) {
         Rule r; r.feature_mode=i; return r;
     }
+    if(text=="no-monster-traps") { Rule r; r.no_monster_traps=true; return r; }
     if(text=="no-map-features") { Rule r; r.no_features=true; return r; }
     if(text=="ordinary-items") {
         Rule r; r.ordinary_items=true; return r;
@@ -81,7 +82,7 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
-        if(r.ordinary_items || r.no_features || r.original>=0) continue;
+        if(r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
         if(r.feature || r.feature_mode>=0) {
             unsigned removed=0;
             for(auto& f:g.features) {
@@ -125,6 +126,10 @@ void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vecto
 bool RuleExperiment::original_features(FeatureVariant variant) const {
     for(const auto& r:rules) if(r.original==int(variant)) return true;
     return false;
+}
+bool RuleExperiment::monster_traps_enabled() const {
+    for(const auto& r:rules) if(r.no_monster_traps) return false;
+    return true;
 }
 bool RuleExperiment::features_enabled() const {
     for(const auto& r:rules) if(r.no_features) return false;

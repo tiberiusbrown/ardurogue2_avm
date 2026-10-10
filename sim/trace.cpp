@@ -36,6 +36,8 @@ void trace_action(std::ostream& out, uint64_t action, uint64_t turn, const Actio
 }
 void trace_event(std::ostream& out, EventKind kind, uint8_t, uint8_t type, uint16_t amount) {
     switch(kind) {
+    case EventKind::MonsterTrapActivated: out << "  monster trap activated=" << int(type) << '\n'; break;
+    case EventKind::MonsterTrapTeleport: out << "  monster trap teleported=" << amount << '\n'; break;
     case EventKind::FeatureActivated: out << "  feature activated=" << int(type) << '\n'; break;
     case EventKind::FeatureDiscovered: out << "  feature discovered=" << int(type) << '\n'; break;
     case EventKind::FeatureSpawn: out << "  feature spawned=" << monster_name(type) << '\n'; break;

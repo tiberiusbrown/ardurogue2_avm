@@ -166,7 +166,9 @@ int discard_value(int s) {
     // Retaining stocked food has value even when the desired supply cap was
     // reached. Using acquisition value here caused food/scroll swap cycles.
     if(i.type == FOOD) return 70 + 20*item_value(i);
-    if(is_bow(i.type)) return s==best_bow() ? (quantity(ARROWS) ? 150+bow_score(i) : 95) : 0;
+    // Keep a useful bow at least as valuable as reacquiring that same bow.
+    // Otherwise a full pack can swap bow -> wand -> bow forever without ammo.
+    if(is_bow(i.type)) return s==best_bow() ? (quantity(ARROWS) ? 150 : 100)+bow_score(i) : 0;
     if(is_ammo(i.type)) return best_bow()!=NONE ? 120+std::min(24,int(item_value(i)))*4 : 45;
     if(bow_equipped() && s==best_melee()) return 180+equipment_score(i);
     if(s==glass_fallback()) return 150+equipment_score(i);

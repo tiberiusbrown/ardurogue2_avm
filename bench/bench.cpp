@@ -68,7 +68,15 @@ using namespace rogue;
     X(feature_forge, "Forge item choice before the movement turn", feature_item, A, room, LONG_SWORD, 0, 0) \
     X(feature_search, "Search with eight hidden neighboring traps", wait, A, room, NO_ITEM, 0, 0) \
     X(feature_dense, "Move with twelve visible features and enemies", play, RIGHT, dense, NO_ITEM, 0, 0) \
-    X(trap_phoenix, "Lethal spike trap consumes Phoenix Heart", play, RIGHT, room, AMULET_PHOENIX_HEART, 0, 0)
+    X(trap_phoenix, "Lethal spike trap consumes Phoenix Heart", play, RIGHT, room, AMULET_PHOENIX_HEART, 0, 0) \
+    X(monster_trap_multi, "Four monsters enter damaging traps", wait, A, room, NO_ITEM, 0, 0) \
+    X(monster_trap_kills, "Four environmental trap kills", wait, A, room, NO_ITEM, 0, 0) \
+    X(monster_trap_teleport, "Monster enters a teleport trap", wait, A, room, NO_ITEM, 0, 0) \
+    X(monster_trap_summon, "Monster summons near itself", wait, A, room, NO_ITEM, 0, 0) \
+    X(monster_trap_force, "Force wand lands a monster on spikes", wand, RIGHT, room, WAND_FORCE, 0, 0) \
+    X(monster_trap_hammer, "Hammer lands a monster on magic backlash", play, RIGHT, room, HAMMER_OF_RUIN, 0, 0) \
+    X(monster_trap_busy, "Late floor with twelve monsters and visible traps", wait, A, dense, NO_ITEM, 0, 0) \
+    X(monster_trap_spread, "Spreading force lands four monsters on traps", use, A, room, WAND_FORCE, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -237,6 +245,45 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         }
         break;
     }
+    case Case::monster_trap_multi:
+    case Case::monster_trap_kills: {
+        add_monster(0,{34,16}); add_monster(1,{30,16}); add_monster(2,{32,14}); add_monster(3,{32,18});
+        for(uint8_t i=0;i<4;++i) {
+            Position p=game.monsters[i].pos;
+            if(p.x!=32) p.x=p.x>32 ? p.x-1:p.x+1;
+            else p.y=p.y>16 ? p.y-1:p.y+1;
+            game.features[i]={p, uint8_t((i%2 ? FEATURE_FLAME_TRAP:FEATURE_MAGIC_DRAIN_TRAP)|MAP_FEATURE_HIDDEN)};
+            if(scenario==Case::monster_trap_kills) game.monsters[i].hp=1;
+        }
+        game.floor=15;
+        break;
+    }
+    case Case::monster_trap_teleport:
+    case Case::monster_trap_summon:
+        add_monster(0,{34,16}); game.floor=15;
+        game.features[0]={{33,16},uint8_t((scenario==Case::monster_trap_teleport ? FEATURE_TELEPORT_TRAP:FEATURE_SUMMONING_TRAP)|MAP_FEATURE_HIDDEN)};
+        break;
+    case Case::monster_trap_force:
+        add_monster(0,{33,16}); game.speed=1;
+        game.features[0]={{37,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        break;
+    case Case::monster_trap_spread:
+        add_monster(0,{33,16}); add_monster(1,{31,16}); add_monster(2,{32,15}); add_monster(3,{32,17});
+        game.speed=1; set_wand_modifier(game.inventory[0],WAND_SPREADING);
+        game.features[0]={{37,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        game.features[1]={{27,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        game.features[2]={{32,11},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        game.features[3]={{32,21},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        break;
+    case Case::monster_trap_busy:
+        game.floor=15;
+        for(uint8_t i=0;i<MONSTERS;++i) {
+            Position p=game.monsters[i].pos;
+            if(p.x!=32) p.x=p.x>32 ? p.x-1:p.x+1;
+            else p.y=p.y>16 ? p.y-1:p.y+1;
+            game.features[i]={p,uint8_t(FEATURE_SPIKE_TRAP+2*(i%5))};
+        }
+        break;
     case Case::feature_dense:
         for(uint8_t i=0;i<MAP_FEATURES;++i)
             game.features[i]={{static_cast<uint8_t>(28+i%4),static_cast<uint8_t>(12+i/4)},static_cast<uint8_t>(FEATURE_FOUNTAIN+2*(i%9))};
@@ -275,11 +322,14 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     }
     case Case::storm_splash:
     case Case::glass_break:
-    case Case::hammer_heavy: {
+    case Case::hammer_heavy:
+    case Case::monster_trap_hammer: {
         game.weapon_slot = 0; game.dexterity = MAX_PHYSICAL_STAT; game.speed = 1;
         if(scenario == Case::hammer_heavy)
             for(uint8_t x = 38; x <= 42; ++x) carve(x, 16);
         add_monster(0, {33, 16}, SNAKE, 100); game.monsters[0].stun = 15;
+        if(scenario == Case::monster_trap_hammer)
+            game.features[0]={{37,16},FEATURE_MAGIC_DRAIN_TRAP|MAP_FEATURE_HIDDEN};
         if(scenario == Case::storm_splash) {
             game.inventory[0].info |= ITEM_CURSED;
             add_monster(1, {34, 16}, SNAKE); add_monster(2, {33, 15}, SNAKE); add_monster(3, {33, 17}, SNAKE);
@@ -291,7 +341,7 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
             WeaponDefinition w = weapon_definition(item);
             weapon_damage_roll(w.minimum_damage, w.maximum_damage, 0);
             if(scenario == Case::glass_break && static_cast<uint8_t>(next_random(game.random_state))) continue;
-            if(scenario == Case::hammer_heavy && roll(3)) continue;
+            if((scenario == Case::hammer_heavy || scenario == Case::monster_trap_hammer) && roll(3)) continue;
             game.random_state = seed; break;
         }
         break;

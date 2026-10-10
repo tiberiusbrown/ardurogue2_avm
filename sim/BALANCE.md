@@ -131,7 +131,7 @@ containing existing `runs.csv` cannot be overwritten; choose fresh directories.
 and seals raw CSVs with SHA-256 hashes. `--simulator` additionally records the
 executable path/hash. `factors` defaults to `RUN/factors/`.
 
-## Telemetry schema 4
+## Telemetry schema 5
 
 All nine deterministic streams merge in requested-seed order and are identical
 between serial and parallel execution. A descriptor table supplies headers,
@@ -139,14 +139,14 @@ writers and merging; header-only sparse streams are valid.
 
 | Stream | Observation and fields |
 | --- | --- |
-| runs.csv | One run: requested/effective seed, agent, escaped/death or distinct simulator failure, actions/turns/score/depth, Yendor, immediate cause, action hash |
+| runs.csv | One run: requested/effective seed, agent, escaped/death or distinct simulator failure, actions/turns/score/depth, Yendor, immediate cause, action hash, final residual XP and hunger |
 | floors.csv | Entered visit keyed by seed/effective_seed/agent/visit/floor/direction, exited flag and activity, HP/max HP/level, effective strength/dexterity/speed, hunger, armor rating/enchantment, food/healing units, weapon/armor type/enchantment, archetype, tile/features/corridors/loops/connections, 16 feature-family counts |
 | items.csv | Whole-run typed item aggregates, including final carried units and distinct wand pickup/activation accounting |
 | monsters.csv | Whole-run typed generated/encountered/engaged/killed, attacks/damage/hits/deaths/status aggregates |
 | visit_items.csv | Sparse typed visit activity: generated/reached/picked_up/used/consumed/equipped/dropped/discarded, charges/drunk/thrown/read/equipped turns and wand identities |
 | visit_monsters.csv | Sparse typed visit activity: generated/encountered/engaged/killed, player_attacks/damage_to_monster, monster_attacks/monster_hits/damage_to_player/deaths_caused, poison/confusion/paralysis/fire |
 | ranged.csv | Arrow generation, acquisition, fired/thrown/sacrificed/carried units, bow occupancy/switches, shot distance/target metrics and descent droughts |
-| features.csv | Sparse visit/even-type generated, discovered, activated, declined, damage, deaths, spawned and holy_damage counters |
+| features.csv | Sparse visit/even-type generated, discovered, activated, declined, damage, deaths, spawned and holy_damage counters plus distinct monster activation/damage/kill/teleport/status/spawn counters |
 | interventions.csv | Sparse applied replacements/removals with visit, experiment, variant, operation, from/to type and count |
 
 Generated item units retain production stack semantics; equipment/wands are
@@ -494,3 +494,20 @@ selection, holding early settings fixed. This avoids treating survivor-selected
 visit frequencies as unconditional spawn probabilities. Current constants,
 definitions, interventions and results are in
 [the tuning report](../docs/MAP_FEATURE_TUNING_2026-10-10.md).
+
+## Monster trap paired control
+
+`no-monster-traps` disables only monster trap resolution. Feature generation,
+player effects, the maintained agent policy and effective seeds remain identical;
+gameplay RNG is never resynchronized after outcomes diverge. Player feature
+counters retain their historical meanings. Environmental monster damage/kills
+are a subset of ordinary monster totals, not additional damage/kill events.
+Final `xp` is residual progress toward the next level, not cumulative XP.
+
+```text
+python sim/balance.py ab --control-exe <simulator> --treatment-exe <simulator> --all-seeds --jobs 8 --experiment monster-traps --control-intervention no-monster-traps --output build/monster-traps/paired-all
+python sim/monster_trap_report.py build/monster-traps/paired-all --output build/monster-traps/paired-all/monster-report
+```
+
+Use `--seeds 1:10000` instead of `--all-seeds` for routine validation. See
+[the implementation and paired results](../docs/MONSTER_TRAPS_2026-10-10.md).
