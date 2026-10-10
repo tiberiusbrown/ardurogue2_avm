@@ -9,7 +9,7 @@ enum class EventKind {
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,
     ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget,
-    FeatureDiscovered, FeatureActivated, FeatureDeclined, FeatureSpawn, HolyDamage
+    FeatureDiscovered, FeatureActivated, FeatureDisplacement, FeatureDeclined, FeatureSpawn, HolyDamage
 };
 enum class Cause : uint8_t { Other, Monster, Starvation, Item, Fire, Trap, Feature };
 enum class Special : uint8_t { Poison, Confusion, Paralysis, Fire };
@@ -18,6 +18,8 @@ void event(EventKind, uint8_t index = 255, uint8_t type = 0,
 void after_floor_generation();
 bool artifacts_enabled();
 bool features_enabled();
+enum class FeatureVariant { Placement, Early, Holy, Density, Damage, Roster };
+bool original_features(FeatureVariant);
 // Scoped attribution is exclusively host simulator state, never saved state.
 class DamageScope {
     Cause previous_cause;

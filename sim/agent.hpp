@@ -32,6 +32,8 @@ public:
     virtual const char* name() const = 0;
     virtual void reset() {}
     virtual Action choose_action(const DecisionContext&) = 0;
+    // A Wait response declines remaining pickups before the entry feature.
+    virtual Action choose_pickup(const DecisionContext&) { return {}; }
 };
 
 // Cardinal BFS: closed doors are traversable estimates; monsters are endpoints
@@ -39,7 +41,7 @@ public:
 struct Paths {
     std::array<int16_t, rogue::MAP_W * rogue::MAP_H> distance;
     std::array<int8_t, rogue::MAP_W * rogue::MAP_H> first;
-    explicit Paths(bool allow_monsters = false);
+    explicit Paths(bool allow_monsters = false, bool allow_teleports = false);
     int to(rogue::Position p) const;
     Action move_to(rogue::Position p, const std::string& goal) const;
 };
@@ -52,12 +54,19 @@ class OmniscientAgent final : public Agent {
     std::array<bool, rogue::MAP_FEATURES> feature_attempted{};
     uint8_t feature_floor = rogue::NONE;
     uint16_t retreat_threats = 0;
+    rogue::Position navigation_goal{rogue::NONE, rogue::NONE};
+    std::array<rogue::Position, 8> navigation_history{};
+    unsigned navigation_cursor = 0, navigation_stale = 0;
+    int navigation_best = 10000;
+    std::array<bool, rogue::GROUND_ITEMS> abandoned_loot{};
+    Action navigate(const Paths&, rogue::Position, const char*, bool optional = false);
 public:
     // Maintained balance policy. The automatic build hash identifies its exact
     // implementation; establish a fresh reference after extending mechanics.
     const char* name() const override { return "omniscient-v2"; }
-    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = 0; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); }
+    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = 0; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); navigation_goal = {rogue::NONE, rogue::NONE}; navigation_cursor = navigation_stale = 0; navigation_best = 10000; navigation_history.fill({rogue::NONE, rogue::NONE}); abandoned_loot.fill(false); }
     Action choose_action(const DecisionContext&) override;
+    Action choose_pickup(const DecisionContext&) override;
 };
 rogue::FeatureChoice choose_feature_choice(uint8_t type);
 inline std::array<rogue::MapFeature, rogue::MAP_FEATURES> observed_features(const rogue::Game& source) {

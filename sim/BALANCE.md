@@ -473,3 +473,24 @@ subsequent combat and starvation. Holy damage and curse-removal associations
 are descriptive; survivors have more opportunities to use these features.
 Retain discordant traces and check old-content control action hashes before
 accepting interpretation. See [the feature report](../docs/MAP_FEATURES.md).
+
+## Controlled feature tuning
+
+Freeze one simulator executable, then run all removal, placement, Holy and early
+component comparisons without resynchronizing RNG:
+
+```text
+python sim/feature_experiments.py run --simulator build/feature-tuning/pickup-first-simulator.exe --output build/feature-tuning/pickup-first-10k --seeds 1:10000 --jobs 8
+python sim/feature_experiments.py report --output build/feature-tuning/pickup-first-10k
+python sim/feature_experiments.py run --simulator build/feature-tuning/pickup-first-simulator.exe --output build/feature-tuning/pickup-first-census --seeds 1:65535 --variants final no-features --jobs 8
+python sim/feature_experiments.py report --output build/feature-tuning/pickup-first-census
+```
+
+Use fresh output directories. The runner records and checks executable identity;
+the report checks paired policy hashes, seed populations, failures, and raw CSV
+seals. The host `feature_generation_audit 10000` target separately measures
+320,000 floors by depth/archetype/unholy population/geometry with old/new Holy
+selection, holding early settings fixed. This avoids treating survivor-selected
+visit frequencies as unconditional spawn probabilities. Current constants,
+definitions, interventions and results are in
+[the tuning report](../docs/MAP_FEATURE_TUNING_2026-10-10.md).

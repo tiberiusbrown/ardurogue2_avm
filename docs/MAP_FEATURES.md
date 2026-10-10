@@ -29,6 +29,7 @@ array, rendering cache or dynamic allocation is added to the game.
 
 ## Roster
 
+The table gives floor 4+ effects; the depth rules below override early traps.
 Raw damage is before the existing protection/armor/MR helpers. Status durations
 are set before the movement's normal turn ticks, just like existing effects.
 
@@ -95,10 +96,20 @@ are unaffected.
 Features populate after monsters, items and the initial player position using
 the dedicated `MAP_FEATURE_DOMAIN = 0x37e9` floor stream. Gameplay RNG and
 ordinary layout, population, supplies, equipment, ammunition and artifact streams
-remain isolated. Each floor attempts 4–8 features within the twelve-slot capacity.
-Named category weights are traps 55, interactive objects 40, and holy symbols
-`5 + 5 × actual generated undead/demonic count`. At most one symbol is placed.
-Trap and interactive types are uniform within their categories.
+remain isolated. The depth rules are:
+
+| Floors | Total feature budget | Trap share of non-holy slots | Eligible traps | Early effect overrides |
+| --- | --- | --- | --- | --- |
+| 0–1 | 2–4 | 30% | Spike, dart, confusion | Spike 2–4; dart 1–2 plus normal weakness; confusion 3–5 |
+| 2–3 | 3–5 | 40% | Above plus flame, frost, snare, teleport | Flame 3–5; frost 2–4 plus normal slowing/MR; snare 1–2 |
+| 4–15 | 4–8 | 55/95 = 57.895% | All ten | Original full-strength effects |
+
+Once per generated floor, select a holy symbol with probability
+`min(30, 4 + 2 × actual generated undead/demonic count)` percent. It consumes
+one budget slot, uses the existing geometry and fallback, and is never selected
+again on that floor. Remaining slots use the depth's trap/interactive split.
+Trap and interactive types are uniform within their eligible categories. A
+failed placement leaves the slot empty; it does not grant a replacement reward.
 
 Placement traverses a deterministic permutation of the 2,048 map cells. It
 first honors geometry and feature spacing (squared distance at least nine),
@@ -106,12 +117,20 @@ then relaxes spacing, then geometry. All passes exclude walls, doors, stairs,
 player, existing items/monsters/features; traps also exclude Manhattan distance
 three or less from the player. Valid floor geometry is already connected.
 
+Teleport candidates additionally require a conservative connectivity proof.
+In a 5×5 window, remove the candidate and flood the passable cells using two
+32-bit masks. All its passable cardinal neighbors must reconnect within that
+window. Closed doors count as traversable, as ordinary movement opens them.
+This proves a path in the full map without requiring a map-sized flood buffer.
+It may reject safe tiles whose alternate route leaves the window. Every fallback
+retains the proof; if no safe tile exists, omit that teleport.
+
 | Feature | Preferred geometry |
 | --- | --- |
 | Spike, poison dart, frost, confusion, rust | Corridor |
 | Flame | Junction or corridor |
 | Snare | Corridor or corner |
-| Teleport | Junction |
+| Teleport | Open or junction, always with connectivity proof |
 | Magic drain | Dead end or corridor |
 | Summoning | Open or junction |
 | Fountain, altar, statue, pool | Open |
@@ -121,33 +140,51 @@ three or less from the player. Valid floor geometry is already connected.
 
 ## Movement and simulation
 
-`begin_player_move` resolves ordinary movement and immediate traps. For an
+`begin_player_move` resolves ordinary movement and immediate traps. When an
+item and feature share the entered tile, it first defers entry for pickup
+offers. Pickups and full-pack swaps finish before the feature; declined items
+stay on the tile. Movement and accepted pickups retain their normal turn costs,
+which run after entry resolution. Yendor remains at the Lord's drop location
+and can be picked up before a teleport displaces the player. For an
 interactive entry it defers the enemy turn using temporary `Session` state.
 The frontend gathers the explicit `FeatureChoice` after the combat frame
-unwinds, then `complete_player_move` resolves it and completes exactly one turn.
+unwinds, then `complete_player_move` resolves it and completes the movement turn
+plus any accepted pickup turns.
 Cancellation still completes that movement turn. Fatal traps stop turn processing.
 Knockback queues its final landing activation until the combat frame unwinds,
 without an extra turn or teleport recursion. Monsters do not activate features.
-The three added session bytes are unsaved; telemetry adds no AVM RAM.
+The five feature/pickup session bytes are unsaved; telemetry adds no AVM RAM.
 
 The simulator uses the same resolver. `DecisionContext` erases both ID and
 position of every hidden feature; `observed_features` provides the same filtered
 view. The maintained policy only reads filtered feature observations. Regression
 tests change hidden type and position independently and require unchanged actions.
-It penalizes known traps while retaining geometric travel distance for goals,
-allows pressured crossings, uses nearby beneficial objects with hunger and detour
+It treats known teleports as impassable in ordinary routes, regardless of detour
+length. Only an unreachable mandatory goal permits a bounded relaxed route;
+other known traps retain weighted routing. An eight-position host-only history
+abandons repeating optional loot/feature detours and resumes stair progress.
+History only records observed movement and known features. The policy
+uses nearby beneficial objects with hunger and detour
 budgets, and limits intentional holy entries. It does not deliberately farm
 summoning traps. New feature curses exposed two bow-switch loops; guards now
 respect a cursed equipped bow/weapon and available curse removal.
 
 Telemetry schema 4 adds sparse `features.csv`, per visit and even feature type:
 generated, discovered, activated, declined, damage, deaths, spawned and holy
-damage. `floors.csv` adds exit hunger. Trap/feature damage scopes distinguish
+damage, repeated activations, maximum entries on one trap per visit, and actual
+teleport displacement. `floors.csv` adds exit hunger, move attempts, generated
+unholy population and available holy geometry. Trap/feature damage scopes distinguish
 direct causes; summons reset host monster identity. `ranged.csv` distinguishes
 entire arrow stacks sacrificed from arrows fired/thrown, preserving conservation.
 Counters and policy scratch live only in native host structures.
 
-## Validation
+## Current tuning validation
+
+The 2026-10-10 pickup-first revision and controlled results are documented in
+[the tuning report](MAP_FEATURE_TUNING_2026-10-10.md). The following sections
+preserve the initial feature implementation's measurements and policy identity.
+
+## Historical initial validation
 
 The final native suite passes **16/16** tests, including all twenty outcomes,
 protection, forced entry, Phoenix, item packing/selection, save round trips,
@@ -172,7 +209,7 @@ Against the saved pre-feature ELF, text grows 68,982 → 79,329 bytes and rodata
 Paired balance artifacts and analysis are described below. Huge raw datasets and
 profiles stay in ignored `build/`; the source, tests and small report are tracked.
 
-## Paired balance and review
+## Historical initial paired balance and review
 
 Both variants use one RelWithDebInfo executable, maintained `omniscient-v2`
 policy hash `76e57893905404906ab59197ddb62915da5c453aea23a6f0f208281ca13a9e7e`,
@@ -205,7 +242,7 @@ Arrow conservation and floor/run action/turn reconciliation pass in both
 variants; there are **zero single-use activation violations**. Detailed census
 type totals are in `feature-analysis/feature_totals.csv`.
 
-Direct trap deaths total **932**: flame 397, frost 211, magic drain 143,
+Routine **1–10,000 seed treatment** direct trap deaths total **932**: flame 397, frost 211, magic drain 143,
 spike 139, dart 40 and rust 2. Effective trap damage totals **358,420 HP**.
 Starvation rises from zero to **396** deaths; no direct interactive-feature
 deaths occur in this batch. Teleport traps activate **121,390** times after

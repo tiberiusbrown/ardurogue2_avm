@@ -32,6 +32,10 @@ int main(int argc, char** argv) {
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"
                     "Also replace-monster, remove-item:FROM, remove-monster:FROM, ordinary-items and no-map-features.\n"
+                    "Features: remove-feature:TYPE[:floor=N][:direction=...][:max=N], no-teleport-traps,\n"
+                    "no-early-damaging-traps, interactive-features-only, traps-only.\n"
+                    "Generation controls: original-teleport-placement, original-early-traps, original-holy-generation.\n"
+                    "Also original-early-density, original-early-damage, original-early-roster for isolated tuning.\n"
                     "--jobs uses 1..64 isolated processes (default 1); CSV remains in seed order.\n";
                 return 0;
             } else if(arg=="--all-seeds") {

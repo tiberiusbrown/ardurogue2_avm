@@ -263,6 +263,46 @@ int main()
             require(game.turns==1 && bool(game.features[0].id)==!consumed,"feature yes/no/target cancel turn or consumption");
         }
     }
+    // Overlapping item/feature entry follows main's pickup-before-feature phase.
+    for(bool accept : {false,true}) {
+        game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+        game.hp=game.max_hp=100; game.hunger=220; game.speed=4; game.random_state=123;
+        game.player={10,10}; game.up={2,2}; game.down={40,20};
+        game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+        game.features[0]={{11,10},FEATURE_TELEPORT_TRAP|MAP_FEATURE_HIDDEN};
+        game.ground[0]={{11,10},{YENDOR_AMULET,1}};
+        require(handle_input(AVM_BUTTON_R)==INPUT_MOVED && session.pending_pickups && !game.turns,
+            "UI item/feature overlap activated before pickup");
+        const uint8_t buttons[]={0,uint8_t(accept ? AVM_BUTTON_A : AVM_BUTTON_B)};
+        std::memcpy(avm_test_buttons,buttons,sizeof buttons); avm_test_button_count=sizeof buttons; avm_test_button_index=0;
+        prompt_ground_items();
+        require(bool(game.has_amulet)==accept && game.player==Position{11,10} && !game.turns,
+            "UI pickup offer ran trap or enemy turn");
+        complete_ground_pickups(); complete_player_move(prompt_feature());
+        require(game.features[0].id==FEATURE_TELEPORT_TRAP && game.turns==(accept ? 2 : 1) &&
+            game.player!=Position{11,10},"UI pickup/decline then teleport completion");
+    }
+    bool offered_gift=false;
+    for(uint16_t seed=1;seed<=100 && !offered_gift;++seed) {
+        game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+        game.hp=game.max_hp=100; game.hunger=220; game.speed=4; game.random_state=seed;
+        game.player={10,10}; game.up={2,2}; game.down={40,20};
+        game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+        game.features[0]={{11,10},FEATURE_STATUE}; game.ground[0]={{11,10},{FOOD,1}};
+        require(handle_input(AVM_BUTTON_R)==INPUT_MOVED,"gift overlap entry");
+        Position pickup_position=game.player;
+        const uint8_t buttons[]={0,AVM_BUTTON_A};
+        std::memcpy(avm_test_buttons,buttons,sizeof buttons); avm_test_button_count=sizeof buttons; avm_test_button_index=0;
+        prompt_ground_items();
+        if(item_at(game.player)==NONE) pickup_position={NONE,NONE};
+        complete_ground_pickups(); complete_player_move({true});
+        if(item_at(game.player)==NONE) continue;
+        require(game.player!=pickup_position,"new feature gift suppressed by earlier pickup offer");
+        avm_test_button_index=0; prompt_ground_items();
+        require(item_at(game.player)==NONE && game.turns==3,"feature gift pickup flow or turn cost");
+        offered_gift=true;
+    }
+    require(offered_gift,"statue gift pickup fixture never exercised");
     std::puts("equipment, scroll, wand, inventory and feature UI flow passed");
     return 0;
 }

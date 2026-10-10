@@ -45,6 +45,15 @@ void populate_features(uint16_t seed);
 uint8_t encounter_type(uint8_t floor, uint16_t& seed);
 Item useful_item(uint16_t& seed);
 constexpr uint8_t FEATURE_TRAP_WEIGHT = 55, FEATURE_INTERACTIVE_WEIGHT = 40;
+constexpr uint8_t OPENING_FEATURE_MIN = 2, MIDDLE_FEATURE_MIN = 3, DEEP_FEATURE_MIN = 4;
+constexpr uint8_t OPENING_TRAP_PERCENT = 30, MIDDLE_TRAP_PERCENT = 40;
+constexpr uint8_t HOLY_BASE_PERCENT = 4, HOLY_COUNT_PERCENT = 2, HOLY_MAX_PERCENT = 30;
+constexpr uint8_t holy_symbol_chance(uint8_t count) {
+    return HOLY_BASE_PERCENT + HOLY_COUNT_PERCENT * count < HOLY_MAX_PERCENT
+        ? HOLY_BASE_PERCENT + HOLY_COUNT_PERCENT * count : HOLY_MAX_PERCENT;
+}
+// Conservative 5x5 proof, including normally openable closed doors.
+bool teleport_tile_safe(Position pos);
 constexpr uint8_t HOLY_BASE_WEIGHT = 5, HOLY_SPAWN_BONUS = 5;
 constexpr uint8_t holy_symbol_weight(uint8_t count) { return HOLY_BASE_WEIGHT + count * HOLY_SPAWN_BONUS; }
 void populate_items(uint16_t seed, uint16_t equipment_seed);

@@ -29,13 +29,19 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
         Game before = game;
         uint16_t rng = game.random_state;
         Action a;
-        try { a = agent.choose_action({game,r.actions,r.turns}); }
+        try { a = session.pending_pickups ? agent.choose_pickup({game,r.actions,r.turns}) :
+                                           agent.choose_action({game,r.actions,r.turns}); }
         catch(const std::exception& error) {
             r.stuck = true; r.result = "SIM_ERROR";
             r.reason = std::string("agent error: ")+error.what(); break;
         }
         if(game.random_state != rng || std::memcmp(&before,&game,sizeof game) != 0) {
             r.stuck = true; r.result = "SIM_ERROR"; r.reason = "agent mutated production state or RNG"; break;
+        }
+        if(session.pending_pickups && a.kind == ActionKind::Wait) {
+            complete_ground_pickups();
+            complete_player_move(choose_feature_choice(observed_feature_at(game, game.player)));
+            continue;
         }
         if(options.trace) trace_action(*options.trace,r.actions,r.turns,a);
         ++r.actions;
@@ -89,7 +95,7 @@ bool dispatch(const Action& a) {
         if(!cardinal(a)) return false;
         Game before = game;
         begin_player_move(a.dx,a.dy);
-        if(session.pending_move) {
+        if(session.pending_move && !session.pending_pickups) {
             uint8_t id = observed_feature_at(game, game.player);
             complete_player_move(choose_feature_choice(feature_type(id)));
         }

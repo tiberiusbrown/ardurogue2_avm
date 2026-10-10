@@ -525,23 +525,24 @@ __attribute__((noinline)) static void finish_monster_turn(uint8_t index)
 // Unwind movement/status temporaries before a turn-free player attack. This
 // preserves hit status processing and keeps retaliation inside the AVM stack.
 // Regeneration and effect aging follow retaliation only if the attacker survives.
+__attribute__((noinline)) static void retaliate_ring(uint8_t index, uint8_t slot)
+{
+    if(!game.monsters[index].type || slot >= INVENTORY || game.inventory[slot].type != RING_REPRISAL) return;
+    bool cursed = item_is_cursed(game.inventory[slot]);
+    if(roll(cursed ? 4 : 2)) return;
+    if(cursed) {
+#if defined(ARDUROGUE2_SIM)
+        sim::DamageScope recoil_source(sim::Cause::Item, RING_REPRISAL);
+#endif
+        hurt_player(1);
+        status(F("Your cursed ring bites you!"));
+    } else attack_monster(index);
+}
 __attribute__((noinline)) static void retaliate_monster(uint8_t index)
 {
     if(session.ended || !game.hp) return;
-    for(uint8_t slot : game.ring_slots) {
-        if(!game.monsters[index].type) return;
-        if(slot >= INVENTORY || game.inventory[slot].type != RING_REPRISAL) continue;
-        bool cursed = item_is_cursed(game.inventory[slot]);
-        if(roll(cursed ? 4 : 2)) continue;
-        if(cursed) {
-#if defined(ARDUROGUE2_SIM)
-            sim::DamageScope recoil_source(sim::Cause::Item, RING_REPRISAL);
-#endif
-            hurt_player(1);
-            status(F("Your cursed ring bites you!"));
-        } else attack_monster(index);
-        if(session.ended) return;
-    }
+    retaliate_ring(index, game.ring_slots[0]);
+    if(!session.ended) retaliate_ring(index, game.ring_slots[1]);
 }
 
 static void enemy_turn(uint8_t player_speed)
@@ -773,6 +774,11 @@ void begin_player_move(int8_t dx, int8_t dy)
     bool forced = session.forced_entry;
     resolve_forced_entry();
     session.pending_feature = NONE;
+    if(!forced && game.player != origin && item_at(game.player) != NONE &&
+       feature_at(game.player) != NONE) {
+        session.pending_pickups = session.pending_move = true;
+        return;
+    }
     if(!forced && game.player != origin) activate_entry_feature(feature_at(game.player));
     if(session.ended) return;
     if(session.pending_feature != NONE) session.pending_move = true;
@@ -782,6 +788,7 @@ void begin_player_move(int8_t dx, int8_t dy)
 void move_player(int8_t dx, int8_t dy)
 {
     begin_player_move(dx, dy);
+    complete_ground_pickups();
     complete_player_move();
 }
 

@@ -64,3 +64,6 @@ if(BALANCE_PYTHON)
         add_test(NAME balance_scorecard COMMAND "${BALANCE_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/test_check_balance.py" "$<TARGET_FILE:ardurogue2_sim>")
     endif()
 endif()
+
+add_executable(feature_generation_audit feature_generation_audit.cpp)
+target_link_libraries(feature_generation_audit PRIVATE ardurogue2_sim_core)

@@ -35,12 +35,20 @@ extern "C" int main()
             static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0)) {
             InputAction input = handle_input(buttons);
+            Position pickup_position{NONE, NONE};
+            if(session.pending_pickups) {
+                pickup_position = game.player;
+                prompt_ground_items();
+                // Newly created feature gifts still deserve their normal offer.
+                if(item_at(game.player) == NONE) pickup_position = {NONE, NONE};
+                complete_ground_pickups();
+            }
             if(session.pending_move) {
                 FeatureChoice choice = prompt_feature();
                 complete_player_move(choice);
             }
             if(input == INPUT_MOVED && !session.ended) {
-                prompt_ground_items();
+                if(game.player != pickup_position) prompt_ground_items();
                 prompt_stairs();
             } else if(input >= INPUT_PROJECTILE_UP && input <= INPUT_PROJECTILE_LEFT) {
                 int8_t dx = input == INPUT_PROJECTILE_RIGHT ? 1 : input == INPUT_PROJECTILE_LEFT ? -1 : 0;

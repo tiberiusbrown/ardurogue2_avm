@@ -19,7 +19,8 @@ const Field<FeatureMetrics> feature_fields[] = {
     {"generated",&FeatureMetrics::generated},{"discovered",&FeatureMetrics::discovered},
     {"activated",&FeatureMetrics::activated},{"declined",&FeatureMetrics::declined},
     {"damage",&FeatureMetrics::damage},{"deaths",&FeatureMetrics::deaths},
-    {"spawned",&FeatureMetrics::spawned},{"holy_damage",&FeatureMetrics::holy_damage}};
+    {"spawned",&FeatureMetrics::spawned},{"holy_damage",&FeatureMetrics::holy_damage},{"repeated",&FeatureMetrics::repeated},
+    {"max_entries",&FeatureMetrics::max_entries},{"displacement",&FeatureMetrics::displacement}};
 const Field<ItemMetrics> item_fields[] = {
     {"generated",&ItemMetrics::generated},{"reached",&ItemMetrics::reached},
     {"picked_up",&ItemMetrics::picked_up},{"used",&ItemMetrics::used},{"consumed",&ItemMetrics::consumed},
@@ -79,6 +80,9 @@ void after_floor_generation() {
 bool features_enabled() {
     return !collector || !collector->experiment || collector->experiment->features_enabled();
 }
+bool original_features(FeatureVariant variant) {
+    return collector && collector->experiment && collector->experiment->original_features(variant);
+}
 bool artifacts_enabled() {
     return !collector || !collector->experiment || collector->experiment->artifacts_enabled();
 }
@@ -115,14 +119,23 @@ void Collector::prepare_action(const Action& a) {
                 if(!rogue::game.inventory[s].type) { pickup_slot=s; break; }
     }
     if(a.kind == ActionKind::Drop) drop_slot = a.slot;
+    if(a.kind == ActionKind::Move && !data.floors.empty()) ++data.floors.back().moves;
 }
 void Collector::enter_floor() {
     const auto& g = rogue::game;
     close_floor(true);
     ++data.floors_entered;
     data.deepest = std::max(data.deepest,int(g.floor));
-    reached.fill(false); encountered.fill(false); engaged.fill(false);
+    reached.fill(false); encountered.fill(false); engaged.fill(false); feature_entries.fill(0);
     FloorMetrics f; f.floor = g.floor; f.visit = data.floors_entered;
+    for(const auto& m:g.monsters) f.unholy_count += rogue::undead_or_demonic(m.type);
+    if(enabled) for(uint8_t y=0;y<rogue::MAP_H;++y) for(uint8_t x=0;x<rogue::MAP_W;++x) {
+        rogue::Position pos{x,y};
+        if(rogue::wall_at(x,y) || pos==g.player || pos==g.up || pos==g.down ||
+            rogue::door_at(pos)!=rogue::NONE || rogue::monster_at(pos)!=rogue::NONE || rogue::item_at(pos)!=rogue::NONE) continue;
+        ++f.holy_candidates;
+        f.holy_preferred += bool(rogue::generation::geometry(pos) & (rogue::generation::OPEN | rogue::generation::ROOMY));
+    }
     f.ascent = g.has_amulet; f.entry_hp = f.exit_hp = g.hp; f.entry_level = f.exit_level = g.level;
     f.entry_max_hp=rogue::player_max_hp(); f.entry_strength=rogue::player_strength();
     f.entry_dexterity=rogue::player_dexterity();
@@ -278,7 +291,16 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     };
     switch(k) {
     case EventKind::FeatureDiscovered: feature_metric(type, &FeatureMetrics::discovered, 1); break;
-    case EventKind::FeatureActivated: feature_metric(type, &FeatureMetrics::activated, 1); break;
+    case EventKind::FeatureActivated:
+        feature_metric(type, &FeatureMetrics::activated, 1);
+        if(index < feature_entries.size()) {
+            unsigned entries=++feature_entries[index];
+            if(entries>1) feature_metric(type,&FeatureMetrics::repeated,1);
+            data.features[type/2].max_entries=std::max<uint64_t>(data.features[type/2].max_entries,entries);
+            if(f) f->features[type/2].max_entries=std::max<uint64_t>(f->features[type/2].max_entries,entries);
+        }
+        break;
+    case EventKind::FeatureDisplacement: feature_metric(type,&FeatureMetrics::displacement,amount); break;
     case EventKind::FeatureDeclined: feature_metric(type, &FeatureMetrics::declined, 1); break;
     case EventKind::HolyDamage: feature_metric(type, &FeatureMetrics::holy_damage, amount); break;
     case EventKind::FeatureSpawn:
@@ -394,7 +416,7 @@ void write_runs_header(std::ostream& o) {
 void write_floors_header(std::ostream& o) {
     o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,exit_hunger,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
     for(int i=0;i<16;++i) o<<",feature_family_"<<i;
-    o<<'\n';
+    o<<",move_actions,unholy_count,holy_candidates,holy_preferred\n";
 }
 void write_items_header(std::ostream& o) {
     o << "seed,effective_seed,agent,item_type,item"; field_header(o,item_fields);
@@ -418,7 +440,7 @@ void write_floors(std::ostream& o, const RunMetrics& r) {
       << ',' << f.arrow_bundles << ',' << f.arrow_generated << ',' << f.arrow_picked << ',' << f.bow_owned
       << ',' << f.archetype << ',' << f.floor_tiles << ',' << f.major_features << ',' << f.corridors << ',' << f.loops << ',' << f.open_connections;
       for(auto family:f.families) o<<','<<int(family);
-      o<<'\n';
+      o<<','<<f.moves<<','<<f.unholy_count<<','<<f.holy_candidates<<','<<f.holy_preferred<<'\n';
     }
 }
 void write_items(std::ostream& o, const RunMetrics& r) {

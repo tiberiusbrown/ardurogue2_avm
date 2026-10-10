@@ -400,6 +400,8 @@ struct Session {
     uint8_t pending_feature = NONE;
     bool pending_move = false;
     bool forced_entry = false;
+    bool pending_pickups = false;
+    uint8_t pickup_turns = 0;
 };
 
 extern Game game;

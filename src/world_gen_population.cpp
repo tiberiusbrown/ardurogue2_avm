@@ -336,7 +336,7 @@ static uint8_t feature_geometry(uint8_t type)
     switch(type) {
     case FEATURE_FLAME_TRAP: return JUNCTION | CORRIDOR;
     case FEATURE_SNARE_TRAP: return CORRIDOR | CORNER;
-    case FEATURE_TELEPORT_TRAP: return JUNCTION;
+    case FEATURE_TELEPORT_TRAP: return OPEN | JUNCTION;
     case FEATURE_MAGIC_DRAIN_TRAP: return DEAD_END | CORRIDOR;
     case FEATURE_SUMMONING_TRAP: return OPEN | JUNCTION;
     case FEATURE_HOLY_SYMBOL: return OPEN | ROOMY;
@@ -346,6 +346,62 @@ static uint8_t feature_geometry(uint8_t type)
     default: return feature_is_trap(type) ? CORRIDOR : OPEN;
     }
 }
+// A local path is also a full-floor path. Failure to prove it is conservative.
+// Closed doors are passable topology: movement opens them normally.
+__attribute__((noinline)) bool teleport_tile_safe(Position pos)
+{
+    if(wall_at(pos.x, pos.y)) return false;
+    uint32_t passable = 0;
+    for(uint8_t i = 0; i < 25; ++i) {
+        if(i == 12) continue;
+        if(!wall_at(static_cast<int16_t>(pos.x) + i % 5 - 2,
+                    static_cast<int16_t>(pos.y) + i / 5 - 2)) passable |= 1UL << i;
+    }
+    uint32_t neighbors = passable & ((1UL << 7) | (1UL << 11) | (1UL << 13) | (1UL << 17));
+    if(!neighbors) return true;
+    uint32_t reached = neighbors & (~neighbors + 1u);
+    constexpr uint32_t left = (1UL << 0) | (1UL << 5) | (1UL << 10) | (1UL << 15) | (1UL << 20);
+    constexpr uint32_t right = left << 4;
+    for(uint8_t n = 0; n < 24; ++n) {
+        uint32_t next = reached | (passable & ((reached << 5) | (reached >> 5) |
+            ((reached & ~right) << 1) | ((reached & ~left) >> 1)));
+        if(next == reached) break;
+        reached = next;
+    }
+    return (reached & neighbors) == neighbors;
+}
+__attribute__((noinline)) static Position select_feature_tile(uint16_t& seed, uint8_t type)
+{
+    uint16_t start = next_random(seed) & 2047, stride = next_random(seed) | 1;
+    uint8_t wanted = feature_geometry(type);
+    bool safe_teleport = type == FEATURE_TELEPORT_TRAP;
+#if defined(ARDUROGUE2_SIM)
+    if(sim::original_features(sim::FeatureVariant::Placement)) {
+        safe_teleport = false;
+        if(type == FEATURE_TELEPORT_TRAP) wanted = JUNCTION;
+    }
+#endif
+    // Spacing/geometry may relax. Connectivity and exclusions never do.
+    for(uint8_t pass = 0; pass < 3; ++pass) {
+        uint16_t cell = start;
+        for(uint16_t n = 0; n < 2048; ++n, cell = (cell + stride) & 2047) {
+            if(!(n & 63)) progress();
+            Position pos{static_cast<uint8_t>(cell & 63), static_cast<uint8_t>(cell >> 6)};
+            if(wall_at(pos.x, pos.y) || (pass < 2 && !(geometry(pos) & wanted))) continue;
+            if(pos == game.player || pos == game.up || pos == game.down || door_at(pos) != NONE ||
+               monster_at(pos) != NONE || item_at(pos) != NONE || feature_at(pos) != NONE) continue;
+            uint8_t dx = pos.x > game.player.x ? pos.x - game.player.x : game.player.x - pos.x;
+            uint8_t dy = pos.y > game.player.y ? pos.y - game.player.y : game.player.y - pos.y;
+            if(feature_is_trap(type) && dx + dy <= 3) continue;
+            bool close = false;
+            if(pass == 0) for(const MapFeature& f : game.features)
+                if(f.id && distance_squared(pos, f.pos) < 9) { close = true; break; }
+            if(close || (safe_teleport && !teleport_tile_safe(pos))) continue;
+            return pos;
+        }
+    }
+    return {NONE, NONE};
+}
 __attribute__((noinline)) void populate_features(uint16_t seed)
 {
 #if defined(ARDUROGUE2_SIM)
@@ -353,37 +409,42 @@ __attribute__((noinline)) void populate_features(uint16_t seed)
 #endif
     uint8_t unholy = 0;
     for(const Monster& m : game.monsters) if(undead_or_demonic(m.type)) ++unholy;
-    uint8_t holy_weight = holy_symbol_weight(unholy);
+    uint8_t depth = game.floor, roster_depth = game.floor;
+#if defined(ARDUROGUE2_SIM)
+    if(sim::original_features(sim::FeatureVariant::Early) || sim::original_features(sim::FeatureVariant::Density)) depth = 4;
+    if(sim::original_features(sim::FeatureVariant::Early) || sim::original_features(sim::FeatureVariant::Roster)) roster_depth = 4;
+#endif
+    uint8_t count = depth < 2 ? OPENING_FEATURE_MIN + floor_roll(seed, 3) :
+        depth < 4 ? MIDDLE_FEATURE_MIN + floor_roll(seed, 3) : DEEP_FEATURE_MIN + floor_roll(seed, 5);
+    bool original_holy = false;
+#if defined(ARDUROGUE2_SIM)
+    original_holy = sim::original_features(sim::FeatureVariant::Holy);
+#endif
+    bool holy_selected = !original_holy && floor_roll(seed, 100) < holy_symbol_chance(unholy);
     bool holy_placed = false;
-    uint8_t count = 4 + floor_roll(seed, 5);
     for(uint8_t slot = 0; slot < count; ++slot) {
-        uint8_t weight = holy_placed ? 0 : holy_weight;
-        uint8_t chance = floor_roll(seed, FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT + weight);
-        uint8_t type = chance < FEATURE_TRAP_WEIGHT ? 2 + 2 * floor_roll(seed, 10) :
-            chance < FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT ? 22 + 2 * floor_roll(seed, 9) : FEATURE_HOLY_SYMBOL;
-        uint16_t start = next_random(seed) & 2047, stride = next_random(seed) | 1;
-        uint8_t wanted = feature_geometry(type);
-        Position chosen{NONE, NONE};
-        // Relax spacing first, then geometry. Spawn safety remains mandatory.
-        for(uint8_t pass = 0; pass < 3 && chosen.x == NONE; ++pass) {
-            uint16_t cell = start;
-            for(uint16_t n = 0; n < 2048; ++n, cell = (cell + stride) & 2047) {
-                if(!(n & 63)) progress();
-                Position pos{static_cast<uint8_t>(cell & 63), static_cast<uint8_t>(cell >> 6)};
-                if(wall_at(pos.x, pos.y) || (pass < 2 && !(geometry(pos) & wanted))) continue;
-                if(pos == game.player || pos == game.up || pos == game.down || door_at(pos) != NONE ||
-                   monster_at(pos) != NONE || item_at(pos) != NONE || feature_at(pos) != NONE) continue;
-                int16_t dx = pos.x > game.player.x ? pos.x - game.player.x : game.player.x - pos.x;
-                int16_t dy = pos.y > game.player.y ? pos.y - game.player.y : game.player.y - pos.y;
-                if(feature_is_trap(type) && dx + dy <= 3) continue;
-                bool close = false;
-                if(pass == 0) for(const MapFeature& f : game.features)
-                    if(f.id && distance_squared(pos, f.pos) < 9) { close = true; break; }
-                if(close) continue;
-                // Layout generation has already connected every passable tile.
-                chosen = pos; break;
-            }
+        uint8_t type;
+        if(original_holy) {
+            uint8_t weight = holy_placed ? 0 : holy_symbol_weight(unholy);
+            uint8_t chance = floor_roll(seed, FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT + weight);
+            type = chance < FEATURE_TRAP_WEIGHT ? 2 + 2 * floor_roll(seed, 10) :
+                chance < FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT ? 22 + 2 * floor_roll(seed, 9) : FEATURE_HOLY_SYMBOL;
+        } else if(!slot && holy_selected) type = FEATURE_HOLY_SYMBOL;
+        else {
+            bool trap = depth < 4 ? floor_roll(seed, 100) < (depth < 2 ? OPENING_TRAP_PERCENT : MIDDLE_TRAP_PERCENT) :
+                floor_roll(seed, FEATURE_TRAP_WEIGHT + FEATURE_INTERACTIVE_WEIGHT) < FEATURE_TRAP_WEIGHT;
+            if(!trap) type = 22 + 2 * floor_roll(seed, 9);
+            else if(roster_depth < 2) {
+                uint8_t choice = floor_roll(seed, 3);
+                type = choice == 2 ? FEATURE_CONFUSION_TRAP : 2 + 2 * choice;
+            } else type = 2 + 2 * floor_roll(seed, roster_depth < 4 ? 7 : 10);
         }
+        // Historical holy selection can still be paired with tuned eligibility.
+        if(original_holy && feature_is_trap(type) && roster_depth < 4) {
+            if(roster_depth < 2) { uint8_t choice = floor_roll(seed, 3); type = choice == 2 ? FEATURE_CONFUSION_TRAP : 2 + 2 * choice; }
+            else type = 2 + 2 * floor_roll(seed, 7);
+        }
+        Position chosen = select_feature_tile(seed, type);
         if(chosen.x == NONE) continue;
         game.features[slot] = {chosen, static_cast<uint8_t>(type | (feature_is_trap(type) ? MAP_FEATURE_HIDDEN : 0))};
         if(type == FEATURE_HOLY_SYMBOL) holy_placed = true;

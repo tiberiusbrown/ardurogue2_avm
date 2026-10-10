@@ -74,6 +74,16 @@ void fire_checks() {
 }
 void tactical_wands() {
     OmniscientAgent agent;
+    // The pickup offer uses item observations alone, before hidden entry effects.
+    arena(); game.ground[0]={game.player,{YENDOR_AMULET,1}};
+    auto pickup_context=DecisionContext(game,0,0);
+    auto pickup_first=agent.choose_pickup(pickup_context);
+    for(uint8_t type=FEATURE_SPIKE_TRAP;type<=FEATURE_RUST_TRAP;type+=2) {
+        game.features[0]={{11,10},uint8_t(type|MAP_FEATURE_HIDDEN)};
+        auto next=agent.choose_pickup({game,0,0});
+        check(next.kind==pickup_first.kind && next.target==pickup_first.target && next.slot==pickup_first.slot,
+            "pickup offer leaked hidden feature type or position");
+    }
     for(uint8_t type : {uint8_t(WAND_TELEPORT),uint8_t(WAND_FORCE),uint8_t(WAND_POLYMORPH)}) {
         for(auto modifier : {WAND_NORMAL,WAND_POWERFUL,WAND_SPREADING,WAND_OVERPOWERED}) {
             arena(12); agent.reset(); monster(DRAGON,{11,10}); wand(type,modifier);
@@ -163,6 +173,45 @@ void retreat_and_inventory() {
 }
 }
 void check_v2_policy() {
+    {
+        OmniscientAgent agent;
+        arena(); game.floor=4; game.has_amulet=1; game.player={10,10}; game.up={14,10}; game.down={50,30};
+        std::memset(game.walls,0xff,sizeof game.walls);
+        for(uint8_t x=10;x<=50;++x) { carve(x,10); carve(x,30); }
+        for(uint8_t y=10;y<=30;++y) { carve(10,y); carve(50,y); }
+        game.features[0]={{11,10},FEATURE_TELEPORT_TRAP | MAP_FEATURE_HIDDEN};
+        auto initial=choose(agent);
+        check(initial.dx==1 && initial.dy==0,"hidden teleport changed initial route");
+        check(dispatch(initial) && game.features[0].id==FEATURE_TELEPORT_TRAP && game.player!=Position{11,10},"teleport activation/displacement regression");
+        unsigned steps=0;
+        for(;steps<200 && game.player!=game.up;++steps) {
+            auto action=choose(agent);
+            check(action.diagnostic==Diagnostic::None && action.kind==ActionKind::Move,"teleport detour became stuck");
+            Position next{uint8_t(game.player.x+action.dx),uint8_t(game.player.y+action.dy)};
+            check(next!=Position{11,10},"known teleport re-entered despite detour");
+            check(dispatch(action),"teleport detour rejected move");
+        }
+        check(game.player==game.up && steps<200,"teleport detour failed eventual progress");
+        game.player={10,10}; agent.reset();
+        auto detour=choose(agent);
+        check(detour.dy==1 && detour.dx==0 && Paths(true).to(game.up)>60,"finite teleport penalty won over long detour");
+        // Leaving the tile remains legal, including a monster endpoint.
+        game.player={11,10}; game.monsters[0]={{12,10},GOBLIN,10,0,{0,0},0};
+        check(Paths(true).to({12,10})==1,"cannot leave known teleport or approach blocker");
+        // Same nonempty history, differing hidden types/positions and future RNG.
+        game.monsters[0]={}; game.player={10,10}; game.features[1]={{10,11},FEATURE_SPIKE_TRAP | MAP_FEATURE_HIDDEN};
+        auto warm=agent; auto first=choose(warm);
+        game.features[1]={{50,20},FEATURE_SUMMONING_TRAP | MAP_FEATURE_HIDDEN};
+        auto other=agent; auto second=choose(other);
+        check(first.kind==second.kind && first.dx==second.dx && first.dy==second.dy && first.goal==second.goal && first.destination==second.destination,"navigation history leaked hidden information");
+        // A truly disconnected mandatory goal has one bounded fallback.
+        arena(); game.floor=4; game.down={14,10}; game.player={10,10}; agent.reset();
+        std::memset(game.walls,0xff,sizeof game.walls);
+        for(uint8_t x=10;x<=14;++x) carve(x,10);
+        game.features[0]={{11,10},FEATURE_TELEPORT_TRAP};
+        check(Paths(true).to(game.down)<0 && Paths(true,true).to(game.down)==4,"teleport fallback connectivity");
+        check(choose(agent).dx==1,"mandatory teleport fallback rejected");
+    }
     {
         OmniscientAgent a;
         arena(); game.player={10,10}; game.down={14,10}; game.hp=game.max_hp=50;

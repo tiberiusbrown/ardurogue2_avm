@@ -6,6 +6,10 @@
 
 namespace sim {
 namespace {
+const char* feature_name(uint8_t t) {
+    static const char* names[]={"NONE","SPIKE_TRAP","POISON_DART_TRAP","FLAME_TRAP","FROST_TRAP","SNARE_TRAP","TELEPORT_TRAP","CONFUSION_TRAP","MAGIC_DRAIN_TRAP","SUMMONING_TRAP","RUST_TRAP","FOUNTAIN","HEALING_SPRING","ALTAR","SACRIFICIAL_ALTAR","ENCHANTED_FORGE","STATUE","SARCOPHAGUS","RUNESTONE","ALCHEMICAL_POOL","HOLY_SYMBOL"};
+    return t<=rogue::FEATURE_HOLY_SYMBOL ? names[t/2] : "NONE";
+}
 int integer(const std::string& s) {
     size_t end=0; int n=std::stoi(s,&end);
     if(end!=s.size() || n<0) throw std::runtime_error("invalid intervention integer: "+s);
@@ -28,6 +32,11 @@ int group(uint8_t t) {
 }
 }
 Rule parse_rule(const std::string& text) {
+    static const char* original_rules[]={"original-teleport-placement","original-early-traps","original-holy-generation","original-early-density","original-early-damage","original-early-roster"};
+    for(int i=0;i<6;++i) if(text==original_rules[i]) { Rule r; r.original=i; return r; }
+    for(int i=0;i<4;++i) if(text==(i==0 ? "no-teleport-traps" : i==1 ? "no-early-damaging-traps" : i==2 ? "interactive-features-only" : "traps-only")) {
+        Rule r; r.feature_mode=i; return r;
+    }
     if(text=="no-map-features") { Rule r; r.no_features=true; return r; }
     if(text=="ordinary-items") {
         Rule r; r.ordinary_items=true; return r;
@@ -40,8 +49,14 @@ Rule parse_rule(const std::string& text) {
     else if(fields[0]=="remove-item") r.remove=true;
     else if(fields[0]=="replace-monster") r.monster=true;
     else if(fields[0]=="remove-monster") r.monster=r.remove=true;
+    else if(fields[0]=="remove-feature") r.feature=r.remove=true;
     else throw std::runtime_error("unknown intervention operation: "+fields[0]);
-    r.from=content(fields[1],r.monster); size_t next=2;
+    if(r.feature) {
+        for(uint8_t t=2;t<=rogue::FEATURE_HOLY_SYMBOL;t+=2)
+            if(fields[1]==feature_name(t)) r.from=t;
+        if(!r.from) throw std::runtime_error("unknown feature: "+fields[1]);
+    } else r.from=content(fields[1],r.monster);
+    size_t next=2;
     if(!r.remove) {
         if(fields.size()<3) throw std::runtime_error("replacement requires TO");
         r.to=content(fields[2],r.monster); next=3;
@@ -66,7 +81,20 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
-        if(r.ordinary_items || r.no_features) continue;
+        if(r.ordinary_items || r.no_features || r.original>=0) continue;
+        if(r.feature || r.feature_mode>=0) {
+            unsigned removed=0;
+            for(auto& f:g.features) {
+                uint8_t t=feature_type(f.id);
+                bool damaging=t==FEATURE_SPIKE_TRAP || t==FEATURE_POISON_DART_TRAP || t==FEATURE_FLAME_TRAP || t==FEATURE_FROST_TRAP || t==FEATURE_MAGIC_DRAIN_TRAP || t==FEATURE_RUST_TRAP;
+                bool match=r.feature ? t==r.from : r.feature_mode==0 ? t==FEATURE_TELEPORT_TRAP :
+                    r.feature_mode==1 ? g.floor<4 && damaging : r.feature_mode==2 ? feature_is_trap(t) || t==FEATURE_HOLY_SYMBOL : !feature_is_trap(t);
+                if(!f.id || !match || removed>=unsigned(r.maximum) || (r.floor>=0 && r.floor!=g.floor) || (r.direction>=0 && r.direction!=int(bool(g.has_amulet)))) continue;
+                ledger.push_back({context.visit,g.floor,bool(g.has_amulet),"remove-feature",feature_name(t),"NONE",1});
+                f={}; ++removed;
+            }
+            continue;
+        }
         if((r.floor>=0 && r.floor!=g.floor) || (r.direction>=0 && r.direction!=int(bool(g.has_amulet)))) continue;
         unsigned count=0;
         // Stable slot order, no PRNG, and each rule's cap is per entered visit.
@@ -93,6 +121,10 @@ void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vecto
             r.monster ? monster_name(r.from) : item_name(r.from),
             r.remove ? "NONE" : r.monster ? monster_name(r.to) : item_name(r.to),count});
     }
+}
+bool RuleExperiment::original_features(FeatureVariant variant) const {
+    for(const auto& r:rules) if(r.original==int(variant)) return true;
+    return false;
 }
 bool RuleExperiment::features_enabled() const {
     for(const auto& r:rules) if(r.no_features) return false;

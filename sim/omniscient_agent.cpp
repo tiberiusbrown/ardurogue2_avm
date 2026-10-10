@@ -436,17 +436,19 @@ bool emergency_control(Action& choice) {
 }
 }
 
-Paths::Paths(bool allow_monsters) {
+Paths::Paths(bool allow_monsters, bool allow_teleports) {
     distance.fill(-1); first.fill(-1);
     std::array<bool, MAP_W*MAP_H> occupied{};
     for(const Monster& m : game.monsters) if(m.type) occupied[cell(m.pos)] = true;
     std::array<int, MAP_W*MAP_H> queue{};
     std::array<int, MAP_W*MAP_H> penalty{};
     bool traps = false;
+    std::array<bool, MAP_W*MAP_H> teleport{};
     int pressure = 0;
     for(const Monster& m : game.monsters) if(m.type && square_contains(m.pos, game.player, 2)) ++pressure;
     for(const MapFeature& f : observed_features(game)) if(feature_is_trap(f.id)) {
-        penalty[cell(f.pos)] = pressure ? 3 : f.id == FEATURE_TELEPORT_TRAP ? 60 :
+        teleport[cell(f.pos)] = f.id == FEATURE_TELEPORT_TRAP && !allow_teleports;
+        penalty[cell(f.pos)] = f.id == FEATURE_TELEPORT_TRAP ? 60 : pressure ? 3 :
             f.id == FEATURE_CONFUSION_TRAP ? 25 : game.hp < 10 ? 20 : 10;
         if(f.id == FEATURE_FLAME_TRAP && player_fire_effect() > 0) penalty[cell(f.pos)] = 0;
         traps = traps || penalty[cell(f.pos)] != 0;
@@ -463,7 +465,9 @@ Paths::Paths(bool allow_monsters) {
             for(int d = 0; d < 4; ++d) {
                 int nx = at % MAP_W + dxs[d], ny = at / MAP_W + dys[d];
                 if(wall_at(int16_t(nx), int16_t(ny))) continue;
-                int next = ny * MAP_W + nx, new_cost = cost + 1 + penalty[next];
+                int next = ny * MAP_W + nx;
+                if(teleport[next]) continue;
+                int new_cost = cost + 1 + penalty[next];
                 if(costs[next] >= 0 && costs[next] <= new_cost) continue;
                 costs[next] = new_cost;
                 distance[next] = static_cast<int16_t>(distance[at] + 1);
@@ -497,6 +501,45 @@ Action Paths::move_to(Position p, const std::string& goal) const {
     return a;
 }
 
+Action OmniscientAgent::navigate(const Paths& paths, Position destination, const char* goal, bool optional) {
+    // Only observed traps enable history. Hidden positions/types never enter it.
+    bool known = false;
+    for(const auto& f : observed_features(game)) known |= f.id == FEATURE_TELEPORT_TRAP;
+    if(known) {
+        int d = paths.to(destination);
+        if(destination != navigation_goal) {
+            navigation_goal = destination; navigation_stale = navigation_cursor = 0;
+            navigation_best = 10000; navigation_history.fill({NONE, NONE});
+        }
+        if(d >= 0 && d < navigation_best) { navigation_best = d; navigation_stale = 0; }
+        else ++navigation_stale;
+        unsigned returns = 0;
+        for(auto p : navigation_history) returns += p == game.player;
+        navigation_history[navigation_cursor++ % navigation_history.size()] = game.player;
+        if(optional && (navigation_stale > 96 || returns >= 3)) {
+            for(unsigned i=0;i<GROUND_ITEMS;++i) if(game.ground[i].pos==destination) abandoned_loot[i]=true;
+            for(unsigned i=0;i<MAP_FEATURES;++i) {
+                auto f=observed_feature(game.features[i]);
+                if(f.id && f.pos==destination) feature_attempted[i]=true;
+            }
+            return navigate(paths, game.has_amulet ? game.up : game.down, "abandon looping optional destination");
+        }
+    }
+    if(paths.to(destination) >= 0) return paths.move_to(destination, goal);
+    // One bounded relaxed calculation, only for mandatory unreachable goals.
+    // The ordinary tree remains authoritative wherever a detour exists.
+    return Paths(true, true).move_to(destination, goal);
+}
+Action OmniscientAgent::choose_pickup(const DecisionContext&) {
+    int best = -1, worth = 0;
+    for(int i = 0; i < GROUND_ITEMS; ++i) {
+        const GroundItem& g = game.ground[i];
+        if(g.pos != game.player || value(g.item) <= worth ||
+           (g.item.type != YENDOR_AMULET && !fits(g.item) && replacement(g.item) < 0)) continue;
+        best = i; worth = value(g.item);
+    }
+    return best >= 0 ? pickup(best) : Action{};
+}
 Action OmniscientAgent::choose_action(const DecisionContext&) {
     if(game.paralyzed) { Action a; a.goal = "wait for paralysis"; return a; }
     int adjacent = -1, threats = 0;
@@ -509,7 +552,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     if(game.confused && !threats && feature_is_trap(observed_feature_at(game, game.player))) {
         Action a; a.goal = "recover senses on a discovered trap"; return a;
     }
-    if(feature_floor != game.floor) { feature_floor = game.floor; holy_entries = feature_steps = 0; feature_attempted.fill(false); }
+    if(feature_floor != game.floor) { feature_floor = game.floor; holy_entries = feature_steps = 0; feature_attempted.fill(false); abandoned_loot.fill(false); navigation_goal = {NONE, NONE}; navigation_stale = navigation_cursor = 0; navigation_best = 10000; navigation_history.fill({NONE, NONE}); }
     // A bounded nearby holy opportunity can beat a dangerous melee exchange.
     if(holy_entries < 3) for(const MapFeature& f : observed_features(game)) {
         if(f.id != FEATURE_HOLY_SYMBOL || distance(f.pos, game.player) != 1) continue;
@@ -663,30 +706,29 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         if(d <= 0 || d > 8 || !choose_feature_choice(f.id).accept) continue;
         ++feature_steps;
         if(d == 1) feature_attempted[i] = true;
-        return paths.move_to(f.pos, "use nearby dungeon feature");
+        return navigate(paths, f.pos, "use nearby dungeon feature", true);
     }
     // On ascent preserve resources and go directly to the surface.
     if(game.has_amulet) {
         if(game.player == game.up) { Action a; a.kind = ActionKind::Stairs; a.goal = "ascend and escape"; return a; }
-        if(paths.to(game.up) > 0) return paths.move_to(game.up,"ascend");
-        return Paths(true).move_to(game.up,"ascend through blocking monster");
+        return navigate(paths, game.up, "ascend");
     }
     int best = -1, best_score = 0;
     for(int i = 0; i < GROUND_ITEMS; ++i) {
         const GroundItem& g = game.ground[i]; int worth = value(g.item), d = paths.to(g.pos);
-        if(worth <= 0 || d < 0 || (g.item.type != YENDOR_AMULET && !fits(g.item) && replacement(g.item) < 0)) continue;
+        if(abandoned_loot[i] || worth <= 0 || d < 0 || (g.item.type != YENDOR_AMULET && !fits(g.item) && replacement(g.item) < 0)) continue;
         int score = worth*100/(d+8);
         if(score > best_score) { best = i; best_score = score; }
     }
     if(best >= 0) {
         if(game.player == game.ground[best].pos) return pickup(best);
-        return paths.move_to(game.ground[best].pos,"seek useful loot");
+        return navigate(paths, game.ground[best].pos, "seek useful loot", game.ground[best].item.type != YENDOR_AMULET);
     }
     if(game.floor == FLOORS-1) {
         for(const Monster& m : game.monsters) if(m.type == LORD)
-            return Paths(true).move_to(m.pos,"defeat Lord");
+            return navigate(paths, m.pos, "defeat Lord");
         for(int i = 0; i < GROUND_ITEMS; ++i) if(game.ground[i].item.type == YENDOR_AMULET)
-            return Paths(true).move_to(game.ground[i].pos,"recover Yendor");
+            return navigate(paths, game.ground[i].pos, "recover Yendor");
     }
     // Early, weak monsters provide levels and HP recovery. Avoid chasing bats.
     if(game.floor < 4 && !game.weakened && game.hp > player_max_hp()/2) {
@@ -700,8 +742,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     if(game.player == game.down && game.floor < FLOORS-1) {
         Action a; a.kind = ActionKind::Stairs; a.goal = "descend"; return a;
     }
-    if(paths.to(game.down) > 0) return paths.move_to(game.down,"descend");
-    return Paths(true).move_to(game.down,"descend through blocking monster");
+    return navigate(paths, game.down, "descend");
 }
 }
 

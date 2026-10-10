@@ -1,5 +1,6 @@
 #pragma once
 #include "model.hpp"
+#include "sim_hooks.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,9 +20,13 @@ public:
     virtual void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const = 0;
     virtual bool artifacts_enabled() const { return true; }
     virtual bool features_enabled() const { return true; }
+    virtual bool original_features(FeatureVariant) const { return false; }
 };
 struct Rule {
     bool monster=false, remove=false, ordinary_items=false, no_features=false;
+    bool feature=false;
+    int feature_mode=-1; // 0 teleport, 1 early damage, 2 interactive only, 3 traps only
+    int original=-1; // FeatureVariant, host only
     uint8_t from=0, to=0;
     int floor=-1, direction=-1, maximum=65535, info=-1; // -1 default, -2 preserve
 };
@@ -31,6 +36,7 @@ public:
     void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const override;
     bool artifacts_enabled() const override;
     bool features_enabled() const override;
+    bool original_features(FeatureVariant) const override;
 };
 Rule parse_rule(const std::string&);
 void after_floor_generation();

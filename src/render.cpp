@@ -303,9 +303,19 @@ struct DungeonView {
 static uint16_t map_row_bits(const uint8_t* map, uint8_t y, int16_t left,
                              uint8_t width)
 {
-    uint16_t opaque = static_cast<uint16_t>((1u << width) - 1);
     if(y >= MAP_H || left <= -static_cast<int16_t>(width) || left >= MAP_W)
-        return opaque;
+        return static_cast<uint16_t>((1u << width) - 1);
+    // Most viewport rows are wholly within the map. Avoid clipping arithmetic
+    // on this measured hot path; the edge path retains solid outside cells.
+    if(left >= 0 && left + width <= MAP_W) {
+        const uint8_t* source = map + static_cast<uint16_t>(y) * (MAP_W / 8) + (left >> 3);
+        uint8_t shift = left & 7;
+        uint16_t bits = source[0];
+        if(shift + width > 8) bits |= static_cast<uint16_t>(source[1]) << 8;
+        bits >>= shift;
+        if(shift + width > 16) bits |= static_cast<uint16_t>(source[2]) << (16 - shift);
+        return bits & static_cast<uint16_t>((1u << width) - 1);
+    }
     uint8_t first = left < 0 ? static_cast<uint8_t>(-left) : 0;
     uint8_t end = left + width > MAP_W
         ? static_cast<uint8_t>(MAP_W - left) : width;
@@ -324,7 +334,7 @@ static uint16_t map_row_bits(const uint8_t* map, uint8_t y, int16_t left,
         bits |= static_cast<uint16_t>(source[2]) << (16 - shift);
     uint16_t run = static_cast<uint16_t>((1u << count) - 1);
     uint16_t valid = static_cast<uint16_t>(run << first);
-    return static_cast<uint16_t>((opaque & ~valid) | ((bits & run) << first));
+    return static_cast<uint16_t>((((1u << width) - 1) & ~valid) | ((bits & run) << first));
 }
 
 uint16_t wall_row_bits(uint8_t y, int16_t left)
@@ -406,43 +416,27 @@ struct TerrainRow {
     uint16_t walls, shown_walls;
 };
 
-__attribute__((noinline)) static TerrainRow terrain_row(
-    uint8_t y, int16_t left)
-{
-    // The halo includes neighbors beyond the viewport. Missing map rows and
-    // columns are solid, matching wall_exposed's clipped neighborhoods.
-    uint16_t center = map_row_bits(game.walls, y, left - 1, 15);
-    uint16_t solid = center;
-    if(y > 0) solid &= map_row_bits(game.walls, y - 1, left - 1, 15);
-    if(y + 1 < MAP_H) solid &= map_row_bits(game.walls, y + 1, left - 1, 15);
-    uint16_t exposed = static_cast<uint16_t>(center &
-        ~(solid & (solid << 1) & (solid >> 1)));
-    uint16_t walls = static_cast<uint16_t>((center >> 1) & 0x1fff);
-    uint16_t shown = static_cast<uint16_t>((exposed >> 1) &
-        map_row_bits(game.explored, y, left, 13));
-    return {walls, shown};
-}
-
 __attribute__((always_inline)) static inline void draw_terrain_row(
     uint16_t floor, uint16_t walls, uint16_t below, uint8_t sy)
 {
     uint8_t y = static_cast<uint8_t>(sy * 5);
     uint8_t shift = y & 7;
     uint8_t* output = __avm_framebuffer + static_cast<uint16_t>(y >> 3) * 128;
+    // Vertical masks depend only on the row, not each wall tile/column.
+    uint8_t low_full = static_cast<uint8_t>(0x1f << shift);
+    uint8_t low_short = static_cast<uint8_t>(0x0f << shift);
+    uint8_t high_full = shift > 3 && y < 60 ? static_cast<uint8_t>(0x1f >> (8 - shift)) : 0;
+    uint8_t high_short = shift > 4 && y < 60 ? static_cast<uint8_t>(0x0f >> (8 - shift)) : 0;
     for(uint8_t sx = 0; sx < 13; ++sx, output += 5,
         floor >>= 1, walls >>= 1, below >>= 1) {
         if(walls & 1) {
-            uint8_t bits = below & 1 ? 0x1f : 0x0f;
-            uint8_t first = static_cast<uint8_t>(bits << shift);
+            uint8_t first = below & 1 ? low_full : low_short;
             for(uint8_t col = 0; col < 4; ++col) output[col] |= first;
-            if(shift > 3 && y < 60) {
-                uint8_t second = static_cast<uint8_t>(bits >> (8 - shift));
-                for(uint8_t col = 0; col < 4; ++col) output[128 + col] |= second;
-            }
+            uint8_t second = below & 1 ? high_full : high_short;
+            if(second) for(uint8_t col = 0; col < 4; ++col) output[128 + col] |= second;
             if(walls & 2) {
-                output[4] |= static_cast<uint8_t>(0x0f << shift);
-                if(shift > 4 && y < 60)
-                    output[132] |= static_cast<uint8_t>(0x0f >> (8 - shift));
+                output[4] |= low_short;
+                if(high_short) output[132] |= high_short;
             }
         } else if(floor & 1) {
             if(shift < 6) output[2] |= static_cast<uint8_t>(1u << (shift + 2));
@@ -456,9 +450,18 @@ __attribute__((noinline)) static void build_view_terrain(
 {
     uint16_t valid = static_cast<uint16_t>(((1u << view.end_sx) - 1) &
                                           ~((1u << view.first_sx) - 1));
-    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy) {
-        terrain[sy] = terrain_row(static_cast<uint8_t>(view.top + sy), view.left);
-        terrain[sy].shown_walls &= valid;
+    // Adjacent terrain rows share their wall halo. Roll three scalar rows
+    // instead of extracting the same map row three times per render.
+    uint8_t y = static_cast<uint8_t>(view.top + view.first_sy);
+    uint16_t above = map_row_bits(game.walls, static_cast<uint8_t>(y - 1), view.left - 1, 15);
+    uint16_t center = map_row_bits(game.walls, y, view.left - 1, 15);
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy, ++y) {
+        uint16_t below = map_row_bits(game.walls, static_cast<uint8_t>(y + 1), view.left - 1, 15);
+        uint16_t solid = above & center & below;
+        uint16_t exposed = static_cast<uint16_t>(center & ~(solid & (solid << 1) & (solid >> 1)));
+        terrain[sy] = {static_cast<uint16_t>((center >> 1) & 0x1fff),
+            static_cast<uint16_t>((exposed >> 1) & map_row_bits(game.explored, y, view.left, 13) & valid)};
+        above = center; center = below;
     }
 }
 

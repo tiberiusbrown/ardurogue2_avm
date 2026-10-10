@@ -15,7 +15,7 @@ namespace {
 void arena(uint8_t type = FEATURE_NONE) {
     game = {}; session = {NONE, DEATH, false};
     game.player = {10, 10}; game.up = {2, 2}; game.down = {40, 20};
-    game.hp = game.max_hp = 100; game.hunger = 220; game.level = 1;
+    game.floor = 4; game.hp = game.max_hp = 100; game.hunger = 220; game.level = 1;
     game.strength = 5; game.dexterity = 4; game.speed = 4;
     game.run_seed = game.random_state = 123; game.valid = 1;
     game.magic = SAVE_MAGIC; game.version = SAVE_VERSION;
@@ -108,6 +108,25 @@ void searching_and_movement() {
     }
 }
 void summons_and_holy() {
+    for(bool hidden: {false,true}) {
+        arena(FEATURE_TELEPORT_TRAP); game.floor=15; game.features[0].id=FEATURE_TELEPORT_TRAP | (hidden ? MAP_FEATURE_HIDDEN : 0);
+        game.monsters[0]={game.player,LORD,1,0,{0,0},0};
+        defeat_monster(0);
+        require(game.ground[15].item.type==YENDOR_AMULET && game.ground[15].pos==game.player &&
+            game.features[0].id==(FEATURE_TELEPORT_TRAP | (hidden ? MAP_FEATURE_HIDDEN : 0)),"Lord drop or trap changed");
+        game.player={9,10};
+        begin_player_move(1,0);
+        require(session.pending_pickups && !game.has_amulet && game.player==Position{10,10} && !game.turns,
+            "teleport fired before pickup offer");
+        require(take_item(15)==PICKUP_TAKEN && game.has_amulet && !game.turns,
+            "Yendor pickup ran enemies before feature");
+        complete_ground_pickups(); complete_player_move();
+        require(!session.pending_move && !session.pending_pickups && game.turns==2 &&
+            game.features[0].id==FEATURE_TELEPORT_TRAP,"pickup/teleport turn completion");
+        arena(); game.floor=15; game.monsters[0]={{12,10},LORD,1,0,{0,0},0};
+        damage_monster(0,1,false);
+        require(game.ground[15].pos==Position{12,10},"ordinary Lord drop moved");
+    }
     arena(FEATURE_SUMMONING_TRAP); activate_entry_feature(0);
     unsigned count = 0;
     for(uint8_t i = 0; i < MONSTERS; ++i) if(game.monsters[i].type) {
@@ -135,6 +154,28 @@ void summons_and_holy() {
     require(!game.monsters[0].type && game.score > 0 && game.xp > 0, "holy normal kill rewards");
     require(undead_or_demonic(ZOMBIE) && undead_or_demonic(PHANTOM) && undead_or_demonic(INCUBUS) &&
         undead_or_demonic(ANGEL) && undead_or_demonic(LORD) && !undead_or_demonic(TROLL), "unholy classification");
+}
+void pickup_order() {
+    arena(); game.hp=1; game.features[0]={{11,10},FEATURE_SPIKE_TRAP | MAP_FEATURE_HIDDEN};
+    game.ground[0]={{11,10},{FOOD,1}};
+    begin_player_move(1,0);
+    require(session.pending_pickups && !session.ended && game.features[0].id&MAP_FEATURE_HIDDEN,
+        "lethal trap fired before pickup offer");
+    require(take_item(0)==PICKUP_TAKEN && game.inventory[0].type==FOOD && !game.turns,"pickup before lethal trap");
+    complete_ground_pickups(); complete_player_move();
+    require(session.ended && !game.turns && !session.pending_move,"lethal entry ran queued turns");
+    arena(); game.features[0]={{11,10},FEATURE_HEALING_SPRING}; game.ground[0]={{11,10},{FOOD,1}};
+    begin_player_move(1,0); complete_ground_pickups(); complete_player_move();
+    require(game.ground[0].item.type==FOOD && game.turns==1 && game.features[0].id,
+        "declined pickup/feature consumed item or extra turn");
+    arena(); game.features[0]={{11,10},FEATURE_SPIKE_TRAP | MAP_FEATURE_HIDDEN};
+    for(auto& i:game.inventory) i={FOOD,1};
+    game.ground[0]={{11,10},{POTION_HEALING,1}};
+    begin_player_move(1,0);
+    require(take_item(0)==PICKUP_NEEDS_SWAP && swap_ground_item(0,0) && game.hp==100 && !game.turns,
+        "full pack swap resolved trap before pickup");
+    complete_ground_pickups(); complete_player_move();
+    require(game.inventory[0].type==POTION_HEALING && game.hp<100 && game.turns==2,"swap/feature turn order");
 }
 uint16_t seed_for(uint8_t limit, uint8_t value) {
     for(uint32_t seed = 1; seed <= 65535; ++seed) {
@@ -227,9 +268,54 @@ void interactive_roster() {
         resolve_feature(0, {true, NONE}); require(!std::memcmp(before.data(), game.ground, sizeof game.ground), "statue full ground overwrite");
     }
 }
+void teleport_topology() {
+    auto layout=[](std::initializer_list<const char*> rows) {
+        arena(); std::memset(game.walls,0xff,sizeof game.walls);
+        unsigned y=8;
+        for(auto row:rows) { for(unsigned x=0;row[x];++x) if(row[x]=='.') carve(uint8_t(8+x),uint8_t(y)); ++y; }
+    };
+    layout({"...#...",".......","...#..."});
+    require(!generation::teleport_tile_safe({11,9}),"room connector accepted");
+    layout({"##.##","##.##",".....","##.##","##.##"});
+    require(!generation::teleport_tile_safe({10,10}),"severed junction accepted");
+    layout({".....",".....",".....",".....","....."});
+    require(generation::teleport_tile_safe({10,10}),"open room rejected");
+    layout({".....",".###.","....."});
+    require(generation::teleport_tile_safe({10,8}),"loop corridor rejected");
+    layout({"....."});
+    require(generation::teleport_tile_safe({8,8}),"dead end rejected");
+    require(!generation::teleport_tile_safe({10,8}),"corridor choke accepted");
+    game.door_count=1; game.doors[0].pos={10,8};
+    require(!generation::teleport_tile_safe({10,8}),"closed doorway choke accepted");
+    layout({".....",".###.","....."});
+    game.door_count=1; game.doors[0].pos={8,9};
+    require(generation::teleport_tile_safe({10,8}),"openable door omitted from loop topology");
+    // Every interior cell is essential; endpoints are stairs/spawn.
+    layout({"........................................"});
+    game.player=game.up={8,8}; game.down={47,8};
+    for(unsigned seed=1;seed<300;++seed) {
+        std::memset(game.features,0,sizeof game.features);
+        generation::populate_features(uint16_t(seed));
+        for(auto f:game.features) require(feature_type(f.id)!=FEATURE_TELEPORT_TRAP,"unsafe teleport fallback");
+    }
+    for(unsigned seed=1;seed<=256;++seed) for(uint8_t floor: {uint8_t(0),uint8_t(1),uint8_t(2),uint8_t(3),uint8_t(4)}) {
+        arena(FEATURE_SPIKE_TRAP); game.floor=floor; game.random_state=uint16_t(seed); activate_entry_feature(0);
+        require(100-game.hp >= (floor<2 ? 2 : 3) && 100-game.hp <= (floor<2 ? 4 : 7),"depth spike damage");
+        arena(FEATURE_POISON_DART_TRAP); game.floor=floor; game.random_state=uint16_t(seed); activate_entry_feature(0);
+        require(100-game.hp<= (floor<2 ? 2 : 3) && game.weakened==1,"depth poison damage/weakness");
+        arena(FEATURE_CONFUSION_TRAP); game.floor=floor; game.random_state=uint16_t(seed); activate_entry_feature(0);
+        require(game.confused>= (floor<2 ? 3 : 5) && game.confused<= (floor<2 ? 5 : 8),"depth confusion duration");
+        arena(FEATURE_FLAME_TRAP); game.floor=floor; game.random_state=uint16_t(seed); activate_entry_feature(0);
+        require(100-game.hp>= (floor<4 ? 3 : 5) && 100-game.hp<= (floor<4 ? 5 : 9),"depth flame damage");
+        arena(FEATURE_FROST_TRAP); game.floor=floor; game.random_state=uint16_t(seed); activate_entry_feature(0);
+        require(100-game.hp>= (floor<4 ? 2 : 3) && 100-game.hp<= (floor<4 ? 4 : 6),"depth frost damage");
+        arena(FEATURE_SNARE_TRAP); game.floor=floor; game.random_state=uint16_t(seed); activate_entry_feature(0);
+        require(game.paralyzed>= (floor<4 ? 1 : 2) && game.paralyzed<= (floor<4 ? 2 : 3),"depth snare duration");
+    }
+}
 void generation_checks() {
     unsigned roster[FEATURE_TYPES + 1] = {}; unsigned archetypes[4] = {};
-    for(uint16_t seed = 1; seed <= 512; ++seed) {
+    for(uint16_t seed = 1; seed <= 4096; ++seed) {
         arena(); game.run_seed = seed; game.floor = seed % FLOORS; make_floor();
         Game first = game; uint16_t rng = game.random_state;
         ++archetypes[generation::archetype(generation::floor_seed(generation::LAYOUT))];
@@ -261,7 +347,31 @@ void generation_checks() {
             }
             for(uint8_t j = 0; j < i; ++j) require(!game.features[j].id || game.features[j].pos != f.pos, "features overlap");
         }
-        require(count >= 4 && count <= 8 && holy <= 1, "feature count/holy cap");
+        unsigned minimum = game.floor < 2 ? 2 : game.floor < 4 ? 3 : 4;
+        unsigned maximum = game.floor < 2 ? 4 : game.floor < 4 ? 5 : 8;
+        require(count >= minimum - 1 && count <= maximum && holy <= 1, "feature count/holy cap");
+        for(const auto& trap : game.features) if(feature_type(trap.id) == FEATURE_TELEPORT_TRAP) {
+            require(generation::teleport_tile_safe(trap.pos), "generated unsafe teleport");
+            std::array<bool, MAP_W * MAP_H> without{};
+            head=tail=0; queue[tail++]=game.player; without[game.player.y*MAP_W+game.player.x]=true;
+            while(head<tail) {
+                auto pos=queue[head++];
+                const int8_t dx[]={0,1,0,-1},dy[]={-1,0,1,0};
+                for(unsigned d=0;d<4;++d) {
+                    int x=pos.x+dx[d],y=pos.y+dy[d];
+                    if(wall_at(x,y) || Position{uint8_t(x),uint8_t(y)}==trap.pos) continue;
+                    unsigned c=y*MAP_W+x; if(without[c]) continue;
+                    without[c]=true; queue[tail++]={uint8_t(x),uint8_t(y)};
+                }
+            }
+            for(unsigned c=0;c<visited.size();++c) if(c!=unsigned(trap.pos.y*MAP_W+trap.pos.x))
+                require(!visited[c] || without[c], "teleport removal disconnected reachable region");
+        }
+        for(const auto& f:game.features) if(feature_is_trap(f.id)) {
+            auto t=feature_type(f.id);
+            if(game.floor<2) require(t==FEATURE_SPIKE_TRAP || t==FEATURE_POISON_DART_TRAP || t==FEATURE_CONFUSION_TRAP,"opening trap roster");
+            else if(game.floor<4) require(t<=FEATURE_CONFUSION_TRAP,"middle trap roster");
+        }
         std::memset(game.features, 0, sizeof game.features);
         generation::populate_features(generation::floor_seed(generation::MAP_FEATURE_DOMAIN));
         require(!std::memcmp(game.features, first.features, sizeof game.features) &&
@@ -285,11 +395,11 @@ void generation_checks() {
     for(uint8_t y = 9; y < 15; ++y) for(uint8_t x = 9; x < 18; ++x) carve(x, y);
     generation::populate_features(123); unsigned count = 0; for(const auto& f : game.features) count += bool(f.id);
     require(count >= 4, "geometry fallback rejected valid floor");
-    std::printf("map features: generation roster and 512 floors; holy low=%u high=%u\n", low, high);
+    std::printf("map features: generation roster and 4096 floors; holy low=%u high=%u\n", low, high);
 }
 }
 void check_map_features() {
     static_assert(sizeof(MapFeature) == 3 && sizeof(Game) == 810 && offsetof(Game, features) == 773, "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
-    trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); interactive_roster(); outcome_checks(); generation_checks();
+    teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
 }

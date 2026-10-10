@@ -29,11 +29,13 @@ struct RangedMetrics {
     std::array<ShotMetrics,rogue::LORD+1> targets{};
 };
 struct FeatureMetrics {
-    uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0;
+    uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0, repeated=0, max_entries=0, displacement=0;
 };
 struct FloorMetrics {
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     int floor=0, visit=0;
+    uint64_t moves=0;
+    unsigned unholy_count=0, holy_candidates=0, holy_preferred=0;
     uint64_t arrow_bundles=0, arrow_generated=0, arrow_picked=0;
     bool bow_owned=false;
     bool ascent=false, exited=false;
@@ -76,6 +78,7 @@ struct Collector {
     bool enabled=true;
     std::ostream* trace=nullptr;
     std::array<bool, rogue::GROUND_ITEMS> reached{};
+    std::array<unsigned, rogue::MAP_FEATURES> feature_entries{};
     std::array<bool, rogue::MONSTERS> encountered{}, engaged{};
     // Host-only object identity survives ground swaps/drop/repick. This counts
     // distinct wands, separately from pickup transactions and charge uses.

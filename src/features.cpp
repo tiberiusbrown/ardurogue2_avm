@@ -7,6 +7,12 @@
 #include "sim_hooks.hpp"
 
 namespace rogue {
+uint8_t trap_tuning_depth() {
+#if defined(ARDUROGUE2_SIM)
+    if(sim::original_features(sim::FeatureVariant::Early) || sim::original_features(sim::FeatureVariant::Damage)) return 4;
+#endif
+    return game.floor;
+}
 uint8_t feature_at(Position pos) {
     for(uint8_t i = 0; i < MAP_FEATURES; ++i)
         if(game.features[i].id && game.features[i].pos == pos) return i;
@@ -52,9 +58,9 @@ static void physical_damage(uint8_t raw) {
         armor_absorption(player_armor_rating(), player_armor_enchant())));
 }
 static void weaken() { if(game.weakened < 3) ++game.weakened; }
-static void confuse() {
+static void confuse(bool trap = false) {
     if(amulet_bonus(AMULET_CLARITY) <= 0) {
-        uint8_t duration = static_cast<uint8_t>(5 + roll(4));
+        uint8_t duration = static_cast<uint8_t>(trap && trap_tuning_depth() < 2 ? OPENING_CONFUSION_MIN + roll(OPENING_CONFUSION_ROLL) : 5 + roll(4));
         if(game.confused < duration) game.confused = duration;
     }
 }
@@ -151,14 +157,14 @@ __attribute__((noinline)) void activate_entry_feature(uint8_t index, bool forced
 #endif
         switch(type) {
         case FEATURE_SPIKE_TRAP:
-            status(F("You step on a spike trap!")); physical_damage(3 + roll(5)); break;
+            status(F("You step on a spike trap!")); physical_damage(trap_tuning_depth() < 2 ? OPENING_SPIKE_MIN + roll(OPENING_SPIKE_ROLL) : 3 + roll(5)); break;
         case FEATURE_POISON_DART_TRAP:
-            status(F("A poisoned dart strikes you!")); physical_damage(1 + roll(3));
+            status(F("A poisoned dart strikes you!")); physical_damage(1 + roll(trap_tuning_depth() < 2 ? OPENING_DART_ROLL : 3));
             if(!session.ended) weaken(); break;
         case FEATURE_FLAME_TRAP:
-            status(F("Flames erupt beneath you!")); player_take_fire_damage(5 + roll(5), 6); break;
+            status(F("Flames erupt beneath you!")); player_take_fire_damage(trap_tuning_depth() < 4 ? MIDDLE_FLAME_MIN + roll(MIDDLE_FLAME_ROLL) : 5 + roll(5), 6); break;
         case FEATURE_FROST_TRAP:
-            status(F("Freezing air surrounds you!")); player_take_magic_damage(3 + roll(4), 6);
+            status(F("Freezing air surrounds you!")); player_take_magic_damage(trap_tuning_depth() < 4 ? MIDDLE_FROST_MIN + roll(MIDDLE_FROST_ROLL) : 3 + roll(4), 6);
             if(!session.ended && !magic_save(game.magic_resistance, 6)) {
                 uint8_t duration = 4 + roll(4);
                 if(game.slowed < duration) game.slowed = duration;
@@ -166,13 +172,14 @@ __attribute__((noinline)) void activate_entry_feature(uint8_t index, bool forced
         case FEATURE_SNARE_TRAP:
             status(F("You become caught in a snare!"));
             if(amulet_bonus(AMULET_IRONBLOOD) <= 0) {
-                uint8_t duration = 2 + roll(2);
+                uint8_t duration = (trap_tuning_depth() < 4 ? MIDDLE_SNARE_MIN : 2) + roll(2);
                 if(game.paralyzed < duration) game.paralyzed = duration;
             } break;
         case FEATURE_TELEPORT_TRAP:
-            status(F("Space twists around you!")); teleport_player(); break;
+            status(F("Space twists around you!")); teleport_player();
+            SIM_EVENT(sim::EventKind::FeatureDisplacement, index, type, game.player != game.features[index].pos); break;
         case FEATURE_CONFUSION_TRAP:
-            status(F("Your senses become scrambled!")); confuse(); break;
+            status(F("Your senses become scrambled!")); confuse(true); break;
         case FEATURE_MAGIC_DRAIN_TRAP: {
             status(F("A magical force drains your power!")); uint8_t slot = random_item(2);
             if(slot == NONE) player_take_magic_damage(3 + roll(4), 6);
@@ -326,12 +333,28 @@ __attribute__((noinline)) bool resolve_feature(uint8_t index, FeatureChoice choi
     }
     return true;
 }
-void complete_player_move(FeatureChoice choice) {
+// Pickup transactions unwind before feature messages and enemy rendering.
+__attribute__((noinline)) void finish_pickup_turn() {
+    if(session.pending_pickups) ++session.pickup_turns;
+    else end_turn();
+}
+__attribute__((noinline)) void complete_ground_pickups() {
+    if(!session.pending_pickups) return;
+    session.pending_pickups = false;
+    activate_entry_feature(feature_at(game.player));
+}
+__attribute__((noinline)) void complete_player_move(FeatureChoice choice) {
     if(!session.pending_move) return;
+    complete_ground_pickups();
     uint8_t index = session.pending_feature;
     session.pending_feature = NONE;
     session.pending_move = false;
     resolve_feature(index, choice);
     if(!session.ended) end_turn();
+    while(session.pickup_turns && !session.ended) {
+        --session.pickup_turns;
+        end_turn();
+    }
+    session.pickup_turns = 0;
 }
 } // namespace rogue

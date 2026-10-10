@@ -1,4 +1,5 @@
 #include "game.hpp"
+#include "features.hpp"
 #include "game_internal.hpp"
 #include "status.hpp"
 #include "world.hpp"
@@ -131,7 +132,7 @@ static bool add_inventory(Item incoming)
     return true;
 }
 
-__attribute__((noinline)) PickupResult take_item(uint8_t index)
+__attribute__((noinline)) static PickupResult apply_pickup(uint8_t index)
 {
     if(index >= GROUND_ITEMS || game.ground[index].item.type == NO_ITEM)
         return PICKUP_INVALID;
@@ -151,8 +152,14 @@ __attribute__((noinline)) PickupResult take_item(uint8_t index)
     ground.item.type = NO_ITEM;
     SIM_EVENT(sim::EventKind::Pickup, index, item.type,
               stackable(item.type) ? item_value(item) : 1);
-    end_turn();
     return PICKUP_TAKEN;
+}
+// Inventory and message temporaries unwind before retaliation/status rendering.
+__attribute__((noinline)) PickupResult take_item(uint8_t index)
+{
+    PickupResult result = apply_pickup(index);
+    if(result == PICKUP_TAKEN) finish_pickup_turn();
+    return result;
 }
 
 static bool item_is_equipped(uint8_t slot)
@@ -235,7 +242,7 @@ __attribute__((noinline)) bool swap_ground_item(uint8_t index, uint8_t slot)
 {
     if(!apply_ground_swap(index, slot))
         return false;
-    end_turn();
+    finish_pickup_turn();
     return true;
 }
 
@@ -647,7 +654,7 @@ bool use_inventory(uint8_t slot, uint8_t target_slot)
     return true;
 }
 
-bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
+__attribute__((noinline)) static bool apply_thrown_potion(uint8_t slot, int8_t dx, int8_t dy)
 {
     if(slot >= INVENTORY || game.paralyzed ||
        !is_potion(game.inventory[slot].type) ||
@@ -676,10 +683,14 @@ bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
         apply_monster_potion(type, hit);
     }
     status(F("The potion shatters."));
-    if(!session.ended)
-        end_turn();
-    if(item.type == NO_ITEM && session.repeat_slot == slot)
-        session.repeat_slot = NONE;
+    return true;
+}
+
+__attribute__((noinline)) bool throw_potion(uint8_t slot, int8_t dx, int8_t dy)
+{
+    if(!apply_thrown_potion(slot, dx, dy)) return false;
+    if(!session.ended) end_turn();
+    if(game.inventory[slot].type == NO_ITEM && session.repeat_slot == slot) session.repeat_slot = NONE;
     return true;
 }
 
@@ -942,8 +953,9 @@ __attribute__((noinline)) static void single_wand_ray(
     } else resolve_wand_ray(type, ray.end, ray.monster, dx, dy, powerful);
 }
 
-// Keep wand temporaries out of the main event loop's persistent frame.
-__attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
+// Separate validation/identification, ray effects and turn resolution so their
+// stack frames never overlap. Ray effects cannot change the firing wand.
+__attribute__((noinline)) static bool prepare_wand(uint8_t slot, int8_t dx, int8_t dy)
 {
     if(slot >= INVENTORY || game.paralyzed ||
        !is_wand(game.inventory[slot].type))
@@ -959,10 +971,6 @@ __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
     }
     uint8_t type = item.type;
     SIM_EVENT(sim::EventKind::ChargeUsed, slot, type);
-#if defined(ARDUROGUE2_SIM)
-    sim::DamageScope damage_source(sim::Cause::Item, type);
-#endif
-    WandModifier modifier = wand_modifier(item);
     bool known = item_type_identified(type);
     bool individual = item_is_identified(item);
     status(F("You use"));
@@ -975,6 +983,13 @@ __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
         status(F("It is"));
         status(Item{type, item.info}, '.');
     }
+    return true;
+}
+__attribute__((noinline)) static void apply_wand_effect(uint8_t slot, int8_t dx, int8_t dy)
+{
+    const Item& item = game.inventory[slot];
+    uint8_t type = item.type;
+    WandModifier modifier = wand_modifier(item);
     bool spreading = wand_spreads(item);
     bool powerful = wand_powerful(item);
     if(modifier == WAND_CURSED) cursed_wand_effect(type);
@@ -997,12 +1012,28 @@ __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
             else resolve_all_other_rays(type, powerful);
         } else single_wand_ray(type, dx, dy, powerful);
     }
-    if(!remaining) {
+}
+__attribute__((noinline)) static void finish_wand(uint8_t slot)
+{
+    Item& item = game.inventory[slot];
+#if defined(ARDUROGUE2_SIM)
+    uint8_t type = item.type;
+#endif
+    if(!wand_charges(item)) {
         SIM_EVENT(sim::EventKind::Consumed, NONE, type);
         item.type = NO_ITEM;
         status(F("The wand crumbles to dust."));
         if(session.repeat_slot == slot) session.repeat_slot = NONE;
     }
+}
+__attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
+{
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope damage_source(sim::Cause::Item, slot < INVENTORY ? game.inventory[slot].type : NO_ITEM);
+#endif
+    if(!prepare_wand(slot, dx, dy)) return false;
+    apply_wand_effect(slot, dx, dy);
+    finish_wand(slot);
     if(!session.ended) end_turn();
     return true;
 }

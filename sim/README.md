@@ -327,13 +327,27 @@ firing distance and target breakdowns alongside the ordinary scorecard.
 
 Schema 4 adds the ninth stream, `features.csv`: sparse visit/type counters for
 generation, discovery, activation, decline, damage, direct deaths, spawned
-monsters and holy damage. Floor records add exit hunger. Ranged records add
+monsters and holy damage. Additive counters track repeated activations, maximum
+same-trap entries per visit and actual teleport displacements. Floor records add
+exit hunger, move attempts, unholy population and holy placement geometry. Ranged records add
 sacrificed arrow units so fired + thrown + sacrificed equals consumption.
 
 Movement gathers explicit feature choices after entering and resolves through
-the production resolver before the enemy turn. The maintained policy avoids
-known traps with weighted routing, uses nearby beneficial features within a
+the production resolver before the enemy turn. Item/feature overlaps offer
+pickups first, including full-pack replacement and Yendor; accepted pickups
+retain their turn costs. The maintained policy blocks known teleports when
+an alternate path exists, uses a bounded fallback for mandatory goals, abandons
+repeated optional detours, and avoids other known traps with weighted routing. It uses nearby beneficial features within a
 food/detour budget, limits holy re-entry, and respects cursed equipment. Hidden
 traps never inform route penalties or choices. `no-map-features` disables only
 the dedicated generation domain for same-executable, same-policy controls.
 See [map-feature results](../docs/MAP_FEATURES.md).
+
+`feature_experiments.py` runs the A–G controlled interventions and independent
+early-density/damage/roster variants with one frozen executable, then streams
+a paired report with policy/seed checks and raw-file SHA-256 seals. Typed rules
+such as `remove-feature:SPIKE_TRAP:floor=0` remove instances after generation
+without replacement or RNG resynchronization. `feature_generation_audit` exports
+an independent Holy generation census by depth, archetype, unholy count and
+geometry, avoiding survivor selection from visited floors. See
+[the tuning report](../docs/MAP_FEATURE_TUNING_2026-10-10.md).

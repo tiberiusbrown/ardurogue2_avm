@@ -117,12 +117,12 @@ static void show_pickup_rejection(const char AVM_PROGMEM* message)
     status_clear();
 }
 
-__attribute__((noinline)) static void resolve_full_pack_pickup(uint8_t ground_slot)
+__attribute__((noinline)) static uint8_t confirmed_pickup_swap()
 {
     show_pickup_rejection(F("Your pack is full."));
     for(;;) {
         uint8_t slot = choose_item(F("Leave which item?"), nullptr);
-        if(slot == NONE) { status_clear(); return; }
+        if(slot == NONE) { status_clear(); return NONE; }
         Item item = game.inventory[slot];
         if(item.type == YENDOR_AMULET) {
             show_pickup_rejection(F("You cannot leave the amulet of Yendor."));
@@ -135,9 +135,13 @@ __attribute__((noinline)) static void resolve_full_pack_pickup(uint8_t ground_sl
         render_play();
         if(!yesno(F("Leave"), item)) { status_clear(); continue; }
         status_clear();
-        swap_ground_item(ground_slot, slot);
-        return;
+        return slot;
     }
+}
+__attribute__((noinline)) static void resolve_full_pack_pickup(uint8_t ground_slot)
+{
+    uint8_t slot = confirmed_pickup_swap();
+    if(slot != NONE) swap_ground_item(ground_slot, slot);
 }
 
 __attribute__((noinline)) void prompt_stairs()
