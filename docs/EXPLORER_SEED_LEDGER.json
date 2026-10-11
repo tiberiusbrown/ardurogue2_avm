@@ -16,6 +16,14 @@
   },
   "holdout_limitation": "40001:50000 was unused by explorer development when reserved. The oracle had already been evaluated on the complete population, so no globally untouched seed range exists. Oracle rows are reference checks, not untouched oracle validation.",
   "raw_root": "build/competence",
+  "hazard_routing_pass": {
+    "development": "1:1000",
+    "expanded_development": "10001:20000; previously used in contact comparisons",
+    "independent_holdout": false,
+    "selection": "Structural navigation tests; no weight search or historical census escape-seed tuning",
+    "raw_root": "build/hazard-routing/delivery",
+    "report": "EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md"
+  },
   "invalid_or_superseded": [
     "offhand-v3r/no-switch: seed 169 reverse-swap failure; fixed, rerun",
     "awareness-development/omniscient-v2-equipment-light-awareness: seed 1461 reverse-swap failure; fixed, rerun",

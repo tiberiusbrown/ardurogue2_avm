@@ -92,7 +92,10 @@ using namespace rogue;
     X(monster_trap_force, "Force wand lands a monster on spikes", wand, RIGHT, room, WAND_FORCE, 2, 0) \
     X(monster_trap_hammer, "Hammer lands a monster on magic backlash", play, RIGHT, room, HAMMER_OF_RUIN, 0, 0) \
     X(monster_trap_busy, "Late floor with twelve monsters and visible traps", wait, A, dense, NO_ITEM, 0, 0) \
-    X(monster_trap_spread, "Spreading force lands four monsters on traps", use, A, room, WAND_FORCE, 2, 0)
+    X(monster_trap_spread, "Spreading force lands four monsters on traps", use, A, room, WAND_FORCE, 2, 0) \
+    X(visibility_trap_hidden, "Invisible monster triggers an observable trap", wait, A, room, NO_ITEM, 0, 0) \
+    X(visibility_trap_cursed, "Cursed sight flickers during monster trap entry", wait, A, room, NO_ITEM, 0, 0) \
+    X(visibility_trap_blind, "Blind player hears no unseen monster trap message", wait, A, room, NO_ITEM, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -294,6 +297,18 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     case Case::monster_trap_summon:
         add_monster(0,{34,16}); game.floor=15;
         game.features[0]={{33,16},uint8_t((scenario==Case::monster_trap_teleport ? FEATURE_TELEPORT_TRAP:FEATURE_SUMMONING_TRAP)|MAP_FEATURE_HIDDEN)};
+        break;
+    case Case::visibility_trap_hidden:
+    case Case::visibility_trap_cursed:
+    case Case::visibility_trap_blind:
+        add_monster(0,{34,16});
+        game.features[0]={{33,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        if(scenario==Case::visibility_trap_hidden) set_monster_effect(game.monsters[0],MON_INVISIBLE,6);
+        if(scenario==Case::visibility_trap_blind) game.blindness=6;
+        if(scenario==Case::visibility_trap_cursed) {
+            add_inventory(1,RING_SEE_INVISIBLE);
+            game.inventory[1].info=ITEM_IDENTIFIED|ITEM_CURSED|1; game.ring_slots[0]=1;
+        }
         break;
     case Case::monster_trap_force:
         add_monster(0,{33,16}); game.speed=1;

@@ -1,5 +1,5 @@
 add_library(ardurogue2_sim_core STATIC
-    simulator.cpp omniscient_agent.cpp explorer_observation.cpp explorer_events.cpp explorer_parameters.cpp policy_hash.cpp metrics.cpp trace.cpp frontend.cpp experiment.cpp
+    simulator.cpp omniscient_agent.cpp explorer_observation.cpp explorer_events.cpp explorer_parameters.cpp policy_hash.cpp metrics.cpp survival_diagnostics.cpp trace.cpp frontend.cpp experiment.cpp
     ../src/features.cpp
     ../src/state.cpp ../src/combat.cpp ../src/combat_math.cpp ../src/items.cpp
     ../src/world.cpp ../src/world_gen.cpp ../src/world_gen_population.cpp)
@@ -80,6 +80,9 @@ add_test(NAME simulator_checks COMMAND sim_checks)
 add_executable(explorer_checks explorer_checks.cpp)
 target_link_libraries(explorer_checks PRIVATE ardurogue2_sim_core)
 add_test(NAME explorer_checks COMMAND explorer_checks)
+add_executable(survival_checks survival_checks.cpp)
+target_link_libraries(survival_checks PRIVATE ardurogue2_sim_core)
+add_test(NAME survival_diagnostics COMMAND survival_checks)
 add_executable(explorer_render_checks explorer_render_checks.cpp ../src/render.cpp ../src/status.cpp)
 target_compile_definitions(explorer_render_checks PRIVATE AVM_TEST_LOADING)
 target_include_directories(explorer_render_checks PRIVATE ../tests/shim)

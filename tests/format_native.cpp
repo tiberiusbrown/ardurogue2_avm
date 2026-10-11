@@ -120,7 +120,8 @@ static void check_streaming_status()
 {
     using namespace rogue;
     const char* cases[] = {"a", "abcd", "abcde", "abcdefgh", "abcdefghi",
-        "extraordinarilylongword", "alpha beta gamma", "  alpha   beta  ",
+        "extraordinarilylongword", "abcdefghijklmnopqrstuvwxyz",
+        "alpha beta gamma", "  alpha   beta  ",
         "", "   ", "alpha beta gamma delta epsilon zeta"};
     for(const char* text : cases) {
         begin_capture();
@@ -150,6 +151,12 @@ static void check_streaming_status()
     status_words("");
     status_words("  abcdefghi beta");
     expect_status("Abcdefghi beta");
+
+    begin_capture();
+    status_capitalize();
+    status_suffix('?');
+    status_word("abcdefghijklmnopqrstuvwxyz");
+    expect_status("Abcdefghijklmnopqrstuvwxyz?");
 
     begin_capture();
     status_suffix('!');

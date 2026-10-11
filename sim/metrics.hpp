@@ -42,6 +42,8 @@ struct InvisibleMetrics {
         ordinary_damage=0, hazard_damage=0, ordinary_kills=0, hazard_kills=0;
 };
 struct ExplorationMetrics {
+    ExplorerStats navigation;
+    uint64_t known_trap_crossings=0, repeated_known_trap_crossings=0, hazard_damage=0, safe_detours=0;
     InvisibleMetrics invisible;
     uint64_t terrain_cells=0, floor_cells=0, surveyed_floor_cells=0, exploring_turns=0, travel=0, repeated_visits=0,
         frontier_changes=0, unreachable=0, missing_items=0, unseen_damage=0, items_observed=0, displacements=0;
@@ -98,8 +100,48 @@ struct RunMetrics {
     std::vector<FloorMetrics> floors;
     std::vector<Intervention> interventions;
     std::string experiment="baseline", variant="control";
+    struct Encounter {
+        unsigned id=0, floor=0, visit=0, participants=0;
+        uint32_t species_mask=0;
+        uint64_t start=0, end=0, actions=0, damage=0, healing=0, escape=0, food_used=0,
+            combat_turns=0, movement_turns=0, kills=0, phantom_kills=0, phantom_contact=0,
+            player_kills=0, phantom_player_kills=0;
+        int hp=0,max_hp=0,exit_hp=0,level=0,armor=0,weapon=0,weapon_enchant=0,offhand=0,light=0,
+            healing_reserve=0,escape_reserve=0,food=0,phantom_hp=0,phantom_max_hp=0;
+        int armor_enchant=0,phantom_weapon=0,phantom_offhand=0,phantom_light=0,phantom_level=0,
+            phantom_armor=0,phantom_armor_enchant=0,phantom_healing_reserve=0,phantom_escape_reserve=0,phantom_food=0;
+        uint64_t phantom_damage_before=0,phantom_healing_before=0,phantom_escape_before=0;
+        bool ascent=false,visible=false,phantom_visible=false,intentional=false,mixed=false,phantom=false,first_phantom=false,
+            known_trap=false,summoning=false,survived=false,next_floor=false;
+        // -1 denotes follow-up censored by a simulator failure/unfinished horizon.
+        std::array<int,3> followup{{-1,-1,-1}};
+        std::string outcome;
+    };
+    struct Milestone {
+        std::string name;
+        uint64_t actions=0,turns=0;
+        int floor=0,hp=0,max_hp=0,level=0,armor=0,weapon=0,enchant=0,offhand=0,food=0,healing=0,escape=0;
+    };
+    std::vector<Encounter> encounters;
+    std::vector<Milestone> milestones;
 };
 struct Collector {
+    int current_encounter=-1;
+    uint64_t encounter_evidence=0, hazard_window=0, summoning_window=0;
+    std::array<bool,rogue::MONSTERS> encounter_members{};
+    std::array<uint8_t,rogue::MONSTERS> encounter_species{};
+    std::array<unsigned,EXPLORER_CELLS> known_trap_entries{};
+    std::array<uint8_t,EXPLORER_CELLS> known_features{};
+    std::array<Terrain,EXPLORER_CELLS> known_terrain{};
+    SeenPosition previous_observed_position, reported_goal;
+    SeenPosition action_origin;
+    std::array<bool,rogue::MONSTERS> player_damage_this_action{};
+    void record_route(const struct Action&);
+    bool intentional_action=false, movement_action=false, essential_action=false, first_phantom_seen=false;
+    void encounter_event(EventKind,uint8_t,uint8_t,uint16_t,uint8_t detail=0);
+    void close_encounter(const char*);
+    void update_encounters(bool final=false);
+    void milestone(const std::string&);
     bool invisible_engagement=false, invisible_hazard=false, invisible_located=false, invisible_disengaging=false;
     uint64_t invisible_started=0, invisible_evidence=0, invisible_probes=0, contact_streak=0, invisible_duration=0;
     uint64_t invisible_damage=0, invisible_kills=0, contact_last_action=UINT64_MAX;
@@ -167,7 +209,7 @@ void write_interventions(std::ostream&, const RunMetrics&);
 inline constexpr unsigned ENTRY_STATE_SCHEMA_VERSION=1;
 void write_entry_state_header(std::ostream&);
 void write_entry_state(std::ostream&, const RunMetrics&);
-inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=5;
+inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=6;
 void write_exploration_header(std::ostream&);
 void write_exploration(std::ostream&,const RunMetrics&);
 struct CsvStream {
@@ -176,7 +218,12 @@ struct CsvStream {
     void (*rows)(std::ostream&, const RunMetrics&);
 };
 inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=7;
-inline constexpr size_t CSV_STREAM_COUNT=9;
+inline constexpr size_t CSV_STREAM_COUNT=11;
+inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=1;
+void write_encounters_header(std::ostream&);
+void write_encounters(std::ostream&,const RunMetrics&);
+void write_milestones_header(std::ostream&);
+void write_milestones(std::ostream&,const RunMetrics&);
 void write_ranged_header(std::ostream&);
 void write_ranged(std::ostream&, const RunMetrics&);
 extern const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams;

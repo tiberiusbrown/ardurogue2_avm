@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <queue>
 #include <utility>
+#include <tuple>
 #include <vector>
 
 namespace sim {
@@ -364,6 +365,8 @@ void ExplorerAgent::reset() {
     blocked_contact={}; blocked_contact_until=0;
     blocked_origin={}; invisible_contact={}; previous_healing=false;
     previous_hp=0; unseen_turns=contact_damage=0; last_offhand_switch=last_control=0; controlled_position={}; risk={};
+    objective=deferred_objective=prior_position=recent_hazard={}; recent_positions.fill({});
+    deferred_until=hazard_until=0; navigation_moves=objective_failures=0;
 }
 void ExplorerAgent::remember_contact(const ExplorerObservation& o) {
     auto& c=invisible_contact;
@@ -437,16 +440,20 @@ void ExplorerAgent::remember_contact(const ExplorerObservation& o) {
 void ExplorerAgent::remember(const ExplorerObservation& o) {
     const auto& prefs=parameters;
     auto& f=floors[o.floor];
+    uint64_t revealed_before=stats.revealed;
+    bool terrain_changed=false;
     for(int g=0;g<6;++g) for(int a=0;a<16;++a) if(o.identities[g][a]) identities[g][a]=o.identities[g][a];
     if(active_floor!=o.floor) {
         active_floor=o.floor; frontier=shadow={}; last_position={}; last_retreat={}; retreat_budget=quiet_turns=stalled=0;
         blocked_contact={}; blocked_contact_until=0;
         blocked_origin={}; invisible_contact={}; previous_healing=false;
         unseen_turns=contact_damage=0; previous_hp=o.hp; controlled_position={}; last_offhand_switch=0;
+        objective=deferred_objective=prior_position=recent_hazard={}; recent_positions.fill({});
+        deferred_until=hazard_until=0; navigation_moves=objective_failures=0;
         // Production regenerates a DIFFERENT layout after Yendor; preserve history,
         // but never route through it as current known terrain.
         if(f.visited && f.ascent_layout!=o.yendor) {
-            for(auto& t:f.tiles) { t.historical=t.terrain; t.terrain=Terrain::Unknown; t.feature=0; t.has_item=t.surveyed=false; t.visits=t.failures=0; }
+            for(auto& t:f.tiles) { t.historical=t.terrain; t.terrain=Terrain::Unknown; t.feature=0; t.has_item=t.surveyed=false; t.visits=t.failures=t.hazard_entries=t.hazard_loss=t.survey_attempts=0; }
             f.up=f.down={};
         }
         f.enemies.fill({}); f.visited=true; f.ascent_layout=o.yendor;
@@ -480,12 +487,44 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
         }
     }
     if(changed && last_position!=o.player) {
+        if(prefs.hazard_routing && last_position.x!=255) {
+            if(o.player==prior_position) ++stats.reversals;
+            prior_position=last_position;
+            auto& entered=f.tiles[cell(o.player)];
+            if(entered.feature==FEATURE_SUMMONING_TRAP) {
+                ++stats.known_crossings;
+                if(entered.hazard_entries) ++stats.repeated_crossings;
+                entered.hazard_entries=uint8_t(std::min(255,int(entered.hazard_entries)+1));
+                recent_hazard=o.player; hazard_until=o.turns+24;
+                if(previous.essential_hazard) ++stats.essential_crossings;
+            }
+            if(previous.navigation) {
+                recent_positions[navigation_moves++%recent_positions.size()]=o.player;
+                if(navigation_moves>=4) {
+                    auto at=[&](unsigned ago) { return recent_positions[(navigation_moves-ago)%recent_positions.size()]; };
+                    if(at(1)==at(3) && at(2)==at(4)) {
+                        if(previous.goal=="explore known frontier" && objective.x!=255)
+                            f.tiles[cell(objective)].survey_attempts=3;
+                        deferred_objective=objective; deferred_until=o.turns+16; objective={};
+                        ++stats.cycles; ++stats.goal_failures;
+                    }
+                }
+            }
+        }
         auto& t=f.tiles[cell(o.player)]; if(t.visits) ++stats.repeats;
         t.visits=uint8_t(std::min(255,int(t.visits)+1)); stalled=0;
     } else if(changed) ++stalled;
+    if(prefs.hazard_routing && changed && recent_hazard.x!=255 && o.turns<hazard_until && o.hp_loss) {
+        auto& t=f.tiles[cell(recent_hazard)];
+        t.hazard_loss=uint8_t(std::min(255,int(t.hazard_loss)+o.hp_loss));
+    }
+    if(prefs.hazard_routing && changed && o.last_rejected && previous.destination==objective && ++objective_failures>=3) {
+        deferred_objective=objective; deferred_until=o.turns+16; objective={}; ++stats.goal_failures;
+    }
     for(int n=0;n<EXPLORER_CELLS;++n) {
         auto& t=f.tiles[n];
         if(o.terrain[n]!=Terrain::Unknown) {
+            if(t.terrain!=Terrain::Unknown && t.terrain!=o.terrain[n]) terrain_changed=true;
             if(t.terrain==Terrain::Unknown) ++stats.revealed;
             t.terrain=o.terrain[n]; t.feature=o.features[n];
             if(passable(t.terrain)) t.failures=0;
@@ -500,6 +539,13 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
             if(t.has_item && !found && !covered) ++stats.missing_items;
             if(!found && !covered) { t.has_item=false; t.item={}; }
         }
+    }
+    if(prefs.hazard_routing && changed) {
+        if(terrain_changed) for(auto& t:f.tiles) t.survey_attempts=0;
+        auto& current=f.tiles[cell(o.player)];
+        if(stats.revealed>revealed_before) current.survey_attempts=0;
+        else if(previous.goal=="explore known frontier" && previous.destination==o.player)
+            current.survey_attempts=uint8_t(std::min(255,int(current.survey_attempts)+1));
     }
     for(int i=0;i<o.ground_count;++i) {
         auto& g=o.ground[i]; auto& t=f.tiles[cell(g.pos)];
@@ -537,41 +583,107 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
     }
     last_position=o.player; last_actions=o.actions; last_turns=o.turns;
 }
-void ExplorerAgent::paths(const ExplorerObservation& o) {
+void ExplorerAgent::paths(const ExplorerObservation& o,bool hazards) {
     const auto& prefs=parameters;
-    costs.fill(30000); steps.fill(-1); first.fill(-1);
+    costs.fill(prefs.hazard_routing ? INT32_MAX/4 : 30000); steps.fill(-1); first.fill(-1); route_hazards.fill(255);
     auto& f=floors[o.floor]; int root=cell(o.player);
-    using Node=std::pair<int,int>;
+    using Node=std::tuple<unsigned,int,int>;
     // Retain the backing allocation between decisions; no per-turn allocation.
     thread_local std::vector<Node> storage;
     storage.clear(); storage.reserve(EXPLORER_CELLS*4);
     auto push=[&](Node n) { storage.push_back(n); std::push_heap(storage.begin(),storage.end(),std::greater<Node>()); };
-    costs[root]=0; steps[root]=0; push({0,root});
+    costs[root]=0; steps[root]=0; route_hazards[root]=0; push({0,0,root});
     while(!storage.empty()) {
         std::pop_heap(storage.begin(),storage.end(),std::greater<Node>());
-        auto [cost,at]=storage.back(); storage.pop_back();
-        if(cost!=costs[at]) continue;
+        auto [crossings,cost,at]=storage.back(); storage.pop_back();
+        if(cost!=costs[at] || crossings!=route_hazards[at]) continue;
+        // Occupants are reachable combat endpoints, never transit squares.
+        if(prefs.hazard_routing && !hazards && at!=root && sees_monster(o,position(at))) continue;
         for(int d=0;d<4;++d) {
             int x=at%EXPLORER_W+dxs[d],y=at/EXPLORER_W+dys[d];
             if(!inside(x,y)) continue;
             int n=y*EXPLORER_W+x; auto& t=f.tiles[n];
             if(!passable(t.terrain) || t.failures>=2) continue;
+            bool trap=t.feature==FEATURE_SUMMONING_TRAP;
+            if(prefs.hazard_routing && trap && !hazards) continue;
             if(o.turns<blocked_contact_until && position(n)==blocked_contact) continue;
             if(prefs.contact_aware && o.turns<blocked_contact_until && position(n)==blocked_origin) continue;
             int penalty=trap_penalty(prefs,t.feature)+(t.terrain==Terrain::ClosedDoor ? 1 : 0);
-            if(prefs.contact_aware && t.feature==FEATURE_SUMMONING_TRAP && t.visits)
+            if(prefs.hazard_routing && hazards && trap)
+                penalty+=20*std::min(10,int(t.hazard_entries))+2*int(t.hazard_loss);
+            if(!prefs.hazard_routing && prefs.contact_aware && trap && t.visits)
                 penalty+=1000*std::min(10,int(t.visits));
             for(auto& m:f.enemies) if(m.type>=ORC && o.turns<=m.seen+prefs.monster_memory_turns && distance(position(n),m.pos)<=1) penalty+=prefs.remembered_threat_cost;
             if(prefs.tactical_risk && risk.danger>=Danger::Serious) for(int m=0;m<o.monster_count;++m)
                 if(distance(position(n),o.monsters[m].pos)<=2) penalty+=80;
             int next=cost+1+penalty;
-            if(next<costs[n]) { costs[n]=int16_t(next); steps[n]=int16_t(steps[at]+1); first[n]=at==root ? int8_t(d) : first[at]; push({next,n}); }
+            unsigned count=crossings+(prefs.hazard_routing && trap ? 1 : 0);
+            if(next<(prefs.hazard_routing ? INT32_MAX/4 : 30000) &&
+               (count<route_hazards[n] || (count==route_hazards[n] && next<costs[n]))) {
+                // A simple route cannot contain more hazards than map cells.
+                // Saturation is safe: 255 means no usable bounded route.
+                if(count>=255) continue;
+                costs[n]=next; steps[n]=int16_t(steps[at]+1); route_hazards[n]=uint8_t(count);
+                first[n]=at==root ? int8_t(d) : first[at]; push({count,next,n});
+            }
         }
     }
 }
 ExplorerAction ExplorerAgent::navigate(SeenPosition p,const char* goal) {
-    if(p.x!=255 && first[cell(p)]>=0) return move(first[cell(p)],goal,p);
+    if(p.x!=255 && first[cell(p)]>=0) {
+        if(parameters.hazard_routing && objective!=p) {
+            if(objective.x!=255) ++stats.goal_changes;
+            objective=p; objective_failures=0;
+        }
+        auto a=move(first[cell(p)],goal,p); a.navigation=true; return a;
+    }
     ExplorerAction a; a.goal="no reachable known route"; a.no_path=true; ++stats.unreachable; return a;
+}
+ExplorerAction ExplorerAgent::hazardous_progress(const ExplorerObservation& o,SeenPosition stairs) {
+    ++stats.no_safe_route;
+    paths(o,true); // Reuse all buffers; optional goals never use this pass.
+    auto& f=floors[o.floor];
+    int target=-1;
+    if(stairs.x!=255 && steps[cell(stairs)]>0) target=cell(stairs);
+    if(target<0 && previous.goal=="essential progression through known summoning hazard" &&
+       objective.x!=255 && steps[cell(objective)]>0) target=cell(objective);
+    // If stairs remain unknown, crossing toward a new survey is progression.
+    if(target<0) for(int n=0;n<EXPLORER_CELLS;++n) {
+        if(steps[n]<=0 || f.tiles[n].feature==FEATURE_SUMMONING_TRAP) continue;
+        bool frontier_needed=!f.tiles[n].surveyed;
+        for(int d=0;d<4;++d) {
+            int x=n%64+dxs[d],y=n/64+dys[d];
+            if(inside(x,y) && f.tiles[y*64+x].terrain==Terrain::Unknown) frontier_needed=true;
+        }
+        if(frontier_needed && (target<0 || std::make_pair(route_hazards[n],costs[n])<
+            std::make_pair(route_hazards[target],costs[target]))) target=n;
+    }
+    for(int n=0;n<EXPLORER_CELLS;++n) if(f.tiles[n].has_item && steps[n]>0 && route_hazards[n] &&
+        position(n)!=deferred_objective) {
+        deferred_objective=position(n); deferred_until=o.turns+24; ++stats.hazard_abandoned;
+        break;
+    }
+    if(target<0) { ExplorerAction a; a.no_path=true; a.goal="no progression route through observed terrain"; return a; }
+    // Recover or escape before an avoidable serious crossing. Exhausted quiet
+    // players may still make the only progression attempt instead of deadlocking.
+    if((risk.danger>=Danger::Serious || o.hp*2<o.max_hp) && quantity(o,POTION_HEALING))
+        return use(find(o,POTION_HEALING),"heal before essential hazard crossing");
+    if(risk.danger>=Danger::Serious && find(o,SCROLL_TELEPORT)>=0)
+        return use(find(o,SCROLL_TELEPORT),"escape before essential hazard crossing");
+    int direction=first[target];
+    if(direction>=0) {
+        SeenPosition next{uint8_t(int(o.player.x)+dxs[direction]),uint8_t(int(o.player.y)+dys[direction])};
+        auto& t=f.tiles[cell(next)];
+        if(t.feature==FEATURE_SUMMONING_TRAP && t.hazard_entries && next==recent_hazard && o.turns<hazard_until &&
+           (risk.danger>=Danger::Serious || t.hazard_loss>=o.max_hp/2)) {
+            ExplorerAction pause; pause.goal="reassess costly repeated essential hazard"; return pause;
+        }
+    }
+    auto a=navigate(position(target),"essential progression through known summoning hazard");
+    a.essential_hazard=route_hazards[target]!=0;
+    // Entry is permitted only after all safe useful destinations were exhausted;
+    // repeated/expensive activations do not license optional return trips.
+    return a;
 }
 ExplorerAction ExplorerAgent::pickup(const ExplorerObservation& o) {
     const auto& prefs=parameters;
@@ -940,7 +1052,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         paths(o);
         SeenPosition stairs=o.yendor ? f.up : f.down;
         if(prefs.resource_planning && (o.hp*4<o.max_hp*3 || o.weakened) && !risk.attackers) {
-            int recovery=-1,best_cost=30000;
+            int recovery=-1,best_cost=INT32_MAX;
             for(int n=0;n<EXPLORER_CELLS;++n) {
                 auto& t=f.tiles[n];
                 bool spring=t.feature==FEATURE_HEALING_SPRING;
@@ -957,7 +1069,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             return navigate(stairs,"leave known floor with depleted reserves");
         }
         if(o.yendor && o.hunger<prefs.ascent_food_seek_hunger && quantity(o,FOOD)<prefs.ascent_food_reserve_units) {
-            int food=-1,best_cost=30000;
+            int food=-1,best_cost=INT32_MAX;
             for(int n=0;n<EXPLORER_CELLS;++n) if(f.tiles[n].has_item && f.tiles[n].item.category==ItemCategory::Food &&
                 steps[n]>0 && steps[n]<=prefs.ascent_food_detour_distance && costs[n]<best_cost &&
                 (fits(o,f.tiles[n].item) || replacement(prefs,o,f.tiles[n].item)>=0)) { food=n; best_cost=costs[n]; }
@@ -977,11 +1089,13 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         int loot=-1,loot_score=0;
         if(!o.yendor) for(int n=0;n<EXPLORER_CELLS;++n) {
             auto& t=f.tiles[n]; if(!t.has_item || steps[n]<=0 || steps[n]>prefs.loot_max_distance || t.visits>=prefs.loot_max_visits) continue;
+            if(prefs.hazard_routing && position(n)==deferred_objective && o.turns<deferred_until) continue;
             if(prefs.resource_planning && stairs.x!=255 && steps[n]>24) continue;
             if(prefs.resource_planning && stairs.x!=255 && steps[n]>12 &&
                 (o.hp*2<o.max_hp || o.hunger<80) && t.item.category!=ItemCategory::Food && t.item.type!=POTION_HEALING) continue;
             if(!fits(o,t.item) && replacement(prefs,o,t.item)<0) continue;
             int score=value(prefs,o,t.item)*100/(costs[n]+prefs.loot_distance_offset)-int(t.visits)*prefs.loot_visit_cost;
+            if(prefs.hazard_routing && position(n)==objective && score>0) score+=std::max(1,score/5);
             if(score>loot_score) { loot=n; loot_score=score; }
         }
         if(loot>=0 && (stairs.x==255 || o.hunger>=60 || steps[loot]<=4)) return navigate(position(loot),"seek remembered item sprite");
@@ -991,6 +1105,8 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         int radius=std::max(1,int(o.radius));
         for(int n=0;n<EXPLORER_CELLS;++n) {
             auto& t=f.tiles[n]; if(steps[n]<=0 || !passable(t.terrain) || t.failures>=2) continue;
+            if(prefs.hazard_routing && t.survey_attempts>=3) continue;
+            if(prefs.hazard_routing && position(n)==deferred_objective && o.turns<deferred_until) continue;
             int x=n%EXPLORER_W,y=n/EXPLORER_W,adjacent_unknown=0,gain=0;
             auto needs_survey=[&](int at) { auto& tile=f.tiles[at]; return tile.terrain==Terrain::Unknown || (passable(tile.terrain) && !tile.surveyed); };
             for(int d=0;d<4;++d) if(inside(x+dxs[d],y+dys[d]) && needs_survey((y+dys[d])*EXPLORER_W+x+dxs[d])) ++adjacent_unknown;
@@ -1001,6 +1117,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             int score=prefs.frontier_adjacent_weight*adjacent_unknown+prefs.frontier_gain_weight*gain-prefs.frontier_distance_cost*costs[n]-prefs.frontier_visit_cost*t.visits;
             if(prefs.obstruction_gain) score+=prefs.frontier_gain_weight*gain*8/(steps[n]+4);
             if(position(n)==frontier) score+=prefs.frontier_hold_bonus;
+            if(prefs.hazard_routing && position(n)==objective) score+=std::max(prefs.frontier_hold_bonus,std::abs(score)/5);
             if(o.hunger<40) score-=steps[n]*prefs.hunger_distance_cost;
             if(score>best_score) { best=n; best_score=score; }
         }
@@ -1025,7 +1142,8 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             for(int d=0;d<4;++d) {
                 int x=int(o.player.x)+dxs[d],y=int(o.player.y)+dys[d]; if(!inside(x,y)) continue;
                 auto& t=f.tiles[y*EXPLORER_W+x];
-                if(t.terrain!=Terrain::Wall && t.failures<2 && t.visits<visits) { best_probe=d; visits=t.visits; }
+                if(t.terrain!=Terrain::Wall && t.failures<2 && t.visits<visits &&
+                   (!prefs.hazard_routing || t.feature!=FEATURE_SUMMONING_TRAP)) { best_probe=d; visits=t.visits; }
             }
             if(best_probe>=0) { ++stats.exploring_actions; return move(best_probe,"explicit tactile probe at radius zero"); }
         }
@@ -1046,6 +1164,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         }
         ExplorerAction a;
         if(o.turns<blocked_contact_until) { a.goal="wait for observed contact detour"; return a; }
+        if(prefs.hazard_routing) return hazardous_progress(o,stairs);
         a.no_path=true; a.goal="exploration exhausted: no known stairs or reachable frontier"; return a;
     };
     auto a=decide();

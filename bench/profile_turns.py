@@ -87,7 +87,7 @@ def state_fields(case):
     # All reads use DWARF names; there is no dependency on Game byte layout.
     fields = {
         "valid": "game.valid", "hp": "game.hp", "turns": "game.turns",
-        "x": "game.player.x", "y": "game.player.y", "score": "game.score",
+        "x": "game.player.x", "y": "game.player.y", "score": "game.score", "rng": "game.random_state",
         "monster_type": "game.monsters[0].type", "monster_hp": "game.monsters[0].hp",
         "door_open": "(game.doors[0].pos.y & 0x80) != 0",
         "item_type": "game.inventory[0].type", "item_info": "game.inventory[0].info",
@@ -98,7 +98,7 @@ def state_fields(case):
         "digging_wall": "(game.walls[(16 * MAP_W + 35) >> 3] & (1u << (35 & 7))) != 0",
     }
     fields = {key: re.sub(r'\b(game|MAP_W)\b', r'rogue::\1', expr) for key, expr in fields.items()}
-    if case.name.startswith(("trap_", "feature_", "monster_trap_")):
+    if case.name.startswith(("trap_", "feature_", "monster_trap_", "visibility_trap_")):
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
@@ -108,6 +108,9 @@ def state_fields(case):
         for i in range(1, 4):
             fields[f"other_type_{i}"] = f"rogue::game.monsters[{i}].type"
             fields[f"other_hp_{i}"] = f"rogue::game.monsters[{i}].hp"
+    if case.name.startswith("visibility_trap_"):
+        fields["monster_x"] = "rogue::game.monsters[0].pos.x"
+        fields["monster_y"] = "rogue::game.monsters[0].pos.y"
     if case.name == "storm_splash":
         for i in (1, 2, 3): fields[f"splash_hp_{i}"] = f"rogue::game.monsters[{i}].hp"
     if case.name == "glass_break":
@@ -213,6 +216,8 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         # Read this named array after profiling to check mapping, regardless of its size.
         f"memory read --binary --outfile {quote(folder / 'explored.bin')} --size 1 "
         "--count `sizeof(rogue::game.explored)` `(unsigned int)&rogue::game.explored + 0x01000000`",
+        f"memory read --binary --outfile {quote(folder / 'game.bin')} --size 1 "
+        "--count `sizeof(rogue::game)` `(unsigned int)&rogue::game + 0x01000000`",
         "thread backtrace",
         f"avm display save {quote(folder / 'frame.pgm')} --mode " + ("logical" if case.setup in ("browse", "projectile_browse") else "controller"),
     ]
@@ -229,6 +234,11 @@ def validate_outcome(case, before, after, explored):
     require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup in ("browse", "projectile_browse")
             else "expected one completed game turn")
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
+    if case.name.startswith("visibility_trap_"):
+        require((after['monster_x'],after['monster_y']) == (33,16) and after['monster_hp'] < before['monster_hp'],
+                'monster did not enter and suffer the production trap')
+        require(after['feature_id'] == (before['feature_id'] if case.name.endswith('_blind') else before['feature_id'] & ~1),
+                'trap visibility/discovery changed')
     if case.setup in ("browse", "projectile_browse"):
         require(before == after, "inventory browsing changed game state")
         return

@@ -60,40 +60,33 @@ char capitalized(char c)
 // Cache each character once, especially for program-space strings. Scratch
 // belongs to these shallow helpers and is gone before status paging redraws.
 template<typename Pointer>
-uint8_t status_chunk(Pointer scan, char (&buf)[25], bool capitalize)
+__attribute__((noinline)) int16_t status_word_width(Pointer word, bool capitalize, char suffix, uint16_t& length)
 {
-    uint8_t count = 0;
-    while(count < 24) {
-        char c = scan[count];
-        if(!c || c == ' ') break;
-        buf[count++] = c;
-    }
-    buf[count] = 0;
-    if(capitalize && count) buf[0] = capitalized(buf[0]);
-    return count;
-}
-
-template<typename Pointer>
-__attribute__((noinline)) int16_t status_word_width(Pointer word, bool capitalize, char suffix)
-{
+    Pointer start = word;
     char c = *word;
     int16_t width = status_character_width(capitalize ? capitalized(c) : c);
     while((c = *++word) && c != ' ') width += status_character_width(c);
+    length = static_cast<uint16_t>(word - start);
     if(suffix) width += status_character_width(suffix);
     return width;
 }
 
 template<typename Pointer>
 __attribute__((noinline)) Pointer draw_status_word(Pointer word, bool capitalize,
-                                                  char suffix, uint8_t& x, uint8_t y)
+                                                  char suffix, uint8_t& x, uint8_t y, uint16_t length)
 {
     char buf[25];
     Pointer scan = word;
-    for(;;) {
-        uint8_t count = status_chunk(scan, buf, capitalize && scan == word);
-        if(!count) break;
+    while(length) {
+        uint8_t count = length > 24 ? 24 : static_cast<uint8_t>(length);
+        // Width measurement already found the word boundary. The native copy
+        // preserves RAM/program address spaces and avoids a second VM scan.
+        memcpy(buf, scan, count);
+        buf[count] = 0;
+        if(capitalize && scan == word) buf[0] = capitalized(buf[0]);
         x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
         scan += count;
+        length -= count;
     }
     if(suffix) {
         buf[0] = suffix; buf[1] = 0;
@@ -112,7 +105,8 @@ Pointer stream_status_word(Pointer word)
     while(*word == ' ') ++word;
     if(!*word) return nullptr;
 
-    int16_t width = status_word_width(word, capitalize, suffix);
+    uint16_t length;
+    int16_t width = status_word_width(word, capitalize, suffix, length);
     if(x != 67) {
         int16_t space_width = status_character_width(' ');
         width += space_width;
@@ -121,7 +115,7 @@ Pointer stream_status_word(Pointer word)
     }
 
     ui.repeat_suppressed = true;
-    Pointer scan = draw_status_word(word, capitalize, suffix, x, y);
+    Pointer scan = draw_status_word(word, capitalize, suffix, x, y, length);
     status_x = x;
     status_y = y;
     pending_capitalize = false;
@@ -662,6 +656,11 @@ void rogue::status(Item item, char punctuation)
 void rogue::status(const Monster& monster)
 {
     status_entity(monster);
+}
+void rogue::status_visible_monster(const Monster& monster)
+{
+    status_words(F("the"));
+    status_final_words(monster_name(monster.type), 0);
 }
 
 void rogue::status(const Monster& monster, char punctuation)

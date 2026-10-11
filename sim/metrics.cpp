@@ -140,6 +140,15 @@ void Collector::prepare_action(const Action& a) {
     exploring_action=a.goal=="explore known frontier" || a.goal=="explicit tactile probe at radius zero" || a.goal=="patrol surveyed final floor";
     pickup_slot = drop_slot = rogue::NONE;
     if(!enabled) return;
+    intentional_action=(a.kind==ActionKind::Move && a.goal=="melee visible monster") ||
+        a.kind==ActionKind::Throw || a.kind==ActionKind::Wand;
+    movement_action=a.kind==ActionKind::Move;
+    action_origin={rogue::game.player.x,rogue::game.player.y};
+    // Direct defeat effects credit the player; non-player damage explicitly
+    // overrides this within the action before its subsequent kill event.
+    player_damage_this_action.fill(true);
+    essential_action=a.goal=="essential progression through known summoning hazard";
+    record_route(a);
     healing_action=a.kind==ActionKind::Use && a.slot<rogue::INVENTORY &&
         (rogue::game.inventory[a.slot].type==rogue::POTION_HEALING || rogue::game.inventory[a.slot].type==rogue::POTION_EXPERIENCE);
     if(!data.floors.empty()) {
@@ -226,6 +235,8 @@ void Collector::enter_floor() {
     observed_terrain.reset(); observed_floor.reset(); surveyed_floor.reset(); visited_tiles.reset();
     visibly_observed.fill(false); visible_before.fill(false); observed_items.fill(false);
     observed_position={}; exploration_entry_turn=data.turns; entry_explorer_stats=explorer_stats;
+    known_features.fill(0); known_terrain.fill(Terrain::Unknown); known_trap_entries.fill(0); hazard_window=summoning_window=0;
+    previous_observed_position=reported_goal={};
     if(enabled) {
         // Ground truth for reporting ONLY; never passed to any policy.
         std::array<int16_t,EXPLORER_CELLS> dist; dist.fill(-1);
@@ -291,6 +302,8 @@ void Collector::enter_floor() {
     std::copy(std::begin(d.families),std::end(d.families),f.families.begin());
     entry_items=data.items; entry_monsters=data.monsters;
     data.floors.push_back(f);
+    if(!g.has_amulet && (g.floor==0 || g.floor==2 || g.floor==4 || g.floor==7 || g.floor==9 || g.floor==11 || g.floor==14))
+        milestone("floor_"+std::to_string(g.floor+1)+"_reached");
     if(!enabled) return;
     for(size_t s=0; s<rogue::INVENTORY; ++s) {
         if(!rogue::is_wand(g.inventory[s].type)) inventory_wands[s]=0;
@@ -317,6 +330,11 @@ void Collector::close_floor(bool exited) {
     close_invisible();
     auto& f = data.floors.back();
     if(data.agent=="explorer-v1") {
+        auto& n=f.exploration.navigation;
+#define NAV_DELTA(member) n.member=explorer_stats.member-entry_explorer_stats.member
+        NAV_DELTA(hazard_abandoned); NAV_DELTA(no_safe_route);
+        NAV_DELTA(goal_failures); NAV_DELTA(cycles);
+#undef NAV_DELTA
         f.exploration.frontier_changes=explorer_stats.frontier_changes-entry_explorer_stats.frontier_changes;
         f.exploration.unreachable=explorer_stats.unreachable-entry_explorer_stats.unreachable;
         f.exploration.missing_items=explorer_stats.missing_items-entry_explorer_stats.missing_items;
@@ -346,9 +364,13 @@ void Collector::close_floor(bool exited) {
     e.recent_damage=0;
     for(size_t i=0;i<damage_turns.size();++i) if(data.turns<=damage_turns[i]+7) e.recent_damage+=int(damage_amounts[i]);
     if(exited) { f.exited = true; ++data.floors_exited; }
+    close_encounter(exited ? "floor_exit" : data.stuck ? "censored" : "run_end");
+    if(exited && !f.ascent && f.floor==0) milestone("floor_1_complete");
+    if(exited && f.ascent) milestone("ascent_floor_"+std::to_string(f.floor+1)+"_complete");
 }
 void Collector::observe() {
     if(!enabled) return;
+    update_encounters();
     const auto& g = rogue::game;
     if(!data.floors.empty()) for(auto i:g.inventory)
         if(rogue::is_bow(i.type)) data.floors.back().bow_owned=true;
@@ -364,6 +386,7 @@ void Collector::observe() {
 void Collector::observe_exploration(const ExplorerObservation& o) {
     if(!enabled || data.floors.empty()) return;
     observe_contact(o);
+    for(int n=0;n<EXPLORER_CELLS;++n) if(o.terrain[n]!=Terrain::Unknown) { known_features[n]=o.features[n]; known_terrain[n]=o.terrain[n]; }
     auto& e=data.floors.back().exploration;
     combat_action=o.attacked;
     for(int m=0;m<o.monster_count;++m) if(std::abs(int(o.player.x)-o.monsters[m].pos.x)+std::abs(int(o.player.y)-o.monsters[m].pos.y)<=2) combat_action=true;
@@ -377,6 +400,8 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
     }
     int n=o.player.y*64+o.player.x;
     if(o.player!=observed_position) {
+        if(o.player==previous_observed_position) ++e.navigation.reversals;
+        previous_observed_position=observed_position;
         if(visited_tiles[n]) ++e.repeated_visits;
         visited_tiles.set(n);
         if(observed_position.x!=255) {
@@ -407,6 +432,7 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
     }
 }
 void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount, uint8_t detail) {
+    encounter_event(k,index,type,amount,detail);
     if(enabled && data.agent=="explorer-v1" && !data.floors.empty()) {
         if((k==EventKind::MonsterAttack || k==EventKind::PlayerAttack) && index<rogue::MONSTERS && !visible_before[index]) {
             begin_invisible(); initially_unseen[index]=true;
@@ -656,7 +682,8 @@ void write_exploration_header(std::ostream& o) {
     for(int d=0;d<=8;++d) o<<",initial_alert_distance_"<<d;
     for(int d=0;d<=6;++d) o<<",initial_alert_light_"<<d;
     o<<",first_hostile_contact_turn";
-    field_header(o,invisible_fields);
+    for(const auto& f:invisible_fields) o<<','<<f.name;
+    o<<",known_trap_crossings,repeated_known_trap_crossings,hazard_following_damage,safe_detours,hazard_objectives_abandoned,essential_hazard_crossings,no_safe_routes,movement_reversals,objective_changes,goal_failures,navigation_cycles\n";
 }
 void write_exploration(std::ostream& o,const RunMetrics& r) {
     for(const auto& f:r.floors) {
@@ -669,7 +696,11 @@ void write_exploration(std::ostream& o,const RunMetrics& r) {
         for(auto n:e.alert_distances) o<<','<<n;
         for(auto n:e.alert_light) o<<','<<n;
         o<<','<<e.first_contact;
-        field_values(o,e.invisible,invisible_fields);
+        for(const auto& f:invisible_fields) o<<','<<e.invisible.*(f.member);
+        auto& n=e.navigation;
+        o<<','<<e.known_trap_crossings<<','<<e.repeated_known_trap_crossings<<','<<e.hazard_damage<<','<<e.safe_detours
+          <<','<<n.hazard_abandoned<<','<<n.essential_crossings<<','<<n.no_safe_route<<','<<n.reversals
+          <<','<<n.goal_changes<<','<<n.goal_failures<<','<<n.cycles<<'\n';
     }
 }
 void write_runs_header(std::ostream& o) {
@@ -789,5 +820,7 @@ const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
     {"visit_monsters.csv",write_visit_monsters_header,write_visit_monsters},
     {"interventions.csv",write_interventions_header,write_interventions},
     {"ranged.csv",write_ranged_header,write_ranged},
-    {"features.csv",write_features_header,write_features}}};
+    {"features.csv",write_features_header,write_features},
+    {"encounters.csv",write_encounters_header,write_encounters},
+    {"milestones.csv",write_milestones_header,write_milestones}}};
 }

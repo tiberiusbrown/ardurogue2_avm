@@ -7,9 +7,16 @@ import tempfile
 import unittest
 
 import profile_turns as turns
+import compare_turns
 
 
 class TurnBenchmarks(unittest.TestCase):
+    def test_comparison_rejects_matching_incomplete_suites(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw); a=root/'a'; b=root/'b'; a.mkdir(); b.mkdir()
+            partial={'source_bench_sha256':'same','benchmarks':[{'name':'move_room'}]}
+            for p in (a,b): (p/'summary.json').write_text(json.dumps(partial))
+            with self.assertRaisesRegex(ValueError,'incomplete'): compare_turns.compare(a,b)
     @classmethod
     def setUpClass(cls):
         cls.source = Path(__file__).resolve().parents[1] / "src"
@@ -19,7 +26,8 @@ class TurnBenchmarks(unittest.TestCase):
         cases = turns.read_benchmarks(Path(__file__).with_name("bench.cpp"))
         self.assertEqual(cases, turns.BENCHMARKS)
         self.assertEqual([case.index for case in cases], list(range(len(cases))))
-        self.assertEqual(len(cases), 78)
+        self.assertEqual(len(cases), 81)
+        self.assertEqual({c.name for c in cases[78:]}, {'visibility_trap_hidden','visibility_trap_cursed','visibility_trap_blind'})
         names = {case.name for case in cases}
         self.assertIn("equip_cursed_amulet", names)
         self.assertTrue(names.isdisjoint({"descend", "throw_harming", "wand_force", "wand_fire"}))
@@ -35,6 +43,14 @@ class TurnBenchmarks(unittest.TestCase):
             (project / "bench/bench.cpp").write_bytes(Path(__file__).with_name("bench.cpp").read_bytes())
             self.assertEqual(turns.source_contract(project / "src"), self.contract)
             self.assertFalse((project / "src/model.hpp").exists())
+
+    def test_trap_visibility_outcomes(self):
+        for case in turns.BENCHMARKS[78:]:
+            before=dict(valid=1,hp=100,turns=0,x=32,y=16,monster_x=34,monster_y=16,monster_hp=100,feature_id=3)
+            after=dict(before,turns=1,monster_x=33,monster_hp=97,feature_id=3 if case.name.endswith('_blind') else 2)
+            turns.validate_outcome(case,before,after,b'')
+            with self.assertRaisesRegex(ValueError,'visibility/discovery'):
+                turns.validate_outcome(case,before,dict(after,feature_id=2 if case.name.endswith('_blind') else 3),b'')
 
     def test_real_inputs_prepare_ui_and_measure_only_final_input(self):
         for case in turns.BENCHMARKS:

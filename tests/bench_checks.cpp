@@ -17,9 +17,14 @@ extern "C" void bench_wand_digging();
 extern "C" void bench_inventory_open_full();
 extern "C" void bench_inventory_open_wands();
 extern "C" void bench_inventory_open_singletons();
+extern "C" void bench_visibility_trap_cursed();
 
 void check_benchmark_scenarios()
 {
+    bench_visibility_trap_cursed();
+    const Game sight_fixture = game;
+    require(game.inventory[game.ring_slots[0]].type == RING_SEE_INVISIBLE &&
+            item_is_cursed(game.inventory[game.ring_slots[0]]), "cursed sight fixture lost its ring");
     for(uint8_t index = 0; index < bench_count(); ++index) {
         bench_case = index;
         bench_setup();
@@ -28,7 +33,8 @@ void check_benchmark_scenarios()
         require((game.weapon_slot == NONE || is_weapon(game.inventory[game.weapon_slot].type)) &&
                 (game.armor_slot == NONE || is_artifact(game.inventory[game.armor_slot].type)) &&
                 (game.amulet_slot == NONE || is_amulet(game.inventory[game.amulet_slot].type)) &&
-                (game.ring_slots[0] == NONE || is_artifact(game.inventory[game.ring_slots[0]].type)) &&
+                (game.ring_slots[0] == NONE || is_artifact(game.inventory[game.ring_slots[0]].type) ||
+                 std::memcmp(&game, &sight_fixture, sizeof game) == 0) &&
                 game.ring_slots[1] == NONE, "benchmark equipment must start unequipped");
         Game first = game;
         bench_setup();

@@ -169,6 +169,16 @@ static void gift_item() {
     status(F("You discover")); status(item, '.');
 }
 // Formatting and paging run after effect/placement temporaries have unwound.
+static void visible_trap_status(const Monster& monster, const char PROGMEM* message) {
+#if !defined(__AVM__)
+    // Native status adapters retain their existing public-feedback protocol.
+    monster_status(monster, message);
+#else
+    status_capitalize();
+    status_visible_monster(monster);
+    status(message);
+#endif
+}
 __attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_t type, bool lethal, bool visible) {
     const Monster& monster = game.monsters[index];
     if(!visible) return;
@@ -176,18 +186,18 @@ __attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_
         status(F("A trap activates!"));
         return;
     }
-    if(lethal) { monster_status(monster, F("dies in a trap!")); return; }
+    if(lethal) { visible_trap_status(monster, F("dies in a trap!")); return; }
     switch(type) {
-    case FEATURE_SPIKE_TRAP: monster_status(monster, F("is struck by spikes!")); break;
-    case FEATURE_POISON_DART_TRAP: monster_status(monster, F("is poisoned!")); break;
-    case FEATURE_FLAME_TRAP: monster_status(monster, monster.type == DRAGON ? F("ignores the flames!") : F("is burned!")); break;
-    case FEATURE_FROST_TRAP: monster_status(monster, F("is chilled!")); break;
-    case FEATURE_SNARE_TRAP: monster_status(monster, F("is caught in a snare!")); break;
-    case FEATURE_TELEPORT_TRAP: monster_status(monster, F("triggers a teleport trap!")); break;
-    case FEATURE_CONFUSION_TRAP: monster_status(monster, F("is confused!")); break;
-    case FEATURE_MAGIC_DRAIN_TRAP: monster_status(monster, F("is struck by magic!")); break;
+    case FEATURE_SPIKE_TRAP: visible_trap_status(monster, F("is struck by spikes!")); break;
+    case FEATURE_POISON_DART_TRAP: visible_trap_status(monster, F("is poisoned!")); break;
+    case FEATURE_FLAME_TRAP: visible_trap_status(monster, monster.type == DRAGON ? F("ignores the flames!") : F("is burned!")); break;
+    case FEATURE_FROST_TRAP: visible_trap_status(monster, F("is chilled!")); break;
+    case FEATURE_SNARE_TRAP: visible_trap_status(monster, F("is caught in a snare!")); break;
+    case FEATURE_TELEPORT_TRAP: visible_trap_status(monster, F("triggers a teleport trap!")); break;
+    case FEATURE_CONFUSION_TRAP: visible_trap_status(monster, F("is confused!")); break;
+    case FEATURE_MAGIC_DRAIN_TRAP: visible_trap_status(monster, F("is struck by magic!")); break;
     case FEATURE_SUMMONING_TRAP: status(F("A trap calls monsters!")); break;
-    case FEATURE_RUST_TRAP: monster_status(monster, F("is splashed by acid!")); break;
+    case FEATURE_RUST_TRAP: visible_trap_status(monster, F("is splashed by acid!")); break;
     default: break;
     }
 }

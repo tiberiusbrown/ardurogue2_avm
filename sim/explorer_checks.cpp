@@ -453,9 +453,82 @@ void controlled_roundtrip() {
     game.inventory[6]={FOOD,63};
     for(int i=0;i<=5;++i) identify_item(uint8_t(i));
     game.monsters[11]={{11,10},LORD,1,0,{0,0},MON_AGGRO};
-    auto p=std::make_unique<ExplorerAgent>(); auto r=run_started(24,*p);
+    std::ostringstream roundtrip_trace; Options roundtrip_options; roundtrip_options.trace=&roundtrip_trace;
+    auto p=std::make_unique<ExplorerAgent>(); auto r=run_started(24,*p,roundtrip_options);
+    if(r.result!="escaped") { auto text=roundtrip_trace.str(); std::cerr<<text.substr(text.size()>10000 ? text.size()-10000 : 0); }
     check(r.result=="escaped" && r.has_yendor && r.floors_exited==16,"controlled Lord/Yendor/full ascent did not escape");
     check(r.monsters[LORD].killed==1 && r.items[YENDOR_AMULET].picked_up==1,"controlled roundtrip bypassed production Lord/Yendor");
+}
+void hazard_navigation() {
+    auto corridor=[] {
+        ExplorerObservation o; o.player={10,10}; o.hp=o.max_hp=100; o.level=5;
+        o.strength=5; o.dexterity=o.speed=4; o.hunger=220; o.radius=6;
+        o.terrain.fill(Terrain::Wall); o.visible.set();
+        for(int x=10;x<=14;++x) o.terrain[cell(x,10)]=Terrain::Floor;
+        o.terrain[cell(14,10)]=Terrain::Down;
+        o.features[cell(11,10)]=FEATURE_SUMMONING_TRAP;
+        return o;
+    };
+    auto p=std::make_unique<ExplorerAgent>(); auto o=corridor();
+    for(int x=10;x<=14;++x) o.terrain[cell(x,11)]=Terrain::Floor;
+    auto a=p->choose_action(o);
+    check(a.kind==ExplorerActionKind::Move && a.dy==1 && !a.essential_hazard,"safe summoning detour lost to short hazardous route");
+    // Every step of a safe route avoids re-entry, including previously visited cells.
+    for(unsigned i=0;i<12 && o.player!=SeenPosition{14,10};++i) {
+        a=p->choose_action(o);
+        if(a.kind!=ExplorerActionKind::Move) break;
+        o.player={uint8_t(o.player.x+a.dx),uint8_t(o.player.y+a.dy)}; ++o.actions; ++o.turns;
+        check(o.features[cell(o.player.x,o.player.y)]!=FEATURE_SUMMONING_TRAP,"safe route entered summoning trap");
+    }
+    check(o.player==SeenPosition{14,10},"safe detour failed to reach stairs");
+    p->reset(); o=corridor(); a=p->choose_action(o);
+    check(a.dx==1 && a.essential_hazard,"mandatory trapped passage permanently blocked");
+    o.player={11,10}; ++o.actions; ++o.turns; o.summoning_reported=true; o.hp_loss=12; o.hp=88;
+    a=p->choose_action(o);
+    check(p->memory(0).tiles[cell(11,10)].hazard_entries==1 && p->memory(0).tiles[cell(11,10)].hazard_loss==12,"activation history not retained from public observations");
+    check(a.dx==1,"essential crossing did not continue away from trap");
+    p->reset(); o=corridor(); o.terrain[cell(14,10)]=Terrain::Floor;
+    o.ground_count=1; o.ground[0].pos={14,10}; o.ground[0].item.category=ItemCategory::Ammo;
+    a=p->choose_action(o); check(a.no_path && !a.essential_hazard,"optional loot licensed dangerous crossing");
+    check(p->stats.hazard_abandoned==1,"hazard abandonment was not diagnosed");
+    // Authoritative hidden traps cannot affect an equal sanitized input.
+    arena(); game.features[0]={{11,10},uint8_t(FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN)};
+    p->reset(); o=corridor(); o.features.fill(0); a=p->choose_action(o);
+    check(a.dx==1 && !a.essential_hazard,"policy inspected authoritative hidden trap");
+    auto other=std::make_unique<ExplorerAgent>(); game.features[0]={};
+    check(action_text(a)==action_text(other->choose_action(o)),"hidden trap changed equal-input navigation");
+    p->reset(); o=corridor(); o.incoming_attack=o.attacked=true; o.anonymous_attacks=1;
+    o.hp=15; o.hp_loss=8; o.terrain[cell(10,11)]=Terrain::Floor;
+    a=p->choose_action(o);
+    check(a.kind==ExplorerActionKind::Move && !(a.dx==1 && a.dy==0),"unseen disengagement preferred known trap over safe retreat");
+    p->reset(); o=corridor(); o.features.fill(0); o.terrain[cell(11,10)]=Terrain::ClosedDoor;
+    a=p->choose_action(o); check(a.dx==1,"closed door ceased to be a legal opening route");
+    ++o.actions; ++o.turns; o.terrain[cell(11,10)]=Terrain::OpenDoor;
+    a=p->choose_action(o); check(a.dx==1 && p->memory(0).tiles[cell(11,10)].terrain==Terrain::OpenDoor,"observed opening did not refresh route");
+    ++o.actions; ++o.turns; o.terrain[cell(11,10)]=Terrain::ClosedDoor;
+    p->choose_action(o); check(p->memory(0).tiles[cell(11,10)].terrain==Terrain::ClosedDoor,"observed closure not retained");
+    p->reset(); o=corridor(); p->choose_action(o);
+    o.floor=1; ++o.actions; p->choose_action(o);
+    o.floor=0; o.yendor=true; ++o.actions; o.features.fill(0); o.terrain[cell(14,10)]=Terrain::Up;
+    a=p->choose_action(o);
+    check(a.dx==1 && p->memory(0).tiles[cell(11,10)].feature==0,"ascent reused descent hazard location");
+    p->reset(); o=corridor(); o.terrain[cell(11,10)]=Terrain::Wall;
+    for(unsigned i=0;i<20;++i) { ++o.actions; ++o.turns; a=p->choose_action(o); check(a.no_path,"no-path handling fabricated terrain or a route"); }
+    // Equal-value optional targets are consumed once and cannot create a movement cycle.
+    p->reset(); o=corridor(); o.features.fill(0);
+    for(int y=8;y<=12;++y) o.terrain[cell(10,y)]=Terrain::Floor;
+    o.ground_count=2;
+    for(int i=0;i<2;++i) { o.ground[i].pos={10,uint8_t(i ? 12 : 8)}; o.ground[i].handle=uint8_t(i); o.ground[i].item.category=ItemCategory::Food; o.ground[i].item.type=FOOD; o.ground[i].item.quantity=1; }
+    unsigned movements=0;
+    for(unsigned i=0;i<60;++i) {
+        a=p->choose_action(o); ++o.actions; ++o.turns;
+        if(a.kind==ExplorerActionKind::Move) { o.player={uint8_t(o.player.x+a.dx),uint8_t(o.player.y+a.dy)}; ++movements; }
+        if(a.kind==ExplorerActionKind::Take) {
+            for(unsigned g=0;g<o.ground_count;++g) if(o.ground[g].pos==o.player) { o.ground[g]=o.ground[--o.ground_count]; break; }
+        }
+        if(a.kind==ExplorerActionKind::Stairs) break;
+    }
+    check(o.player==SeenPosition{14,10} && movements<24,"competing goals caused unlimited movement cycle");
 }
 void replay() {
     auto p=std::make_unique<ExplorerAgent>(); Options o; o.agent=p->name();
@@ -574,7 +647,7 @@ void competence() {
 }
 }
 int main() {
-    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
+    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }

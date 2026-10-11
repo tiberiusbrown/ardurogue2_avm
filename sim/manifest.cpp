@@ -27,6 +27,7 @@ void write_manifest(const std::filesystem::path& path,uint64_t start,uint64_t co
      <<",\n  \"observation_interface_version\": "<<EXPLORER_OBSERVATION_VERSION
      <<",\n  \"observation_interface_hash\": "<<json(SIM_OBSERVATION_HASH)
      <<",\n  \"exploration_schema_version\": "<<EXPLORATION_SCHEMA_VERSION
+     <<",\n  \"survival_schema_version\": "<<SURVIVAL_SCHEMA_VERSION
      <<",\n  \"executable\": "<<json(std::filesystem::absolute(argv[0]).string())
      <<",\n  \"agent_code_hash\": "<<json(options.agent=="explorer-v1" ? SIM_EXPLORER_POLICY_HASH : SIM_AGENT_POLICY_HASH);
     if(options.agent=="explorer-v1") o<<",\n  \"agent_parameter_hash\": "<<json(parameter_hash(options.parameters))

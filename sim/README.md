@@ -447,9 +447,9 @@ results, policy compatibility limits, and reproducible commands.
 See [the full report](../docs/EXPLORER_COMPETENCE_AND_REBALANCE.md) for the
 current results and [seed ledger](../docs/EXPLORER_SEED_LEDGER.json). Explorer
 protocol 3 supplies anonymous incoming feedback without hidden species or
-bearing. There are 102 preferences; tuning rewards escapes, Yendor, Lord kills,
+bearing. There are 103 preferences; tuning rewards escapes, Yendor, Lord kills,
 progression, fewer actions, then score. Core telemetry is version 7 and
-exploration telemetry is version 5. `OBS` trace lines are policy observations;
+exploration telemetry is version 6 and survival telemetry is version 1. `OBS` trace lines are policy observations;
 other trace lines remain privileged reporting and never feed decisions.
 
 Monster awareness is now the engine default. `--intervention legacy-awareness`
@@ -467,3 +467,25 @@ Fresh output directories are required. Each suite retains an executable and DLLs
 complete parameters, commands embodied in the experiment specification, manifests,
 raw seals, summaries and paired reports. The comparison command supports explicit
 `--policy-comparison` labeling; gameplay pairs require identical policy hashes.
+
+## Encounter, milestone, and hazard diagnostics
+
+Output now also includes `encounters.csv` and `milestones.csv`. The nine core
+CSV schemas remain version 7. Exploration schema 6 appends known/repeated
+summoning-trap entries, following damage, safe routing decisions, essential
+crossings, abandoned objectives, route failures, reversals and objective changes.
+First discovery is separate from knowingly reentering a trap.
+
+Survival schema 1 records combat episodes, mixed participants, first phantom
+contact snapshots, resource costs, 25/50/100-turn follow-up and subsequent descent.
+Milestones record equipment and supplies alongside cumulative actions/turns.
+`competence_experiments.py --compare CONTROL CANDIDATE --policy-comparison
+--output REPORT.json` includes these diagnostics, exact binomial intervals,
+paired mean intervals and the existing progression bootstrap. The helper
+`survival_report.py` is part of this report pipeline, not a policy input.
+
+The new default `hazard_routing=1` uses explicit safe-route feasibility; set it
+to zero in a complete parameter JSON for the contact-aware baseline. Binary
+feature switches remain excluded from parameter mutation. See the
+[implementation and measured results](../docs/EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md)
+for encounter segmentation, counting conventions, seed usage and limitations.

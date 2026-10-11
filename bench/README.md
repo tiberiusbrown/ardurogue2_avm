@@ -216,3 +216,21 @@ blindness. Existing dense and forced-movement cases equip permanent illumination
 to retain radius-six coverage. Their item prompts are prepared with real button
 presses before profiling begins. Final measurements are recorded in
 [the lighting report](../docs/LIGHTING_OFFHAND_BLINDNESS.md).
+
+## Hazard-routing performance pass
+
+The suite now has 81 cases: all 78 prior fixtures are retained, followed by
+hidden-monster, cursed-sight-ring and blind-player monster trap entries. They
+exercise the visibility proof reused by trap status formatting. Profiling also
+captures `game.random_state` and the entire `sizeof(game)` via DWARF to `game.bin`
+after final readiness. Capture commands run outside the timing window.
+
+```text
+python bench/compare_turns.py REFERENCE_RUN CANDIDATE_RUN --output build/turn-comparison.csv
+```
+
+This rejects differing case manifests, timing failures, gameplay fields, full
+saved state/RNG, endpoints, final display, or pagination framebuffers and exports
+absolute and percentage timing differences. The final suite improves the worst
+case from 99.299 to 92.773 ms with 81/81 equivalent cases and a complete
+239/256-byte stack bound. See the [full timing table and hotspot report](../docs/EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md).

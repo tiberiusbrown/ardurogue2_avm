@@ -119,6 +119,10 @@ def summary(path):
                mean_first_contact=mean(contacts),
                surveyed_coverage=mean(coverage), early_detection_percent=100*sum(exploration[f'monsters_first_seen_{i}'] for i in range(2,7))/seen if seen else None,
                policy_hash=manifest['agent_policy_hash'], manifest=manifest)
+    import statistics
+    from survival_report import diagnostics
+    out['median_floor']=statistics.median(int(r['deepest_floor'])+1 for r in runs.values())
+    out['survival']=diagnostics(path,runs)
     return out, runs
 
 
@@ -167,7 +171,8 @@ def paired(control, treatment, policy_comparison=False):
         from statsmodels.stats.multitest import multipletests
         qs=multipletests([r['exact_mcnemar_p'] for r in floor_pairs],method='fdr_bh')[1]
         for row,q in zip(floor_pairs,qs): row['bh_q']=float(q)
-    return dict(kind='policy comparison' if policy_comparison else 'controlled gameplay intervention',
+    from survival_report import paired_diagnostics
+    return dict(survival_differences=paired_diagnostics(control,treatment,ar,br),kind='policy comparison' if policy_comparison else 'controlled gameplay intervention',
                 control=a, treatment=b, difference_pp=delta,
                 mean_depth_difference=float(depths.mean()), mean_depth_paired_95=None if census else np.quantile(depth_draws,[.025,.975]).tolist(),
                 descent_floor_pairs=floor_pairs,

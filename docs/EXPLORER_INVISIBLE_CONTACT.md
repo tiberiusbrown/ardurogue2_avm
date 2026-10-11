@@ -421,3 +421,17 @@ still spend resources on an unfavorable fight, revisit a hazard when no route
 avoids it, or die while cornered. Simulation-loop guards are not survival proofs.
 Rare escapes and survivor-dependent aggregate measures do not establish human
 completion probability or a statistically significant escape benefit.
+
+## Subsequent navigation and measurement pass
+
+The [hazard-routing report](EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md) retains
+the frozen contact release and these historical manifests. It adds explicit
+known summoning-trap route feasibility without editing `remember_contact` or the
+contact state machine. In the newer executable, select `hazard_routing=0` for the
+contact-aware control. Its full core outputs reproduce this report's 10,000-seed
+contact dataset. New source/parameter hashes are conservative identities, so
+they differ from the archived hashes even in the compatibility arm.
+
+Encounter and milestone CSVs now supplement terminal phantom-death attribution.
+Conditional first-contact survival is descriptive; changes in contact HP,
+equipment, floor and enemy mix prevent treating it as an equal-state experiment.

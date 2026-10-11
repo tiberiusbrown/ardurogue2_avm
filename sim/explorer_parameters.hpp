@@ -37,6 +37,7 @@ namespace sim {
  X(recovery_detour_distance,24,1,48) \
  X(invisible_response,1,0,1) \
  X(contact_aware,1,0,1) \
+ X(hazard_routing,1,0,1) \
  X(risk_margin_percent,120,80,180) \
  X(offhand_switch_margin,30,0,150) \
  X(offhand_switch_turns,6,0,20) \

@@ -65,9 +65,12 @@ struct ExplorerAction {
     bool discard=false, no_path=false;
     std::string goal;
     SeenPosition destination;
+    bool essential_hazard=false, navigation=false;
 };
 struct ExplorerStats {
     uint64_t revealed=0, exploring_actions=0, repeats=0, frontier_changes=0, unreachable=0, missing_items=0;
+    uint64_t safe_detours=0, hazard_abandoned=0, essential_crossings=0, no_safe_route=0,
+        known_crossings=0, repeated_crossings=0, reversals=0, goal_changes=0, goal_failures=0, cycles=0;
 };
 struct SeenFeatureChoice { bool accept=false; uint8_t slot=255; };
 struct RememberedTile {
@@ -75,6 +78,7 @@ struct RememberedTile {
     uint8_t feature=0, visits=0, failures=0;
     SeenItem item;
     bool has_item=false,surveyed=false;
+    uint8_t hazard_entries=0, hazard_loss=0, survey_attempts=0;
 };
 struct MonsterMemory { SeenPosition pos; uint8_t type=0; uint64_t seen=0; SeenMonster species; };
 struct ExplorerFloor {
@@ -125,12 +129,20 @@ class ExplorerAgent final {
     ExplorerAction previous;
     InvisibleContact invisible_contact;
     bool previous_healing=false;
+    // Navigation commitment is separate from invisible-contact inference.
+    SeenPosition objective, deferred_objective, prior_position, recent_hazard;
+    std::array<SeenPosition,8> recent_positions{};
+    uint64_t deferred_until=0, hazard_until=0;
+    unsigned navigation_moves=0, objective_failures=0;
     void remember_contact(const ExplorerObservation&);
-    std::array<int16_t,EXPLORER_CELLS> costs{}, steps{};
+    std::array<int32_t,EXPLORER_CELLS> costs{};
+    std::array<int16_t,EXPLORER_CELLS> steps{};
     std::array<int8_t,EXPLORER_CELLS> first{};
+    std::array<uint8_t,EXPLORER_CELLS> route_hazards{};
     void remember(const ExplorerObservation&);
-    void paths(const ExplorerObservation&);
+    void paths(const ExplorerObservation&,bool hazards=false);
     ExplorerAction navigate(SeenPosition,const char*);
+    ExplorerAction hazardous_progress(const ExplorerObservation&,SeenPosition);
     ExplorerAction pickup(const ExplorerObservation&);
 public:
     SurvivalRisk risk;

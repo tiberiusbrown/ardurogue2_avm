@@ -29,6 +29,26 @@ class Reports(unittest.TestCase):
         self.assertLess(result['paired_conservative_exact_95_pp'][0],0)
         self.assertGreater(result['paired_conservative_exact_95_pp'][1],0)
         self.assertIn('not evidence',result['uncertainty_note'])
+        self.assertEqual(result['survival_differences']['actions']['paired_mean_95'],[0.,0.])
+
+    def test_survival_schema_and_milestones(self):
+        s,runs=c.summary(self.a); d=s['survival']
+        self.assertEqual(d['milestones']['floor_1_reached']['reached'],len(runs))
+        with (self.a/'encounters.csv').open(newline='') as f:
+            encounters=list(csv.DictReader(f))
+        first=[r for r in encounters if r['first_phantom']=='1']
+        self.assertEqual(len(first),len({r['effective_seed'] for r in first}))
+        self.assertEqual(d['first_phantom']['n'],len(first))
+        for row in encounters:
+            self.assertGreaterEqual(int(row['actions']),1)
+            self.assertGreater(int(row['species_mask']),0)
+            self.assertLessEqual(int(row['player_kills']),int(row['kills']))
+            self.assertGreaterEqual(int(row['end_turn']),int(row['start_turn']))
+            self.assertIn(row['survived_25'],{'-1','0','1'})
+            self.assertGreaterEqual(int(row['damage']),int(row['phantom_damage']))
+        for name in ('encounters.csv','milestones.csv'):
+            self.assertIn(name,json.loads((self.a/'raw-sha256.json').read_text()))
+        self.assertIn('different',d['selection_note'])
 
     def test_seal_and_failures(self):
         path=self.a/'runs.csv'

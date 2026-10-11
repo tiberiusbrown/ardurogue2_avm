@@ -426,7 +426,7 @@ cycle; save layout remains unchanged. See the current competence report.
 
 The contact-aware policy supersedes the historical stationary budget and
 invisible-response measurements above. `contact_aware=0` retains the frozen
-decision logic; combining it with `invisible_response=0` reproduces the existing
+decision logic on the archived contact release; combining it with `invisible_response=0` reproduces the existing
 reassessment ablation, which still probes and repeats contact.
 `stationary_contact_turns` is a legacy-only preference. All other defaults are
 held fixed in the [new policy report](EXPLORER_INVISIBLE_CONTACT.md). Protocol 3
@@ -454,3 +454,22 @@ speed and control choices; no Lord path or live HP is supplied.
 CSVs, rejects failures and provides paired escape/progression statistics.
 The seed ledger and current results are in the competence report. The historical
 results above remain archival evidence, not estimates for these defaults.
+
+## Known summoning hazards
+
+The default `hazard_routing=1` first computes routes excluding every legitimately
+remembered summoning trap, including unvisited discovered traps. Safe routes can
+reuse visited terrain. A second pass is reserved for stairs or exhausted survey
+progression; optional loot never uses it. Healing, escape, recent activation
+damage, and a bounded reassessment interval govern costly repeat entries. Route
+costs are 32-bit, and hazard count precedes ordinary cost in the second pass.
+
+Objectives receive modest hysteresis. Three failed or fruitless survey attempts
+defer a target; recent ABAB movement retires its survey request. Danger and urgent
+resource decisions still run before navigation. Ascent invalidates remembered
+features. `hazard_routing=0` reproduces the contact-aware routing baseline; use it
+alongside contact/invisible ablation switches when reproducing older behavior
+with the current executable.
+
+See [the hazard, survival diagnostics, and AVM report](EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md)
+for constructed tests, paired results, exact limitations, and reproducibility.

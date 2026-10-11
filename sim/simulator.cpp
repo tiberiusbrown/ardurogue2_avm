@@ -135,6 +135,7 @@ RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
     }
     if(options.trace) { *options.trace << "result=" << r.result << " actions=" << r.actions << " turns=" << r.turns
         << " score=" << r.score << " cause=" << r.death_cause << " reason=" << r.reason << " action_hash=" << r.action_hash << '\n'; }
+    c.update_encounters(true);
     return r;
 }
 }

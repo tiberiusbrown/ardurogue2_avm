@@ -3,6 +3,9 @@
 #include "model.hpp"
 
 namespace rogue {
+// Caller has just established both geometric sight and monster visibility.
+// No movement/status/equipment mutation may intervene before this call.
+void status_visible_monster(const Monster& monster);
 
 constexpr uint8_t ITEM_TEXT_CAPACITY = 40;
 void format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY]);

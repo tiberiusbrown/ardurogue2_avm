@@ -608,3 +608,26 @@ The final seed population and selection history are recorded in
 are development data, 30001:32000 intervention data, and 40001:50000 a reserved
 explorer holdout. Previous oracle censuses mean no globally untouched seeds
 remain; do not claim otherwise. See the [current measured report](../docs/EXPLORER_COMPETENCE_AND_REBALANCE.md).
+
+## Survival diagnostics and known-hazard policy comparisons
+
+Keep rare escapes as the terminal outcome, with exact intervals. During
+development, inspect encounter costs, first phantom contact, floor milestones,
+navigation effectiveness and starvation together; these are explanatory measures,
+not a new aggregate tuning score. `competence_experiments.py` incorporates the
+survival-schema-1 sidecars and exploration-schema-6 navigation columns. Continuous
+common diagnostics use paired Student mean intervals; deepest floor retains its
+paired bootstrap. Unavailable older diagnostic columns are not treated as
+measured zeros in paired comparisons.
+
+The two-pass hazard experiment changes only `hazard_routing` within one frozen
+executable and uses an explicit policy comparison. First-phantom and milestone
+conditional survival select different player states between policies. Equal-start
+native phantom encounters supplement those descriptive cohorts. Agent-internal
+cycle/defer counters exist only in the new policy and cannot measure a baseline
+cycle reduction; shared reporting reversals and travel remain comparable.
+
+The AVM optimization is a separate equivalence experiment: the fixed oracle and
+compatibility explorer reproduce all core CSVs, while the hardware comparison
+checks full saved Game bytes (including RNG), captured fields and every status
+page framebuffer. See [the full report](../docs/EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md).

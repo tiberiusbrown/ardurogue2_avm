@@ -100,6 +100,10 @@ def main():
         shutil.copy2(dll, binary / dll.name)
     subprocess.run([str(exe), '--write-agent-defaults', str(binary / 'defaults.json')], check=True)
     defaults = json.loads((binary / 'defaults.json').read_text())
+    # Isolate the contact experiment when run with the newer navigation build.
+    # Old frozen executables do not accept this preference.
+    if 'hazard_routing' in defaults:
+        defaults['hazard_routing'] = 0
     variants = {'legacy': {'contact_aware': 0}, 'disabled': {'contact_aware': 0, 'invisible_response': 0},
                 'contact': {'contact_aware': 1}}
     for name, changes in variants.items():
