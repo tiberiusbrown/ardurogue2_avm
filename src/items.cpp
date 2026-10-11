@@ -164,13 +164,14 @@ __attribute__((noinline)) PickupResult take_item(uint8_t index)
 
 static bool item_is_equipped(uint8_t slot)
 {
-    return game.weapon_slot == slot || game.armor_slot == slot ||
+    return game.weapon_slot == slot || game.armor_slot == slot || game.offhand_slot == slot ||
         game.amulet_slot == slot || game.ring_slots[0] == slot ||
         game.ring_slots[1] == slot;
 }
 
 static void clear_equipment_slot(uint8_t slot)
 {
+    if(game.offhand_slot == slot) game.offhand_slot = NONE;
     if(game.weapon_slot == slot)
         game.weapon_slot = NONE;
     if(game.armor_slot == slot)
@@ -195,6 +196,21 @@ void destroy_inventory_item(uint8_t slot)
     clear_equipment_slot(slot);
     game.inventory[slot] = {NO_ITEM, 0};
     if(session.repeat_slot == slot) session.repeat_slot = NONE;
+}
+
+__attribute__((noinline)) void burn_offhand_fuel()
+{
+    uint8_t slot = game.offhand_slot;
+    if(slot >= INVENTORY) return;
+    Item& item = game.inventory[slot];
+    if(!is_fueled_light(item.type)) return;
+    if(item.info && roll(fuel_denominator(item.type)) != 0) return;
+    if(item.info) --item.info;
+    if(item.info) return;
+    SIM_EVENT(sim::EventKind::FuelExhausted, slot, item.type);
+    Item exhausted = item;
+    destroy_inventory_item(slot);
+    status_capitalize(); status(exhausted); status(F("goes out."));
 }
 
 static bool remove_equipment_slot(uint8_t slot)
@@ -488,6 +504,20 @@ __attribute__((noinline)) static bool apply_inventory(
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope damage_source(sim::Cause::Item, item.type);
 #endif
+    if(is_offhand(item.type)) {
+        uint8_t old = game.offhand_slot;
+        if(old < INVENTORY && item_is_cursed(game.inventory[old])) {
+            status(F("The cursed item cannot be removed."));
+            return false;
+        }
+        if(is_fueled_light(item.type) && !item.info) return false;
+        game.offhand_slot = old == slot ? NONE : slot;
+        session.repeat_slot = slot;
+        identify_item(slot);
+        status(old == slot ? F("You take off") : F("You equip"));
+        status(item, '.');
+        return true;
+    }
     if(is_equipment(item.type)) {
         uint8_t& equipped_slot = is_weapon(item.type) ? game.weapon_slot : game.armor_slot;
         if(equipped_slot != slot && equipped_slot < INVENTORY &&
@@ -532,7 +562,7 @@ __attribute__((noinline)) static bool apply_inventory(
         break;
     case POTION_HEALING: case POTION_CONFUSION: case POTION_POISON: case POTION_HARMING:
     case POTION_STRENGTH: case POTION_DEXTERITY: case POTION_PARALYSIS: case POTION_SLOWING:
-    case POTION_EXPERIENCE: case POTION_INVISIBILITY: {
+    case POTION_EXPERIENCE: case POTION_INVISIBILITY: case POTION_BLINDNESS: {
         uint8_t type = item.type;
         bool known = potion_identified(type);
         status(F("You drink"));
@@ -594,6 +624,10 @@ __attribute__((noinline)) static bool apply_inventory(
             if(!game.weakened)
                 status(F("You feel weaker."));
             if(game.weakened < 3) ++game.weakened;
+            break;
+        case POTION_BLINDNESS:
+            game.blindness = static_cast<uint8_t>(8 + roll(8));
+            status(F("You are blinded!"));
             break;
         case POTION_CONFUSION:
             if(amulet_bonus(AMULET_CLARITY) > 0) {
@@ -682,7 +716,7 @@ __attribute__((noinline)) static bool apply_thrown_potion(uint8_t slot, int8_t d
         }
         apply_monster_potion(type, hit);
     }
-    status(F("The potion shatters."));
+    if(type != POTION_BLINDNESS || hit == NONE) status(F("The potion shatters."));
     return true;
 }
 
@@ -802,7 +836,7 @@ static void polymorph_monster(uint8_t index)
         (target.type != ANGEL && roll(4) == 0 ? 1 : -1));
     // A newly polymorphed mimic is already revealed; its default appearance
     // is scroll. Other forms must not retain the old mimic's appearance bits.
-    target.state &= static_cast<uint8_t>(~MIMIC_APPEARANCE_MASK);
+    target.state &= static_cast<uint8_t>(~(MIMIC_APPEARANCE_MASK | MON_BLINDED));
     SIM_EVENT(sim::EventKind::MonsterChanged, index, target.type);
     target.hp = monster_health(target.type);
     target.stun = 0;

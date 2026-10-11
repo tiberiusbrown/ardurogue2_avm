@@ -373,3 +373,25 @@ without ammunition (seed 54808). The maintained agent now values retaining its
 best bow at least as highly as reacquiring it. This corrects inventory progress;
 hidden observations, trap routing and monster behavior are unchanged. Both
 control and treatment validation use this same corrected policy.
+
+## Lighting, offhand equipment and blindness
+
+Telemetry schema 6 adds `fuel_exhaustions`, `blind_turns`, `blind_deaths`,
+`shield_turns`, `offhand_light_turns`, and `light_0` through `light_6` to `runs.csv`.
+Radius and equipment occupancy are sampled at turn entry, before fuel burn and
+effect aging. `blind_deaths` counts deaths while the player timer is active;
+it does not establish blindness as the cause. Item activity and generation use
+the existing typed streams. Starting torches are not ground-generation exposure.
+
+The maintained oracle equips/replaces lights, keeps fuel reserves, prefers shields
+when permanent jewelry supplies sight, values illumination jewelry, and throws
+blindness as a confusion-like control potion. It never drinks harmful potions.
+Its global terrain/loot knowledge remains omniscient; tactical ranged visibility
+uses production sight checks. These results describe the oracle, not human play.
+
+The host-only `full-light` intervention forces radius six unless blinded and lets
+the same policy account for that guaranteed sight. It preserves the candidate
+content, placement, fuel rules and executable. Same-location shield removal uses
+`remove-item:BUCKLER`, `remove-item:ROUND_SHIELD`, and `remove-item:TOWER_SHIELD`.
+See [the implementation report](../docs/LIGHTING_OFFHAND_BLINDNESS.md) for paired
+results, policy compatibility limits, and reproducible commands.

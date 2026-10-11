@@ -73,20 +73,35 @@ static uint8_t floor_ring_type(uint16_t& seed)
         chance < 55 ? RING_PROTECTION :
         chance < 68 ? RING_FIRE_IMMUNITY :
         chance < 83 ? RING_ATTACK :
-        chance < 98 ? RING_SUSTENANCE :
-        RING_PROTECTION; // Invisibility now uses the unique artifact schedule.
+        chance < 94 ? RING_SUSTENANCE :
+        RING_ILLUMINATION; // Invisibility now uses the unique artifact schedule.
 }
 
 static uint8_t floor_amulet_type(uint16_t& seed)
 {
-    uint8_t chance = floor_roll(seed, 16);
+    uint8_t chance = floor_roll(seed, 17);
+    if(chance == 16) return AMULET_BRILLIANCE;
     if(chance == 8) return AMULET_VAMPIRE;
     return static_cast<uint8_t>(AMULET_FIRST + chance % (AMULET_WISDOM - AMULET_FIRST + 1));
 }
 
+static uint8_t floor_light_type(uint16_t& seed)
+{
+    uint8_t chance = floor_roll(seed, 100);
+    if(game.floor < 3) return chance < 30 ? CANDLE : chance < 90 ? TORCH : LANTERN;
+    if(game.floor < 8) return chance < 15 ? CANDLE : chance < 60 ? TORCH : chance < 95 ? LANTERN : GLOWING_ORB;
+    return chance < 5 ? CANDLE : chance < 30 ? TORCH : chance < 90 ? LANTERN : GLOWING_ORB;
+}
+
+static uint8_t floor_shield_type(uint16_t& seed)
+{
+    uint8_t chance = floor_equipment_roll(seed, 100);
+    return chance < 45 ? BUCKLER : chance < 80 ? ROUND_SHIELD : TOWER_SHIELD;
+}
+
 static uint8_t floor_potion_type(uint16_t& seed)
 {
-    uint8_t chance = floor_roll(seed, 20);
+    uint8_t chance = floor_roll(seed, 2 * POTION_COUNT);
     if(game.floor > 0 && game.floor < 5 && (chance == POTION_COUNT + POTION_HARMING - POTION_FIRST || chance == POTION_COUNT + POTION_POISON - POTION_FIRST)) return POTION_HEALING;
     if(chance == POTION_COUNT + POTION_EXPERIENCE - POTION_FIRST)
         return game.floor == 0 || (game.floor >= 5 && game.floor < 10) ? POTION_SLOWING : POTION_HEALING;
@@ -213,7 +228,15 @@ uint8_t artifact_type(uint8_t index)
 static uint16_t artifact_seed(uint16_t run_seed, uint8_t type)
 {
     // Run-wide domain, independent of floor, ascent and all ordinary streams.
-    uint32_t value = static_cast<uint32_t>(run_seed) + type * 0x9e3779b9u + ARTIFACTS;
+    uint8_t legacy = type;
+    switch(type) {
+    case STORMBRINGER: legacy = 20; break; case GLASS_SWORD: legacy = 21; break;
+    case HAMMER_OF_RUIN: legacy = 22; break; case DRAGONHIDE: legacy = 29; break;
+    case TITAN_PLATE: legacy = 30; break; case RING_INVISIBILITY: legacy = 39; break;
+    case RING_REPRISAL: legacy = 40; break; case RING_HUNT: legacy = 41; break;
+    case AMULET_PHOENIX_HEART: legacy = 50; break; case AMULET_HEART_OF_GIANT: legacy = 51; break;
+    }
+    uint32_t value = static_cast<uint32_t>(run_seed) + legacy * 0x9e3779b9u + ARTIFACTS;
     value = (value ^ (value >> 16)) * 0x7feb352du;
     value = (value ^ (value >> 15)) * 0x846ca68bu;
     return static_cast<uint16_t>(value ^ (value >> 16));
@@ -278,7 +301,7 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
     if(game.has_amulet) return;
     uint16_t placement_seed = seed;
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
-        uint8_t chance = floor_roll(seed, 72);
+        uint8_t chance = floor_roll(seed, 87);
         uint8_t type = chance < FOOD_WEIGHT ? FOOD : chance < 20 ? ARROWS : chance < 40
             ? floor_potion_type(seed) :
               chance < 48 ? static_cast<uint8_t>(SCROLL_FIRST +
@@ -289,8 +312,10 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
                                                  floor_roll(seed, WAND_COUNT)) :
               chance < 70
                 ? floor_ring_type(seed)
-                : floor_amulet_type(seed);
+                : chance < 72 ? floor_amulet_type(seed) :
+                  chance < 82 ? floor_light_type(seed) : floor_shield_type(equipment_seed);
         uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) : 1;
+        if(is_light(type)) info = light_initial_fuel(type);
         if(is_ammo(type)) {
             uint16_t quantity_seed = static_cast<uint16_t>(floor_seed(AMMO_QUANTITY) ^ ((i + 1u) * 0x9e37u));
             info = static_cast<uint8_t>(ARROW_BUNDLE_MIN + floor_roll(quantity_seed, ARROW_BUNDLE_MAX - ARROW_BUNDLE_MIN + 1));
@@ -326,9 +351,23 @@ void populate_items(uint16_t seed, uint16_t equipment_seed)
     populate_ordinary_items(seed, equipment_seed);
     if(game.has_amulet) return;
 #if defined(ARDUROGUE2_SIM)
-    if(!sim::artifacts_enabled()) return;
-#endif
+    if(sim::artifacts_enabled()) place_artifacts();
+#else
     place_artifacts();
+#endif
+    if(game.floor >= 1 && game.floor <= 3) {
+        for(const GroundItem& ground : game.ground) if(is_light(ground.item.type)) return;
+        for(GroundItem& ground : game.ground) {
+            uint8_t type = ground.item.type;
+            if(!type || is_artifact(type) || type == YENDOR_AMULET || type == FOOD || type == ARROWS) continue;
+            ground.item = {TORCH, light_initial_fuel(TORCH)};
+            return;
+        }
+        // A floor consisting entirely of essential supplies still needs a light.
+        for(GroundItem& ground : game.ground) if(ground.item.type == FOOD || ground.item.type == ARROWS) {
+            ground.item = {TORCH, light_initial_fuel(TORCH)}; return;
+        }
+    }
 }
 
 static uint8_t feature_geometry(uint8_t type)

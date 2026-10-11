@@ -21,7 +21,7 @@ const char* names[] = {"CHAMBERS", "WARREN", "FORTRESS", "RUINS"};
 
 void generate(unsigned seed, unsigned floor, bool ascent)
 {
-    game = {};
+    game = {}; game.offhand_slot = NONE;
     game.run_seed = static_cast<uint16_t>(seed);
     game.floor = static_cast<uint8_t>(floor);
     game.has_amulet = ascent;
@@ -212,7 +212,7 @@ unsigned cycle_rank()
 void check_loop_topology()
 {
     for(unsigned seed = 0; seed < 64; ++seed) {
-        game = {};
+        game = {}; game.offhand_slot = NONE;
         game.run_seed = static_cast<uint16_t>(seed);
         game.floor = static_cast<uint8_t>(seed % FLOORS);
         std::memset(game.walls, 0xff, sizeof game.walls);
@@ -230,7 +230,7 @@ void check_loop_topology()
 
 void check_passage_trimming()
 {
-    game = {};
+    game = {}; game.offhand_slot = NONE;
     std::memset(game.walls, 0xff, sizeof game.walls);
     for(uint8_t y = 8; y <= 12; ++y)
         for(uint8_t x = 8; x <= 32; ++x)

@@ -12,7 +12,7 @@ void require(bool, const char*);
 
 namespace {
 void arena(uint8_t bow=SHORT_BOW, uint8_t ammo=4) {
-    game={}; session={NONE,DEATH,false};
+    game={}; game.offhand_slot=NONE; session={NONE,DEATH,false};
     game.player={10,10}; game.hp=game.max_hp=240; game.hunger=240;
     game.strength=5; game.dexterity=4; game.speed=1; game.level=1;
     game.random_state=1; game.weapon_slot=bow==NO_ITEM ? NONE : 0;
@@ -33,7 +33,7 @@ void hit_seed(bool hit) {
 }
 
 void check_bows() {
-    static_assert(sizeof(Item)==2 && sizeof(Game)==810 && SAVE_VERSION==26,"saved state changed");
+    static_assert(sizeof(Item)==2 && sizeof(Game)==812 && SAVE_VERSION==27,"saved state changed");
     for(unsigned t=0;t<=255;++t) {
         require(is_ammo(t)==(t==ARROWS),"ammo range overlaps another category");
         require(is_bow(t)==(t==SHORT_BOW || t==LONG_BOW),"bow range overlaps another category");
@@ -141,11 +141,11 @@ void check_bows() {
         }
     }
     require(changed>30,"ammo quantity isolation fixture had no independent variation");
-    // Every one of the 72 category outcomes is reached through the real generator.
+    // Every one of the 87 category outcomes is reached through the real generator.
     unsigned food=0,ammo=0;
-    for(unsigned chance=0;chance<72;++chance) {
+    for(unsigned chance=0;chance<87;++chance) {
         uint16_t seed=1;
-        for(;;++seed) { uint16_t state=seed; if(next_random(state)%72==chance) break; }
+        for(;;++seed) { uint16_t state=seed; if(next_random(state)%87==chance) break; }
         arena(); populate_items(seed,0x1234);
         auto type=game.ground[0].item.type;
         food+=type==FOOD; ammo+=type==ARROWS;

@@ -83,11 +83,19 @@ uint8_t monster_effect(const Monster& monster, MonsterEffect effect)
 void set_monster_effect(Monster& monster, MonsterEffect effect,
                                uint8_t duration)
 {
+    if(effect == MON_CONFUSED) monster.state &= static_cast<uint8_t>(~MON_BLINDED);
+    if(duration > 15) duration = 15;
     uint8_t& packed = monster.effects[effect >> 1];
     if(effect & 1)
         packed = static_cast<uint8_t>((packed & 0x0f) | (duration << 4));
     else
         packed = static_cast<uint8_t>((packed & 0xf0) | duration);
+}
+
+void blind_monster(Monster& monster, uint8_t duration)
+{
+    set_monster_effect(monster, MON_CONFUSED, duration);
+    if(duration) monster.state |= MON_BLINDED;
 }
 
 void monster_status(const Monster& monster,
@@ -104,12 +112,13 @@ __attribute__((noinline)) static void age_monster_effects(Monster& monster)
         auto effect = static_cast<MonsterEffect>(i);
         uint8_t duration = monster_effect(monster, effect);
         if(duration) {
-            set_monster_effect(monster, effect,
-                               static_cast<uint8_t>(duration - 1));
+            bool blinded = effect == MON_CONFUSED && (monster.state & MON_BLINDED);
+            set_monster_effect(monster, effect, static_cast<uint8_t>(duration - 1));
+            if(blinded && duration > 1) monster.state |= MON_BLINDED;
             if(duration == 1) {
                 switch(effect) {
                 case MON_CONFUSED:
-                    monster_status(monster, F("is no longer confused."));
+                    monster_status(monster, blinded ? F("can see again.") : F("is no longer confused."));
                     break;
                 case MON_SLOWED:
                     monster_status(monster, F("moves normally again."));
@@ -201,14 +210,18 @@ uint8_t player_armor_rating()
 {
     uint8_t rating = game.armor_slot < INVENTORY
         ? armor_definition(game.inventory[game.armor_slot].type).rating : 0;
+    if(game.offhand_slot < INVENTORY) rating += shield_rating(game.inventory[game.offhand_slot].type);
     return effective_armor_rating(rating, ring_bonus(RING_PROTECTION));
 }
 
 int8_t player_armor_enchant()
 {
-    return game.armor_slot < INVENTORY &&
-        is_armor(game.inventory[game.armor_slot].type)
+    int8_t enchant = game.armor_slot < INVENTORY && is_armor(game.inventory[game.armor_slot].type)
         ? equipment_enchant(game.inventory[game.armor_slot]) : 0;
+    if(game.offhand_slot < INVENTORY && is_shield(game.inventory[game.offhand_slot].type))
+        enchant += equipment_enchant(game.inventory[game.offhand_slot]);
+    return enchant < -MAX_EQUIPMENT_ENCHANT ? -MAX_EQUIPMENT_ENCHANT :
+        enchant > MAX_EQUIPMENT_ENCHANT ? MAX_EQUIPMENT_ENCHANT : enchant;
 }
 
 void player_take_magic_damage(uint8_t damage, uint8_t power)
@@ -268,6 +281,8 @@ void damage_monster(uint8_t index, uint8_t damage, bool player_attack)
             SIM_EVENT(sim::EventKind::MonsterKilled, index, target.type);
             leave_yendor(target);
             target.type = NO_MONSTER;
+            target.state &= static_cast<uint8_t>(~MON_BLINDED);
+            set_monster_effect(target, MON_CONFUSED, 0);
         }
     } else
         target.hp = static_cast<uint8_t>(target.hp - damage);
@@ -631,27 +646,9 @@ uint8_t player_speed_cost()
     return static_cast<uint8_t>(cost < 1 ? 1 : cost > 255 ? 255 : cost);
 }
 
-void end_turn()
+__attribute__((noinline)) static void age_player_effects()
 {
-    resolve_forced_entry();
-    if(session.ended) return;
-    SIM_EVENT(sim::EventKind::Turn);
-    uint8_t player_speed = player_speed_cost();
-    ++game.turns;
-    int8_t sustenance = ring_bonus(RING_SUSTENANCE);
-    bool hunger_tick = sustenance > 0 ? game.turns % 6 == 0 :
-        sustenance < 0 ? game.turns % 3 != 2 : game.turns % 3 == 0;
-    if(hunger_tick && game.hunger)
-        --game.hunger;
-    if(game.hunger == 0 && game.turns % 4 == 0) {
-#if defined(ARDUROGUE2_SIM)
-        sim::DamageScope damage_source(sim::Cause::Starvation);
-#endif
-        status(F("You are starving!"));
-        hurt_player(1);
-        if(session.ended) return;
-    }
-    enemy_turn(player_speed);
+    if(game.blindness && !--game.blindness) status(F("You can see again."));
     if(game.confused && !--game.confused)
         status(F("You are no longer confused."));
     if(game.paralyzed && !--game.paralyzed)
@@ -676,6 +673,31 @@ void end_turn()
     }
 }
 
+void end_turn()
+{
+    resolve_forced_entry();
+    if(session.ended) return;
+    SIM_EVENT(sim::EventKind::Turn);
+    uint8_t player_speed = player_speed_cost();
+    ++game.turns;
+    burn_offhand_fuel();
+    int8_t sustenance = ring_bonus(RING_SUSTENANCE);
+    bool hunger_tick = sustenance > 0 ? game.turns % 6 == 0 :
+        sustenance < 0 ? game.turns % 3 != 2 : game.turns % 3 == 0;
+    if(hunger_tick && game.hunger)
+        --game.hunger;
+    if(game.hunger == 0 && game.turns % 4 == 0) {
+#if defined(ARDUROGUE2_SIM)
+        sim::DamageScope damage_source(sim::Cause::Starvation);
+#endif
+        status(F("You are starving!"));
+        hurt_player(1);
+        if(session.ended) return;
+    }
+    enemy_turn(player_speed);
+    age_player_effects();
+}
+
 void defeat_monster(uint8_t index)
 {
     Monster& target = game.monsters[index];
@@ -687,6 +709,8 @@ void defeat_monster(uint8_t index)
     status(F("You defeat"));
     status(target, '.');
     target.type = NO_MONSTER;
+    target.state &= static_cast<uint8_t>(~MON_BLINDED);
+    set_monster_effect(target, MON_CONFUSED, 0);
     if(xp) gain_xp(xp);
 }
 
@@ -890,8 +914,12 @@ void apply_monster_potion(uint8_t type, uint8_t index)
             monster_status(target, F("grows weaker."));
         set_monster_effect(target, MON_WEAKENED, 15);
         break;
+    case POTION_BLINDNESS:
+        blind_monster(target, static_cast<uint8_t>(8 + roll(8)));
+        monster_status(target, F("is blinded!"));
+        break;
     case POTION_CONFUSION:
-        if(!monster_effect(target, MON_CONFUSED))
+        if(!monster_effect(target, MON_CONFUSED) || (target.state & MON_BLINDED))
             monster_status(target, F("becomes confused."));
         set_monster_effect(target, MON_CONFUSED,
                            static_cast<uint8_t>(8 + roll(8)));

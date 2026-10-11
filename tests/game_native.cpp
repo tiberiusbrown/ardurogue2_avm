@@ -84,7 +84,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  sizeof(Game) == 810 && sizeof(Item) == 2,
+                  sizeof(Game) == 812 && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -172,8 +172,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x752f2639u, 0xe8bf145du}, {0x2f581d6eu, 0x6c365cb5u},
-        {0xed59ca05u, 0xfb40913eu}, {0x4badb54au, 0x8e2b6476u}
+        {0x0e1477e1u, 0xe8bf145du}, {0x1786dbcdu, 0x6c365cb5u},
+        {0xbe6cb374u, 0xfb40913eu}, {0xffa4400du, 0x8e2b6476u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -185,7 +185,7 @@ void check_floor_generation_snapshots()
                     hash = (hash ^ bytes[i]) * 16777619u;
             };
             for(uint8_t floor = 0; floor < FLOORS; ++floor) {
-                game = {};
+                game = {}; game.offhand_slot = NONE;
                 game.run_seed = seeds[sample];
                 game.random_state = 0x51ad;
                 game.floor = floor;
@@ -224,7 +224,7 @@ void check_new_run_state()
     require(game.best_score == 321 && game.score == 0 &&
             game.hp == 18 && game.strength == 5 && game.dexterity == 4 &&
             game.magic_resistance == 2 && game.speed == 4 &&
-            game.inventory[0].type == NO_ITEM &&
+            game.inventory[0].type == TORCH && game.offhand_slot == 0 && game.inventory[0].info == 175 &&
             !session.ended && session.repeat_slot == NONE,
             "new run did not preserve best score while resetting run state");
 
@@ -241,7 +241,7 @@ void check_new_run_state()
 
 void check_inventory_view()
 {
-    std::memset(game.inventory, 0, sizeof(game.inventory));
+    std::memset(game.inventory, 0, sizeof(game.inventory)); game.offhand_slot = NONE;
     InventoryView empty(game, nullptr);
     require(empty.count() == 0 && empty.first_slot() == NONE &&
             empty.entry_at(0) == NONE,
@@ -320,7 +320,7 @@ void check_inventory_view()
     full.keep_visible(8, top);
     require(top == full.count() - INVENTORY_VISIBLE_ROWS,
             "full inventory scrolling changed");
-    std::memset(game.inventory, 0, sizeof(game.inventory));
+    std::memset(game.inventory, 0, sizeof(game.inventory)); game.offhand_slot = NONE;
 }
 
 void check_stacked_ground_items()
@@ -375,9 +375,9 @@ void check_local_visibility()
                     int16_t tx = static_cast<int16_t>(x) + sx - 6;
                     int16_t ty = static_cast<int16_t>(y) + sy - 6;
                     if(tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H)
-                        require(ray_visible(sx, sy, opaque) ==
+                        require((ray_visible(sx, sy, opaque) && in_light_radius(sx - 6, sy - 6, player_light_radius())) ==
                                 can_see({static_cast<uint8_t>(tx), static_cast<uint8_t>(ty)}) &&
-                                bool(sight[sy] & (1u << sx)) == ray_visible(sx, sy, opaque),
+                                (bool(sight[sy] & (1u << sx)) && in_light_radius(sx - 6, sy - 6, player_light_radius())) == ray_visible(sx, sy, opaque),
                                 "local/shared visibility differs from world ray");
                 }
         }
@@ -404,7 +404,7 @@ void check_shared_rays()
         for(uint8_t y = 0; y < 13; ++y) {
             require(!(sight[y] & ~0x1fffu), "shared ray output exceeds viewport");
             for(uint8_t x = 0; x < 13; ++x)
-                require(bool(sight[y] & (1u << x)) == ray_visible(x, y, opaque),
+                require((bool(sight[y] & (1u << x)) && in_light_radius(x - 6, y - 6, player_light_radius())) == ray_visible(x, y, opaque),
                         "shared ray differs for a blocker pattern");
         }
     }
@@ -412,7 +412,7 @@ void check_shared_rays()
 
 void check_light_masks()
 {
-    require(player_light_radius() == 6, "default player light radius changed");
+    require(player_light_radius() <= 6, "player light radius exceeds viewport");
     for(uint8_t radius = 0; radius <= 6; ++radius) {
         unsigned count = 0;
         for(uint8_t sy = 0; sy < 13; ++sy) {
@@ -460,6 +460,10 @@ void check_monster_accessors()
 
 void check_circular_light_radius()
 {
+    Game saved_light = game;
+    game.inventory[15] = {GLOWING_ORB, 0}; game.offhand_slot = 15;
+    game.inventory[14] = {AMULET_BRILLIANCE, 1}; game.amulet_slot = 14;
+
     std::array<uint8_t, sizeof(game.walls)> saved_walls;
     std::memcpy(saved_walls.data(), game.walls, saved_walls.size());
     uint8_t old_x = game.player.x, old_y = game.player.y;
@@ -488,6 +492,8 @@ void check_circular_light_radius()
     std::memcpy(game.walls, saved_walls.data(), saved_walls.size());
     game.door_count = old_door_count;
     game.player = {old_x, old_y};
+    game.inventory[14] = saved_light.inventory[14]; game.inventory[15] = saved_light.inventory[15];
+    game.offhand_slot = saved_light.offhand_slot; game.amulet_slot = saved_light.amulet_slot;
 }
 
 void check_wall_faces()
@@ -907,8 +913,9 @@ void reset_item_fixture()
     start_new(0x2468);
     std::memset(game.monsters, 0, sizeof(game.monsters));
     std::memset(game.ground, 0, sizeof(game.ground));
-    std::memset(game.inventory, 0, sizeof(game.inventory));
+    std::memset(game.inventory, 0, sizeof(game.inventory)); game.offhand_slot = NONE;
     game.player = {3, 4};
+    game.offhand_slot = NONE;
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
     game.magic_resistance = 0;
@@ -1216,12 +1223,12 @@ void check_scrolls_and_identification()
             different = true;
     require(different, "scroll appearances do not change between runs");
     for(const GroundItem& ground : game.ground)
-        if(ground.item.type && !is_ammo(ground.item.type))
+        if(ground.item.type && !uses_full_info(ground.item.type))
             require(!item_is_identified(ground.item),
                     "generated item starts identified");
 
     std::memset(game.monsters, 0, sizeof(game.monsters));
-    std::memset(game.inventory, 0, sizeof(game.inventory));
+    std::memset(game.inventory, 0, sizeof(game.inventory)); game.offhand_slot = NONE;
     game.hunger = 255;
     game.invisible = 100;
     game.inventory[0] = {SCROLL_IDENTIFY, 2};
@@ -1247,6 +1254,7 @@ void check_scrolls_and_identification()
     game.door_count = 0;
     game.monsters[0] = {{static_cast<uint8_t>(game.player.x + 1), game.player.y},
                         ORC, 12, 0, {0, 0}, MON_AGGRO};
+    game.inventory[15] = {GLOWING_ORB, 0}; game.offhand_slot = 15;
     game.inventory[0] = {SCROLL_MASS_CONFUSE, 1};
     require(use_inventory(0) &&
             monster_effect(game.monsters[0], MON_CONFUSED),
@@ -1877,7 +1885,7 @@ void wand_arena(uint8_t type, uint8_t charges = 2)
     start_new(0x4312);
     std::memset(game.walls, 0, sizeof game.walls);
     std::memset(game.monsters, 0, sizeof game.monsters);
-    std::memset(game.inventory, 0, sizeof game.inventory);
+    std::memset(game.inventory, 0, sizeof game.inventory); game.offhand_slot = NONE;
     std::memset(game.ground, 0, sizeof game.ground);
     game.door_count = 0;
     game.player = {10, 10};
@@ -2655,6 +2663,9 @@ int main(int argc, char** argv)
         check_artifacts(); return 0;
     }
     if(generation_command(argc, argv)) return 0;
+    if(argc == 2 && std::strcmp(argv[1], "--lighting") == 0) {
+        extern void check_lighting_offhand(); check_lighting_offhand(); return 0;
+    }
     if(argc == 2 && std::strcmp(argv[1], "--combat-distributions") == 0) {
         print_weapon_distributions();
         print_armor_distributions();
@@ -2664,6 +2675,8 @@ int main(int argc, char** argv)
         print_armor_distributions();
         return 0;
     }
+    extern void check_lighting_offhand();
+    check_lighting_offhand();
     check_benchmark_scenarios();
     check_combat_rules();
     check_weapon_and_equipment_rules();

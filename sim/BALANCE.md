@@ -511,3 +511,25 @@ python sim/monster_trap_report.py build/monster-traps/paired-all --output build/
 
 Use `--seeds 1:10000` instead of `--all-seeds` for routine validation. See
 [the implementation and paired results](../docs/MONSTER_TRAPS_2026-10-10.md).
+
+## Lighting comparisons (schema 6)
+
+Use one candidate executable in both arms. The light control retains generated
+items and fuel RNG but supplies radius six; the adaptive policy recognizes that
+sight and can choose shields. The shield control removes generated shields in
+place without drawing gameplay RNG. Do not compare these results directly to
+historical policy hashes or claim that generated-on-visit totals measure causal
+availability: surviving further increases exposure.
+
+```sh
+python sim/balance.py ab --control-exe build/sim-native/sim/ardurogue2_sim --treatment-exe build/sim-native/sim/ardurogue2_sim --all-seeds --jobs 8 --control-intervention full-light --experiment lighting-census --output build/lighting-census
+python sim/balance.py ab --control-exe build/sim-native/sim/ardurogue2_sim --treatment-exe build/sim-native/sim/ardurogue2_sim --seeds 1:10000 --jobs 4 --control-intervention remove-item:BUCKLER --control-intervention remove-item:ROUND_SHIELD --control-intervention remove-item:TOWER_SHIELD --experiment shield-ablation --output build/shield-ablation
+```
+
+On Windows, native C++ executables need the runtime DLLs matching their compiler.
+If CTest loads an incompatible DLL from another installed application, co-locate
+the matching compiler runtime DLLs beside the native test/simulator executables
+inside the ignored build directory. This does not require a global installation
+change.
+The report and retained experiment locations are in
+[the lighting implementation report](../docs/LIGHTING_OFFHAND_BLINDNESS.md).

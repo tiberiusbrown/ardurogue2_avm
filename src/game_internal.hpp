@@ -32,6 +32,8 @@ void hurt_player(uint8_t damage);
 // Turn-free melee resolution; only successful hits activate weapon effects.
 void attack_monster(uint8_t index);
 void destroy_inventory_item(uint8_t slot);
+void burn_offhand_fuel();
+void blind_monster(Monster& monster, uint8_t duration);
 void force_monster(uint8_t index, int8_t dx, int8_t dy, bool powerful = false);
 // Movement/collision phase returns whether a landing needs trap resolution.
 bool force_monster_move(uint8_t index, int8_t dx, int8_t dy, bool powerful = false);

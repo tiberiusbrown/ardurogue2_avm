@@ -17,8 +17,8 @@ def main():
         assert (p.returncode == 0) == valid, (args, p.stderr)
         return p
 
-    quiet = invoke("--seed", "1")
-    traced = invoke("--seed", "0x1", "--trace")
+    quiet = invoke("--seed", "24")
+    traced = invoke("--seed", "0x18", "--trace")
     assert quiet.stdout == traced.stdout
     assert "killed LORD" in traced.stderr and "picked up YENDOR_AMULET" in traced.stderr
     assert "result=escaped" in traced.stderr
@@ -39,7 +39,7 @@ def main():
     serial=invoke("--seeds","0:8")
     parallel=invoke("--seeds","0:8","--jobs","3")
     assert (serial.stdout,serial.stderr)==(parallel.stdout,parallel.stderr)
-    assert invoke("--seed","1","--jobs","8","--trace").stdout==quiet.stdout
+    assert invoke("--seed","24","--jobs","8","--trace").stdout==quiet.stdout
     limited=invoke("--seeds","1:5","--max-actions","1","--no-telemetry")
     assert limited.stdout==invoke("--seeds","1:5","--jobs","3","--max-actions","1","--no-telemetry").stdout
     with tempfile.TemporaryDirectory(prefix="ardurogue2-sim-cli-") as scratch:
@@ -86,7 +86,7 @@ def main():
                 for k in counters:
                     assert totals[(row["effective_seed"], row[type_key])][k] == int(row[k]), (category, k, row)
         manifest = json.loads((first / "manifest.json").read_text())
-        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 5 and len(manifest["agent_policy_hash"]) == 64
+        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 6 and len(manifest["agent_policy_hash"]) == 64
         assert manifest["effective_seed_count"] == 8 and manifest["variant"] == "control"
         for row in rows["floors"]:
             assert int(row["entry_max_hp"]) >= int(row["entry_hp"]) and int(row["floor_tiles"]) > 0

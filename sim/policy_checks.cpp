@@ -10,11 +10,13 @@ using namespace sim;
 using namespace rogue;
 void check(bool condition, const char* message) { if(!condition) throw std::runtime_error(message); }
 void arena(int hp = 100) {
-    game = {}; session = {NONE,DEATH,false}; game.run_seed = game.random_state = 123;
+    game = {}; game.offhand_slot = NONE; session = {NONE,DEATH,false}; game.run_seed = game.random_state = 123;
     game.hp = static_cast<uint8_t>(hp); game.max_hp = 100; game.level = 1; game.strength = 5;
     game.dexterity = 4; game.speed = 4; game.hunger = 220;
+    game.inventory[15] = {GLOWING_ORB,0}; game.offhand_slot = 15;
     game.player = {10,10}; game.up = {2,2}; game.down = {20,20};
     game.weapon_slot = game.armor_slot = game.amulet_slot = game.ring_slots[0] = game.ring_slots[1] = NONE;
+    game.inventory[14] = {AMULET_BRILLIANCE,1}; game.amulet_slot = 14;
 }
 void monster(uint8_t type, Position pos, bool stunned = false) {
     game.monsters[0] = {pos,type,monster_health(type),uint8_t(stunned ? 15 : 0),{0,0},MON_AGGRO};
@@ -352,6 +354,30 @@ void check_v2_policy() {
         game.inventory[4]={SCROLL_REMOVE_CURSE,1}; agent.reset(); a=choose(agent);
         check(a.kind==ActionKind::Use && a.slot==4 && a.target==0,"feature-cursed weapon failed to use available cure");
     }
+    // Lights and shields are mutually exclusive; fixed jewelry permits armor.
+    arena(); agent.reset(); game.inventory[0] = {LANTERN,150};
+    game.inventory[14] = {}; game.amulet_slot = NONE;
+    a=choose(agent); check(a.kind==ActionKind::Use && a.slot==0, "lantern upgrade ignored");
+    arena(); agent.reset(); game.inventory[0] = make_equipment(TOWER_SHIELD,0);
+    a=choose(agent); check(a.kind==ActionKind::Use && a.slot==0, "shield with permanent sight ignored");
+    // A discovered replenishing trap must not pin a healthy armored oracle forever.
+    arena(); agent.reset(); monster(PHANTOM,{11,10});
+    game.monsters[0].state |= MON_TRAP_SUMMONED;
+    game.features[0] = {{11,10},FEATURE_SUMMONING_TRAP};
+    bool left=false;
+    for(unsigned step=0;step<70;++step) {
+        a=choose(agent);
+        if(a.goal=="leave replenishing summoning fight") {
+            check(a.kind==ActionKind::Move && (int(game.player.x+a.dx)-11)*(int(game.player.x+a.dx)-11)+a.dy*a.dy>1,"summoning retreat not away from trap"); left=true; break;
+        }
+    }
+    check(left,"summoning fight remained unbounded");
+    // Acquisition and retention must not reverse the bow-owned ammo/wand swap.
+    arena(); agent.reset(); for(auto& i:game.inventory) i={POTION_HEALING,1};
+    game.inventory[0]=make_equipment(LONG_BOW,0); game.inventory[1]={ARROWS,2};
+    game.inventory[2]={WAND_STRIKING,12}; game.ground[0]={game.player,{ARROWS,2}};
+    auto pick=agent.choose_pickup({game,0,0});
+    check(!(pick.kind==ActionKind::Take && pick.slot==2),"ammo acquisition reversed useful wand retention");
     // Full-census regressions: complementary bow/ammo slots caused reverse
     // swaps for seeds 39396/41956. Neither pickup may strand its counterpart.
     for(uint8_t bow : {uint8_t(SHORT_BOW), uint8_t(LONG_BOW)}) {

@@ -48,7 +48,7 @@ static_assert(sizeof(monster_icons) == 2 + 4 * (LORD + 1),
 // Shared visual categories are independent of ItemType ordering and roster size.
 enum ItemIconCategory : uint8_t {
     ICON_NONE, ICON_AMMO, ICON_FOOD, ICON_POTION, ICON_WEAPON, ICON_ARMOR,
-    ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ITEM_ICON_CATEGORIES
+    ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ICON_LIGHT, ICON_SHIELD, ITEM_ICON_CATEGORIES
 };
 static const uint8_t PROGMEM item_icons[] = {
     4, 4, // width, height; four vertical columns per frame
@@ -62,12 +62,16 @@ static const uint8_t PROGMEM item_icons[] = {
     0x00, 0x0a, 0x0a, 0x0a, // ring
     0x00, 0x01, 0x0b, 0x03, // scroll
     0x01, 0x02, 0x04, 0x08, // wand
+    0x02, 0x0d, 0x02, 0x00, // light
+    0x03, 0x0d, 0x0d, 0x03, // shield
 };
 static_assert(sizeof(item_icons) == 2 + 4 * ITEM_ICON_CATEGORIES,
               "item icon categories changed");
 
 uint8_t item_icon(uint8_t type)
 {
+    if(is_light(type)) return ICON_LIGHT;
+    if(is_shield(type)) return ICON_SHIELD;
     if(is_ammo(type)) return ICON_AMMO;
     if(is_weapon(type)) return ICON_WEAPON;
     if(is_armor(type)) return ICON_ARMOR;
@@ -561,6 +565,7 @@ __attribute__((noinline)) static void render_stats()
 {
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
     avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
+    avm_draw_textf_P(67, 22, F("LIGHT %u"), player_light_radius());
 }
 
 __attribute__((noinline)) void render_play()
@@ -677,6 +682,7 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
             case WEAPONS: avm_draw_text_P(1, y, F("Weapons")); break;
             case AMMO: avm_draw_text_P(1, y, F("Ammo")); break;
             case ARMORS: avm_draw_text_P(1, y, F("Armor")); break;
+            case OFFHANDS: avm_draw_text_P(1, y, F("Offhand")); break;
             case RINGS: avm_draw_text_P(1, y, F("Rings")); break;
             case AMULETS: avm_draw_text_P(1, y, F("Amulets")); break;
             case WANDS: avm_draw_text_P(1, y, F("Wands")); break;
@@ -693,7 +699,7 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
             avm_set_text_mode(AVM_TEXT_BLACK_TRANSPARENT);
         }
         draw_item_text(8, y, item);
-        if(game.weapon_slot == entry || game.armor_slot == entry ||
+        if(game.weapon_slot == entry || game.armor_slot == entry || game.offhand_slot == entry ||
            game.amulet_slot == entry || game.ring_slots[0] == entry ||
            game.ring_slots[1] == entry)
             avm_draw_text_P(116, y, F("*"));

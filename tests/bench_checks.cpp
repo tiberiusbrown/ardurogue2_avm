@@ -27,7 +27,7 @@ void check_benchmark_scenarios()
                 !wall_at(game.player.x, game.player.y), "benchmark setup is not playable");
         require((game.weapon_slot == NONE || is_weapon(game.inventory[game.weapon_slot].type)) &&
                 (game.armor_slot == NONE || is_artifact(game.inventory[game.armor_slot].type)) &&
-                (game.amulet_slot == NONE || is_artifact(game.inventory[game.amulet_slot].type)) &&
+                (game.amulet_slot == NONE || is_amulet(game.inventory[game.amulet_slot].type)) &&
                 (game.ring_slots[0] == NONE || is_artifact(game.inventory[game.ring_slots[0]].type)) &&
                 game.ring_slots[1] == NONE, "benchmark equipment must start unequipped");
         Game first = game;

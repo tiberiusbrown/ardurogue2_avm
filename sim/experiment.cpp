@@ -28,7 +28,7 @@ uint8_t content(const std::string& s, bool monster) {
 int group(uint8_t t) {
     using namespace rogue;
     return t==FOOD ? 1 : is_potion(t) ? 2 : is_scroll(t) ? 3 : is_weapon(t) ? 4 :
-        is_armor(t) ? 5 : is_ring(t) ? 6 : is_amulet(t) ? 7 : is_wand(t) ? 8 : is_ammo(t) ? 10 : 9;
+        is_armor(t) ? 5 : is_light(t) ? 11 : is_shield(t) ? 12 : is_ring(t) ? 6 : is_amulet(t) ? 7 : is_wand(t) ? 8 : is_ammo(t) ? 10 : 9;
 }
 }
 Rule parse_rule(const std::string& text) {
@@ -37,6 +37,7 @@ Rule parse_rule(const std::string& text) {
     for(int i=0;i<4;++i) if(text==(i==0 ? "no-teleport-traps" : i==1 ? "no-early-damaging-traps" : i==2 ? "interactive-features-only" : "traps-only")) {
         Rule r; r.feature_mode=i; return r;
     }
+    if(text=="full-light") { Rule r; r.full_light=true; return r; }
     if(text=="no-monster-traps") { Rule r; r.no_monster_traps=true; return r; }
     if(text=="no-map-features") { Rule r; r.no_features=true; return r; }
     if(text=="ordinary-items") {
@@ -82,7 +83,7 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
-        if(r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
+        if(r.full_light || r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
         if(r.feature || r.feature_mode>=0) {
             unsigned removed=0;
             for(auto& f:g.features) {
@@ -134,6 +135,10 @@ bool RuleExperiment::monster_traps_enabled() const {
 bool RuleExperiment::features_enabled() const {
     for(const auto& r:rules) if(r.no_features) return false;
     return true;
+}
+bool RuleExperiment::full_light() const {
+    for(const auto& r : rules) if(r.full_light) return true;
+    return false;
 }
 bool RuleExperiment::artifacts_enabled() const {
     for(const auto& r:rules) if(r.ordinary_items) return false;

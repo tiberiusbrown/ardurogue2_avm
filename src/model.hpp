@@ -36,7 +36,7 @@ constexpr uint8_t INVENTORY = 16;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 26;
+constexpr uint8_t SAVE_VERSION = 27;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -46,7 +46,8 @@ enum ItemType : uint8_t {
     POTION_HEALING = POTION_FIRST, POTION_CONFUSION, POTION_POISON, POTION_HARMING,
     POTION_STRENGTH, POTION_DEXTERITY, POTION_PARALYSIS, POTION_SLOWING, POTION_EXPERIENCE,
     POTION_INVISIBILITY,
-    POTION_LAST = POTION_INVISIBILITY,
+    POTION_BLINDNESS,
+    POTION_LAST = POTION_BLINDNESS,
     WEAPON_FIRST,
     LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
     STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN,
@@ -55,19 +56,25 @@ enum ItemType : uint8_t {
     CHAIN_MAIL = ARMOR_FIRST, LEATHER_ARMOR, RING_MAIL, SCALE_MAIL, SPLINT_MAIL, PLATE_MAIL,
     DRAGONHIDE, TITAN_PLATE,
     ARMOR_LAST = TITAN_PLATE,
+    OFFHAND_FIRST,
+    CANDLE = OFFHAND_FIRST, TORCH, LANTERN, GLOWING_ORB,
+    BUCKLER, ROUND_SHIELD, TOWER_SHIELD,
+    OFFHAND_LAST = TOWER_SHIELD,
     YENDOR_AMULET,
     RING_FIRST,
     RING_SEE_INVISIBLE = RING_FIRST, RING_STRENGTH, RING_DEXTERITY,
     RING_PROTECTION, RING_FIRE_IMMUNITY, RING_ATTACK,
     RING_SUSTENANCE, RING_INVISIBILITY,
     RING_REPRISAL, RING_HUNT,
-    RING_LAST = RING_HUNT,
+    RING_ILLUMINATION,
+    RING_LAST = RING_ILLUMINATION,
     AMULET_FIRST,
     AMULET_SPEED = AMULET_FIRST, AMULET_CLARITY, AMULET_CONSERVATION,
     AMULET_REGENERATION, AMULET_VAMPIRE, AMULET_IRONBLOOD,
     AMULET_VITALITY, AMULET_WISDOM,
     AMULET_PHOENIX_HEART, AMULET_HEART_OF_GIANT,
-    AMULET_LAST = AMULET_HEART_OF_GIANT,
+    AMULET_BRILLIANCE,
+    AMULET_LAST = AMULET_BRILLIANCE,
     SCROLL_FIRST,
     SCROLL_IDENTIFY = SCROLL_FIRST, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE,
     SCROLL_TELEPORT, SCROLL_MAPPING, SCROLL_FEAR,
@@ -94,7 +101,24 @@ constexpr bool is_armor(uint8_t type)
 {
     return type >= ARMOR_FIRST && type <= ARMOR_LAST;
 }
-constexpr bool is_equipment(uint8_t type) { return is_weapon(type) || is_armor(type); }
+constexpr bool is_light(uint8_t type) { return type >= CANDLE && type <= GLOWING_ORB; }
+constexpr bool is_fueled_light(uint8_t type) { return type >= CANDLE && type <= LANTERN; }
+constexpr bool is_shield(uint8_t type) { return type >= BUCKLER && type <= TOWER_SHIELD; }
+constexpr bool is_offhand(uint8_t type) { return type >= OFFHAND_FIRST && type <= OFFHAND_LAST; }
+constexpr bool is_equipment(uint8_t type) { return is_weapon(type) || is_armor(type) || is_shield(type); }
+constexpr bool uses_full_info(uint8_t type) { return is_ammo(type) || is_light(type); }
+constexpr uint8_t light_bonus(uint8_t type) {
+    return type == CANDLE ? 1 : type == TORCH || type == GLOWING_ORB ? 2 : type == LANTERN ? 3 : 0;
+}
+constexpr uint8_t light_initial_fuel(uint8_t type) {
+    return type == CANDLE ? 125 : type == TORCH ? 175 : type == LANTERN ? 150 : 0;
+}
+constexpr uint8_t fuel_denominator(uint8_t type) {
+    return type == LANTERN ? 6 : type == CANDLE || type == TORCH ? 2 : 0;
+}
+constexpr uint8_t shield_rating(uint8_t type) {
+    return type == BUCKLER ? 1 : type == ROUND_SHIELD ? 2 : type == TOWER_SHIELD ? 3 : 0;
+}
 constexpr bool is_artifact(uint8_t type)
 {
     return (type >= STORMBRINGER && type <= HAMMER_OF_RUIN) ||
@@ -195,6 +219,8 @@ static_assert(sizeof(MapFeature) == 3, "feature save layout changed");
 struct Monster { Position pos; uint8_t type, hp, stun, effects[2], state; };
 static_assert(sizeof(Monster) == 8, "monster save layout changed");
 constexpr uint8_t MON_AGGRO = 1;
+constexpr uint8_t MON_BLINDED = 0x10;
+static_assert((MON_BLINDED & (MON_AGGRO | 0x0e | 0xc0)) == 0, "blindness overlaps state");
 constexpr uint8_t MON_AFRAID = 0x40;
 constexpr uint8_t MON_TRAP_SUMMONED = 0x80;
 enum MimicAppearance : uint8_t {
@@ -239,7 +265,7 @@ constexpr RangedWeaponDefinition ranged_weapon_definition(uint8_t type)
 }
 static_assert(ranged_weapon_definition(SHORT_BOW).range <= MAX_BOW_RANGE &&
               ranged_weapon_definition(LONG_BOW).range <= MAX_BOW_RANGE, "bow exceeds viewport");
-constexpr uint8_t maximum_stack(uint8_t type) { return is_ammo(type) ? 255 : ITEM_VALUE_MASK; }
+constexpr uint8_t maximum_stack(uint8_t type) { return uses_full_info(type) ? 255 : ITEM_VALUE_MASK; }
 constexpr WeaponDefinition weapon_definition(uint8_t type)
 {
     switch(type) {
@@ -347,25 +373,25 @@ constexpr bool wand_needs_direction(const Item& item)
 // must use equipment_enchant/set_equipment_enchant; this is not a combat API.
 constexpr uint8_t item_value(const Item& item)
 {
-    return is_ammo(item.type) ? item.info : is_wand(item.type) ? wand_charges(item) :
+    return uses_full_info(item.type) ? item.info : is_wand(item.type) ? wand_charges(item) :
            item.info & ITEM_VALUE_MASK;
 }
 constexpr void set_item_value(Item& item, uint8_t value)
 {
-    if(is_ammo(item.type)) item.info = value;
+    if(uses_full_info(item.type)) item.info = value;
     else if(is_wand(item.type)) set_wand_charges(item, value);
     else item.info = static_cast<uint8_t>((item.info & ~ITEM_VALUE_MASK) |
                                           (value & ITEM_VALUE_MASK));
 }
 constexpr bool item_is_cursed(const Item& item)
 {
-    if(is_ammo(item.type)) return false;
+    if(uses_full_info(item.type)) return false;
     return is_wand(item.type) ? wand_modifier(item) == WAND_CURSED :
            (item.info & ITEM_CURSED) != 0;
 }
 constexpr bool item_is_identified(const Item& item)
 {
-    return is_ammo(item.type) || (item.info & ITEM_IDENTIFIED) != 0;
+    return uses_full_info(item.type) || (item.info & ITEM_IDENTIFIED) != 0;
 }
 static_assert(sizeof(Item) == 2, "Item must use two bytes");
 struct GroundItem { Position pos; Item item; };
@@ -384,8 +410,9 @@ struct Game {
     uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
-    uint8_t identified_items[6];
+    uint8_t identified_items[7];
     MapFeature features[MAP_FEATURES];
+    uint8_t offhand_slot, blindness;
 };
 
 enum RunResult : uint8_t {
@@ -409,7 +436,7 @@ extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 809, "Game saved layout changed");
+static_assert(sizeof(Game) == 812, "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -430,11 +457,11 @@ static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, magic_resistance) == 751 &&
               offsetof(Game, identified_items) == 767,
               "game save offsets changed");
-static_assert(offsetof(Game, features) == 773, "features must append to saved layout");
-static_assert(POTION_COUNT == 10 && SCROLL_COUNT == 9 &&
-              RING_COUNT == 10 && AMULET_COUNT == 10 && WAND_COUNT == 7,
+static_assert(offsetof(Game, features) == 774, "features must append to saved layout");
+static_assert(POTION_COUNT == 11 && SCROLL_COUNT == 9 &&
+              RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 7,
               "item table counts changed");
-static_assert(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 46 &&
+static_assert(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 49 &&
               POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
                   sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 

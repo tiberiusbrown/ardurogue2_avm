@@ -84,6 +84,7 @@ static void blessing(uint8_t divisor = 4) {
     status(F("You feel renewed."));
 }
 static void set_curse(Item& item, bool cursed) {
+    if(uses_full_info(item.type)) return;
     if(is_wand(item.type)) {
         if(cursed) set_wand_modifier(item, WAND_CURSED);
         else if(wand_afflicted(item)) set_wand_modifier(item, WAND_NORMAL);
@@ -118,6 +119,14 @@ static void random_uncurse() {
 static uint8_t random_equipped() {
     bool weapon = game.weapon_slot < INVENTORY && is_weapon(game.inventory[game.weapon_slot].type);
     bool armor = game.armor_slot < INVENTORY && is_armor(game.inventory[game.armor_slot].type);
+    bool shield = game.offhand_slot < INVENTORY && is_shield(game.inventory[game.offhand_slot].type);
+    if(shield) {
+        uint8_t choice = roll(static_cast<uint8_t>(1 + weapon + armor));
+        if(weapon && choice-- == 0) return game.weapon_slot;
+        if(armor && choice-- == 0) return game.armor_slot;
+        return game.offhand_slot;
+    }
+    // Preserve the existing RNG stream when no shield participates.
     if(weapon && armor) return roll(2) ? game.weapon_slot : game.armor_slot;
     return weapon ? game.weapon_slot : armor ? game.armor_slot : NONE;
 }
@@ -160,9 +169,9 @@ static void gift_item() {
     status(F("You discover")); status(item, '.');
 }
 // Formatting and paging run after effect/placement temporaries have unwound.
-__attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_t type, bool lethal) {
+__attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_t type, bool lethal, bool visible) {
     const Monster& monster = game.monsters[index];
-    if(!can_see(monster.pos)) return;
+    if(!visible) return;
     if(!player_can_see_monster(index)) {
         status(F("A trap activates!"));
         return;
@@ -184,7 +193,7 @@ __attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_
 }
 static void trap_effect(Monster& monster, MonsterEffect effect, uint8_t duration, uint8_t type) {
     (void)type;
-    if(monster_effect(monster, effect) < duration) {
+    if(monster_effect(monster, effect) < duration || (effect == MON_CONFUSED && (monster.state & MON_BLINDED))) {
         set_monster_effect(monster, effect, duration);
         SIM_EVENT(sim::EventKind::MonsterTrapStatus, NONE, type, 1, effect);
     }
@@ -198,21 +207,22 @@ __attribute__((noinline)) void activate_monster_trap(uint8_t index) {
     uint8_t feature = feature_at(monster.pos);
     if(feature == NONE || !feature_is_trap(game.features[feature].id)) return;
     uint8_t type = feature_type(game.features[feature].id);
-    if(can_see(monster.pos)) reveal_feature(feature);
+    bool visible = can_see(monster.pos);
+    if(visible) reveal_feature(feature);
     SIM_EVENT(sim::EventKind::MonsterTrapActivated, index, type);
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope source(sim::Cause::MonsterTrap, type);
 #endif
     if(type == FEATURE_TELEPORT_TRAP) {
         // Report at the origin while the monster is still observable.
-        monster_trap_message(index, type, false);
+        monster_trap_message(index, type, false, visible);
         bool moved = teleport_monster(index, false);
         SIM_EVENT(sim::EventKind::MonsterTrapTeleport, index, type, moved);
         (void)moved;
         return;
     }
     if(type == FEATURE_SUMMONING_TRAP) {
-        monster_trap_message(index, type, false);
+        monster_trap_message(index, type, false, visible);
         uint8_t count = 1 + roll(2);
         while(count--) summon(monster.pos, true, false, false);
         return;
@@ -223,7 +233,7 @@ __attribute__((noinline)) void activate_monster_trap(uint8_t index) {
     if(type == FEATURE_FLAME_TRAP && monster.type == DRAGON) damage = 0;
     bool lethal = damage >= monster.hp;
     // Status formats the live monster; death clears its type after the message.
-    monster_trap_message(index, type, lethal);
+    monster_trap_message(index, type, lethal, visible);
     if(damage || !monster.hp) damage_monster(index, damage, false);
     if(!monster.type) return;
     switch(type) {

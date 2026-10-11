@@ -17,13 +17,15 @@ unsigned feature_monster_names();
 const std::string& feature_status_text();
 namespace {
 void arena(uint8_t type = FEATURE_NONE) {
-    game = {}; session = {NONE, DEATH, false};
+    game = {}; game.offhand_slot = NONE; session = {NONE, DEATH, false};
     game.player = {10, 10}; game.up = {2, 2}; game.down = {40, 20};
     game.floor = 4; game.hp = game.max_hp = 100; game.hunger = 220; game.level = 1;
     game.strength = 5; game.dexterity = 4; game.speed = 4;
     game.run_seed = game.random_state = 123; game.valid = 1;
     game.magic = SAVE_MAGIC; game.version = SAVE_VERSION;
     game.weapon_slot = game.armor_slot = game.amulet_slot = game.ring_slots[0] = game.ring_slots[1] = NONE;
+    game.inventory[15] = {GLOWING_ORB, 0}; game.offhand_slot = 15;
+    game.inventory[14] = {AMULET_BRILLIANCE, uint8_t(1 | ITEM_IDENTIFIED)}; game.amulet_slot = 14;
     if(type) game.features[0] = {game.player, static_cast<uint8_t>(type | (feature_is_trap(type) ? MAP_FEATURE_HIDDEN : 0))};
 }
 void trap_roster() {
@@ -245,7 +247,7 @@ void interactive_roster() {
         require(resolve_feature(0, {true, 0}) && !game.features[0].id && game.features[0].pos == Position{0, 0}, "successful feature consumption");
         before = game; require(!resolve_feature(0, {true, 0}) && !std::memcmp(&before, &game, sizeof game), "duplicate feature reward");
         std::array<uint8_t, sizeof(Game)> saved{}; std::memcpy(saved.data(), &game, sizeof game);
-        game = {}; std::memcpy(&game, saved.data(), sizeof game);
+        game = {}; game.offhand_slot = NONE; std::memcpy(&game, saved.data(), sizeof game);
         require(restore_startup_save(true) && !game.features[0].id, "consumption save/load");
     }
     arena(FEATURE_HEALING_SPRING); game.hp = 90; game.weakened = game.confused = game.slowed = 3;
@@ -577,7 +579,7 @@ void generation_checks() {
 }
 }
 void check_map_features() {
-    static_assert(sizeof(MapFeature) == 3 && sizeof(Game) == 810 && offsetof(Game, features) == 773, "map feature saved layout");
+    static_assert(sizeof(MapFeature) == 3 && sizeof(Game) == 812 && offsetof(Game, features) == 774, "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
     monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
 }

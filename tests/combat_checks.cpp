@@ -141,7 +141,7 @@ static void combat_fixture()
 {
     start_new(0x1234);
     std::memset(game.monsters, 0, sizeof game.monsters);
-    std::memset(game.inventory, 0, sizeof game.inventory);
+    std::memset(game.inventory, 0, sizeof game.inventory); game.offhand_slot = NONE;
     std::memset(game.walls, 0, sizeof game.walls);
     game.door_count = 0;
     game.player = {10, 10};

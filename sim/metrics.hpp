@@ -59,6 +59,8 @@ struct FloorMetrics {
 struct RunMetrics {
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     RangedMetrics ranged;
+    std::array<uint64_t,7> light_turns{};
+    uint64_t fuel_exhaustions=0, blind_turns=0, blind_deaths=0, shield_turns=0, offhand_light_turns=0;
     uint16_t seed=0, effective_seed=0;
     std::string agent, result, reason, death_cause;
     uint64_t actions=0, turns=0, action_hash=14695981039346656037ull;
@@ -121,7 +123,7 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=5;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=6;
 inline constexpr size_t CSV_STREAM_COUNT=9;
 void write_ranged_header(std::ostream&);
 void write_ranged(std::ostream&, const RunMetrics&);

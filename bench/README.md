@@ -35,7 +35,7 @@ The normal `ardurogue2.elf` and root `.arduboy` do not include the benchmark cod
 
 ## Run
 
-Build the game and run all 66 cases once:
+Build the game and run all 74 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
@@ -155,13 +155,13 @@ the mapping check reads the explored array using its actual `sizeof`.
 - Wands: digging through blocked terrain without animation.
 - Inventory browsing: opening, scrolling down near the end, and scrolling up
   from the top of a scrolled viewport for each of these layouts:
-  - A full 16-slot pack with all ten groups interleaved (26 rows including
+  - A full 16-slot pack with all eleven groups interleaved (27 rows including
     headers), identified equipment and accessories, and long consumable names.
   - A full 16-slot group containing all seven identified wand types, alternating
     overpowered and unreliable modifiers, and 10–15 charges. Scrolled views
     render seven item names rather than spending a row on the group header.
-  - All ten groups with one item each (20 rows). The ten items occupy the last
-    ten slots in reverse group order, maximizing headers and scanning past
+  - All eleven groups with one item each (22 rows). The eleven items occupy the last
+    eleven slots in reverse group order, maximizing headers and scanning past
     empty leading slots. Scrolling crosses group headers near the bottom.
 
 These are controlled scenarios, not a statistical claim about all
@@ -209,3 +209,10 @@ retained for every page. Animation drawing/delays for wand rays are omitted only
 in BENCH builds, as for other excluded animation; production animation is intact.
 All original 58 cases retain their existing final-render endpoints. See
 [the monster-trap measurements](../docs/MONSTER_TRAPS_2026-10-10.md).
+
+The lighting integration adds eight cases for maximum sight, blinded dense turns,
+fuel exhaustion, blindness recovery, offhand equipping, and drinking/throwing
+blindness. Existing dense and forced-movement cases equip permanent illumination
+to retain radius-six coverage. Their item prompts are prepared with real button
+presses before profiling begins. Final measurements are recorded in
+[the lighting report](../docs/LIGHTING_OFFHAND_BLINDNESS.md).

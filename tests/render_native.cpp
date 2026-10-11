@@ -130,7 +130,7 @@ static bool check_hidden_arrow_status()
 {
     using namespace rogue;
     for(bool hit : {false, true}) for(uint8_t hp : {uint8_t(1), uint8_t(100)}) {
-        game = {}; session = {NONE, DEATH, false}; ui = {};
+        game = {}; game.offhand_slot = NONE; session = {NONE, DEATH, false}; ui = {};
         game.player = {20, 15}; game.hp = game.max_hp = 240; game.hunger = 240;
         game.strength = 5; game.dexterity = 4; game.speed = game.level = 1;
         game.weapon_slot = 0;
@@ -160,10 +160,12 @@ static bool check_hidden_arrow_status()
 static bool check_monster_reference_status()
 {
     using namespace rogue;
-    game = {}; ui = {}; session = {NONE, DEATH, false};
+    game = {}; game.offhand_slot = NONE; ui = {}; session = {NONE, DEATH, false};
     game.player = {20, 15}; game.hp = game.max_hp = 100;
+    game.offhand_slot = NONE;
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
+    game.inventory[15] = {GLOWING_ORB, 0}; game.offhand_slot = 15;
     for(uint8_t ring : {uint8_t(NO_ITEM), uint8_t(RING_SEE_INVISIBLE)})
         for(bool cursed : {false, true}) for(uint16_t turns : {0, 1})
             for(uint8_t type : {uint8_t(ORC), uint8_t(PHANTOM)})
@@ -258,6 +260,7 @@ static bool check_sprite_artwork()
     std::memset(game.ground, 0, sizeof game.ground);
     game.player = {10, 10}; game.door_count = 0;
     game.up = game.down = {NONE, NONE};
+    game.inventory[15] = {GLOWING_ORB,0}; game.offhand_slot = 15;
     game.inventory[0] = {RING_SEE_INVISIBLE, 1}; game.ring_slots[0] = 0;
     for(unsigned kind = 0; kind < 2; ++kind)
         for(unsigned index = kind ? 1 : 0;
@@ -365,7 +368,7 @@ static void reference_terrain(uint8_t frame[1024])
         for(int sx = 0; sx < 13; ++sx) {
             int x = left + sx, y = top + sy;
             if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
-            if(wall_at(x, y) && in_light_radius(sx - 6, sy - 6, 6)) {
+            if(wall_at(x, y) && in_light_radius(sx - 6, sy - 6, player_light_radius())) {
                 const int dx[] = {-1, 1, 0, 0}, dy[] = {0, 0, -1, 1};
                 for(unsigned n = 0; n < 4; ++n) {
                     int nx = sx + dx[n], ny = sy + dy[n];
@@ -630,6 +633,7 @@ static bool check_direction_prompt()
     render_play();
     uint8_t dungeon[1024];
     std::memcpy(dungeon, __avm_framebuffer, sizeof dungeon);
+    game.inventory[15] = game.inventory[0]; game.offhand_slot = 15;
     const uint8_t types[] = {POTION_HARMING, ARROWS, WAND_FIRE};
     for(uint8_t type : types) {
         game.inventory[0] = {type, 3};
@@ -660,10 +664,11 @@ static bool check_direction_prompt()
 static bool check_feature_rendering()
 {
     using namespace rogue;
-    game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+    game={}; game.offhand_slot=NONE; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
     game.player={20,15}; game.up={2,2}; game.down={50,25}; game.hp=game.max_hp=100;
     game.hunger=220; game.speed=4; game.random_state=123;
     game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+    game.inventory[15]={GLOWING_ORB,0}; game.offhand_slot=15;
     render_play(); uint8_t empty[1024]; std::memcpy(empty,__avm_framebuffer,sizeof empty);
     // Every hidden frame leaves terrain intact; all visible silhouettes draw.
     for(uint8_t type=2;type<=FEATURE_HOLY_SYMBOL;type+=2) {
@@ -743,8 +748,8 @@ int main()
     };
     const uint32_t expected[] = {
         0xc0b79398u, 0xc7113a38u, 0x473d2b98u, 0x8bbf3a38u,
-        0x226e8606u, 0xc280f35fu, 0x37850c9cu, 0xdc749961u,
-        0x4b46c42bu, 0xd975e0abu, 0x0d861207u
+        0x11bd4269u, 0xf8a13c3bu, 0xfeecdac0u, 0x7ead9f78u,
+        0xd7cf2942u, 0xeb751e9cu, 0xf0f1ec57u
     };
     bool failed = false;
     for(unsigned i = 0; i < sizeof expected / sizeof expected[0]; ++i) {

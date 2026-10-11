@@ -50,6 +50,8 @@ class OmniscientAgent final : public Agent {
     uint8_t retreat_floor = rogue::NONE;
     unsigned retreat_steps = 0;
     unsigned bow_idle = 0, bow_cooldown = 0;
+    rogue::Position summoned_origin{rogue::NONE, rogue::NONE};
+    unsigned summoned_combat_steps = 0;
     unsigned holy_entries = 0, feature_steps = 0;
     std::array<bool, rogue::MAP_FEATURES> feature_attempted{};
     uint8_t feature_floor = rogue::NONE;
@@ -64,7 +66,7 @@ public:
     // Maintained balance policy. The automatic build hash identifies its exact
     // implementation; establish a fresh reference after extending mechanics.
     const char* name() const override { return "omniscient-v2"; }
-    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = 0; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); navigation_goal = {rogue::NONE, rogue::NONE}; navigation_cursor = navigation_stale = 0; navigation_best = 10000; navigation_history.fill({rogue::NONE, rogue::NONE}); abandoned_loot.fill(false); }
+    void reset() override { retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = summoned_combat_steps = 0; summoned_origin = {rogue::NONE, rogue::NONE}; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); navigation_goal = {rogue::NONE, rogue::NONE}; navigation_cursor = navigation_stale = 0; navigation_best = 10000; navigation_history.fill({rogue::NONE, rogue::NONE}); abandoned_loot.fill(false); }
     Action choose_action(const DecisionContext&) override;
     Action choose_pickup(const DecisionContext&) override;
 };

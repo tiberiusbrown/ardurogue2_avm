@@ -5,7 +5,7 @@
 #include <stdint.h>
 namespace sim {
 enum class EventKind {
-    FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
+    FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,
     ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget,
@@ -17,6 +17,7 @@ void event(EventKind, uint8_t index = 255, uint8_t type = 0,
            uint16_t amount = 1, uint8_t detail = 0);
 void after_floor_generation();
 bool artifacts_enabled();
+bool full_light();
 bool features_enabled();
 bool monster_traps_enabled();
 enum class FeatureVariant { Placement, Early, Holy, Density, Damage, Roster };

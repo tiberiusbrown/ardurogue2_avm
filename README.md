@@ -14,6 +14,16 @@ turn-based dungeon crawl for a 128x64 monochrome screen.
 
 ## Game
 
+Every character starts with an equipped torch. Innate sight is one tile; lights,
+rings of illumination and amulets of brilliance add sight, capped at six tiles.
+Blindness temporarily reduces sight to the player's tile while explored terrain
+remains remembered. The HUD displays effective light radius. The offhand slot
+accepts one light or shield, with no bow or two-handed weapon restriction.
+Candles, torches and lanterns burn probabilistically on elapsed turns; inventory
+labels show approximate remaining turns. Shields add intrinsic defense and share
+ordinary equipment enchantment and curse rules. See the mechanics, validation,
+and balance measurements in [the implementation report](docs/LIGHTING_OFFHAND_BLINDNESS.md).
+
 Descend through 16 dungeon depths, defeat the Lord of Darkness on the last
 depth, pick up the Yendor Amulet, then climb back to the surface to win.
 Upward travel is blocked until the Amulet is acquired. After that, downward
@@ -30,25 +40,26 @@ classic Rogue nonpersistent-floor model and saves 112 bytes of AVM RAM.
 The active floor's explored map uses one bit per tile, and a spare bit in each
 door coordinate records whether that door is open. Each inventory item uses two
 bytes: a type byte and an info byte. Ordinary items use six value bits, a cursed
-bit, and an identified bit. Arrows use all eight info bits as unsigned quantity
+bit, and an identified bit. Fueled lights use all eight info bits as remaining fuel.
+Arrows use all eight info bits as unsigned quantity
 (0..255); curse and identification bits have no meaning, and arrows are always
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 26 stores one active floor in an 809-byte AVM `Game`. Generation
+Save version 27 stores one active floor in an 812-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 25 and older saves are incompatible; no migration is attempted.
+Version 26 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
 subtypes with independent enchantment and curse rolls. The former attack and
 cached defense fields store strength and magic resistance.
-It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Six bytes store their
+It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Seven bytes store their
 discoveries. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
 
-The ten potions from ArduRogue are healing, strength, dexterity, experience,
-invisibility, harming, poison, confusion, paralysis, and slowing. Every new
+The eleven potions are healing, strength, dexterity, experience,
+invisibility, harming, poison, confusion, paralysis, slowing, and blindness. Every new
 run assigns each type a different color. Potions of the same type keep that
 color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
@@ -62,7 +73,7 @@ torment, confusion, or poison. Reading a scroll reveals its type. Each run
 randomly assigns unknown scroll descriptions, and scrolls of the same type
 stack in inventory.
 
-Rings and amulets are separate item types, with eight variants of each. Rings
+Rings and amulets are separate item types, with eleven variants of each including artifacts. Rings
 can be worn two at a time, and one amulet can be worn. Their effects include
 bonuses to combat, visibility, speed, physical protection, health, and experience, plus
 sustenance, regeneration, life drain, clarity, conservation, ironblood, and
@@ -422,11 +433,10 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
-The AVM build uses an 809-byte saved layout and two-byte items, eight-byte
-monsters, and four-byte ground items. With the current SDK, the build reports a
-complete maximum stack bound of 256 bytes and zero analysis gaps. This uses the
-full 256-byte VM stack; future changes must continue checking the linker
-report. The saved and ordinary data sections total 915 of 1,024 bytes. The
-renderer reuses transient row scratch outside the saved layout to keep
-pagination within the stack limit. Floor generation keeps its 48-byte room
-array on the stack; rendering uses line of sight without room metadata.
+The AVM build uses an 812-byte saved layout and two-byte items, eight-byte
+monsters, and four-byte ground items. The final lighting build has a complete
+250-byte maximum stack bound and zero analysis gaps within the 256-byte VM
+stack. Future changes must continue checking the linker report. Rendering
+reuses transient row scratch outside the saved layout and preserves explored
+terrain separately from current sight. See the lighting implementation report
+for RAM, flash, final-ELF benchmarks and paired balance validation.

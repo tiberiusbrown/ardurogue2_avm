@@ -24,10 +24,11 @@ DEFAULT_GOAL_MS = 100.0
 INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("ARROWS", "ARROWS", "AMMO"),
                     ("CHAIN_MAIL", "TITAN_PLATE", "ARMORS"),
-                    ("RING_SEE_INVISIBLE", "RING_HUNT", "RINGS"),
-                    ("AMULET_SPEED", "AMULET_HEART_OF_GIANT", "AMULETS"),
+                    ("CANDLE", "TOWER_SHIELD", "OFFHANDS"),
+                    ("RING_SEE_INVISIBLE", "RING_ILLUMINATION", "RINGS"),
+                    ("AMULET_SPEED", "AMULET_BRILLIANCE", "AMULETS"),
                     ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
-                    ("POTION_HEALING", "POTION_INVISIBILITY", "POTIONS"),
+                    ("POTION_HEALING", "POTION_BLINDNESS", "POTIONS"),
                     ("SCROLL_IDENTIFY", "SCROLL_MASS_POISON", "SCROLLS"))
 
 
@@ -58,7 +59,7 @@ def read_benchmarks(path):
     require(all((case.setup in ("browse", "projectile_browse") and case.button in ("A", "DOWN", "UP") and
                  (case.button != "A" or not (case.down or case.up))) or
                 (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile", "feature", "feature_item") and
-                 case.button in ("RIGHT", "A") and not (case.down or case.up))
+                 case.button in ("RIGHT", "A") and (not (case.down or case.up) or case.setup in ("use", "wand")))
                 for case in cases), "unsupported benchmark input preparation")
     return cases
 
@@ -91,6 +92,7 @@ def state_fields(case):
         "door_open": "(game.doors[0].pos.y & 0x80) != 0",
         "item_type": "game.inventory[0].type", "item_info": "game.inventory[0].info",
         "weapon": "game.weapon_slot", "armor": "game.armor_slot",
+        "offhand": "game.offhand_slot", "blindness": "game.blindness",
         "amulet": "game.amulet_slot", "ring0": "game.ring_slots[0]", "ring1": "game.ring_slots[1]",
         "ground_type": "game.ground[0].item.type",
         "digging_wall": "(game.walls[(16 * MAP_W + 35) >> 3] & (1u << (35 & 7))) != 0",
@@ -115,7 +117,7 @@ def state_fields(case):
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(POTION_INVISIBILITY - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_HUNT - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_BLINDNESS - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
@@ -186,8 +188,11 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
             "breakpoint disable 3", f"breakpoint set --file ui.cpp --line {line}",
             "avm button set " + ("RIGHT" if case.setup == "pickup" else "A"), run,
             "avm button set", run,  # Poll release, ready for the final A edge.
-            "breakpoint disable 4", "breakpoint enable 3",
         ]
+        for button, count in (("DOWN", case.down), ("UP", case.up)):
+            for _ in range(count):
+                commands += press(button)
+        commands += ["breakpoint disable 4", "breakpoint enable 3"]
         if case.setup in ("wand", "projectile"):
             commands += press("A")  # Confirm slot; stop after direction prompt is ready.
     if case.setup in ("feature", "feature_item"):
@@ -276,6 +281,12 @@ def validate_outcome(case, before, after, explored):
         require(after["monster_x"] > before["monster_x"], "Hammer target was not knocked back")
     if case.name == "phoenix":
         require(after["hp"] == 100 and not after["item_type"] and after["amulet"] == 255, "Phoenix Heart failed")
+    if case.name in ("equip_light", "equip_shield"):
+        require(after["offhand"] == 0 and after["expected_item"], "offhand was not equipped")
+    if case.name == "fuel_out":
+        require(after["offhand"] == 255 and after["item_type"] == 0, "exhausted torch remained equipped/carried")
+    if case.name == "drink_blindness": require(7 <= after["blindness"] <= 14, "blindness duration missing")
+    if case.name == "blind_recovery": require(after["blindness"] == 0, "blindness failed to expire")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
     for name, slot in (("equip_weapon", "weapon"), ("equip_bow", "weapon"), ("equip_armor", "armor")):
@@ -299,7 +310,7 @@ def validate_outcome(case, before, after, explored):
     if case.name == "wand_digging":
         require(after["charges"] == before["charges"] - 1 and before["digging_wall"] and not after["digging_wall"],
                 "digging did not spend a charge and carve the wall")
-    if case.setup == "projectile":
+    if case.setup == "projectile" and case.item == "ARROWS":
         require(before["item_info"] == 255 and after["item_info"] == 254, "arrow consumption/quantity wrong")
         if case.name == "arrow_hit": require(after["monster_hp"] < before["monster_hp"], "arrow failed to hit")
         if case.name == "arrow_miss": require(after["monster_hp"] == before["monster_hp"], "arrow failed to miss")

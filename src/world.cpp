@@ -163,7 +163,17 @@ static constexpr LightMasks PROGMEM light_masks = make_light_masks();
 
 uint16_t light_mask(uint8_t radius, uint8_t sy)
 {
-    return sy < 13 ? light_masks.rows[clamp_light_radius(radius)][sy] : 0;
+    if(sy >= 13) return 0;
+    // Fixed row bases avoid a runtime multiply and its AVM helper stack frame.
+    switch(radius) {
+    case 0: return light_masks.rows[0][sy];
+    case 1: return light_masks.rows[1][sy];
+    case 2: return light_masks.rows[2][sy];
+    case 3: return light_masks.rows[3][sy];
+    case 4: return light_masks.rows[4][sy];
+    case 5: return light_masks.rows[5][sy];
+    default: return light_masks.rows[6][sy];
+    }
 }
 
 // Each local ray crosses at most five tiles before its target. Encode an

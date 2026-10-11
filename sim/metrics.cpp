@@ -89,18 +89,21 @@ bool features_enabled() {
 bool original_features(FeatureVariant variant) {
     return collector && collector->experiment && collector->experiment->original_features(variant);
 }
+bool full_light() {
+    return collector && collector->experiment && collector->experiment->full_light();
+}
 bool artifacts_enabled() {
     return !collector || !collector->experiment || collector->experiment->artifacts_enabled();
 }
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
-        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY",
+        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS",
         "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","STORMBRINGER","GLASS_SWORD","HAMMER_OF_RUIN","CHAIN_MAIL","LEATHER_ARMOR",
-        "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","YENDOR_AMULET","RING_SEE_INVISIBLE",
+        "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","CANDLE","TORCH","LANTERN","GLOWING_ORB","BUCKLER","ROUND_SHIELD","TOWER_SHIELD","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
-        "RING_SUSTENANCE","RING_INVISIBILITY","RING_REPRISAL","RING_HUNT","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
-        "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT",
+        "RING_SUSTENANCE","RING_INVISIBILITY","RING_REPRISAL","RING_HUNT","RING_ILLUMINATION","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
+        "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT","AMULET_BRILLIANCE",
         "SCROLL_IDENTIFY","SCROLL_ENCHANT","SCROLL_REMOVE_CURSE","SCROLL_TELEPORT","SCROLL_MAPPING",
         "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","WAND_FORCE",
         "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH"};
@@ -239,7 +242,16 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     if(trace) trace_event(*trace,k,index,type,amount);
     if(k == EventKind::FloorEntered) { enter_floor(); return; }
     if(k == EventKind::FloorExited) { close_floor(true); return; }
+    if(k == EventKind::Finished && type == rogue::DEATH && rogue::game.blindness) ++data.blind_deaths;
+    if(k == EventKind::FuelExhausted) { ++data.fuel_exhaustions; return; }
     if(k == EventKind::Turn) {
+        ++data.light_turns[rogue::player_light_radius()];
+        if(rogue::game.blindness) ++data.blind_turns;
+        uint8_t offhand = rogue::game.offhand_slot;
+        if(offhand < rogue::INVENTORY) {
+            if(rogue::is_shield(rogue::game.inventory[offhand].type)) ++data.shield_turns;
+            if(rogue::is_light(rogue::game.inventory[offhand].type)) ++data.offhand_light_turns;
+        }
         ++data.turns;
         if(enabled) {
             uint8_t weapon = rogue::game.weapon_slot < rogue::INVENTORY ?
@@ -252,7 +264,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(rogue::is_bow(weapon)) ++data.ranged.bow_turns;
         }
         if(!data.floors.empty()) ++data.floors.back().turns;
-        if(enabled) for(uint8_t s : {rogue::game.weapon_slot,rogue::game.armor_slot,rogue::game.amulet_slot,
+        if(enabled) for(uint8_t s : {rogue::game.weapon_slot,rogue::game.armor_slot,rogue::game.offhand_slot,rogue::game.amulet_slot,
                                    rogue::game.ring_slots[0],rogue::game.ring_slots[1]})
             if(s < rogue::INVENTORY) ++data.items[rogue::game.inventory[s].type].turns_equipped;
         return;
@@ -423,7 +435,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     }
 }
 void write_runs_header(std::ostream& o) {
-    o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash,xp,final_hunger\n";
+    o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash,xp,final_hunger,fuel_exhaustions,blind_turns,blind_deaths,shield_turns,offhand_light_turns,light_0,light_1,light_2,light_3,light_4,light_5,light_6\n";
 }
 void write_floors_header(std::ostream& o) {
     o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,exit_hunger,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
@@ -440,7 +452,9 @@ void write_run(std::ostream& o, const RunMetrics& r) {
     o << r.seed << ',' << r.effective_seed << ',' << r.agent << ',' << r.result << ',' << r.actions << ',' << r.turns
       << ',' << r.score << ',' << r.deepest << ',' << r.final_floor << ',' << r.level << ',' << r.hp << ',' << r.max_hp
       << ',' << r.has_yendor << ',' << r.floors_entered << ',' << r.floors_exited << ',' << r.stuck << ','
-      << csv(r.reason) << ',' << csv(r.death_cause) << ',' << r.action_hash << ',' << r.xp << ',' << r.final_hunger << '\n';
+      << csv(r.reason) << ',' << csv(r.death_cause) << ',' << r.action_hash << ',' << r.xp << ',' << r.final_hunger << ',' << r.fuel_exhaustions << ',' << r.blind_turns << ',' << r.blind_deaths << ',' << r.shield_turns << ',' << r.offhand_light_turns;
+    for(auto turns : r.light_turns) o << ',' << turns;
+    o << '\n';
 }
 void write_floors(std::ostream& o, const RunMetrics& r) {
     for(const auto& f : r.floors) { visit_key(o,r,f); o << ',' << f.entry_hp << ',' << f.exit_hp << ',' << f.entry_level << ','

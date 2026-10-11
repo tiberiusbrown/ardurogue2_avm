@@ -1,6 +1,7 @@
 #include "agent.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
+#include "sim_hooks.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <queue>
@@ -12,7 +13,7 @@ constexpr int8_t dxs[] = {0, 1, 0, -1}, dys[] = {-1, 0, 1, 0};
 int cell(Position p) { return p.y * MAP_W + p.x; }
 int distance(Position a, Position b) { return std::abs(int(a.x)-b.x)+std::abs(int(a.y)-b.y); }
 bool equipped(int s) { return s == game.weapon_slot || s == game.armor_slot ||
-    s == game.amulet_slot || s == game.ring_slots[0] || s == game.ring_slots[1]; }
+    s == game.offhand_slot || s == game.amulet_slot || s == game.ring_slots[0] || s == game.ring_slots[1]; }
 Action use(int s, const char* goal, int target = NONE) {
     Action a; a.kind = ActionKind::Use; a.slot = static_cast<uint8_t>(s);
     a.target = static_cast<uint8_t>(target); a.goal = goal; return a;
@@ -42,8 +43,22 @@ int equipment_score(Item i) {
         if(i.type == DRAGONHIDE) score += game.floor >= 11 ? 45 : 20;
         return score;
     }
+    if(is_light(i.type)) {
+        if(is_fueled_light(i.type) && !i.info) return 0;
+        int sight = sim::full_light() ? 6 : 1 + artifact_ring_bonus(RING_ILLUMINATION, 2, -1) +
+            (game.amulet_slot < INVENTORY && game.inventory[game.amulet_slot].type == AMULET_BRILLIANCE ? 3 : 0);
+        return (sight < 3 ? 70 : 5) + 15*light_bonus(i.type) +
+            (i.type == GLOWING_ORB ? 25 : std::min(20, int(i.info)*fuel_denominator(i.type)/30));
+    }
+    if(is_shield(i.type)) {
+        int sight = sim::full_light() ? 6 : 1 + artifact_ring_bonus(RING_ILLUMINATION, 2, -1) +
+            (game.amulet_slot < INVENTORY && game.inventory[game.amulet_slot].type == AMULET_BRILLIANCE ? 3 : 0);
+        return (sight >= 3 ? 65 : 0) + 15*shield_rating(i.type) + 3*equipment_enchant(i);
+    }
     int n = item_value(i);
     switch(i.type) {
+    case RING_ILLUMINATION: return 100;
+    case AMULET_BRILLIANCE: return 135;
     case RING_PROTECTION: return 65+15*n;
     case RING_INVISIBILITY: return 100;
     case RING_STRENGTH: return 45+8*n;
@@ -102,6 +117,7 @@ bool upgrade(Item i) {
     if(is_bow(i.type)) return false;
     if(is_weapon(i.type)) s = bow_equipped() ? best_melee() : game.weapon_slot;
     else if(is_armor(i.type)) s = game.armor_slot;
+    else if(is_offhand(i.type)) s = game.offhand_slot;
     else if(is_amulet(i.type)) s = game.amulet_slot;
     else if(is_ring(i.type)) {
         if(game.ring_slots[0] == NONE || game.ring_slots[1] == NONE) return true;
@@ -119,6 +135,15 @@ int value(Item i) {
     if(is_ammo(i.type)) {
         int n=quantity(ARROWS);
         return n >= 24 ? 0 : best_bow()!=NONE ? (n<5 ? 170 : 95) : n<8 ? 45 : 0;
+    }
+    if(is_light(i.type)) {
+        int best = 0, reserve = 0;
+        for(const Item& owned : game.inventory) if(is_light(owned.type)) {
+            best = std::max(best, equipment_score(owned));
+            reserve += owned.type == GLOWING_ORB ? 10000 : int(owned.info)*fuel_denominator(owned.type);
+        }
+        if(equipment_score(i) > best) return 100+equipment_score(i);
+        return reserve < 600 ? 120 + equipment_score(i)/2 : 0;
     }
     if(is_equipment(i.type) || is_ring(i.type) || is_amulet(i.type))
         return upgrade(i) ? 100+equipment_score(i) : 0;
@@ -144,7 +169,7 @@ int value(Item i) {
     case POTION_STRENGTH: return game.strength < 12 || game.weakened ? 160 : 0;
     case POTION_DEXTERITY: return game.dexterity < 12 ? 150 : 0;
     case POTION_PARALYSIS: return 100;
-    case POTION_CONFUSION: return 65;
+    case POTION_CONFUSION: case POTION_BLINDNESS: return 65;
     case POTION_SLOWING: return 60;
     case POTION_POISON: return 60;
     case POTION_HARMING: return 55;
@@ -169,7 +194,8 @@ int discard_value(int s) {
     // Keep a useful bow at least as valuable as reacquiring that same bow.
     // Otherwise a full pack can swap bow -> wand -> bow forever without ammo.
     if(is_bow(i.type)) return s==best_bow() ? (quantity(ARROWS) ? 150 : 100)+bow_score(i) : 0;
-    if(is_ammo(i.type)) return best_bow()!=NONE ? 120+std::min(24,int(item_value(i)))*4 : 45;
+    if(is_ammo(i.type)) return best_bow()!=NONE ? 170+std::min(24,int(item_value(i)))*4 : 45;
+    if(is_light(i.type)) return 100 + equipment_score(i);
     if(bow_equipped() && s==best_melee()) return 180+equipment_score(i);
     if(s==glass_fallback()) return 150+equipment_score(i);
     return value(i) + (is_stackable(i.type) ? item_value(i)*5 : 0);
@@ -403,7 +429,7 @@ bool retreat(Position previous, Action& choice) {
 }
 bool emergency_control(Action& choice) {
     // Hard control first. Production ray/visibility checks still decide hits.
-    for(uint8_t type : {uint8_t(POTION_PARALYSIS),uint8_t(POTION_CONFUSION)}) {
+    for(uint8_t type : {uint8_t(POTION_PARALYSIS),uint8_t(POTION_CONFUSION),uint8_t(POTION_BLINDNESS)}) {
         int s = find(type); if(s < 0) continue;
         for(int d = 0; d < 4; ++d) {
             auto ray = scan_ray(game.player,dxs[d],dys[d],6);
@@ -554,7 +580,40 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     if(game.confused && !threats && feature_is_trap(observed_feature_at(game, game.player))) {
         Action a; a.goal = "recover senses on a discovered trap"; return a;
     }
-    if(feature_floor != game.floor) { feature_floor = game.floor; holy_entries = feature_steps = 0; feature_attempted.fill(false); abandoned_loot.fill(false); navigation_goal = {NONE, NONE}; navigation_stale = navigation_cursor = 0; navigation_best = 10000; navigation_history.fill({NONE, NONE}); }
+    if(feature_floor != game.floor) { feature_floor = game.floor; holy_entries = feature_steps = summoned_combat_steps = 0; summoned_origin = {NONE,NONE}; feature_attempted.fill(false); abandoned_loot.fill(false); navigation_goal = {NONE, NONE}; navigation_stale = navigation_cursor = 0; navigation_best = 10000; navigation_history.fill({NONE, NONE}); }
+    // A replenishing summoning trap can sustain endless, zero-XP combat when
+    // shields and regeneration absorb the damage. Leave after a bounded fight;
+    // only discovered traps inform this decision, never hidden feature metadata.
+    if(summoned_origin != game.player) { summoned_origin = game.player; summoned_combat_steps = 0; }
+    if(adjacent >= 0 && (game.monsters[adjacent].state & MON_TRAP_SUMMONED)) {
+        for(const MapFeature& f : observed_features(game)) {
+            if(f.id != FEATURE_SUMMONING_TRAP || distance(f.pos, game.player) > 6) continue;
+            if(++summoned_combat_steps <= 64) break;
+            int escape = find(SCROLL_TELEPORT);
+            if(escape >= 0) return use(escape,"leave replenishing summoning fight");
+            escape = find(POTION_INVISIBILITY);
+            if(escape >= 0 && !player_is_invisible()) return use(escape,"leave replenishing summoning fight");
+            escape = find(WAND_TELEPORT);
+            if(escape >= 0 && !wand_afflicted(game.inventory[escape]) && wand_charges(game.inventory[escape])) {
+                const Monster& m=game.monsters[adjacent];
+                for(int d=0;d<4;++d) if(game.player.x+dxs[d]==m.pos.x && game.player.y+dys[d]==m.pos.y)
+                    return wand_action(escape,d,"clear replenishing summoning blockade",m.pos);
+            }
+            int best = distance(f.pos, game.player), direction = -1;
+            for(int d=0; d<4; ++d) {
+                Position next{uint8_t(game.player.x+dxs[d]), uint8_t(game.player.y+dys[d])};
+                if(blocked(next.x,next.y) || monster_at(next)!=NONE ||
+                   feature_is_trap(observed_feature_at(game,next))) continue;
+                int separation = distance(f.pos,next);
+                if(separation > best) { best=separation; direction=d; }
+            }
+            if(direction >= 0) {
+                Action a; a.kind=ActionKind::Move; a.dx=dxs[direction]; a.dy=dys[direction];
+                a.goal="leave replenishing summoning fight"; return a;
+            }
+            break;
+        }
+    }
     // A bounded nearby holy opportunity can beat a dangerous melee exchange.
     if(holy_entries < 3) for(const MapFeature& f : observed_features(game)) {
         if(f.id != FEATURE_HOLY_SYMBOL || distance(f.pos, game.player) != 1) continue;
@@ -625,10 +684,10 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         const Monster& m = game.monsters[ray.monster];
         bool dangerous = m.type >= ORC || game.hp < 12 || threats > 1;
         if(!dangerous || (ray.steps > 4 && m.type != LORD)) continue;
-        for(uint8_t type : {uint8_t(POTION_PARALYSIS),uint8_t(POTION_POISON),uint8_t(POTION_CONFUSION),uint8_t(POTION_SLOWING)}) {
+        for(uint8_t type : {uint8_t(POTION_PARALYSIS),uint8_t(POTION_POISON),uint8_t(POTION_CONFUSION),uint8_t(POTION_BLINDNESS),uint8_t(POTION_SLOWING)}) {
             bool needed = type == POTION_PARALYSIS ? m.stun == 0 && ray.steps <= 2 :
                 type == POTION_POISON ? !monster_effect(m,MON_WEAKENED) :
-                type == POTION_CONFUSION ? !monster_effect(m,MON_CONFUSED) && !m.stun :
+                (type == POTION_CONFUSION || type == POTION_BLINDNESS) ? !monster_effect(m,MON_CONFUSED) && !m.stun :
                 !monster_effect(m,MON_SLOWED);
             int s = find(type);
             if(s >= 0 && needed && (m.type >= INCUBUS || (adjacent >= 0 && game.hp < player_max_hp()*3/4))) {

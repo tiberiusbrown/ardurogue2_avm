@@ -22,11 +22,12 @@ void binomial_frequency(unsigned count, unsigned total, double probability, cons
 }
 void arena(uint8_t weapon = NO_ITEM, bool cursed = false)
 {
-    game = {}; session = {NONE, DEATH, false};
+    game = {}; game.offhand_slot = NONE; session = {NONE, DEATH, false};
     game.player = {10, 10}; game.up = {1, 1}; game.down = {60, 28};
     game.hp = game.max_hp = 240; game.hunger = 240;
     game.strength = 5; game.dexterity = 30; game.speed = 1; game.level = 1;
     game.random_state = 1;
+    game.offhand_slot = NONE;
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
     if(is_weapon(weapon)) {
@@ -423,8 +424,8 @@ void hearts()
 void artifact_generation()
 {
     using namespace rogue::generation;
-    static_assert(sizeof(Item) == 2 && sizeof(Game) == 810 && SAVE_VERSION == 26 &&
-                  WEAPON_LAST + 1 == ARMOR_FIRST && ARMOR_LAST + 1 == YENDOR_AMULET &&
+    static_assert(sizeof(Item) == 2 && sizeof(Game) == 812 && SAVE_VERSION == 27 &&
+                  WEAPON_LAST + 1 == ARMOR_FIRST && ARMOR_LAST + 1 == OFFHAND_FIRST && OFFHAND_LAST + 1 == YENDOR_AMULET &&
                   RING_LAST + 1 == AMULET_FIRST && AMULET_LAST + 1 == SCROLL_FIRST,
                   "artifact groups or saved layout changed");
     unsigned selected[ARTIFACT_COUNT] = {};
@@ -531,7 +532,7 @@ void artifact_generation()
             }
         }
         for(uint8_t type = WAND_FIRST; type <= WAND_LAST; ++type) identify_type(type);
-        require((game.identified_items[5] & 0xc0) == 0, "identification exceeded 46 bits");
+        require((game.identified_items[6] & 0xfe) == 0, "identification exceeded 49 bits");
     }
 }
 }

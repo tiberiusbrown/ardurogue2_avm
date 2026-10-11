@@ -49,9 +49,9 @@ static uint8_t expected_rating(uint8_t type)
 
 static void check_equipment_definitions_and_ranges()
 {
-    static_assert(LONG_SWORD == 13 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
+    static_assert(LONG_SWORD == 14 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
-                  POTION_COUNT == 10 && RING_COUNT == 10 && AMULET_COUNT == 10 &&
+                  POTION_COUNT == 11 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
                   SCROLL_COUNT == 9 && WAND_COUNT == 7,
                   "item groups are no longer contiguous or changed size");
     for(const auto& weapon : weapons) {
@@ -198,10 +198,10 @@ static void check_equipment_encoding()
 {
     for(unsigned type = 0; type <= 255; ++type) {
         require(is_weapon(type) == expected_weapon(type) && is_armor(type) == expected_armor(type) &&
-                is_equipment(type) == (expected_weapon(type) || expected_armor(type)),
+                is_equipment(type) == (expected_weapon(type) || expected_armor(type) || is_shield(type)),
                 "equipment predicates classify unrelated item types");
         if(is_equipment(type))
-            require(inventory_group(type) == (is_weapon(type) ? WEAPONS : ARMORS),
+            require(inventory_group(type) == (is_weapon(type) ? WEAPONS : is_shield(type) ? OFFHANDS : ARMORS),
                     "equipment does not use its generic inventory group");
     }
     // The same info byte must decode and update identically for either type,
@@ -275,7 +275,7 @@ static void equipment_fixture()
 {
     start_new(0x1234);
     std::memset(game.monsters, 0, sizeof game.monsters);
-    std::memset(game.inventory, 0, sizeof game.inventory);
+    std::memset(game.inventory, 0, sizeof game.inventory); game.offhand_slot = NONE;
     std::memset(game.ground, 0, sizeof game.ground);
     game.hunger = 255;
 }
@@ -460,11 +460,11 @@ static void check_generated_equipment()
                     "equipment curse probability depends on enchantment");
         }
     }
-    // Original category weights out of 72; equipment expansion changes only subtypes.
-    const unsigned category_weights[] = {8, generation::AMMO_WEIGHT, 8, 2, 2, 4, 20, 8, generation::FOOD_WEIGHT};
+    // Category weights out of 87; early guarantee modestly redistributes non-supplies.
+    const unsigned category_weights[] = {8, generation::AMMO_WEIGHT, 8, 15, 2, 2, 4, 20, 8, generation::FOOD_WEIGHT};
     for(unsigned category = 0; category < sizeof category_weights / sizeof category_weights[0]; ++category)
-        require(category_counts[category] * 7200 > generated * (category_weights[category] * 100 - 72) &&
-                category_counts[category] * 7200 < generated * (category_weights[category] * 100 + 72),
+        require(category_counts[category] * 8700 > generated * (category_weights[category] * 100 - 110) &&
+                category_counts[category] * 8700 < generated * (category_weights[category] * 100 + 110),
                 "subtype generation changed overall loot category probability");
     for(unsigned subtype = 0; subtype < sizeof equipment_types; ++subtype) {
         unsigned total = 0, cursed = 0;
@@ -542,10 +542,10 @@ static void check_generated_equipment()
     unsigned speed = amulet_counts[0];
     unsigned vampire = amulet_counts[AMULET_VAMPIRE - AMULET_SPEED];
     if(!(speed * 100 > amulets * 5 && speed * 100 < amulets * 8 &&
-         vampire * 100 > amulets * 16 && vampire * 100 < amulets * 21))
+         vampire * 100 > amulets * 14 && vampire * 100 < amulets * 21))
         std::printf("Amulet sample: speed=%u vampire=%u total=%u\n", speed, vampire, amulets);
     require(speed * 100 > amulets * 5 && speed * 100 < amulets * 8 &&
-            vampire * 100 > amulets * 16 && vampire * 100 < amulets * 21,
+            vampire * 100 > amulets * 14 && vampire * 100 < amulets * 21,
             "speed is not rarer than its combat-healing comparator");
     for(uint8_t floor = 0; floor < FLOORS; ++floor) {
         unsigned potions = 0;
@@ -557,8 +557,8 @@ static void check_generated_equipment()
         unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? POTION_SLOWING : POTION_HEALING) - POTION_HEALING];
         bool early_recovery = floor > 0 && floor < 5;
         require(experience * 100 > potions * 3 && experience * 100 < potions * 7 &&
-                replacement * 100 > potions * (early_recovery ? 20 : 12) &&
-                replacement * 100 < potions * (early_recovery ? 30 : 18),
+                replacement * 100 > potions * (early_recovery ? 19 : 11) &&
+                replacement * 100 < potions * (early_recovery ? 29 : 17),
                 "experience rarity or tactical/recovery supply pacing regressed");
     }
 }

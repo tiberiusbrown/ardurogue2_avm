@@ -132,7 +132,7 @@ int main()
         start_new(0x4312);
         std::memset(game.walls, 0, sizeof game.walls);
         std::memset(game.monsters, 0, sizeof game.monsters);
-        std::memset(game.inventory, 0, sizeof game.inventory);
+        std::memset(game.inventory, 0, sizeof game.inventory); game.offhand_slot = NONE;
         game.door_count = 0;
         game.player = {10, 10};
         game.hp = game.max_hp = 240;
@@ -173,7 +173,7 @@ int main()
         for(unsigned equipped = 0; equipped < 2; ++equipped) {
             start_new(0x4312);
             std::memset(game.monsters, 0, sizeof game.monsters);
-            std::memset(game.inventory, 0, sizeof game.inventory);
+            std::memset(game.inventory, 0, sizeof game.inventory); game.offhand_slot = NONE;
             game.inventory[0] = {type, 1};
             if(equipped) {
                 if(is_weapon(type)) game.weapon_slot = 0;
@@ -207,7 +207,7 @@ int main()
         }
     }
     // Each new modal must rebuild its metadata after inventory/filter changes.
-    std::memset(game.inventory, 0, sizeof game.inventory);
+    std::memset(game.inventory, 0, sizeof game.inventory); game.offhand_slot = NONE;
     game.inventory[0] = {POTION_HEALING, 1};
     game.inventory[7] = {WAND_FORCE, 2};
     game.inventory[15] = {LONG_SWORD, 1};
@@ -246,7 +246,7 @@ int main()
     // Run the same deferred feature input/resolver lifecycle as main.cpp.
     for(uint8_t type : {uint8_t(FEATURE_HEALING_SPRING), uint8_t(FEATURE_ENCHANTED_FORGE), uint8_t(FEATURE_SACRIFICIAL_ALTAR), uint8_t(FEATURE_ALCHEMICAL_POOL)}) {
         for(unsigned response = 0; response < 3; ++response) {
-            game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+            game={}; game.offhand_slot=NONE; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
             game.hp=20; game.max_hp=100; game.hunger=220; game.speed=4; game.random_state=123;
             game.player={10,10}; game.up={2,2}; game.down={40,20};
             game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
@@ -265,7 +265,7 @@ int main()
     }
     // Overlapping item/feature entry follows main's pickup-before-feature phase.
     for(bool accept : {false,true}) {
-        game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+        game={}; game.offhand_slot=NONE; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
         game.hp=game.max_hp=100; game.hunger=220; game.speed=4; game.random_state=123;
         game.player={10,10}; game.up={2,2}; game.down={40,20};
         game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
@@ -284,7 +284,7 @@ int main()
     }
     bool offered_gift=false;
     for(uint16_t seed=1;seed<=100 && !offered_gift;++seed) {
-        game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+        game={}; game.offhand_slot=NONE; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
         game.hp=game.max_hp=100; game.hunger=220; game.speed=4; game.random_state=seed;
         game.player={10,10}; game.up={2,2}; game.down={40,20};
         game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;

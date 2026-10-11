@@ -11,6 +11,14 @@ using namespace rogue;
 // Name, description, UI preparation, final button, terrain, inventory item,
 // unmeasured DOWN/UP presses within the inventory modal.
 #define TURN_BENCHMARKS(X) \
+    X(light_full_dense, "Radius six with twelve enemies", wait, A, dense, NO_ITEM, 0, 0) \
+    X(light_blind_dense, "Blinded turn with twelve enemies", wait, A, dense, NO_ITEM, 0, 0) \
+    X(fuel_out, "Torch exhaustion and reference cleanup", wait, A, room, NO_ITEM, 0, 0) \
+    X(blind_recovery, "Blindness expires with equipment intact", wait, A, room, NO_ITEM, 0, 0) \
+    X(equip_light, "Equip a full lantern", use, A, room, LANTERN, 0, 0) \
+    X(equip_shield, "Equip an enchanted round shield", use, A, room, ROUND_SHIELD, 0, 0) \
+    X(drink_blindness, "Drink a blindness potion", use, A, room, POTION_BLINDNESS, 0, 0) \
+    X(throw_blindness, "Throw blindness at an orc", projectile, RIGHT, room, POTION_BLINDNESS, 0, 0) \
     X(move_room, "Move in a lit room", play, RIGHT, room, NO_ITEM, 0, 0) \
     X(move_corridor, "Move along a branching corridor", play, RIGHT, corridor, NO_ITEM, 0, 0) \
     X(move_map_edge, "Move with viewport clipping at map corner", play, RIGHT, edge, NO_ITEM, 0, 0) \
@@ -38,14 +46,14 @@ using namespace rogue;
     X(equip_bow, "Equip a bow in the weapon slot", use, A, room, LONG_BOW, 0, 0) \
     X(projectile_picker, "Open Ammo before Potions in Throw/Shoot", projectile_browse, A, room, ARROWS, 0, 0) \
     X(pickup_food, "Confirm pickup after stepping onto food", pickup, A, room, NO_ITEM, 0, 0) \
-    X(inventory_open_full, "Open a full pack spanning all ten groups", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_open_full, "Open a full pack spanning all eleven groups", browse, A, room, NO_ITEM, 0, 0) \
     X(inventory_down_full, "Scroll down across the last group in a full mixed pack", browse, DOWN, room, NO_ITEM, 14, 0) \
     X(inventory_up_full, "Scroll up near the bottom of a full mixed pack", browse, UP, room, NO_ITEM, 15, 5) \
     X(inventory_open_wands, "Open a full pack of identified wands with long names", browse, A, room, NO_ITEM, 0, 0) \
     X(inventory_down_wands, "Scroll down to the last of 16 identified wands", browse, DOWN, room, NO_ITEM, 14, 0) \
     X(inventory_up_wands, "Scroll up through seven visible long wand names", browse, UP, room, NO_ITEM, 15, 6) \
-    X(inventory_open_singletons, "Open all ten groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
-    X(inventory_down_singletons, "Scroll down across the last of ten singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
+    X(inventory_open_singletons, "Open all eleven groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
+    X(inventory_down_singletons, "Scroll down across the last of eleven singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
     X(inventory_up_singletons, "Scroll up across singleton group headers near the bottom", browse, UP, room, NO_ITEM, 8, 3) \
     X(storm_splash, "Stormbringer hits with three splash targets and cursed life cost", play, RIGHT, room, STORMBRINGER, 0, 0) \
     X(glass_break, "Glass Sword hits then shatters", play, RIGHT, room, GLASS_SWORD, 0, 0) \
@@ -73,10 +81,10 @@ using namespace rogue;
     X(monster_trap_kills, "Four environmental trap kills", wait, A, room, NO_ITEM, 0, 0) \
     X(monster_trap_teleport, "Monster enters a teleport trap", wait, A, room, NO_ITEM, 0, 0) \
     X(monster_trap_summon, "Monster summons near itself", wait, A, room, NO_ITEM, 0, 0) \
-    X(monster_trap_force, "Force wand lands a monster on spikes", wand, RIGHT, room, WAND_FORCE, 0, 0) \
+    X(monster_trap_force, "Force wand lands a monster on spikes", wand, RIGHT, room, WAND_FORCE, 2, 0) \
     X(monster_trap_hammer, "Hammer lands a monster on magic backlash", play, RIGHT, room, HAMMER_OF_RUIN, 0, 0) \
     X(monster_trap_busy, "Late floor with twelve monsters and visible traps", wait, A, dense, NO_ITEM, 0, 0) \
-    X(monster_trap_spread, "Spreading force lands four monsters on traps", use, A, room, WAND_FORCE, 0, 0)
+    X(monster_trap_spread, "Spreading force lands four monsters on traps", use, A, room, WAND_FORCE, 2, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -100,8 +108,8 @@ void add_ground(uint8_t index, Position pos)
 
 void add_inventory(uint8_t slot, ItemType type)
 {
-    Item item = is_equipment(type) ? make_equipment(type, -3) : Item{type, 15};
-    if(!is_ammo(type)) item.info |= ITEM_IDENTIFIED;
+    Item item = is_equipment(type) ? make_equipment(type, -3) : Item{type, is_light(type) ? light_initial_fuel(type) : uint8_t(15)};
+    if(!uses_full_info(type)) item.info |= ITEM_IDENTIFIED;
     if(is_equipment(type)) item.info |= ITEM_CURSED;
     if(is_wand(type)) {
         set_wand_charges(item, static_cast<uint8_t>(15 - slot % 6));
@@ -127,13 +135,14 @@ void prepare_full_inventory()
     add_inventory(11, POTION_EXPERIENCE);
     add_inventory(12, RING_INVISIBILITY);
     add_inventory(13, SPLINT_MAIL);
-    add_inventory(14, LONG_SWORD);
+    add_inventory(14, LANTERN);
     add_inventory(15, ARROWS);
 }
 
 void prepare_singleton_inventory()
 {
     // Ten is the maximum group count. Empty leading slots increase scanning.
+    add_inventory(5, LANTERN);
     add_inventory(6, ARROWS);
     add_inventory(7, YENDOR_AMULET);
     add_inventory(8, FOOD);
@@ -163,6 +172,7 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     game.dexterity = game.speed = 4;
     game.magic_resistance = 2;
     game.hunger = 200;
+    game.offhand_slot = NONE;
     game.weapon_slot = game.armor_slot = game.amulet_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
     session = {NONE, DEATH, false};
@@ -210,8 +220,8 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     }
 
     if(item != NO_ITEM) {
-        game.inventory[0] = is_equipment(item) ? make_equipment(item, 0) : Item{item, 1};
-        if(!is_ammo(item)) game.inventory[0].info |= ITEM_IDENTIFIED;
+        game.inventory[0] = is_equipment(item) ? make_equipment(item, 0) : Item{item, is_light(item) ? light_initial_fuel(item) : uint8_t(1)};
+        if(!uses_full_info(item)) game.inventory[0].info |= ITEM_IDENTIFIED;
         if(is_wand(item)) {
             set_wand_charges(game.inventory[0], 3);
             set_wand_modifier(game.inventory[0], WAND_NORMAL);
@@ -221,6 +231,20 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         game.features[0] = {{33,16}, static_cast<uint8_t>(FEATURE_SPIKE_TRAP + 2 *
             (static_cast<uint8_t>(scenario) - static_cast<uint8_t>(Case::trap_spike)) + MAP_FEATURE_HIDDEN)};
     switch(scenario) {
+    case Case::light_full_dense: break;
+    case Case::light_blind_dense: game.blindness = 4; break;
+    case Case::blind_recovery: game.blindness = 1; break;
+    case Case::fuel_out:
+        game.inventory[0] = {TORCH, 1}; game.offhand_slot = session.repeat_slot = 0;
+        for(uint16_t seed = 1; ; ++seed) {
+            uint16_t state = seed;
+            if(next_random(state) % 2 == 0) { game.random_state = seed; break; }
+        }
+        break;
+    case Case::throw_blindness:
+        add_monster(0, {33,16}, ORC); game.monsters[0].stun = 15;
+        break;
+
     case Case::trap_rust:
         game.inventory[1]=make_equipment(LONG_SWORD,0); game.weapon_slot=1;
         break;
@@ -399,6 +423,15 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     case Case::pickup_food: add_ground(0, {33, 16}); break;
     default: break;
     }
+    // Preserve radius-six coverage for existing play and ranged benchmarks.
+    if((item == NO_ITEM || scenario == Case::monster_trap_force || scenario == Case::monster_trap_hammer ||
+        scenario == Case::monster_trap_spread) &&
+       game.inventory[14].type == NO_ITEM && game.inventory[15].type == NO_ITEM &&
+       scenario != Case::fuel_out) {
+        game.inventory[15] = {GLOWING_ORB, 0}; game.offhand_slot = 15;
+        game.inventory[14] = {AMULET_BRILLIANCE, uint8_t(1 | ITEM_IDENTIFIED)}; game.amulet_slot = 14;
+    }
+
 }
 } // namespace
 

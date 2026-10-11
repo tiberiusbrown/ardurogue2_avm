@@ -81,7 +81,19 @@ int8_t artifact_ring_bonus(uint8_t type, int8_t positive, int8_t negative)
 
 uint8_t player_light_radius()
 {
-    return 6;
+    if(game.blindness) return 0;
+#if defined(ARDUROGUE2_SIM)
+    if(sim::full_light()) return 6;
+#endif
+    int16_t radius = 1 + artifact_ring_bonus(RING_ILLUMINATION, 2, -1);
+    if(game.offhand_slot < INVENTORY) {
+        const Item& item = game.inventory[game.offhand_slot];
+        if(item.type == GLOWING_ORB || (is_fueled_light(item.type) && item.info))
+            radius += light_bonus(item.type);
+    }
+    if(game.amulet_slot < INVENTORY && game.inventory[game.amulet_slot].type == AMULET_BRILLIANCE)
+        radius += item_is_cursed(game.inventory[game.amulet_slot]) ? -1 : 3;
+    return radius < 0 ? 0 : radius > MAX_LIGHT_RADIUS ? MAX_LIGHT_RADIUS : static_cast<uint8_t>(radius);
 }
 
 bool player_is_invisible()
@@ -92,7 +104,7 @@ bool player_is_invisible()
 
 static bool can_detect_monster(const Monster& monster, uint8_t index)
 {
-    if(!monster.type)
+    if(!monster.type || game.blindness)
         return false;
     if(ring_bonus(RING_SEE_INVISIBLE) < 0 &&
        ((game.turns + index) & 1))
@@ -245,7 +257,7 @@ void identify_item(uint8_t slot)
 {
     if(slot >= INVENTORY || !game.inventory[slot].type) return;
     Item& item = game.inventory[slot];
-    if(!is_ammo(item.type)) item.info |= ITEM_IDENTIFIED;
+    if(!uses_full_info(item.type)) item.info |= ITEM_IDENTIFIED;
     identify_type(item.type);
 }
 
@@ -293,8 +305,10 @@ void start_new(uint16_t seed)
     game.magic_resistance = 2;
     game.hunger = 220;
     game.weapon_slot = game.armor_slot = NONE;
-    game.amulet_slot = NONE;
+    game.amulet_slot = game.offhand_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
+    game.inventory[0] = {TORCH, light_initial_fuel(TORCH)};
+    game.offhand_slot = 0;
     make_floor();
     session = {NONE, DEATH, false};
 }
@@ -351,6 +365,7 @@ void action()
     }
     if(session.repeat_slot < INVENTORY &&
        (is_equipment(game.inventory[session.repeat_slot].type) ||
+        is_offhand(game.inventory[session.repeat_slot].type) ||
         is_ring(game.inventory[session.repeat_slot].type) ||
         is_amulet(game.inventory[session.repeat_slot].type))) {
         use_inventory(session.repeat_slot);

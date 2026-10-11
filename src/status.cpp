@@ -59,13 +59,13 @@ Pointer stream_status_word(Pointer word)
     while(*word == ' ') ++word;
     if(!*word) return nullptr;
 
-    char buf[5];
-    buf[4] = 0;
+    char buf[9];
+    buf[8] = 0;
     int16_t width = 0;
     Pointer scan = word;
     while(*scan && *scan != ' ') {
         uint8_t count = 0;
-        while(count < 4 && scan[count] && scan[count] != ' ') {
+        while(count < 8 && scan[count] && scan[count] != ' ') {
             buf[count] = scan[count];
             ++count;
         }
@@ -79,16 +79,17 @@ Pointer stream_status_word(Pointer word)
     if(suffix) width += text_width(buf);
     if(x != 67) {
         buf[0] = ' ';
-        width += text_width(buf);
+        int16_t space_width = text_width(buf);
+        width += space_width;
         if(x + width > 128) status_next_line(x, y);
-        else x = static_cast<uint8_t>(x + text_width(buf));
+        else x = static_cast<uint8_t>(x + space_width);
     }
 
     ui.repeat_suppressed = true;
     scan = word;
     while(*scan && *scan != ' ') {
         uint8_t count = 0;
-        while(count < 4 && scan[count] && scan[count] != ' ') {
+        while(count < 8 && scan[count] && scan[count] != ' ') {
             buf[count] = scan[count];
             ++count;
         }
@@ -167,21 +168,21 @@ void status_entity(const Monster& monster, char punctuation = 0)
 static const char PROGMEM* const PROGMEM potion_effect_names[] = {
     F("healing"), F("confusion"), F("poison"), F("harming"),
     F("strength"), F("dexterity"), F("paralysis"), F("slowing"),
-    F("experience"), F("invisibility")
+    F("experience"), F("invisibility"), F("blindness")
 };
 static const char PROGMEM* const PROGMEM potion_color_names[] = {
     F("red"), F("clear"), F("orange"), F("green"), F("blue"),
-    F("white"), F("yellow"), F("violet"), F("black"), F("pink")
+    F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown")
 };
 static const char PROGMEM* const PROGMEM ring_names[] = {
     F("see invisible"), F("strength"), F("dexterity"), F("protection"),
     F("fire immunity"), F("attack"), F("sustenance"), F("Invisibility"),
-    F("Reprisal"), F("the Hunt")
+    F("Reprisal"), F("the Hunt"), F("illumination")
 };
 static const char PROGMEM* const PROGMEM amulet_names[] = {
     F("speed"), F("clarity"), F("conservation"), F("regeneration"),
     F("the vampire"), F("ironblood"), F("vitality"), F("wisdom"),
-    F("Phoenix Heart"), F("Heart of the Giant")
+    F("Phoenix Heart"), F("Heart of the Giant"), F("brilliance")
 };
 static const char PROGMEM* const PROGMEM scroll_names[] = {
     F("identify"), F("enchanting"), F("remove curse"),
@@ -196,7 +197,7 @@ static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
 static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
     F("diamond"), F("ruby"), F("emerald"), F("topaz"),
     F("gold"), F("silver"), F("platinum"), F("iron"),
-    F("sapphire"), F("opal")
+    F("sapphire"), F("opal"), F("copper")
 };
 static const char PROGMEM* const PROGMEM wand_names[] = {
     F("force"), F("teleportation"), F("digging"), F("fire"),
@@ -244,7 +245,7 @@ struct BufferedItemText {
         append(words);
     }
 
-    void number(uint8_t value)
+    void number(uint16_t value)
     {
         if(length) append(F(" "));
         snprintf_P(out + length, ITEM_TEXT_CAPACITY - length, F("%u"), value);
@@ -291,7 +292,7 @@ struct DrawItemText {
     }
 #endif
 
-    void number(uint8_t value)
+    void number(uint16_t value)
     {
         space();
         x = avm_draw_textf_P(x, y, F("%u"), value).x;
@@ -346,9 +347,16 @@ struct StatusItemText {
     }
 };
 
-const char AVM_PROGMEM* equipment_name(uint8_t type)
+__attribute__((noinline)) const char AVM_PROGMEM* equipment_name(uint8_t type)
 {
     switch(type) {
+    case CANDLE: return F("candle");
+    case TORCH: return F("torch");
+    case LANTERN: return F("lantern");
+    case GLOWING_ORB: return F("glowing orb");
+    case BUCKLER: return F("buckler");
+    case ROUND_SHIELD: return F("round shield");
+    case TOWER_SHIELD: return F("tower shield");
     case SHORT_BOW: return F("short bow");
     case LONG_BOW: return F("long bow");
     case DAGGER: return F("dagger");
@@ -403,12 +411,34 @@ __attribute__((noinline)) void emit_equipment(Item item, ItemTextStyle style, Ou
     const char AVM_PROGMEM* name = equipment_name(item.type);
     bool has_bonus = item_is_identified(item) && equipment_enchant(item);
     if(style == PROMPT_ITEM) text.word(F("the"));
-    else if(style == STATUS_ITEM && is_weapon(item.type))
+    else if(style == STATUS_ITEM && (is_weapon(item.type) || is_offhand(item.type)))
         text.word(article_for(cursed ? F("cursed") : name));
     if(cursed) text.word(F("cursed"));
     text.final_word(name, has_bonus ? 0 : suffix);
     if(has_bonus) text.final_bonus(equipment_enchant(item), suffix);
+
     return;
+}
+
+template<typename Output>
+__attribute__((noinline)) void emit_light(Item item, ItemTextStyle style, Output& text, char suffix)
+{
+    const char AVM_PROGMEM* name = equipment_name(item.type);
+    if(style == PROMPT_ITEM) text.word(F("the"));
+    else if(style == STATUS_ITEM) text.word(article_for(name));
+    text.final_word(name, suffix);
+    if(style == INVENTORY_ITEM && is_fueled_light(item.type)) {
+        text.word(F("~"));
+        text.number(static_cast<uint16_t>(item.info) * fuel_denominator(item.type));
+        text.word(F("t"));
+    }
+}
+
+template<>
+__attribute__((noinline)) void emit_light<StatusItemText>(Item item, ItemTextStyle, StatusItemText& text, char suffix)
+{
+    text.word(F("a"));
+    text.final_word(equipment_name(item.type), suffix);
 }
 
 template<typename Output>
@@ -526,6 +556,7 @@ template<typename Output>
 __attribute__((always_inline)) inline void emit_item(Item item, ItemTextStyle style, Output& text, char suffix = 0)
 {
     if(is_amulet(item.type)) emit_amulet(item, style, text, suffix);
+    else if(is_light(item.type)) emit_light(item, style, text, suffix);
     else if(is_equipment(item.type)) emit_equipment(item, style, text, suffix);
     else if(is_ring(item.type)) emit_ring(item, style, text, suffix);
     else if(is_wand(item.type)) emit_wand(item, style, text, suffix);

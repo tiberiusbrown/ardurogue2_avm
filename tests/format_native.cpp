@@ -60,8 +60,8 @@ static void capture_glyphs(int16_t x, int16_t y, const char* text)
 {
     if(x == 128) return; // Width measurement is off-screen.
     if(!std::strcmp(text, "[more]")) { ++more_count; return; }
-    if(std::strlen(text) > 4) {
-        std::fprintf(stderr, "status draw exceeded four characters: %s\n", text);
+    if(std::strlen(text) > 8) {
+        std::fprintf(stderr, "status draw exceeded eight characters: %s\n", text);
         std::exit(1);
     }
     while(*text) {
@@ -536,6 +536,22 @@ int main()
         if(std::strcmp(text,expected)) { std::fprintf(stderr,"arrow quantity text: %s\n",text); return 1; }
         check_drawn_item(arrows);
     }
+    for(uint8_t type = CANDLE; type <= GLOWING_ORB; ++type) {
+        Item light{type, light_initial_fuel(type)};
+        format_item(light, text);
+        const char* labels[] = {"candle ~ 250 t", "torch ~ 350 t", "lantern ~ 900 t", "glowing orb"};
+        if(std::strcmp(text, labels[type-CANDLE])) {
+            std::fprintf(stderr,"light estimate formatting: %s\n",text); return 1;
+        }
+        check_drawn_item(light);
+    }
+    Item shield = make_equipment(TOWER_SHIELD, -5);
+    shield.info |= ITEM_IDENTIFIED | ITEM_CURSED;
+    format_item(shield, text);
+    if(std::strcmp(text,"cursed tower shield -5")) {
+        std::fprintf(stderr,"shield formatting: %s\n",text); return 1;
+    }
+    check_drawn_item(shield);
     check_streaming_status();
     check_item_status();
     check_equipment_roster_text();
