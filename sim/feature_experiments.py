@@ -183,6 +183,8 @@ def main():
     p.add_argument("--simulator", type=Path)
     p.add_argument("--seeds", default="1:10000")
     p.add_argument("--jobs", type=int, default=8)
+    p.add_argument("--agent", choices=("omniscient-v2", "explorer-v1"), default="omniscient-v2")
+    p.add_argument("--agent-params", type=Path)
     p.add_argument("--variants", nargs="+", choices=list(VARIANTS), default=list(VARIANTS))
     args = p.parse_args()
     if args.mode == "run":
@@ -192,7 +194,7 @@ def main():
         if any((args.output / name).exists() for name in args.variants):
             p.error("variant output already exists; use fresh directories")
         exe = args.simulator.resolve()
-        spec = dict(seeds=args.seeds, variants={n: VARIANTS[n] for n in args.variants}, executable_sha256=digest(exe))
+        spec = dict(seeds=args.seeds, agent=args.agent, agent_params_sha256=digest(args.agent_params) if args.agent_params else None, variants={n: VARIANTS[n] for n in args.variants}, executable_sha256=digest(exe))
         spec_path = args.output / ("spec-" + "-".join(args.variants) + ".json")
         if spec_path.exists():
             p.error("experiment specification already exists")
@@ -200,8 +202,10 @@ def main():
         for name in args.variants:
             if digest(exe) != spec["executable_sha256"]:
                 raise ValueError("frozen simulator changed during experiment")
-            command = [str(exe), "--seeds", args.seeds, "--jobs", str(args.jobs), "--entry-state",
+            command = [str(exe), "--agent", args.agent, "--seeds", args.seeds, "--jobs", str(args.jobs), "--entry-state",
                        "--experiment", "feature-tuning-20261010", "--variant", name, "--output", str(args.output / name)]
+            if args.agent_params:
+                command += ["--agent-params", str(args.agent_params.resolve())]
             for rule in VARIANTS[name]:
                 command += ["--intervention", rule]
             with (args.output / (name + ".log")).open("w") as log:

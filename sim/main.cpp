@@ -18,16 +18,18 @@ uint64_t number(const std::string& value) {
 int main(int argc, char** argv) {
     try {
         uint64_t start=1, count=1, jobs=1; bool trace=false, selected=false, count_selected=false, all_seeds=false;
-        std::string output;
+        std::string output,parameter_file,defaults_file;
         sim::Options options;
         for(int i=1;i<argc;++i) {
             std::string arg=argv[i];
             auto value=[&]() { if(i+1>=argc) throw std::runtime_error("missing value for "+arg); return std::string(argv[++i]); };
             if(arg=="--help") {
                 std::cout << "ardurogue2_sim [--seed N | --seeds FIRST:LAST | --all-seeds | --count N --start-seed N]\n"
-                    "  [--output DIRECTORY] [--jobs N] [--trace] [--max-actions N] [--no-telemetry] [--entry-state]\n"
+                    "  [--agent omniscient-v2|explorer-v1] [--agent-params FILE] [--output DIRECTORY] [--jobs N] [--trace] [--max-actions N] [--no-telemetry] [--entry-state]\n"
+                    "--agent-params loads explorer preferences from JSON; omitted fields use defaults.\n"
+                    "--write-agent-defaults FILE writes the complete default configuration and exits.\n"
                     "Seeds are unsigned 16-bit; ranges are inclusive. Trace goes to stderr.\n"
-                    "Without --output, runs.csv goes to stdout. With --output nine CSVs and manifest.json are written.\n"
+                    "Without --output, runs.csv goes to stdout. With --output nine core CSVs, exploration.csv and manifest.json are written.\n"
                     "--entry-state adds entry_state.csv for balance reports; requires --output and telemetry.\n"
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"
@@ -53,6 +55,9 @@ int main(int argc, char** argv) {
             } else if(arg=="--start-seed") { if(selected) throw std::runtime_error("conflicting seed selection"); count_selected=true; start=number(value()); }
             else if(arg=="--count") { if(selected) throw std::runtime_error("conflicting seed selection"); count_selected=true; count=number(value()); }
             else if(arg=="--output") output=value();
+            else if(arg=="--agent") options.agent=value();
+            else if(arg=="--agent-params") parameter_file=value();
+            else if(arg=="--write-agent-defaults") defaults_file=value();
             else if(arg=="--max-actions") options.max_actions=number(value());
             else if(arg=="--jobs") jobs=number(value());
             else if(arg=="--trace") trace=true;
@@ -62,6 +67,17 @@ int main(int argc, char** argv) {
             else if(arg=="--variant") options.variant=value();
             else if(arg=="--intervention") options.intervention_rules.push_back(value());
             else throw std::runtime_error("unknown option: "+arg);
+        }
+        if(options.agent!="omniscient-v2" && options.agent!="explorer-v1") throw std::runtime_error("unknown agent: "+options.agent);
+        if(!defaults_file.empty()) {
+            if(std::filesystem::exists(defaults_file)) throw std::runtime_error("defaults output already exists");
+            std::ofstream defaults(defaults_file); defaults<<sim::parameter_json({});
+            if(!defaults) throw std::runtime_error("cannot write explorer defaults");
+            return 0;
+        }
+        if(!parameter_file.empty()) {
+            if(options.agent!="explorer-v1") throw std::runtime_error("--agent-params requires explorer-v1");
+            options.parameters=sim::load_parameters(parameter_file);
         }
         if(start>65535 || count==0 || count>65536 || start+count>65536) throw std::runtime_error("seed selection exceeds 0..65535");
         if(start==0 && start+count>0xace1) throw std::runtime_error("duplicate effective seed: requested 0 and 44257");
@@ -85,6 +101,7 @@ int main(int argc, char** argv) {
             sim::write_entry_state_header(entry_state);
         }
         std::array<std::ofstream,sim::CSV_STREAM_COUNT> files;
+        std::ofstream exploration;
         std::array<std::ostream*,sim::CSV_STREAM_COUNT> outputs{}; outputs[0]=&std::cout;
         if(!output.empty()) {
             std::filesystem::create_directories(output);
@@ -93,19 +110,24 @@ int main(int argc, char** argv) {
                 files[s].open(std::filesystem::path(output)/sim::csv_streams[s].name);
                 if(!files[s]) throw std::runtime_error("cannot open output CSV"); outputs[s]=&files[s];
             }
+            exploration.open(std::filesystem::path(output)/"exploration.csv");
+            if(!exploration) throw std::runtime_error("cannot open exploration.csv");
+            sim::write_exploration_header(exploration);
         }
         for(size_t s=0;s<outputs.size();++s) if(outputs[s]) sim::csv_streams[s].header(*outputs[s]);
         uint64_t escaped=0,deaths=0,stuck=0;
         if(jobs>1 && count>1) {
             auto totals=sim::parallel_batch(argv[0],start,count,static_cast<unsigned>(jobs),options,outputs,
-                options.entry_state ? &entry_state : nullptr);
+                options.entry_state ? &entry_state : nullptr, output.empty() ? nullptr : &exploration);
             escaped=totals.escaped; deaths=totals.deaths; stuck=totals.stuck;
         } else {
             sim::OmniscientAgent agent;
+            auto explorer=options.agent=="explorer-v1" ? std::make_unique<sim::ExplorerAgent>(options.parameters) : nullptr;
             for(uint64_t i=0;i<count;++i) {
-                auto r=sim::run(static_cast<uint16_t>(start+i),agent,options);
+                auto r=explorer ? sim::run(static_cast<uint16_t>(start+i),*explorer,options) : sim::run(static_cast<uint16_t>(start+i),agent,options);
                 for(size_t s=0;s<outputs.size();++s) if(outputs[s]) sim::csv_streams[s].rows(*outputs[s],r);
                 if(options.entry_state) sim::write_entry_state(entry_state,r);
+                if(!output.empty()) sim::write_exploration(exploration,r);
                 escaped+=r.result=="escaped"; deaths+=r.result=="death"; stuck+=r.stuck;
             }
         }
@@ -117,6 +139,7 @@ int main(int argc, char** argv) {
             entry_state.flush();
             if(!entry_state) throw std::runtime_error("entry_state.csv write failed");
         }
+        if(!output.empty()) { exploration.flush(); if(!exploration) throw std::runtime_error("exploration.csv write failed"); }
         if(!output.empty()) sim::write_manifest(std::filesystem::path(output)/"manifest.json",start,count,unsigned(jobs),all_seeds,options,argc,argv);
         std::cerr << "runs=" << count << " escaped=" << escaped << " death=" << deaths << " simulator_failures=" << stuck << '\n';
         return 0;

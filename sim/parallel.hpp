@@ -10,5 +10,5 @@ struct BatchCounts { uint64_t escaped=0, deaths=0, stuck=0; };
 // Contiguous chunks merge in seed order, independently of completion order.
 BatchCounts parallel_batch(const std::string& executable, uint64_t start,
     uint64_t count, unsigned jobs, const Options&, const std::array<std::ostream*,sim::CSV_STREAM_COUNT>& outputs,
-    std::ostream* entry_state=nullptr);
+    std::ostream* entry_state=nullptr, std::ostream* exploration=nullptr);
 }

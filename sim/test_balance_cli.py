@@ -20,7 +20,7 @@ def main():
         for variant in ("control", "treatment"):
             m = json.loads((root / variant / "manifest.json").read_text())
             assert m["variant"] == variant and m["experiment"] == "same-binary-test"
-            assert len(m["simulator_executable_sha256"]) == 64 and len(m["output_csv_sha256"]) == 9
+            assert len(m["simulator_executable_sha256"]) == 64 and len(m["output_csv_sha256"]) == 10
             assert m["experiment_specification_sha256"]
         result = json.loads((root / "comparison" / "comparison.json").read_text())
         assert result["effective_seed_count"] == 32 and not result["census"]
@@ -29,6 +29,14 @@ def main():
                         "--bootstrap", "100", "--output", str(root / "identity")], check=True)
         identity = json.loads((root / "identity" / "comparison.json").read_text())
         assert identity["primary"]["delta_pp"] == 0 and identity["primary"]["ci_pp"] == [0, 0]
+        config=root/"preferences.json"; config.write_text('{"shield_contact_bonus": 220}')
+        explorer=root/"explorer"
+        subprocess.run([sys.executable,tool,"ab","--control-exe",exe,"--treatment-exe",exe,
+                        "--seeds","1:8","--jobs","3","--agent","explorer-v1","--agent-params",str(config),
+                        "--bootstrap","100","--output",str(explorer)],check=True)
+        em=json.loads((explorer/"control"/"manifest.json").read_text())
+        assert em["agent_parameters"]["shield_contact_bonus"]==220
+        assert len(em["agent_parameter_hash"])==64
         # No-data factor report still contains explicit insufficient-data status.
         subprocess.run([sys.executable, tool, "factors", str(root / "control"), "--output", str(root / "factors")], check=True)
         f = pd.read_csv(root / "factors" / "factors.csv")

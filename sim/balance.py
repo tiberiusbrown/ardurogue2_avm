@@ -61,7 +61,7 @@ def read_manifest(directory):
     if m["telemetry_schema_version"] != SCHEMA:
         raise ValueError(f"incompatible telemetry schema: {path}")
     for name, digest in m.get("output_csv_sha256", {}).items():
-        if name not in {s + ".csv" for s in STREAMS} or sha256(Path(directory) / name) != digest:
+        if name not in {s + ".csv" for s in (*STREAMS, "exploration")} or sha256(Path(directory) / name) != digest:
             raise ValueError(f"output hash mismatch: {name}")
     return m
 
@@ -76,6 +76,8 @@ def seal_manifest(directory, executable=None, spec=None):
         m["simulator_executable_path"] = str(Path(executable).resolve())
         m["simulator_executable_sha256"] = sha256(executable)
     m["output_csv_sha256"] = {s + ".csv": sha256(directory / (s + ".csv")) for s in STREAMS}
+    if (directory / "exploration.csv").is_file():
+        m["output_csv_sha256"]["exploration.csv"] = sha256(directory / "exploration.csv")
     if spec is not None:
         m["experiment_specification"] = spec
         m["experiment_specification_sha256"] = specification_hash(spec)
@@ -629,7 +631,8 @@ def ab(args):
         raise ValueError("experiment output already exists; use a fresh directory")
     seeds = ["--all-seeds"] if args.all_seeds else ["--seeds", args.seeds]
     spec = {"experiment": args.experiment, "seed_selection": "all-seeds" if args.all_seeds else args.seeds,
-            "agent": "omniscient-v2", "max_actions": args.max_actions,
+            "agent": args.agent, "max_actions": args.max_actions,
+            "agent_params_sha256": sha256(args.agent_params) if args.agent_params else None,
             "control_interventions": args.control_intervention, "treatment_interventions": args.treatment_intervention}
     output.mkdir(parents=True, exist_ok=True)
     write_json(output / "experiment.json", spec)
@@ -638,7 +641,9 @@ def ab(args):
         executable = Path(exe).resolve()
         directory = output / variant
         command = [str(executable), *seeds, "--jobs", str(args.jobs), "--output", str(directory),
-                   "--max-actions", str(args.max_actions), "--experiment", args.experiment, "--variant", variant]
+                   "--max-actions", str(args.max_actions), "--agent", args.agent, "--experiment", args.experiment, "--variant", variant]
+        if args.agent_params:
+            command.extend(["--agent-params", str(args.agent_params.resolve())])
         for rule in rules:
             command.extend(["--intervention", rule])
         subprocess.run(command, check=True)  # argv arrays support Windows paths with spaces
@@ -667,6 +672,8 @@ def main():
     selection.add_argument("--seeds")
     selection.add_argument("--all-seeds", action="store_true")
     a.add_argument("--jobs", type=int, default=1)
+    a.add_argument("--agent", choices=("omniscient-v2", "explorer-v1"), default="omniscient-v2")
+    a.add_argument("--agent-params", type=Path)
     a.add_argument("--max-actions", type=int, default=20000)
     a.add_argument("--experiment", default="paired-ab")
     a.add_argument("--control-intervention", action="append", default=[])

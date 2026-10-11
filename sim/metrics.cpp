@@ -119,6 +119,7 @@ size_t Collector::new_wand() {
     wand_flags.push_back(0); return wand_flags.size()-1;
 }
 void Collector::prepare_action(const Action& a) {
+    exploring_action=a.goal=="explore known frontier" || a.goal=="explicit tactile probe at radius zero" || a.goal=="patrol surveyed final floor";
     pickup_slot = drop_slot = rogue::NONE;
     if(!enabled) return;
     if(a.kind == ActionKind::Take || a.kind == ActionKind::Swap) {
@@ -137,6 +138,26 @@ void Collector::enter_floor() {
     data.deepest = std::max(data.deepest,int(g.floor));
     reached.fill(false); encountered.fill(false); engaged.fill(false); feature_entries.fill(0);
     FloorMetrics f; f.floor = g.floor; f.visit = data.floors_entered;
+    observed_terrain.reset(); observed_floor.reset(); surveyed_floor.reset(); visited_tiles.reset();
+    visibly_observed.fill(false); visible_before.fill(false); observed_items.fill(false);
+    observed_position={}; exploration_entry_turn=data.turns; entry_explorer_stats=explorer_stats;
+    if(enabled) {
+        // Ground truth for reporting ONLY; never passed to any policy.
+        std::array<int16_t,EXPLORER_CELLS> dist; dist.fill(-1);
+        std::array<int16_t,EXPLORER_CELLS> queue{}; int read=0,write=0;
+        int root=g.player.y*rogue::MAP_W+g.player.x; dist[root]=0; queue[write++]=int16_t(root);
+        while(read<write) {
+            int at=queue[read++];
+            for(int delta:{-64,1,64,-1}) {
+                int n=at+delta;
+                if(n<0 || n>=EXPLORER_CELLS || (delta==1 && at%64==63) || (delta==-1 && at%64==0) || dist[n]>=0 || rogue::wall_at(int16_t(n%64),int16_t(n/64))) continue;
+                dist[n]=int16_t(dist[at]+1); queue[write++]=int16_t(n);
+            }
+        }
+        f.exploration.reachable=write;
+        auto objective=g.has_amulet ? g.up : g.floor==15 ? g.monsters[11].pos : g.down;
+        if(objective.x<64 && objective.y<32) f.exploration.shortest=dist[objective.y*64+objective.x];
+    }
     for(const auto& m:g.monsters) f.unholy_count += rogue::undead_or_demonic(m.type);
     if(enabled) for(uint8_t y=0;y<rogue::MAP_H;++y) for(uint8_t x=0;x<rogue::MAP_W;++x) {
         rogue::Position pos{x,y};
@@ -209,6 +230,11 @@ void Collector::enter_floor() {
 void Collector::close_floor(bool exited) {
     if(data.floors.empty() || data.floors.back().exited) return;
     auto& f = data.floors.back();
+    if(data.agent=="explorer-v1") {
+        f.exploration.frontier_changes=explorer_stats.frontier_changes-entry_explorer_stats.frontier_changes;
+        f.exploration.unreachable=explorer_stats.unreachable-entry_explorer_stats.unreachable;
+        f.exploration.missing_items=explorer_stats.missing_items-entry_explorer_stats.missing_items;
+    }
     if(f.visit != closed_ranged_visit && !f.ascent) {
         generation_gap = f.arrow_bundles ? 0 : generation_gap + 1;
         acquisition_gap = !f.bow_owned || f.arrow_picked ? 0 : acquisition_gap + 1;
@@ -238,13 +264,54 @@ void Collector::observe() {
             encountered[i] = true; ++data.monsters[g.monsters[i].type].encountered;
         }
 }
+void Collector::observe_exploration(const ExplorerObservation& o) {
+    if(!enabled || data.floors.empty()) return;
+    auto& e=data.floors.back().exploration;
+    for(int n=0;n<EXPLORER_CELLS;++n) if(o.terrain[n]!=Terrain::Unknown) {
+        if(!observed_terrain[n]) { ++e.terrain_cells; observed_terrain.set(n); }
+        if(o.terrain[n]!=Terrain::Wall && !observed_floor[n]) { ++e.floor_cells; observed_floor.set(n); }
+        if(o.visible[n] && o.terrain[n]!=Terrain::Wall && !surveyed_floor[n]) { ++e.surveyed_floor_cells; surveyed_floor.set(n); }
+    }
+    int n=o.player.y*64+o.player.x;
+    if(o.player!=observed_position) {
+        if(visited_tiles[n]) ++e.repeated_visits;
+        visited_tiles.set(n);
+        if(observed_position.x!=255) {
+            int d=std::abs(int(o.player.x)-observed_position.x)+std::abs(int(o.player.y)-observed_position.y);
+            if(d==1) ++e.travel; else ++e.displacements;
+        }
+        observed_position=o.player;
+    }
+    for(int i=0;i<rogue::MONSTERS;++i) {
+        const auto& m=rogue::game.monsters[i];
+        visible_before[i]=m.type && o.visible[m.pos.y*64+m.pos.x] && rogue::player_can_see_monster(uint8_t(i)) && !(m.type==rogue::MIMIC && !(m.state&rogue::MON_AGGRO));
+        if(visible_before[i] && !visibly_observed[i]) {
+            visibly_observed[i]=true;
+            int d=std::max(std::abs(int(m.pos.x)-o.player.x),std::abs(int(m.pos.y)-o.player.y));
+            ++e.monster_distances[std::min(6,d)];
+        }
+    }
+    for(int i=0;i<rogue::GROUND_ITEMS;++i) {
+        const auto& g=rogue::game.ground[i];
+        if(g.item.type && !observed_items[i] && o.visible[g.pos.y*64+g.pos.x]) { observed_items[i]=true; ++e.items_observed; }
+    }
+    auto stairs=data.floors.back().ascent ? rogue::game.up : rogue::game.down;
+    if(rogue::game.floor<15 || data.floors.back().ascent) {
+        int index=stairs.y*64+stairs.x;
+        if(o.terrain[index]==Terrain::Up || o.terrain[index]==Terrain::Down)
+            if(e.stair_discovery<0) e.stair_discovery=int64_t(data.turns-exploration_entry_turn);
+        if(o.player.x==stairs.x && o.player.y==stairs.y && e.stair_reached<0) e.stair_reached=int64_t(data.turns-exploration_entry_turn);
+    }
+}
 void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount, uint8_t detail) {
+    if(k==EventKind::MonsterAttack) last_attack_monster=index;
     if(trace) trace_event(*trace,k,index,type,amount);
     if(k == EventKind::FloorEntered) { enter_floor(); return; }
     if(k == EventKind::FloorExited) { close_floor(true); return; }
     if(k == EventKind::Finished && type == rogue::DEATH && rogue::game.blindness) ++data.blind_deaths;
     if(k == EventKind::FuelExhausted) { ++data.fuel_exhaustions; return; }
     if(k == EventKind::Turn) {
+        if(enabled && exploring_action && !data.floors.empty()) ++data.floors.back().exploration.exploring_turns;
         ++data.light_turns[rogue::player_light_radius()];
         if(rogue::game.blindness) ++data.blind_turns;
         uint8_t offhand = rogue::game.offhand_slot;
@@ -255,7 +322,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         ++data.turns;
         if(enabled) {
             uint8_t weapon = rogue::game.weapon_slot < rogue::INVENTORY ?
-                rogue::game.inventory[rogue::game.weapon_slot].type : rogue::NO_ITEM;
+                rogue::game.inventory[rogue::game.weapon_slot].type : uint8_t(rogue::NO_ITEM);
             if(weapon != last_weapon) {
                 if(rogue::is_bow(weapon)) ++data.ranged.switches_to;
                 if(rogue::is_bow(last_weapon)) ++data.ranged.switches_away;
@@ -270,6 +337,8 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         return;
     }
     if(k == EventKind::PlayerDamage && amount) {
+        if(enabled && !data.floors.empty() && (cause==Cause::Monster || cause==Cause::Fire) &&
+            last_attack_monster<rogue::MONSTERS && !visible_before[last_attack_monster]) data.floors.back().exploration.unseen_damage+=amount;
         switch(cause) {
         case Cause::Trap: data.death_cause = "trap:"+std::to_string(cause_type); break;
         case Cause::Feature: data.death_cause = "feature:"+std::to_string(cause_type); break;
@@ -372,6 +441,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::GeneratedItem:
         data.items[type].generated += amount;
         if(index < rogue::GROUND_ITEMS) {
+            observed_items[index] = false;
             reached[index] = false; ground_wands[index] = rogue::is_wand(type) ? new_wand() : 0;
         }
         break;
@@ -383,6 +453,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
         if(f && rogue::is_bow(type)) f->bow_owned=true;
         if(index < rogue::GROUND_ITEMS) {
+            observed_items[index] = false;
             reached[index] = false;
             bool swapped = rogue::game.ground[index].item.type != rogue::NO_ITEM;
             size_t incoming = ground_wands[index];
@@ -399,6 +470,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::Dropped:
         data.items[type].dropped += amount;
         if(index < rogue::GROUND_ITEMS) {
+            observed_items[index] = false;
             reached[index] = false;
             if(drop_slot < rogue::INVENTORY)
                 ground_wands[index] = rogue::is_wand(type) && amount ? inventory_wands[drop_slot] : 0;
@@ -430,8 +502,23 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(!(wand_flags[id]&2)) { ++data.items[type].wands_activated; wand_flags[id]|=2; }
         }
         break;
-    case EventKind::MonsterChanged: if(index < rogue::MONSTERS) encountered[index] = engaged[index] = false; break;
+    case EventKind::MonsterChanged: if(index < rogue::MONSTERS) { encountered[index] = engaged[index] = false; visibly_observed[index]=false; } break;
     default: break;
+    }
+}
+void write_exploration_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,terrain_cells,floor_cells,reachable_floor_cells,exploring_turns,travel,shortest_objective_route,repeated_visits,frontier_changes,unreachable_attempts,missing_items,unseen_damage,items_observed,displacements,stair_discovery_turn,stair_reached_turn";
+    for(int d=0;d<=6;++d) o<<",monsters_first_seen_"<<d;
+    o<<",surveyed_floor_cells";
+    o<<'\n';
+}
+void write_exploration(std::ostream& o,const RunMetrics& r) {
+    for(const auto& f:r.floors) {
+        visit_key(o,r,f); auto& e=f.exploration;
+        o<<','<<e.terrain_cells<<','<<e.floor_cells<<','<<e.reachable<<','<<e.exploring_turns<<','<<e.travel<<','<<e.shortest<<','<<e.repeated_visits<<','<<e.frontier_changes<<','<<e.unreachable<<','<<e.missing_items<<','<<e.unseen_damage<<','<<e.items_observed<<','<<e.displacements<<','<<e.stair_discovery<<','<<e.stair_reached;
+        for(auto n:e.monster_distances) o<<','<<n;
+        o<<','<<e.surveyed_floor_cells;
+        o<<'\n';
     }
 }
 void write_runs_header(std::ostream& o) {

@@ -2,6 +2,7 @@
 #include "model.hpp"
 #include "sim_hooks.hpp"
 #include "experiment.hpp"
+#include "explorer.hpp"
 #include <array>
 #include <string>
 #include <vector>
@@ -32,7 +33,15 @@ struct FeatureMetrics {
     uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0, repeated=0, max_entries=0, displacement=0;
     uint64_t monster_activated=0, monster_damage=0, monster_killed=0, monster_teleported=0, monster_status=0, monster_spawned=0;
 };
+struct ExplorationMetrics {
+    uint64_t terrain_cells=0, floor_cells=0, surveyed_floor_cells=0, exploring_turns=0, travel=0, repeated_visits=0,
+        frontier_changes=0, unreachable=0, missing_items=0, unseen_damage=0, items_observed=0, displacements=0;
+    int reachable=0, shortest=0;
+    int64_t stair_discovery=-1, stair_reached=-1;
+    std::array<uint64_t,7> monster_distances{};
+};
 struct FloorMetrics {
+    ExplorationMetrics exploration;
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     int floor=0, visit=0;
     uint64_t moves=0;
@@ -74,6 +83,15 @@ struct RunMetrics {
     std::string experiment="baseline", variant="control";
 };
 struct Collector {
+    ExplorerStats explorer_stats, entry_explorer_stats;
+    std::bitset<EXPLORER_CELLS> observed_terrain, observed_floor, surveyed_floor, visited_tiles;
+    std::array<bool,rogue::MONSTERS> visibly_observed{}, visible_before{};
+    std::array<bool,rogue::GROUND_ITEMS> observed_items{};
+    SeenPosition observed_position;
+    bool exploring_action=false;
+    uint8_t last_attack_monster=255;
+    uint64_t exploration_entry_turn=0;
+    void observe_exploration(const ExplorerObservation&);
     RunMetrics data;
     uint64_t generation_gap=0, acquisition_gap=0;
     uint8_t last_weapon=rogue::NO_ITEM;
@@ -118,6 +136,9 @@ void write_interventions(std::ostream&, const RunMetrics&);
 inline constexpr unsigned ENTRY_STATE_SCHEMA_VERSION=1;
 void write_entry_state_header(std::ostream&);
 void write_entry_state(std::ostream&, const RunMetrics&);
+inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=2;
+void write_exploration_header(std::ostream&);
+void write_exploration(std::ostream&,const RunMetrics&);
 struct CsvStream {
     const char* name;
     void (*header)(std::ostream&);

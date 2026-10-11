@@ -1,5 +1,6 @@
 #include "manifest.hpp"
 #include "build_metadata.hpp"
+#include "policy_hash.hpp"
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -21,8 +22,16 @@ void write_manifest(const std::filesystem::path& path,uint64_t start,uint64_t co
     std::ofstream o(path);
     o<<"{\n  \"schema_version\": 1,\n  \"telemetry_schema_version\": "<<TELEMETRY_SCHEMA_VERSION
      <<",\n  \"git_sha\": "<<json(SIM_GIT_SHA)<<",\n  \"git_dirty\": "<<SIM_GIT_DIRTY
-     <<",\n  \"agent_policy_hash\": "<<json(SIM_AGENT_POLICY_HASH)
-     <<",\n  \"agent\": \"omniscient-v2\",\n  \"seed_selection\": {\"first\": "<<start
+     <<",\n  \"agent_policy_hash\": "<<json(options.agent=="explorer-v1" ? explorer_policy_hash(SIM_EXPLORER_POLICY_HASH,options.parameters) : SIM_AGENT_POLICY_HASH)
+     <<",\n  \"agent\": "<<json(options.agent)
+     <<",\n  \"observation_interface_version\": "<<EXPLORER_OBSERVATION_VERSION
+     <<",\n  \"observation_interface_hash\": "<<json(SIM_OBSERVATION_HASH)
+     <<",\n  \"exploration_schema_version\": "<<EXPLORATION_SCHEMA_VERSION
+     <<",\n  \"executable\": "<<json(std::filesystem::absolute(argv[0]).string())
+     <<",\n  \"agent_code_hash\": "<<json(options.agent=="explorer-v1" ? SIM_EXPLORER_POLICY_HASH : SIM_AGENT_POLICY_HASH);
+    if(options.agent=="explorer-v1") o<<",\n  \"agent_parameter_hash\": "<<json(parameter_hash(options.parameters))
+        <<",\n  \"agent_parameters\": "<<parameter_json(options.parameters);
+    o<<",\n  \"seed_selection\": {\"first\": "<<start
      <<", \"last\": "<<start+count-1<<", \"all_seeds\": "<<(all_seeds ? "true" : "false")
      <<"},\n  \"effective_seed_count\": "<<count
      <<",\n  \"experiment\": "<<json(options.experiment_id)<<",\n  \"variant\": "<<json(options.variant)

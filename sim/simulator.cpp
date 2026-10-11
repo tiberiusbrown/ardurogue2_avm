@@ -1,12 +1,15 @@
 #include "simulator.hpp"
 #include "trace.hpp"
 #include "world.hpp"
+#include "explorer_observation.hpp"
+#include "explorer_events.hpp"
 #include <cstring>
 #include <ostream>
 #include <stdexcept>
 
 namespace sim {
 using namespace rogue;
+bool dispatch_explorer(const Action&,ExplorerAgent&);
 namespace {
 bool cardinal(const Action& a) { return (a.dx == 0 && (a.dy == -1 || a.dy == 1)) ||
     (a.dy == 0 && (a.dx == -1 || a.dx == 1)); }
@@ -17,11 +20,43 @@ void hash_action(RunMetrics& r, const Action& a) {
         r.action_hash ^= b; r.action_hash *= 1099511628211ull;
     }
 }
-RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
+Action decide(Agent& agent,const ExplorerObservation&,uint64_t actions,uint64_t turns) {
+    return session.pending_pickups ? agent.choose_pickup({game,actions,turns}) : agent.choose_action({game,actions,turns});
+}
+Action decide(ExplorerAgent& agent,const ExplorerObservation& o,uint64_t,uint64_t) {
+    auto e=agent.choose_action(o); Action a;
+    switch(e.kind) {
+    case ExplorerActionKind::Move:a.kind=ActionKind::Move;break;
+    case ExplorerActionKind::Wait:a.kind=ActionKind::Wait;break;
+    case ExplorerActionKind::Take:a.kind=ActionKind::Take;break;
+    case ExplorerActionKind::Stairs:a.kind=ActionKind::Stairs;break;
+    case ExplorerActionKind::Use:a.kind=ActionKind::Use;break;
+    case ExplorerActionKind::Throw:a.kind=ActionKind::Throw;break;
+    case ExplorerActionKind::Wand:a.kind=ActionKind::Wand;break;
+    case ExplorerActionKind::Drop:a.kind=ActionKind::Drop;break;
+    }
+    a.dx=e.dx; a.dy=e.dy; a.slot=e.slot; a.target=e.target; a.discard=e.discard;
+    a.goal=std::move(e.goal); a.destination={e.destination.x,e.destination.y};
+    a.diagnostic=e.no_path ? Diagnostic::NoPath : Diagnostic::None; return a;
+}
+void policy_metrics(Collector&,Agent&) {}
+void policy_metrics(Collector& c,ExplorerAgent& a) { c.explorer_stats=a.stats; }
+FeatureChoice feature_choice(Agent&,uint64_t,uint64_t) { return choose_feature_choice(feature_type(observed_feature_at(game,game.player))); }
+FeatureChoice feature_choice(ExplorerAgent& a,uint64_t actions,uint64_t turns) {
+    auto s=a.choose_feature(observe_explorer(actions,turns)); FeatureChoice choice; choice.accept=s.accept; choice.slot=s.slot; return choice;
+}
+bool dispatch_policy(const Action& a,Agent&) { return dispatch(a); }
+bool dispatch_policy(const Action& a,ExplorerAgent& agent) { return dispatch_explorer(a,agent); }
+template<class Policy>
+RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
     auto& r = c.data;
     unsigned rejected = 0, identical = 0, path_failures = 0, swap_cycles = 0;
     uint8_t last_incoming = NO_ITEM, last_outgoing = NO_ITEM;
     Position last_swap{NONE,NONE};
+    ExplorerObserver observer;
+    ExplorerMessages messages;
+    ExplorerMessageScope message_scope(std::string(agent.name())=="explorer-v1" ? &messages : nullptr);
+    bool last_rejected=false;
     auto stuck = [&](const char* why) { r.stuck = true; r.result = "SIM_STUCK"; r.reason = why; };
     while(!session.ended && !r.stuck) {
         if(r.actions >= options.max_actions) { stuck("excessive action count"); break; }
@@ -29,8 +64,13 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
         Game before = game;
         uint16_t rng = game.random_state;
         Action a;
-        try { a = session.pending_pickups ? agent.choose_pickup({game,r.actions,r.turns}) :
-                                           agent.choose_action({game,r.actions,r.turns}); }
+        try {
+            auto observation=observer.observe(r.actions,r.turns);
+            observation.last_rejected=last_rejected;
+            c.observe_exploration(observation);
+            a=decide(agent,observation,r.actions,r.turns);
+            policy_metrics(c,agent);
+        }
         catch(const std::exception& error) {
             r.stuck = true; r.result = "SIM_ERROR";
             r.reason = std::string("agent error: ")+error.what(); break;
@@ -40,7 +80,7 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
         }
         if(session.pending_pickups && a.kind == ActionKind::Wait) {
             complete_ground_pickups();
-            complete_player_move(choose_feature_choice(observed_feature_at(game, game.player)));
+            complete_player_move(feature_choice(agent,r.actions,r.turns));
             continue;
         }
         if(options.trace) trace_action(*options.trace,r.actions,r.turns,a);
@@ -48,7 +88,12 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
         if(!r.floors.empty()) ++r.floors.back().actions;
         hash_action(r,a);
         c.prepare_action(a);
-        bool accepted = dispatch(a);
+        ExplorerAction message_action;
+        if(a.kind==ActionKind::Move) message_action.kind=ExplorerActionKind::Move;
+        message_action.dx=a.dx; message_action.dy=a.dy;
+        messages.prepare(message_action,{before.player.x,before.player.y},before.confused!=0);
+        bool accepted = dispatch_policy(a,agent);
+        last_rejected=!accepted;
         if(options.trace && !accepted) *options.trace << "  action rejected\n";
         bool swapped = accepted && (a.kind == ActionKind::Swap || a.kind == ActionKind::Take) &&
             a.slot < INVENTORY && a.target < GROUND_ITEMS &&
@@ -67,6 +112,7 @@ RunMetrics execute(Collector& c, Agent& agent, const Options& options) {
             else if(identical >= options.max_identical) stuck("repeated identical state");
             else if(path_failures >= options.max_path_failures) stuck("unable to find path");
         }
+        if(r.stuck && std::string(agent.name())=="explorer-v1") r.reason += std::string("; goal=")+a.goal+"; position="+std::to_string(before.player.x)+":"+std::to_string(before.player.y);
     }
     c.observe(); c.close_floor(false);
     if(session.ended) {
@@ -133,5 +179,25 @@ RunMetrics run_started(uint16_t seed, Agent& agent, const Options& options) {
     c.experiment=options.experiment; c.data.experiment=options.experiment_id; c.data.variant=options.variant;
     CollectScope sink(c); agent.reset(); c.enter_floor();
     return execute(c,agent,options);
+}
+bool dispatch_explorer(const Action& a,ExplorerAgent& agent) {
+    if(a.kind!=ActionKind::Move) return dispatch(a);
+    if(session.ended || !cardinal(a)) return false;
+    Game before=game;
+    begin_player_move(a.dx,a.dy);
+    if(session.pending_move && !session.pending_pickups) complete_player_move(feature_choice(agent,0,0));
+    return std::memcmp(&before,&game,sizeof game)!=0;
+}
+RunMetrics run(uint16_t seed, ExplorerAgent& agent, const Options& options) {
+    Collector c; c.data.seed=seed; c.data.agent=agent.name(); c.enabled=options.telemetry; c.trace=options.trace;
+    c.experiment=options.experiment; c.data.experiment=options.experiment_id; c.data.variant=options.variant;
+    CollectScope sink(c); game={}; session={NONE,DEATH,false}; agent.reset();
+    if(options.trace) *options.trace<<"seed="<<seed<<" agent="<<agent.name()<<'\n';
+    start_new(seed); return execute(c,agent,options);
+}
+RunMetrics run_started(uint16_t seed, ExplorerAgent& agent, const Options& options) {
+    Collector c; c.data.seed=seed; c.data.agent=agent.name(); c.enabled=options.telemetry; c.trace=options.trace;
+    c.experiment=options.experiment; c.data.experiment=options.experiment_id; c.data.variant=options.variant;
+    CollectScope sink(c); agent.reset(); c.enter_floor(); return execute(c,agent,options);
 }
 }

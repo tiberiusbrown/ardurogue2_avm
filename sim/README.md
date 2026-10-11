@@ -45,7 +45,8 @@ build/sim-native/sim/ardurogue2_sim --seed 4 --max-actions 5 --trace
 Ranges are inclusive. Seeds must fit the production 16-bit API; batches never
 wrap. Production maps seed zero to `0xace1`, so CSV records both the requested
 `seed` and `effective_seed`. Without `--output`, stdout contains `runs.csv`.
-With `--output`, the directory receives nine CSV files and `manifest.json` (see
+With `--output`, the directory receives nine core CSV files, `exploration.csv`
+and `manifest.json` (see
 `BALANCE.md` for schemas). Trace is restricted
 to one seed and goes to stderr, keeping CSV parseable. `--no-telemetry` disables
 aggregate collection for isolation diagnostics; run/floor action and turn
@@ -109,7 +110,36 @@ Future policies can implement `Agent` without modifying the runner or CSV
 collectors. The current context exposes the read-only world with hidden map features
 erased, including both their IDs and positions. The feature policy uses the
 same filtered `observed_features` interface; future policies must retain this
-guarantee. No normal-information agent or experimental management is included.
+guarantee. The separate `explorer-v1` uses a sanitized observation protocol,
+retained memory and frontier routes, rather than this context. See
+[EXPLORER_AGENT.md](../docs/EXPLORER_AGENT.md) for the exact boundary, tests and
+measurements. It leaves the default oracle and its policy hash unchanged.
+
+## Explorer runtime preferences and automatic tuning
+
+Use `--agent explorer-v1`; omitting `--agent` still selects `omniscient-v2`.
+`--agent-params FILE` loads a strict JSON object of runtime explorer weights and
+thresholds. Partial files fill omitted values from defaults. Write all defaults
+with `--write-agent-defaults FILE`. Workers forward the full resolved values,
+and manifests contain those values, their SHA-256 and a combined code/parameter
+policy hash. Paired balance runs must hold this configuration constant.
+
+```sh
+build/sim-native/sim/ardurogue2_sim --agent explorer-v1 --seeds 1:1000 --jobs 8 --output build/explorer
+build/sim-native/sim/ardurogue2_sim --write-agent-defaults build/explorer-defaults.json
+build/sim-native/sim/ardurogue2_explorer_tune --seeds 1:1000 --initial-seeds 100 --plateau-generations 3 --population 12 --generations 20 --jobs 8 --output build/explorer-tune
+build/sim-native/sim/ardurogue2_sim --agent explorer-v1 --agent-params build/explorer-tune/best.json --seeds 1001:10000 --jobs 8 --output build/explorer-validation
+```
+
+The separate tuner evolves preferences with seeded mutation/crossover and
+retained elites. Valid batches rank by escapes first, then total score. Each
+stage uses an equal seed range for all candidates. Staged searches expand
+on plateaus, re-evaluate leaders, and validate finalists on the complete range.
+`history.csv`, `best-result.json` and per-candidate configurations/fitness CSVs
+make the selection reviewable. `--minutes` limits search between candidates;
+final full-range validation can extend that limit by up to four batches.
+The tuner does not edit source defaults; promote a reviewed winning configuration
+and validate it separately. All search artifacts belong under ignored `build/`.
 
 ## Maintained omniscient-v2 policy
 

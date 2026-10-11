@@ -1,4 +1,6 @@
 #include "parallel.hpp"
+#include "policy_hash.hpp"
+#include "build_metadata.hpp"
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -8,7 +10,9 @@
 #include <stdexcept>
 #include <vector>
 #if defined(_WIN32)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <cerrno>
@@ -117,10 +121,15 @@ void merge(const fs::path& file, std::ostream& output, const std::string& expect
 }
 BatchCounts parallel_batch(const std::string& executable, uint64_t start,
     uint64_t count, unsigned jobs, const Options& options, const std::array<std::ostream*,sim::CSV_STREAM_COUNT>& outputs,
-    std::ostream* entry_state) {
+    std::ostream* entry_state, std::ostream* exploration) {
     if(options.trace) throw std::runtime_error("parallel batches cannot trace multiple seeds");
     jobs=static_cast<unsigned>(std::min<uint64_t>(jobs,count));
     Scratch scratch;
+    auto parameters=scratch.path/"parameters.json";
+    if(options.agent=="explorer-v1") {
+        std::ofstream file(parameters); file<<parameter_json(options.parameters);
+        if(!file) throw std::runtime_error("cannot write worker parameters");
+    }
     std::vector<fs::path> directories;
     std::vector<std::unique_ptr<Process>> workers;
     // Launch every worker before waiting. Only the parent writes final outputs.
@@ -128,8 +137,9 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
         uint64_t first=start+count*j/jobs, last=start+count*(j+1)/jobs-1;
         auto directory=scratch.path/std::to_string(j); fs::create_directory(directory);
         std::vector<std::string> args{executable,"--seeds",std::to_string(first)+":"+std::to_string(last),
-            "--output",directory.string(),"--max-actions",std::to_string(options.max_actions)};
+            "--output",directory.string(),"--max-actions",std::to_string(options.max_actions),"--agent",options.agent};
         if(!options.telemetry) args.push_back("--no-telemetry");
+        if(options.agent=="explorer-v1") args.insert(args.end(),{"--agent-params",parameters.string()});
         if(entry_state) args.push_back("--entry-state");
         args.insert(args.end(),{"--experiment",options.experiment_id,"--variant",options.variant});
         for(const auto& rule:options.intervention_rules) args.insert(args.end(),{"--intervention",rule});
@@ -142,6 +152,12 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
     }
     BatchCounts result; uint64_t next=start;
     for(const auto& directory:directories) {
+        if(options.agent=="explorer-v1") {
+            std::ifstream manifest(directory/"manifest.json"); std::ostringstream data; data<<manifest.rdbuf();
+            auto expected="\"agent_policy_hash\": \""+explorer_policy_hash(SIM_EXPLORER_POLICY_HASH,options.parameters)+"\"";
+            if(!manifest || data.str().find(expected)==std::string::npos)
+                throw std::runtime_error("worker explorer policy/configuration mismatch; use a matching simulator build");
+        }
         std::ifstream input(directory/"runs.csv"); std::string line;
         if(!input || !std::getline(input,line) || line!=header(write_runs_header)) throw std::runtime_error("invalid worker runs CSV");
         while(std::getline(input,line)) {
@@ -158,6 +174,7 @@ BatchCounts parallel_batch(const std::string& executable, uint64_t start,
         for(size_t s=1;s<csv_streams.size();++s) if(outputs[s])
             merge(directory/csv_streams[s].name,*outputs[s],header(csv_streams[s].header));
         if(entry_state) merge(directory/"entry_state.csv",*entry_state,header(write_entry_state_header));
+        if(exploration) merge(directory/"exploration.csv",*exploration,header(write_exploration_header));
     }
     if(next!=start+count) throw std::runtime_error("worker seed count mismatch");
     return result;

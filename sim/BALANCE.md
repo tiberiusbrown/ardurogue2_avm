@@ -533,3 +533,35 @@ inside the ignored build directory. This does not require a global installation
 change.
 The report and retained experiment locations are in
 [the lighting implementation report](../docs/LIGHTING_OFFHAND_BLINDNESS.md).
+
+## Explorer policies and runtime tuning
+
+`balance.py ab --agent explorer-v1 [--agent-params FILE]` forwards the same
+agent/configuration to both arms. The default remains `omniscient-v2`. Explorer
+manifests retain the complete resolved preferences, parameter hash, code hash
+and combined policy hash. Changing preferences is a policy comparison, not a
+content comparison; the paired framework rejects unequal combined hashes.
+
+The nine core schemas remain at version 6. An independent version-2
+`exploration.csv` sidecar adds visibility, retained exploration, stair discovery,
+first-seen monster distances and route diagnostics. Sealed manifests include
+this sidecar when present. Historical nine-stream directories remain readable.
+Ground-truth reachable area and shortest-route denominators are reporting-only.
+
+`ardurogue2_explorer_tune` is a separate native target. It ranks complete, valid
+same-seed candidates lexicographically by escape count and total production
+score. Use `--initial-seeds 100 --seeds 1:1000 --plateau-generations 3` for quick
+coarse search with automatic expansion. Leaders are re-evaluated after expansion;
+final validation always uses the full requested range. Candidate JSON, per-seed
+fitness CSVs, history and hashes remain under the chosen ignored build directory.
+Use a separate seed range to assess generalization before promoting defaults.
+See [the explorer guide](../docs/EXPLORER_AGENT.md) for commands and limitations.
+
+Four-way lighting measurements must pair equipment/full-light **within each
+agent**, using one executable/configuration per pair. Cross-agent rows are
+descriptive. Repeat generated shield removal with explorer-v1 using the same
+three existing shield rules. `sim/explorer_report.py ROOT` streams summaries
+from `omniscient-equipment`, `omniscient-full`, `explorer-equipment`,
+`explorer-full` and `explorer-no-shields` directories and checks paired policy
+identity. It reports exact McNemar primary tests with BH adjustment; the main
+balance framework provides reconciled telemetry and bootstrap intervals.

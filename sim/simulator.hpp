@@ -1,10 +1,13 @@
 #pragma once
 #include "agent.hpp"
 #include "metrics.hpp"
+#include "explorer.hpp"
 #include <iosfwd>
 
 namespace sim {
 struct Options {
+    std::string agent="omniscient-v2";
+    ExplorerParameters parameters;
     uint64_t max_actions = 20000;
     unsigned max_rejected = 32, max_identical = 32, max_path_failures = 32;
     bool telemetry = true;
@@ -18,4 +21,6 @@ bool dispatch(const Action&);
 RunMetrics run(uint16_t seed, Agent&, const Options& = {});
 // Also used by controlled-state tests, without changing the normal start path.
 RunMetrics run_started(uint16_t seed, Agent&, const Options& = {});
+RunMetrics run(uint16_t seed, ExplorerAgent&, const Options& = {});
+RunMetrics run_started(uint16_t seed, ExplorerAgent&, const Options& = {});
 }
