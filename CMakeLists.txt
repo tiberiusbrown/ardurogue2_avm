@@ -72,7 +72,7 @@ set(ARDUROGUE2_SOURCES
     main state features combat combat_math items world world_gen world_gen_population persistence status render ui)
 set(ARDUROGUE2_HEADERS
     model features feature_icons game game_internal world app_state persistence status render ui
-    inventory_view combat_math ray_sight_generated world_gen world_gen_templates sim_hooks)
+    inventory_view combat_math ray_sight_generated world_gen world_gen_templates sim_hooks status_advances)
 set(ARDUROGUE2_HEADER_FILES)
 foreach(ARDUROGUE2_HEADER IN LISTS ARDUROGUE2_HEADERS)
     list(APPEND ARDUROGUE2_HEADER_FILES

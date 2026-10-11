@@ -542,15 +542,15 @@ manifests retain the complete resolved preferences, parameter hash, code hash
 and combined policy hash. Changing preferences is a policy comparison, not a
 content comparison; the paired framework rejects unequal combined hashes.
 
-The nine core schemas remain at version 6. An independent version-2
+Current core schemas are version 7 (runs appends Lord kills). An independent version-4
 `exploration.csv` sidecar adds visibility, retained exploration, stair discovery,
 first-seen monster distances and route diagnostics. Sealed manifests include
 this sidecar when present. Historical nine-stream directories remain readable.
 Ground-truth reachable area and shortest-route denominators are reporting-only.
 
 `ardurogue2_explorer_tune` is a separate native target. It ranks complete, valid
-same-seed candidates lexicographically by escape count and total production
-score. Use `--initial-seeds 100 --seeds 1:1000 --plateau-generations 3` for quick
+same-seed candidates by escapes, Yendor, Lord kills, progression milestones,
+fewer actions, then production score. Use `--initial-seeds 100 --seeds 1:1000 --plateau-generations 3` for quick
 coarse search with automatic expansion. Leaders are re-evaluated after expansion;
 final validation always uses the full requested range. Candidate JSON, per-seed
 fitness CSVs, history and hashes remain under the chosen ignored build directory.
@@ -565,3 +565,37 @@ from `omniscient-equipment`, `omniscient-full`, `explorer-equipment`,
 `explorer-full` and `explorer-no-shields` directories and checks paired policy
 identity. It reports exact McNemar primary tests with BH adjustment; the main
 balance framework provides reconciled telemetry and bootstrap intervals.
+
+## Current competence experiment protocol
+
+`competence_experiments.py` runs policy ablations, six offhand strategies,
+eight awareness conditions (two policies, two lighting modes, two detection
+rules), and isolated same-location monster/item replacements. It rejects
+SIM_STUCK/SIM_ERROR, incomplete batches, duplicated seeds and changed raw CSV
+hashes. It uses exact low-count binomial intervals, exact McNemar tests, paired
+bootstrap differences, conservative exact paired difference bounds and BH
+adjustment for exploratory families. Simultaneous 97.5% exact binomial intervals
+for gain/loss marginals give at least 95% difference coverage by the union bound.
+A zero-
+discordance bootstrap interval is uninformative about unobserved rare events.
+Full finite-population censuses have no sampling confidence intervals.
+
+Reports contain floor entry/exit counts and entry supplies, food exposure versus
+pickup/use/retention, combat/exploration turns, light occupancy, first-seen
+distances, initial monster-alert distances/light, first hostile contact, recent
+damage, estimated risk, unused known consumables and immediate post-healing
+deaths. “Safe retreat” means the policy model permits an observed step; it is
+not proof that a hidden enemy cannot attack there. Diagnostic death flags are
+co-occurring observations, never automatically identified causal mechanisms.
+
+The new native oracle guard prevents replacing a carried light by a source that
+improves neither its capability nor reserve fuel. It repairs an awareness-run
+reverse swap at seed 1461. This changes policy identity; historical hashes and
+raw references are preserved, and the repaired policy must be used in both arms
+of new awareness comparisons.
+
+The final seed population and selection history are recorded in
+[EXPLORER_SEED_LEDGER.json](../docs/EXPLORER_SEED_LEDGER.json). Seeds 1:10000
+are development data, 30001:32000 intervention data, and 40001:50000 a reserved
+explorer holdout. Previous oracle censuses mean no globally untouched seeds
+remain; do not claim otherwise. See the [current measured report](../docs/EXPLORER_COMPETENCE_AND_REBALANCE.md).

@@ -128,6 +128,10 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
         }
     }
     explorer_message_observation(o);
+    if(o.reported_attacker) {
+        auto info=monster_info(o.reported_attacker);
+        o.reported_species={{},o.reported_attacker,info.strength,info.speed,info.armor,info.flags};
+    }
     return o;
 }
 ExplorerObservation ExplorerObserver::observe(uint64_t actions,uint64_t turns) {
@@ -140,7 +144,8 @@ ExplorerObservation ExplorerObserver::observe(uint64_t actions,uint64_t turns) {
         if(!o.visible[n] && explicit_reveals[n]) { o.terrain[n]=Terrain::Unknown; o.features[n]=0; }
         explicit_reveals[n]=revealed;
     }
-    o.attacked=o.attacked || o.hp<previous_hp; previous_hp=o.hp;
+    o.hp_loss=o.hp<previous_hp ? previous_hp-o.hp : 0;
+    o.attacked=o.attacked || o.hp_loss!=0; previous_hp=o.hp;
     return o;
 }
 }

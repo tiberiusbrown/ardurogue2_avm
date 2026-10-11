@@ -9,7 +9,7 @@ enum class EventKind {
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,
     ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget,
-    FeatureDiscovered, FeatureActivated, FeatureDisplacement, FeatureDeclined, FeatureSpawn, HolyDamage, MonsterTrapActivated, MonsterTrapTeleport, MonsterTrapStatus
+    FeatureDiscovered, FeatureActivated, FeatureDisplacement, FeatureDeclined, FeatureSpawn, HolyDamage, MonsterTrapActivated, MonsterTrapTeleport, MonsterTrapStatus, MonsterAware
 };
 enum class Cause : uint8_t { Other, Monster, Starvation, Item, Fire, Trap, Feature, MonsterTrap };
 enum class Special : uint8_t { Poison, Confusion, Paralysis, Fire };
@@ -18,6 +18,7 @@ void event(EventKind, uint8_t index = 255, uint8_t type = 0,
 void after_floor_generation();
 bool artifacts_enabled();
 bool full_light();
+bool light_awareness();
 bool features_enabled();
 bool monster_traps_enabled();
 enum class FeatureVariant { Placement, Early, Holy, Density, Damage, Roster };

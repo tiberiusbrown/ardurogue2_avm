@@ -279,3 +279,9 @@ Raw experiments, manifests, traces and profiles remain under ignored
 `bench/README.md`. Reports reject failed seeds, require matching policy hashes,
 and use FDR-adjusted item/monster exploratory results; census percentages are
 exact for the finite nonzero 16-bit seed space.
+
+## Initial awareness update
+
+The competence pass adds persistent initial detection using MON_AGGRO. Ordinary unalerted hostile enemies need a clear bounded ray within max(2, physical illumination + 1). Phantom/dragon/Lord dark minima are 3/4/6. Adjacent hostile enemies detect a visible player in darkness. Blindness does not extinguish worn light. Once alerted, extinguishing light cannot erase pursuit. Invisibility, confusion/fear/stun, passive bats, mimics, attack alerts, summons and polymorph retain existing special semantics.
+
+No light bonus, shield rating, fuel probability, curse penalty, ordinary category weight, artifact classification or ascent supply rule changes. Ring of Invisibility remains an artifact. Awareness does not change monster stats/XP or save layout. The [competence report](EXPLORER_COMPETENCE_AND_REBALANCE.md) records experiments, hardware limits and remaining weaknesses.

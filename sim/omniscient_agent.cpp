@@ -212,6 +212,14 @@ bool fits(Item incoming) {
 int replacement(Item i) {
     int best = -1, worst = value(i);
     for(int s = 0; s < INVENTORY; ++s) {
+        // Reserve acquisition can exceed a depleted candle's retention value.
+        // Replacing a light with one that improves neither capability nor fuel
+        // cannot help and otherwise permits a full-pack reverse-swap cycle.
+        const auto owned=game.inventory[s];
+        if(is_light(i.type) && is_light(owned.type) &&
+           equipment_score(i)<=equipment_score(owned) &&
+           (owned.type==GLOWING_ORB || (i.type!=GLOWING_ORB &&
+            int(i.info)*fuel_denominator(i.type)<=int(owned.info)*fuel_denominator(owned.type)))) continue;
         // Bow and ammo are complementary slots. An ammo acquisition must not
         // remove its only useful launcher; a bow must not remove its last ammo.
         // Otherwise their acquisition values reverse after each accepted swap.

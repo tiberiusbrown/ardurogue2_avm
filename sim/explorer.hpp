@@ -7,7 +7,7 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 1;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 2;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
     uint8_t x=255, y=255;
@@ -45,7 +45,10 @@ struct ExplorerObservation {
     uint8_t ground_count=0, monster_count=0;
     std::array<std::array<uint8_t,16>,6> identities{}; // Only identified appearance mappings.
     bool attacked=false, last_rejected=false; // Public feedback, never raw attacker coordinates.
+    bool incoming_attack=false;
+    uint8_t hp_loss=0; // Difference between consecutive displayed HP values, not damage telemetry.
     uint8_t reported_attacker=0, contact_type=0;
+    SeenMonster reported_species; // Public definition from printed name; position stays unknown.
     SeenPosition contact; // Our own attempted melee square, only after hit/miss feedback.
     bool contact_reported=false;
 };
@@ -68,13 +71,22 @@ struct RememberedTile {
     SeenItem item;
     bool has_item=false,surveyed=false;
 };
-struct MonsterMemory { SeenPosition pos; uint8_t type=0; uint64_t seen=0; };
+struct MonsterMemory { SeenPosition pos; uint8_t type=0; uint64_t seen=0; SeenMonster species; };
 struct ExplorerFloor {
     std::array<RememberedTile,EXPLORER_CELLS> tiles{};
     std::array<MonsterMemory,12> enemies{};
     SeenPosition up, down;
     bool visited=false, ascent_layout=false;
 };
+enum class Danger : uint8_t { Quiet, Caution, Serious, Lethal };
+struct SurvivalRisk {
+    int one=0, two=0, attackers=0;
+    bool fire=false, unseen=false, status=false, retreat=false;
+    Danger danger=Danger::Quiet;
+};
+// These helpers accept only public observations and legitimate memory.
+SurvivalRisk estimate_risk(const ExplorerObservation&,const ExplorerFloor&,const ExplorerParameters&);
+int expected_information(const ExplorerFloor&,SeenPosition,int radius,bool obstruction=true);
 class ExplorerAgent final {
     std::array<ExplorerFloor,16> floors{};
     std::array<std::array<uint8_t,16>,6> identities{};
@@ -88,6 +100,10 @@ class ExplorerAgent final {
     unsigned probe_direction=0;
     unsigned retreat_budget=0, quiet_turns=0, stalled=0, bow_cooldown=0;
     uint8_t pending_ring=255;
+    uint8_t previous_hp=0;
+    unsigned unseen_turns=0, contact_damage=0;
+    uint64_t last_offhand_switch=0, last_control=0;
+    SeenPosition controlled_position;
     ExplorerAction previous;
     std::array<int16_t,EXPLORER_CELLS> costs{}, steps{};
     std::array<int8_t,EXPLORER_CELLS> first{};
@@ -96,6 +112,7 @@ class ExplorerAgent final {
     ExplorerAction navigate(SeenPosition,const char*);
     ExplorerAction pickup(const ExplorerObservation&);
 public:
+    SurvivalRisk risk;
     ExplorerParameters parameters;
     explicit ExplorerAgent(ExplorerParameters p={}) : parameters(p) {}
     static const char* name() { return "explorer-v1"; }

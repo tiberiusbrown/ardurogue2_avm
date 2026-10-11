@@ -38,6 +38,8 @@ Rule parse_rule(const std::string& text) {
         Rule r; r.feature_mode=i; return r;
     }
     if(text=="full-light") { Rule r; r.full_light=true; return r; }
+    if(text=="light-awareness") { Rule r; r.light_awareness=true; return r; }
+    if(text=="legacy-awareness") { Rule r; r.legacy_awareness=true; return r; }
     if(text=="no-monster-traps") { Rule r; r.no_monster_traps=true; return r; }
     if(text=="no-map-features") { Rule r; r.no_features=true; return r; }
     if(text=="ordinary-items") {
@@ -83,7 +85,7 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
-        if(r.full_light || r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
+        if(r.full_light || r.light_awareness || r.legacy_awareness || r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
         if(r.feature || r.feature_mode>=0) {
             unsigned removed=0;
             for(auto& f:g.features) {
@@ -139,6 +141,12 @@ bool RuleExperiment::features_enabled() const {
 bool RuleExperiment::full_light() const {
     for(const auto& r : rules) if(r.full_light) return true;
     return false;
+}
+bool RuleExperiment::light_awareness() const {
+    bool candidate=false,legacy=false;
+    for(const auto& r : rules) { candidate|=r.light_awareness; legacy|=r.legacy_awareness; }
+    if(candidate && legacy) throw std::runtime_error("conflicting awareness interventions");
+    return !legacy;
 }
 bool RuleExperiment::artifacts_enabled() const {
     for(const auto& r:rules) if(r.ordinary_items) return false;

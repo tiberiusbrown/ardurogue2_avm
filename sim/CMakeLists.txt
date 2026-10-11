@@ -105,6 +105,7 @@ if(BALANCE_PYTHON)
         add_test(NAME balance_statistics COMMAND "${BALANCE_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/test_balance.py")
         add_test(NAME balance_cli COMMAND "${BALANCE_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/test_balance_cli.py" "$<TARGET_FILE:ardurogue2_sim>")
         add_test(NAME balance_scorecard COMMAND "${BALANCE_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/test_check_balance.py" "$<TARGET_FILE:ardurogue2_sim>")
+        add_test(NAME competence_reports COMMAND "${BALANCE_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/test_competence_experiments.py" "$<TARGET_FILE:ardurogue2_sim>")
     endif()
 endif()
 

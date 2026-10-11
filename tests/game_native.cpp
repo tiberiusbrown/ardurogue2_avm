@@ -28,6 +28,7 @@ Game game = {};
 }
 
 using namespace rogue;
+void check_monster_awareness();
 
 namespace rogue {
 const char* status_word(const char*) { return nullptr; }
@@ -1709,6 +1710,7 @@ void check_enemy_abilities()
     require(game.monsters[0].state & MON_AGGRO, "attacked mimic did not wake");
 
     arena(GOBLIN, 12);
+    game.monsters[0].state |= MON_AGGRO; // Opening tests exercise alerted pursuit.
     game.doors[0] = {{11, 10}};
     game.door_count = 1;
     for(int i = 0; i < 8 && !door_open(0); ++i)
@@ -1718,6 +1720,7 @@ void check_enemy_abilities()
     for(uint8_t type : {uint8_t(GOBLIN), uint8_t(SNAKE)})
         for(uint8_t open = 0; open < 4; ++open) {
             arena(type, 12);
+            game.monsters[0].state |= MON_AGGRO;
             game.monsters[0].pos.y = 12;
             game.speed = monster_speed(type); // Exactly one enemy action.
             game.doors[0] = {{11, 12}};
@@ -2719,6 +2722,8 @@ int main(int argc, char** argv)
             "new game state is wrong");
     require(wall_at(-1, 0) && wall_at(MAP_W, 0),
             "map bounds are not solid");
+    check_monster_awareness();
+    start_new(0x1234);
     check_local_visibility();
     check_light_masks();
     check_shared_rays();

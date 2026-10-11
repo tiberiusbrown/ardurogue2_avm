@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <random>
 #include <set>
 #include <sstream>
@@ -32,6 +33,19 @@ struct Candidate : sim::TuningFitness {
     sim::ExplorerParameters parameters;
     uint64_t id=0;
 };
+std::vector<std::string> csv_fields(const std::string& line) {
+    std::vector<std::string> fields; std::string field; bool quoted=false;
+    for(size_t n=0;n<line.size();++n) {
+        char c=line[n];
+        if(c=='"') {
+            if(quoted && n+1<line.size() && line[n+1]=='"') { field+='"'; ++n; }
+            else quoted=!quoted;
+        } else if(c==',' && !quoted) { fields.push_back(field); field.clear(); }
+        else if(c!='\r') field+=c;
+    }
+    if(quoted) throw std::runtime_error("unterminated fitness CSV field");
+    fields.push_back(field); return fields;
+}
 // Failed runs cannot be interpreted as poor game outcomes or win the search.
 bool better(const Candidate& a,const Candidate& b) {
     if(sim::fitness_better(a,b)) return true;
@@ -51,14 +65,18 @@ Candidate evaluate(Candidate c,uint64_t first,uint64_t count,unsigned jobs,
     }
     runs.close(); if(!runs) throw std::runtime_error("cannot retain candidate fitness runs");
     std::ifstream input(path); std::string line; uint64_t rows=0; std::getline(input,line);
+    auto header=csv_fields(line); std::map<std::string,size_t> columns;
+    for(size_t n=0;n<header.size();++n) columns.emplace(header[n],n);
     while(std::getline(input,line)) {
-            std::istringstream fields(line); std::string field;
-            for(int i=0;i<7;++i) {
-                if(!std::getline(fields,field,',')) throw std::runtime_error("invalid fitness CSV");
-                if(i==3) { c.escaped+=field=="escaped"; c.failures+=field!="escaped" && field!="death"; }
-                if(i==4) c.actions+=std::stoull(field);
-                if(i==6) c.score+=std::stoll(field);
-            }
+            auto fields=csv_fields(line);
+            if(fields.size()!=header.size()) throw std::runtime_error("invalid fitness CSV");
+            auto field=[&](const char* name)->const std::string& { return fields.at(columns.at(name)); };
+            auto result=field("result");
+            c.escaped+=result=="escaped"; c.failures+=result!="escaped" && result!="death";
+            c.actions+=std::stoull(field("actions")); c.score+=std::stoll(field("score"));
+            unsigned depth=unsigned(std::stoul(field("deepest_floor"))),exited=unsigned(std::stoul(field("floors_exited")));
+            bool yendor=field("has_yendor")=="1",lord=field("lord_killed")=="1";
+            c.yendor+=yendor; c.lord+=lord; c.progression+=sim::progression_credit(depth,lord,yendor,exited);
             ++rows;
     }
     if(input.bad() || rows!=count) throw std::runtime_error("fitness seed count mismatch");
@@ -68,10 +86,23 @@ sim::ExplorerParameters offspring(const Candidate& a,const Candidate& b,std::mt1
     auto p=a.parameters;
     // Seeded host RNG affects only preferences. Production gameplay RNG is untouched.
     auto pick=[&](uint64_t n) { return rng()%n; };
-    for(auto& d:sim::parameter_definitions) if(pick(4)==0) p.*(d.member)=b.parameters.*(d.member);
+    // Mutate one coherent group per offspring. Binary ablation switches and
+    // equipment strategy modes are experimental controls, never search genes.
+    auto group=[](const char* name) {
+        std::string n=name;
+        if(n.find("frontier")==0 || n.find("stair")==0 || n.find("loot")==0 || n.find("hunger")==0) return 0;
+        if(n.find("healing")!=n.npos || n.find("emergency")==0 || n.find("retreat")==0 || n.find("risk")==0 || n.find("control")==0 || n.find("contact")==0) return 1;
+        if(n.find("light")!=n.npos || n.find("shield")!=n.npos || n.find("score")!=n.npos || n.find("weight")!=n.npos || n.find("bonus")!=n.npos) return 2;
+        return 3;
+    };
+    std::vector<const sim::ParameterDefinition*> active;
+    int selected=int(generation%4);
+    for(auto& d:sim::parameter_definitions) if(d.maximum-d.minimum>1 && std::string(d.name)!="offhand_mode" && group(d.name)==selected) {
+        active.push_back(&d); if(pick(4)==0) p.*(d.member)=b.parameters.*(d.member);
+    }
     unsigned mutations=2+unsigned(pick(9));
     for(unsigned i=0;i<mutations;++i) {
-        auto& d=sim::parameter_definitions[pick(sim::EXPLORER_PARAMETER_COUNT)];
+        auto& d=*active[pick(active.size())];
         int& v=p.*(d.member);
         if(pick(10)==0) v=d.minimum+int(pick(uint64_t(d.maximum-d.minimum+1)));
         else {
@@ -104,7 +135,7 @@ int main(int argc,char** argv) {
                     "  [--minutes N] [--start-params FILE] [--simulator FILE] [--max-actions N]\n"
                     "  [--initial-seeds N] [--plateau-generations N]\n"
                     "Defaults: seeds 1:1000, population 12, generations 20, jobs 1, random seed 1.\n"
-                    "Fitness: valid complete batches, then escapes descending, then total score descending.\n"
+                    "Fitness: valid batches; escapes, Yendor, Lord, progression, fewer actions, score.\n"
                     "With --initial-seeds, expand tenfold after a plateau and re-evaluate elites.\n"
                     "Always validate final elites on the full range. Minutes limits search between candidates.\n"
                     "Outputs: best.json, baseline.json, candidates/, history.csv, manifest.json.\n";
@@ -138,8 +169,8 @@ int main(int argc,char** argv) {
         sim::ExplorerParameters initial=start_params.empty() ? sim::ExplorerParameters{} : sim::load_parameters(start_params);
         save(fs::path(output)/"baseline.json",sim::parameter_json(initial));
         std::ostringstream manifest;
-        manifest<<"{\n  \"schema_version\": 1,\n  \"algorithm\": \"elitist mutation and crossover v2; staged seeds\",\n"
-            "  \"objective\": [\"escapes descending\", \"total score descending\"],\n"
+        manifest<<"{\n  \"schema_version\": 2,\n  \"algorithm\": \"grouped mutation and crossover v3; staged seeds\",\n"
+            "  \"objective\": [\"escapes descending\", \"Yendor descending\", \"Lord kills descending\", \"progression descending\", \"actions ascending\", \"total score descending\"],\n"
             "  \"failures\": \"invalid; excluded from elites\",\n  \"agent\": \"explorer-v1\",\n  \"agent_code_hash\": "<<quote(SIM_EXPLORER_POLICY_HASH)
             <<",\n  \"first_seed\": "<<first<<",\n  \"last_seed\": "<<last<<",\n  \"population\": "<<population
             <<",\n  \"generations\": "<<generations<<",\n  \"jobs\": "<<jobs<<",\n  \"random_seed\": "<<random_seed
@@ -148,14 +179,14 @@ int main(int argc,char** argv) {
             <<",\n  \"baseline_parameter_hash\": "<<quote(sim::parameter_hash(initial))<<",\n  \"simulator\": "<<quote(fs::absolute(executable).string())<<"\n}\n";
         save(fs::path(output)/"manifest.json",manifest.str());
         std::ofstream history(fs::path(output)/"history.csv");
-        history<<"candidate,generation,seed_count,escapes,total_score,simulator_failures,actions,seconds,parameter_hash,agent_policy_hash,best\n";
+        history<<"candidate,generation,seed_count,escapes,total_score,simulator_failures,actions,seconds,parameter_hash,agent_policy_hash,best,yendor,lord,progression\n";
         std::mt19937_64 rng(random_seed); std::set<std::string> evaluated;
         std::vector<Candidate> elites; Candidate best; bool have_best=false; uint64_t id=0; auto began=Clock::now();
         auto expired=[&] { return minutes && Clock::now()-began>=std::chrono::minutes(minutes); };
         uint64_t count=initial_seeds ? initial_seeds : last-first+1;
         unsigned plateau=0;
         auto assess=[&](Candidate c,unsigned generation) {
-            c.escaped=c.failures=c.actions=0; c.score=0; c.id=id++;
+            c.escaped=c.failures=c.actions=c.yendor=c.lord=c.progression=0; c.score=0; c.id=id++;
             auto hash=sim::parameter_hash(c.parameters); evaluated.insert(hash);
             save(fs::path(output)/"candidates"/(std::to_string(c.id)+".json"),sim::parameter_json(c.parameters));
             auto started=Clock::now(); c=evaluate(c,first,count,unsigned(jobs),executable,options,
@@ -166,12 +197,13 @@ int main(int argc,char** argv) {
                 std::ostringstream result;
                 result<<"{\n  \"candidate\": "<<best.id<<",\n  \"first_seed\": "<<first<<",\n  \"last_seed\": "<<first+count-1
                     <<",\n  \"escapes\": "<<best.escaped<<",\n  \"total_score\": "<<best.score
+                    <<",\n  \"yendor\": "<<best.yendor<<",\n  \"lord\": "<<best.lord<<",\n  \"progression\": "<<best.progression
                     <<",\n  \"parameter_hash\": "<<quote(hash)<<"\n}\n";
                 save(fs::path(output)/"best-result.json",result.str());
             }
             history<<c.id<<','<<generation<<','<<count<<','<<c.escaped<<','<<c.score<<','<<c.failures<<','<<c.actions<<','
                 <<std::chrono::duration<double>(Clock::now()-started).count()<<','<<hash<<','
-                <<sim::explorer_policy_hash(SIM_EXPLORER_POLICY_HASH,c.parameters)<<','<<improved<<'\n'; history.flush();
+                <<sim::explorer_policy_hash(SIM_EXPLORER_POLICY_HASH,c.parameters)<<','<<improved<<','<<c.yendor<<','<<c.lord<<','<<c.progression<<'\n'; history.flush();
             if(!history) throw std::runtime_error("history write failed");
             std::cout<<"candidate="<<c.id<<" generation="<<generation<<" seeds="<<count<<" escaped="<<c.escaped<<" total_score="<<c.score
                 <<" failures="<<c.failures<<(improved ? " BEST" : "")<<std::endl;

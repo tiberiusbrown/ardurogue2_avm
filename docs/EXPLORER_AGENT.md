@@ -1,10 +1,11 @@
 # Explorer-v1
 
 `explorer-v1` is a deterministic native simulation policy with player-limited
-observations. It runs the unchanged production descent, Lord combat, Yendor
+observations. It runs the production descent, Lord combat, Yendor
 pickup and return ascent. `omniscient-v2` remains the default balance oracle.
-No gameplay source, save field, firmware target, lighting constant, shield
-rating or production RNG rule changes for this agent.
+The policy adds no firmware storage. The current engine awareness change,
+competence experiments and preserved historical reference are described in
+[the competence and rebalance report](EXPLORER_COMPETENCE_AND_REBALANCE.md).
 
 ## Observation boundary
 
@@ -50,7 +51,9 @@ rules. They supply position and public species definitions, without HP, live
 effects, stun, AI targets or aggression flags. Native status adapters also
 supply information actually printed to the player: an incoming attacker name,
 or confirmation that the agent's own attempted melee square made contact.
-An incoming attack supplies **no bearing**. Confused movement cannot establish
+An incoming attack supplies **no bearing**. Protocol version 2 also removes
+the historical native status leak: a creature printed as “something” supplies
+no species identity. Its own attempted melee square can still establish contact. Confused movement cannot establish
 an inferred contact square. Damage events and telemetry never feed this path.
 
 ## Memory and decisions
@@ -118,7 +121,7 @@ quiet ascent lighting have separate preferences. None reveals unseen entities.
 
 ## Runtime preferences and evolution
 
-`explorer_parameters.hpp` defines integer defaults, names and bounds for 89
+`explorer_parameters.hpp` defines integer defaults, names and bounds for 101
 runtime preferences. They cover frontier costs, loot costs, threat memory,
 trap avoidance, healing/emergency thresholds, food, safe experimentation,
 equipment ratings, unknown-item values, early experience and retreats.
@@ -137,8 +140,10 @@ rejected for the oracle. Worker processes receive the complete configuration.
 
 The separate `ardurogue2_explorer_tune` executable uses seeded mutation and
 crossover with four retained elites. Every candidate in a stage uses the same
-seed range. Fitness is ordered strictly by **escapes first,
-then sum of production scores**. A batch with any `SIM_STUCK`/`SIM_ERROR` is
+seed range. Fitness is ordered by **escapes, Yendor acquisitions, Lord kills,
+weighted progression milestones, fewer actions, then production score**.
+Mutations cycle through navigation, tactics, equipment and resource groups.
+Binary ablation controls and offhand strategy modes are excluded from mutation. A batch with any `SIM_STUCK`/`SIM_ERROR` is
 invalid and cannot become an elite. Equal fitness retains the earlier candidate.
 The host search RNG is separate from production gameplay RNG.
 
@@ -149,7 +154,7 @@ build/sim-native/sim/ardurogue2_explorer_tune --seeds 1:100 --population 12 --ge
 build/sim-native/sim/ardurogue2_explorer_tune --seeds 1:1000 --start-params build/tune-100/best.json --population 12 --generations 20 --jobs 8 --random-seed 91 --output build/tune-1000
 # Or automate the ramp after three generations without improvement:
 build/sim-native/sim/ardurogue2_explorer_tune --seeds 1:1000 --initial-seeds 100 --plateau-generations 3 --jobs 8 --output build/tune-staged
-# Separate validation; never use these seeds to select training candidates.
+# Historical validation example; this range is now inspected development data.
 build/sim-native/sim/ardurogue2_sim --agent explorer-v1 --agent-params build/tune-1000/best.json --seeds 1001:10000 --jobs 8 --output build/tune-validation
 ```
 
@@ -169,7 +174,8 @@ configuration; the executable does not rewrite source during a search.
 
 ## Identity, telemetry and validation
 
-Oracle hashing remains unchanged. Explorer code and its observation adapter,
+The oracle hashing algorithm remains unchanged; the light-reserve repair changes
+its policy identity. Explorer code and its observation adapter,
 public definitions and preferences have a separate code hash. An explorer
 manifest records the complete runtime parameters and their canonical SHA-256.
 `agent_policy_hash = SHA256(code_hash + ":" + parameter_hash)`.
@@ -177,8 +183,8 @@ Partial and full files resolving to the same configuration have the same
 identity. Changing any preference changes policy identity. Paired comparisons
 require matching policy hashes and thus matching parameters.
 
-The original nine telemetry schemas stay unchanged. The additional
-`exploration.csv` has its own schema version (2) and records per-visit terrain/floor
+Core telemetry is version 7, appending `lord_killed` to runs. The additional
+`exploration.csv` has its own schema version (4) and records per-visit terrain/floor
 coverage, actually surveyed floor cells, exploration turns, travel, repeated visits, frontier changes, failed
 routes, stale items, unseen damage, observed items, discovery-distance bins,
 stair discovery/reach times and displacement. Reachable area and geometric
@@ -209,7 +215,7 @@ telemetry-disabled execution and serial/process-worker execution agree.
 Constructed coverage includes mapping, blindness, traps, swaps, light exhaustion,
 stairs, regenerated ascent and a complete production Lord/Yendor/escape run.
 
-## Measurement and limitations
+## Historical measurement and limitations
 
 The retained reference seeds 1–1,000 produced 41 oracle escapes. All original
 nine CSVs from the instrumented oracle matched the frozen reference byte for
@@ -287,7 +293,7 @@ binary and one policy. Cross-agent rows remain descriptive. The final data,
 per-condition binary provenance, tables and paired reports are retained under
 `build/explorer/final-v12-10000/`.
 
-## Final larger measurements
+## Historical larger measurements
 
 Tuning has stopped. The promoted defaults and all search history are retained
 for a later rebalance. Each main condition below uses seeds 1–10,000; the
@@ -402,5 +408,28 @@ exploration stream while preserving the existing streams. `balance.py`,
 `feature_experiments.py`, `test_balance_cli.py` and `test_check_balance.py`
 support the new agent and optional stream. Documentation changes are this
 file, the project `README.md`, `sim/README.md` and `sim/BALANCE.md`.
-There are no changes to production gameplay, firmware, save layout or the
-oracle's decision implementation.
+These statements describe the historical explorer implementation. The current
+pass changes initial monster awareness and repairs an oracle light-reserve swap
+cycle; save layout remains unchanged. See the current competence report.
+
+## Current competence pass
+
+The current defaults use separate safe (41%), approaching (55%), and melee
+(65%) healing thresholds, bounded one/two-action incoming-risk estimates,
+control before inadequate healing, earlier invisible-contact reassessment, and
+contextual offhand evaluation with a 30-point switching margin and six-turn
+cooldown. Contextual light coefficient 4 was selected after the stronger setting
+hurt equipment-light progression. Old emergency percentage and combat behavior
+remain available only as explicit ablations.
+
+Frontier gain uses rays through remembered terrain, with known walls and closed
+doors blocking sight; unknown terrain is optimistic and mapped unsurveyed cells
+have lower weight. Short remembered healing-feature detours, distant duplicate
+loot limits, critical-supply retention and regenerated-ascent food planning use
+only observed information. Public Lord traits guide clarity, fire resistance,
+speed and control choices; no Lord path or live HP is supplied.
+
+`sim/competence_experiments.py` freezes executables/configurations, seals raw
+CSVs, rejects failures and provides paired escape/progression statistics.
+The seed ledger and current results are in the competence report. The historical
+results above remain archival evidence, not estimates for these defaults.

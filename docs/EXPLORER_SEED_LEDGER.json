@@ -1,0 +1,26 @@
+{
+  "recorded": "2026-10-11",
+  "effective_seed_population": "1:65535",
+  "historical": {
+    "explorer_development_and_training": "1:20000",
+    "explorer_previous_validation": "20001:30000",
+    "omniscient_previous_censuses": "1:65535",
+    "reference_revision": "f31a2664ba4a9dfb88b14103d8e888d1ab6c6989"
+  },
+  "competence_pass": {
+    "optimization_and_sensitivity": "1:1000",
+    "development_and_reference_comparisons": "1:10000",
+    "intervention_experiments": "30001:32000",
+    "reserved_explorer_holdout": "40001:50000; completed after selection, not used for tuning",
+    "final_census": "1:65535; all four conditions completed after selection, no subsequent tuning"
+  },
+  "holdout_limitation": "40001:50000 was unused by explorer development when reserved. The oracle had already been evaluated on the complete population, so no globally untouched seed range exists. Oracle rows are reference checks, not untouched oracle validation.",
+  "raw_root": "build/competence",
+  "invalid_or_superseded": [
+    "offhand-v3r/no-switch: seed 169 reverse-swap failure; fixed, rerun",
+    "awareness-development/omniscient-v2-equipment-light-awareness: seed 1461 reverse-swap failure; fixed, rerun",
+    "frozen-stages-ab and final-stages-ab: superseded prototype batches; interrupted, never counted as deaths",
+    "tune-v3: pre-boundary-correction search; not promoted"
+  ],
+  "final_reference": "EXPLORER_COMPETENCE_RESULTS.json"
+}

@@ -2,6 +2,21 @@
 #include "metrics.hpp"
 #include <ostream>
 namespace sim {
+void trace_explorer(std::ostream& out,const ExplorerObservation& o,const SurvivalRisk& r) {
+    out<<"  OBS radius="<<int(o.radius)<<" danger="<<int(r.danger)<<" incoming="<<r.one<<'/'<<r.two
+        <<" retreat="<<r.retreat<<" attacker="<<int(o.reported_attacker)<<" statuses="<<int(o.confused)<<','<<int(o.paralyzed)<<','<<int(o.weakened)<<','<<int(o.slowed)<<','<<int(o.blindness)<<" worn=";
+    for(auto slot:o.equipped) out<<int(slot)<<',';
+    out<<" visible=";
+    for(int m=0;m<o.monster_count;++m) out<<int(o.monsters[m].type)<<'@'<<int(o.monsters[m].pos.x)<<':'<<int(o.monsters[m].pos.y)<<';';
+    out<<" pack=";
+    for(size_t s=0;s<o.inventory.size();++s) {
+        auto& i=o.inventory[s]; if(i.category==ItemCategory::None) continue;
+        out<<s<<':'<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<i.individual<<':'<<i.cursed<<':'<<int(i.enchant)<<':'<<int(i.modifier)<<';';
+    }
+    out<<" sight=";
+    for(int n=0;n<EXPLORER_CELLS;++n) if(o.visible[n]) out<<n<<':'<<int(o.terrain[n])<<':'<<int(o.features[n])<<';';
+    out<<'\n';
+}
 std::string action_text(const Action& a) {
     switch(a.kind) {
     case ActionKind::Move:

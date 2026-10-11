@@ -25,16 +25,17 @@ def main():
             for k in x:
                 if k!='seconds': assert x[k]==y[k],(k,x,y)
         valid=[r for r in rows if r['simulator_failures']=='0']
-        winner=max(valid,key=lambda r:(int(r['escapes']),int(r['total_score']),-int(r['candidate'])))
+        rank=lambda r:(int(r['escapes']),int(r['yendor']),int(r['lord']),int(r['progression']),-int(r['actions']),int(r['total_score']),-int(r['candidate']))
+        winner=max(valid,key=rank)
         assert (a/'best.json').read_bytes()==(a/'candidates'/f"{winner['candidate']}.json").read_bytes()
         assert (a/'best.json').read_bytes()==(b/'best.json').read_bytes()
         manifest=json.loads((a/'manifest.json').read_text())
-        assert manifest['objective']==['escapes descending','total score descending']
+        assert manifest['objective']==['escapes descending','Yendor descending','Lord kills descending','progression descending','actions ascending','total score descending']
         staged=search('staged',3,'--initial-seeds','2','--plateau-generations','1')
         staged_rows=list(csv.DictReader((staged/'history.csv').open()))
         assert {int(r['seed_count']) for r in staged_rows}=={2,8}
         full=[r for r in staged_rows if r['seed_count']=='8' and r['simulator_failures']=='0']
-        winner=max(full,key=lambda r:(int(r['escapes']),int(r['total_score']),-int(r['candidate'])))
+        winner=max(full,key=rank)
         assert (staged/'best.json').read_bytes()==(staged/'candidates'/f"{winner['candidate']}.json").read_bytes()
         assert json.loads((staged/'best-result.json').read_text())['last_seed']==8
         failed=search('fail',1,'--max-actions','1',valid=False)

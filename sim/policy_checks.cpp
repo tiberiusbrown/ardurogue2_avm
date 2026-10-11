@@ -373,6 +373,20 @@ void check_v2_policy() {
     }
     check(left,"summoning fight remained unbounded");
     // Acquisition and retention must not reverse the bow-owned ammo/wand swap.
+    arena(); agent.reset();
+    for(auto& item:game.inventory) item={POTION_HEALING,1};
+    game.inventory[14]={AMULET_BRILLIANCE,1}; game.amulet_slot=14;
+    game.inventory[15]=make_equipment(BUCKLER,0); game.offhand_slot=15;
+    game.inventory[0]={CANDLE,1}; game.ground[0]={game.player,{CANDLE,1}};
+    auto light_pick=agent.choose_pickup({game,0,0});
+    check(!(light_pick.kind==ActionKind::Take && light_pick.slot==0),"depleted candle replacement cycles");
+    game.ground[0].item.info=2;
+    light_pick=agent.choose_pickup({game,0,0});
+    check(light_pick.kind==ActionKind::Take && light_pick.slot==0,"strictly improved reserve fuel rejected");
+    check(dispatch(light_pick),"reserve fuel replacement failed");
+    light_pick=agent.choose_pickup({game,0,0});
+    check(!(light_pick.kind==ActionKind::Take && light_pick.slot==0),"reserve fuel replacement reversed");
+    // Acquisition and retention must not reverse the bow-owned ammo/wand swap.
     arena(); agent.reset(); for(auto& i:game.inventory) i={POTION_HEALING,1};
     game.inventory[0]=make_equipment(LONG_BOW,0); game.inventory[1]={ARROWS,2};
     game.inventory[2]={WAND_STRIKING,12}; game.ground[0]={game.player,{ARROWS,2}};

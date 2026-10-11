@@ -1,0 +1,157 @@
+{
+  "recorded": "2026-10-11",
+  "selection_frozen_before_holdout_and_census": true,
+  "observation_protocol": 2,
+  "core_telemetry": 7,
+  "exploration_telemetry": 4,
+  "seeds": {
+    "development": "1:10000",
+    "holdout": "40001:50000",
+    "census": "1:65535"
+  },
+  "holdout_scope": "Untouched explorer selection validation; previously used oracle seeds. No globally unused seeds exist.",
+  "policies": {
+    "explorer-v1": {
+      "agent_policy_hash": "7a76eaec8126c34d7769af79f5886afd6c011e4a26eb75eae6c4f0aa94eceec7",
+      "agent_code_hash": "67b6c61f7b5ed4511927a4f3cef261bc15b389695d6489e95eec737cd1e031a2",
+      "agent_parameter_hash": "4e28b1403e5e622baddbb7275a2a19fa66f33ec2d4f3c02acdc897ef7b24e178",
+      "observation_interface_hash": "bbdcea19ef89c9a2fb23dc4cf7b8e08d05e48f3aecedf8581a9221bc957dbd82"
+    },
+    "omniscient-v2": {
+      "agent_policy_hash": "bcd233ea46edab435d79309d53da3bb2469c33814616d2a4a5676e8f9a4bd440",
+      "agent_code_hash": "bcd233ea46edab435d79309d53da3bb2469c33814616d2a4a5676e8f9a4bd440"
+    }
+  },
+  "development": {
+    "explorer-v1-equipment": {
+      "escapes": 0,
+      "seeds": 10000,
+      "mean_floor": 4.4033,
+      "failures": 0
+    },
+    "explorer-v1-full": {
+      "escapes": 1,
+      "seeds": 10000,
+      "mean_floor": 4.8382,
+      "failures": 0
+    },
+    "omniscient-v2-equipment": {
+      "escapes": 477,
+      "seeds": 10000,
+      "mean_floor": 7.7444,
+      "failures": 0
+    },
+    "omniscient-v2-full": {
+      "escapes": 2144,
+      "seeds": 10000,
+      "mean_floor": 11.4151,
+      "failures": 0
+    }
+  },
+  "holdout": {
+    "explorer-v1-equipment": {
+      "escapes": 0,
+      "seeds": 10000,
+      "mean_floor": 4.3472,
+      "failures": 0,
+      "escape_percent": 0.0
+    },
+    "explorer-v1-full": {
+      "escapes": 0,
+      "seeds": 10000,
+      "mean_floor": 4.8135,
+      "failures": 0,
+      "escape_percent": 0.0
+    },
+    "omniscient-v2-equipment": {
+      "escapes": 456,
+      "seeds": 10000,
+      "mean_floor": 7.8386,
+      "failures": 0,
+      "escape_percent": 4.56
+    },
+    "omniscient-v2-full": {
+      "escapes": 2146,
+      "seeds": 10000,
+      "mean_floor": 11.4231,
+      "failures": 0,
+      "escape_percent": 21.46
+    }
+  },
+  "census": {
+    "explorer-v1-equipment": {
+      "escapes": 1,
+      "seeds": 65535,
+      "mean_floor": 4.390600442511635,
+      "failures": 0,
+      "escape_percent": 0.0015259021896696422,
+      "lord": 10,
+      "yendor": 10,
+      "csv_sha256": "3cc260daf944ade34a6e1e85c86a8fa3791fdaf255273d3adeaa7d2c4591daa0",
+      "escape_seeds": [
+        38700
+      ]
+    },
+    "explorer-v1-full": {
+      "escapes": 2,
+      "seeds": 65535,
+      "mean_floor": 4.798580910963607,
+      "failures": 0,
+      "escape_percent": 0.0030518043793392844,
+      "lord": 8,
+      "yendor": 8,
+      "csv_sha256": "798dca4e139e6a54f32ddadfae26c33da39a9ea9c337ff45a2523d9cdded799d",
+      "escape_seeds": [
+        6176,
+        51523
+      ]
+    },
+    "omniscient-v2-equipment": {
+      "escapes": 2937,
+      "seeds": 65535,
+      "mean_floor": 7.782238498512245,
+      "failures": 0,
+      "escape_percent": 4.481574731059739,
+      "lord": 4097,
+      "yendor": 4097,
+      "csv_sha256": "dafc1ccdb88e3cf0e229815ecf43e978c60fc8e10ce5d86c55c8aee8541f686a",
+      "escape_seeds": null
+    },
+    "omniscient-v2-full": {
+      "escapes": 14150,
+      "seeds": 65535,
+      "mean_floor": 11.38236057068742,
+      "failures": 0,
+      "escape_percent": 21.59151598382544,
+      "lord": 18534,
+      "yendor": 18533,
+      "csv_sha256": "f2ac5bf2febbf8d18651d76981f7c8a91839682a6c798511b34fad93eb8bbfb7",
+      "escape_seeds": null
+    }
+  },
+  "hardware": {
+    "benchmark_passed": 78,
+    "benchmark_total": 78,
+    "worst_ms": 99.2990625,
+    "stack_bound_bytes": 233,
+    "stack_analysis_gaps": 0,
+    "saved_game_bytes": 812,
+    "monster_bytes": 8,
+    "item_bytes": 2,
+    "ordinary_globals_bytes": 108,
+    "save_version": 27,
+    "text_bytes": 89873,
+    "rodata_bytes": 10110,
+    "fx_data_bytes": 101376,
+    "fx_save_bytes": 4096
+  },
+  "tests": {
+    "native_ctest_passed": 23,
+    "native_ctest_total": 23,
+    "explorer_checks": 298,
+    "report_tests_rechecked_after_exact_bounds": true
+  },
+  "targets_achieved": false,
+  "executable_sha256": "8b11166c60ffd280f83a268ded99620826df68565f05aa04a36b85e68fc2ea3d",
+  "package_sha256": "5556c4658b484e98bfdae07726c8a34c5e53b16277ef1ba4f9d0db33ccfa2d0c"
+}

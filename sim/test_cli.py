@@ -86,7 +86,7 @@ def main():
                 for k in counters:
                     assert totals[(row["effective_seed"], row[type_key])][k] == int(row[k]), (category, k, row)
         manifest = json.loads((first / "manifest.json").read_text())
-        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 6 and len(manifest["agent_policy_hash"]) == 64
+        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 7 and len(manifest["agent_policy_hash"]) == 64
         assert manifest["effective_seed_count"] == 8 and manifest["variant"] == "control"
         for row in rows["floors"]:
             assert int(row["entry_max_hp"]) >= int(row["entry_hp"]) and int(row["floor_tiles"]) > 0

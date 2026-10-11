@@ -14,6 +14,8 @@ uint8_t monster_speed(uint8_t type);
 uint8_t monster_armor(uint8_t type);
 uint8_t monster_health(uint8_t type);
 uint8_t monster_xp(uint8_t type);
+// Initial awareness only; pursuit retains MON_AGGRO after detection.
+bool monster_detects_player(const Monster& monster, uint16_t flags);
 uint16_t next_random(uint16_t& state);
 uint8_t roll(uint8_t limit);
 int8_t ring_bonus(uint8_t type);

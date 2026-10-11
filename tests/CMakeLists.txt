@@ -7,6 +7,7 @@ enable_testing()
 add_executable(game_native
     game_native.cpp
     lighting_checks.cpp
+    awareness_checks.cpp
     combat_checks.cpp
     weapon_checks.cpp
     bow_checks.cpp

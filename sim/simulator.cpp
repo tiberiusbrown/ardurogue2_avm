@@ -39,8 +39,8 @@ Action decide(ExplorerAgent& agent,const ExplorerObservation& o,uint64_t,uint64_
     a.goal=std::move(e.goal); a.destination={e.destination.x,e.destination.y};
     a.diagnostic=e.no_path ? Diagnostic::NoPath : Diagnostic::None; return a;
 }
-void policy_metrics(Collector&,Agent&) {}
-void policy_metrics(Collector& c,ExplorerAgent& a) { c.explorer_stats=a.stats; }
+void policy_metrics(Collector& c,Agent&) { c.decision_risk={}; }
+void policy_metrics(Collector& c,ExplorerAgent& a) { c.explorer_stats=a.stats; c.decision_risk=a.risk; }
 FeatureChoice feature_choice(Agent&,uint64_t,uint64_t) { return choose_feature_choice(feature_type(observed_feature_at(game,game.player))); }
 FeatureChoice feature_choice(ExplorerAgent& a,uint64_t actions,uint64_t turns) {
     auto s=a.choose_feature(observe_explorer(actions,turns)); FeatureChoice choice; choice.accept=s.accept; choice.slot=s.slot; return choice;
@@ -70,6 +70,7 @@ RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
             c.observe_exploration(observation);
             a=decide(agent,observation,r.actions,r.turns);
             policy_metrics(c,agent);
+            if(options.trace && r.agent=="explorer-v1") trace_explorer(*options.trace,observation,c.decision_risk);
         }
         catch(const std::exception& error) {
             r.stuck = true; r.result = "SIM_ERROR";

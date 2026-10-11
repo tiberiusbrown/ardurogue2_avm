@@ -83,6 +83,9 @@ void after_floor_generation() {
 bool monster_traps_enabled() {
     return !collector || !collector->experiment || collector->experiment->monster_traps_enabled();
 }
+bool light_awareness() {
+    return !collector || !collector->experiment || collector->experiment->light_awareness();
+}
 bool features_enabled() {
     return !collector || !collector->experiment || collector->experiment->features_enabled();
 }
@@ -122,6 +125,15 @@ void Collector::prepare_action(const Action& a) {
     exploring_action=a.goal=="explore known frontier" || a.goal=="explicit tactile probe at radius zero" || a.goal=="patrol surveyed final floor";
     pickup_slot = drop_slot = rogue::NONE;
     if(!enabled) return;
+    healing_action=a.kind==ActionKind::Use && a.slot<rogue::INVENTORY &&
+        (rogue::game.inventory[a.slot].type==rogue::POTION_HEALING || rogue::game.inventory[a.slot].type==rogue::POTION_EXPERIENCE);
+    if(!data.floors.empty()) {
+        auto& e=data.floors.back().exploration;
+        e.last_one=decision_risk.one; e.last_two=decision_risk.two; e.safe_retreat=decision_risk.retreat;
+        e.caution_actions+=decision_risk.danger==Danger::Caution;
+        e.serious_actions+=decision_risk.danger==Danger::Serious;
+        e.lethal_actions+=decision_risk.danger==Danger::Lethal;
+    }
     if(a.kind == ActionKind::Take || a.kind == ActionKind::Swap) {
         pickup_slot = a.slot;
         if(a.kind == ActionKind::Take)
@@ -136,7 +148,7 @@ void Collector::enter_floor() {
     close_floor(true);
     ++data.floors_entered;
     data.deepest = std::max(data.deepest,int(g.floor));
-    reached.fill(false); encountered.fill(false); engaged.fill(false); feature_entries.fill(0);
+    reached.fill(false); encountered.fill(false); engaged.fill(false); aware.fill(false); feature_entries.fill(0);
     FloorMetrics f; f.floor = g.floor; f.visit = data.floors_entered;
     observed_terrain.reset(); observed_floor.reset(); surveyed_floor.reset(); visited_tiles.reset();
     visibly_observed.fill(false); visible_before.fill(false); observed_items.fill(false);
@@ -248,6 +260,17 @@ void Collector::close_floor(bool exited) {
         f.monsters[i].*(field.member)=data.monsters[i].*(field.member)-entry_monsters[i].*(field.member);
     f.exit_hunger = rogue::game.hunger;
     f.exit_hp = rogue::game.hp; f.exit_level = rogue::game.level;
+    auto& e=f.exploration;
+    e.remaining_food=e.remaining_healing=e.remaining_escape=e.remaining_control=e.unknown_potions=0;
+    for(auto i:rogue::game.inventory) {
+        if(i.type==rogue::FOOD) e.remaining_food+=units(i);
+        if(i.type==rogue::POTION_HEALING && rogue::item_type_identified(i.type)) e.remaining_healing+=units(i);
+        if((i.type==rogue::SCROLL_TELEPORT || i.type==rogue::POTION_INVISIBILITY) && rogue::item_type_identified(i.type)) e.remaining_escape+=units(i);
+        if((i.type==rogue::SCROLL_FEAR || i.type==rogue::POTION_PARALYSIS || i.type==rogue::POTION_CONFUSION || i.type==rogue::POTION_BLINDNESS) && rogue::item_type_identified(i.type)) e.remaining_control+=units(i);
+        if(rogue::is_potion(i.type) && !rogue::item_type_identified(i.type)) e.unknown_potions+=units(i);
+    }
+    e.recent_damage=0;
+    for(size_t i=0;i<damage_turns.size();++i) if(data.turns<=damage_turns[i]+7) e.recent_damage+=int(damage_amounts[i]);
     if(exited) { f.exited = true; ++data.floors_exited; }
 }
 void Collector::observe() {
@@ -267,6 +290,11 @@ void Collector::observe() {
 void Collector::observe_exploration(const ExplorerObservation& o) {
     if(!enabled || data.floors.empty()) return;
     auto& e=data.floors.back().exploration;
+    combat_action=o.attacked;
+    for(int m=0;m<o.monster_count;++m) if(std::abs(int(o.player.x)-o.monsters[m].pos.x)+std::abs(int(o.player.y)-o.monsters[m].pos.y)<=2) combat_action=true;
+    for(auto& i:o.inventory) if(i.category==ItemCategory::Potion && i.type && !known_potions[i.type]) {
+        known_potions.set(i.type); ++e.identified_potions;
+    }
     for(int n=0;n<EXPLORER_CELLS;++n) if(o.terrain[n]!=Terrain::Unknown) {
         if(!observed_terrain[n]) { ++e.terrain_cells; observed_terrain.set(n); }
         if(o.terrain[n]!=Terrain::Wall && !observed_floor[n]) { ++e.floor_cells; observed_floor.set(n); }
@@ -304,13 +332,28 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
     }
 }
 void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount, uint8_t detail) {
+    if(k==EventKind::MonsterKilled && type==rogue::LORD) data.lord_killed=true;
+    if(k==EventKind::Finished && type==rogue::DEATH && healing_action && !data.floors.empty()) ++data.floors.back().exploration.healing_then_death;
+    if(k==EventKind::Consumed && type==rogue::FOOD && !data.floors.empty()) data.floors.back().exploration.food_waste+=std::max(0,int(rogue::game.hunger)-145);
     if(k==EventKind::MonsterAttack) last_attack_monster=index;
+    if(enabled && index < rogue::MONSTERS && !data.floors.empty()) {
+        auto& e=data.floors.back().exploration;
+        if(k==EventKind::MonsterAware && !aware[index]) {
+            aware[index]=true;
+            ++e.alert_distances[std::min<unsigned>(amount,8)];
+            ++e.alert_light[std::min<unsigned>(detail,6)];
+        }
+        if(k==EventKind::MonsterAttack && e.first_contact<0)
+            e.first_contact=int64_t(data.turns-exploration_entry_turn);
+        if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn) aware[index]=false;
+    }
     if(trace) trace_event(*trace,k,index,type,amount);
     if(k == EventKind::FloorEntered) { enter_floor(); return; }
     if(k == EventKind::FloorExited) { close_floor(true); return; }
     if(k == EventKind::Finished && type == rogue::DEATH && rogue::game.blindness) ++data.blind_deaths;
     if(k == EventKind::FuelExhausted) { ++data.fuel_exhaustions; return; }
     if(k == EventKind::Turn) {
+        if(enabled && combat_action && !data.floors.empty()) ++data.floors.back().exploration.combat_turns;
         if(enabled && exploring_action && !data.floors.empty()) ++data.floors.back().exploration.exploring_turns;
         ++data.light_turns[rogue::player_light_radius()];
         if(rogue::game.blindness) ++data.blind_turns;
@@ -337,6 +380,9 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         return;
     }
     if(k == EventKind::PlayerDamage && amount) {
+        auto at=data.turns%damage_turns.size();
+        if(damage_turns[at]!=data.turns) { damage_turns[at]=data.turns; damage_amounts[at]=0; }
+        damage_amounts[at]+=amount;
         if(enabled && !data.floors.empty() && (cause==Cause::Monster || cause==Cause::Fire) &&
             last_attack_monster<rogue::MONSTERS && !visible_before[last_attack_monster]) data.floors.back().exploration.unseen_damage+=amount;
         switch(cause) {
@@ -510,6 +556,10 @@ void write_exploration_header(std::ostream& o) {
     o<<"seed,effective_seed,agent,visit,floor,direction,terrain_cells,floor_cells,reachable_floor_cells,exploring_turns,travel,shortest_objective_route,repeated_visits,frontier_changes,unreachable_attempts,missing_items,unseen_damage,items_observed,displacements,stair_discovery_turn,stair_reached_turn";
     for(int d=0;d<=6;++d) o<<",monsters_first_seen_"<<d;
     o<<",surveyed_floor_cells";
+    o<<",combat_turns,caution_actions,serious_actions,lethal_actions,healing_then_death,food_waste,identified_potions,remaining_food,remaining_healing,remaining_escape,remaining_control,unknown_potions,last_one,last_two,recent_damage,safe_retreat";
+    for(int d=0;d<=8;++d) o<<",initial_alert_distance_"<<d;
+    for(int d=0;d<=6;++d) o<<",initial_alert_light_"<<d;
+    o<<",first_hostile_contact_turn";
     o<<'\n';
 }
 void write_exploration(std::ostream& o,const RunMetrics& r) {
@@ -518,11 +568,16 @@ void write_exploration(std::ostream& o,const RunMetrics& r) {
         o<<','<<e.terrain_cells<<','<<e.floor_cells<<','<<e.reachable<<','<<e.exploring_turns<<','<<e.travel<<','<<e.shortest<<','<<e.repeated_visits<<','<<e.frontier_changes<<','<<e.unreachable<<','<<e.missing_items<<','<<e.unseen_damage<<','<<e.items_observed<<','<<e.displacements<<','<<e.stair_discovery<<','<<e.stair_reached;
         for(auto n:e.monster_distances) o<<','<<n;
         o<<','<<e.surveyed_floor_cells;
+        o<<','<<e.combat_turns<<','<<e.caution_actions<<','<<e.serious_actions<<','<<e.lethal_actions<<','<<e.healing_then_death<<','<<e.food_waste<<','<<e.identified_potions
+            <<','<<e.remaining_food<<','<<e.remaining_healing<<','<<e.remaining_escape<<','<<e.remaining_control<<','<<e.unknown_potions<<','<<e.last_one<<','<<e.last_two<<','<<e.recent_damage<<','<<e.safe_retreat;
+        for(auto n:e.alert_distances) o<<','<<n;
+        for(auto n:e.alert_light) o<<','<<n;
+        o<<','<<e.first_contact;
         o<<'\n';
     }
 }
 void write_runs_header(std::ostream& o) {
-    o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash,xp,final_hunger,fuel_exhaustions,blind_turns,blind_deaths,shield_turns,offhand_light_turns,light_0,light_1,light_2,light_3,light_4,light_5,light_6\n";
+    o << "seed,effective_seed,agent,result,actions,turns,score,deepest_floor,final_floor,level,hp,max_hp,has_yendor,floors_entered,floors_exited,stuck,reason,death_cause,action_hash,xp,final_hunger,fuel_exhaustions,blind_turns,blind_deaths,shield_turns,offhand_light_turns,light_0,light_1,light_2,light_3,light_4,light_5,light_6,lord_killed\n";
 }
 void write_floors_header(std::ostream& o) {
     o << "seed,effective_seed,agent,visit,floor,direction,entry_hp,exit_hp,entry_level,exit_level,actions,turns,monsters_killed,damage_taken,damage_dealt,items_picked_up,consumables_used,exited,exit_hunger,entry_max_hp,entry_strength,entry_dexterity,entry_speed,entry_hunger,entry_armor_rating,entry_food_units,entry_healing_units,entry_weapon_type,entry_weapon_enchant,entry_armor_type,entry_armor_enchant,arrow_bundles,arrow_generated,arrow_picked,bow_owned,archetype,floor_tiles,major_features,corridors,loops,open_connections";
@@ -541,6 +596,7 @@ void write_run(std::ostream& o, const RunMetrics& r) {
       << ',' << r.has_yendor << ',' << r.floors_entered << ',' << r.floors_exited << ',' << r.stuck << ','
       << csv(r.reason) << ',' << csv(r.death_cause) << ',' << r.action_hash << ',' << r.xp << ',' << r.final_hunger << ',' << r.fuel_exhaustions << ',' << r.blind_turns << ',' << r.blind_deaths << ',' << r.shield_turns << ',' << r.offhand_light_turns;
     for(auto turns : r.light_turns) o << ',' << turns;
+    o<<','<<r.lord_killed;
     o << '\n';
 }
 void write_floors(std::ostream& o, const RunMetrics& r) {

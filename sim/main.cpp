@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
                     "no-early-damaging-traps, interactive-features-only, traps-only.\n"
                     "Generation controls: original-teleport-placement, original-early-traps, original-holy-generation.\n"
                     "Also original-early-density, original-early-damage, original-early-roster for isolated tuning.\n"
+                    "Lighting: full-light; detection: light-awareness (default) or legacy-awareness.\n"
                     "--jobs uses 1..64 isolated processes (default 1); CSV remains in seed order.\n";
                 return 0;
             } else if(arg=="--all-seeds") {
@@ -88,6 +89,7 @@ int main(int argc, char** argv) {
             auto experiment=std::make_shared<sim::RuleExperiment>();
             for(const auto& rule:options.intervention_rules) experiment->rules.push_back(sim::parse_rule(rule));
             options.experiment=experiment;
+            experiment->light_awareness(); // Validate mutually exclusive controls before opening outputs.
         }
         if(options.entry_state && (output.empty() || !options.telemetry))
             throw std::runtime_error("--entry-state requires --output and telemetry");

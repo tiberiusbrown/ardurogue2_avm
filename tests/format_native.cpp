@@ -60,8 +60,8 @@ static void capture_glyphs(int16_t x, int16_t y, const char* text)
 {
     if(x == 128) return; // Width measurement is off-screen.
     if(!std::strcmp(text, "[more]")) { ++more_count; return; }
-    if(std::strlen(text) > 8) {
-        std::fprintf(stderr, "status draw exceeded eight characters: %s\n", text);
+    if(std::strlen(text) > 24) {
+        std::fprintf(stderr, "status draw exceeded bounded 24-character chunk: %s\n", text);
         std::exit(1);
     }
     while(*text) {

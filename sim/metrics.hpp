@@ -39,6 +39,14 @@ struct ExplorationMetrics {
     int reachable=0, shortest=0;
     int64_t stair_discovery=-1, stair_reached=-1;
     std::array<uint64_t,7> monster_distances{};
+    uint64_t combat_turns=0,caution_actions=0,serious_actions=0,lethal_actions=0,
+        healing_then_death=0,food_waste=0,identified_potions=0;
+    int remaining_food=0,remaining_healing=0,remaining_escape=0,remaining_control=0,unknown_potions=0;
+    int last_one=0,last_two=0,recent_damage=0;
+    bool safe_retreat=false;
+    std::array<uint64_t,9> alert_distances{};
+    std::array<uint64_t,7> alert_light{};
+    int64_t first_contact=-1;
 };
 struct FloorMetrics {
     ExplorationMetrics exploration;
@@ -75,7 +83,7 @@ struct RunMetrics {
     uint64_t actions=0, turns=0, action_hash=14695981039346656037ull;
     int xp=0, final_hunger=0, score=0, deepest=0, final_floor=0, level=0, hp=0, max_hp=0,
         floors_entered=0, floors_exited=0;
-    bool has_yendor=false, stuck=false;
+    bool has_yendor=false, stuck=false, lord_killed=false;
     std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> items{};
     std::array<MonsterMetrics, rogue::LORD+1> monsters{};
     std::vector<FloorMetrics> floors;
@@ -86,9 +94,14 @@ struct Collector {
     ExplorerStats explorer_stats, entry_explorer_stats;
     std::bitset<EXPLORER_CELLS> observed_terrain, observed_floor, surveyed_floor, visited_tiles;
     std::array<bool,rogue::MONSTERS> visibly_observed{}, visible_before{};
+    std::array<bool,rogue::MONSTERS> aware{};
     std::array<bool,rogue::GROUND_ITEMS> observed_items{};
     SeenPosition observed_position;
     bool exploring_action=false;
+    bool combat_action=false,healing_action=false;
+    SurvivalRisk decision_risk;
+    std::array<uint64_t,8> damage_turns{},damage_amounts{};
+    std::bitset<256> known_potions;
     uint8_t last_attack_monster=255;
     uint64_t exploration_entry_turn=0;
     void observe_exploration(const ExplorerObservation&);
@@ -136,7 +149,7 @@ void write_interventions(std::ostream&, const RunMetrics&);
 inline constexpr unsigned ENTRY_STATE_SCHEMA_VERSION=1;
 void write_entry_state_header(std::ostream&);
 void write_entry_state(std::ostream&, const RunMetrics&);
-inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=2;
+inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=4;
 void write_exploration_header(std::ostream&);
 void write_exploration(std::ostream&,const RunMetrics&);
 struct CsvStream {
@@ -144,7 +157,7 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=6;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=7;
 inline constexpr size_t CSV_STREAM_COUNT=9;
 void write_ranged_header(std::ostream&);
 void write_ranged(std::ostream&, const RunMetrics&);

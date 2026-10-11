@@ -25,6 +25,7 @@ void explorer_status_monster(uint8_t type) { if(sink) sink->monster(type); }
 void explorer_message_observation(ExplorerObservation& o) {
     if(!sink) return;
     o.attacked=o.attacked||sink->attacked; o.reported_attacker=sink->attacker_type;
+    o.incoming_attack=sink->attacked;
     o.contact_reported=sink->contact_reported; o.contact_type=sink->contact_type;
     if(o.contact_reported) o.contact=sink->attempted;
 }

@@ -3,6 +3,7 @@
 #include "game.hpp"
 #include "render.hpp"
 #include "status.hpp"
+#include "status_advances.hpp"
 #include "world.hpp"
 #include <stdio.h>
 #include <string.h>
@@ -13,9 +14,17 @@ namespace {
 
 static uint8_t status_x = 67, status_y = 28;
 
-int16_t text_width(const char* words)
+int16_t status_character_width(char c)
 {
-    return avm_draw_text(128, 0, words).x - 128;
+#if defined(__AVM__)
+    // main.cpp fixes the gameplay font to BR5D. Read its public x-advance
+    // table instead of invoking the text renderer just to measure one word.
+    uint8_t index = static_cast<uint8_t>(c) - 32;
+    return index < 95 ? STATUS_ADVANCES[index] : 0;
+#else
+    char word[2] = {c, 0};
+    return avm_draw_text(128, 0, word).x - 128;
+#endif
 }
 
 static char pending_suffix = 0;
@@ -48,8 +57,52 @@ char capitalized(char c)
     return c >= 'a' && c <= 'z' ? static_cast<char>(c - 'a' + 'A') : c;
 }
 
+// Cache each character once, especially for program-space strings. Scratch
+// belongs to these shallow helpers and is gone before status paging redraws.
+template<typename Pointer>
+uint8_t status_chunk(Pointer scan, char (&buf)[25], bool capitalize)
+{
+    uint8_t count = 0;
+    while(count < 24) {
+        char c = scan[count];
+        if(!c || c == ' ') break;
+        buf[count++] = c;
+    }
+    buf[count] = 0;
+    if(capitalize && count) buf[0] = capitalized(buf[0]);
+    return count;
+}
+
+template<typename Pointer>
+__attribute__((noinline)) int16_t status_word_width(Pointer word, bool capitalize, char suffix)
+{
+    char c = *word;
+    int16_t width = status_character_width(capitalize ? capitalized(c) : c);
+    while((c = *++word) && c != ' ') width += status_character_width(c);
+    if(suffix) width += status_character_width(suffix);
+    return width;
+}
+
+template<typename Pointer>
+__attribute__((noinline)) Pointer draw_status_word(Pointer word, bool capitalize,
+                                                  char suffix, uint8_t& x, uint8_t y)
+{
+    char buf[25];
+    Pointer scan = word;
+    for(;;) {
+        uint8_t count = status_chunk(scan, buf, capitalize && scan == word);
+        if(!count) break;
+        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
+        scan += count;
+    }
+    if(suffix) {
+        buf[0] = suffix; buf[1] = 0;
+        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
+    }
+    return scan;
+}
+
 // Pointer retains its address space: RAM loads for AS0, program loads for AS1.
-// Only this frame owns text scratch, including while waiting for [more].
 template<typename Pointer>
 Pointer stream_status_word(Pointer word)
 {
@@ -59,50 +112,16 @@ Pointer stream_status_word(Pointer word)
     while(*word == ' ') ++word;
     if(!*word) return nullptr;
 
-    char buf[9];
-    buf[8] = 0;
-    int16_t width = 0;
-    Pointer scan = word;
-    while(*scan && *scan != ' ') {
-        uint8_t count = 0;
-        while(count < 8 && scan[count] && scan[count] != ' ') {
-            buf[count] = scan[count];
-            ++count;
-        }
-        buf[count] = 0;
-        if(capitalize && scan == word) buf[0] = capitalized(buf[0]);
-        width += text_width(buf);
-        scan += count;
-    }
-    buf[0] = suffix;
-    buf[1] = 0;
-    if(suffix) width += text_width(buf);
+    int16_t width = status_word_width(word, capitalize, suffix);
     if(x != 67) {
-        buf[0] = ' ';
-        int16_t space_width = text_width(buf);
+        int16_t space_width = status_character_width(' ');
         width += space_width;
         if(x + width > 128) status_next_line(x, y);
         else x = static_cast<uint8_t>(x + space_width);
     }
 
     ui.repeat_suppressed = true;
-    scan = word;
-    while(*scan && *scan != ' ') {
-        uint8_t count = 0;
-        while(count < 8 && scan[count] && scan[count] != ' ') {
-            buf[count] = scan[count];
-            ++count;
-        }
-        buf[count] = 0;
-        if(capitalize && scan == word) buf[0] = capitalized(buf[0]);
-        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
-        scan += count;
-    }
-    if(suffix) {
-        buf[0] = suffix;
-        buf[1] = 0;
-        x = static_cast<uint8_t>(avm_draw_text(x, y, buf).x);
-    }
+    Pointer scan = draw_status_word(word, capitalize, suffix, x, y);
     status_x = x;
     status_y = y;
     pending_capitalize = false;

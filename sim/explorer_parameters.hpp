@@ -27,7 +27,19 @@ namespace sim {
  X(remembered_threat_cost,6,0,100) \
  X(monster_memory_turns,7,1,40) \
  X(healing_percent,41,10,90) \
- X(combat_healing_percent,38,10,95) \
+ X(combat_healing_percent,65,10,95) \
+ X(approach_healing_percent,55,10,95) \
+ X(tactical_risk,1,0,1) \
+ X(context_healing,1,0,1) \
+ X(offhand_mode,2,0,5) \
+ X(obstruction_gain,1,0,1) \
+ X(resource_planning,1,0,1) \
+ X(recovery_detour_distance,24,1,48) \
+ X(invisible_response,1,0,1) \
+ X(risk_margin_percent,120,80,180) \
+ X(offhand_switch_margin,30,0,150) \
+ X(offhand_switch_turns,6,0,20) \
+ X(control_retry_turns,4,1,12) \
  X(emergency_hp,3,1,40) \
  X(emergency_percent,6,5,80) \
  X(crowd_threshold,2,2,8) \
@@ -59,7 +71,7 @@ namespace sim {
  X(shield_threat_memory_turns,3,1,12) \
  X(light_low_bonus,11,0,250) \
  X(light_high_bonus,41,0,100) \
- X(light_radius_weight,11,1,80) \
+ X(light_radius_weight,4,1,80) \
  X(shield_rating_weight,73,1,80) \
  X(armor_rating_weight,29,1,80) \
  X(weapon_damage_weight,4,1,30) \
@@ -87,13 +99,13 @@ namespace sim {
  X(early_xp_level,3,1,15) \
  X(early_xp_distance,2,1,12) \
  X(early_xp_health_percent,74,40,100) \
- X(retreat_steps,2,0,8) \
- X(retreat_connections,3,1,4) \
+ X(retreat_steps,4,0,8) \
+ X(retreat_connections,2,1,4) \
  X(retreat_reversal_cost,44,0,100) \
  X(retreat_separation_weight,7,1,50) \
  X(retreat_connectivity_weight,0,0,30) \
  X(retreat_reset_quiet_turns,12,4,40) \
- X(stationary_contact_turns,128,32,512)
+ X(stationary_contact_turns,12,4,512)
 struct ExplorerParameters {
 #define DECLARE(name,value,low,high) int name=value;
     EXPLORER_PARAMETERS(DECLARE)

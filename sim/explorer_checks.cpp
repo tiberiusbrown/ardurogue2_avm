@@ -2,6 +2,7 @@
 #include "simulator.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
+#include "status.hpp"
 #include "policy_hash.hpp"
 #include "explorer_events.hpp"
 #include "tuning.hpp"
@@ -29,7 +30,8 @@ void item_text(std::ostream& s,const SeenItem& i) {
 }
 std::string observation_text(const ExplorerObservation& o) {
     std::ostringstream s;
-    s<<int(o.player.x)<<':'<<int(o.player.y)<<':'<<int(o.floor)<<':'<<int(o.hp)<<':'<<int(o.max_hp)<<':'<<int(o.level)<<':'<<int(o.xp)<<':'<<int(o.strength)<<':'<<int(o.dexterity)<<':'<<int(o.speed)<<':'<<int(o.hunger)<<':'<<int(o.radius)<<':'<<o.yendor<<':'<<o.pending_pickups<<':'<<o.actions<<':'<<o.turns<<':'<<o.attacked;
+    s<<int(o.player.x)<<':'<<int(o.player.y)<<':'<<int(o.floor)<<':'<<int(o.hp)<<':'<<int(o.max_hp)<<':'<<int(o.level)<<':'<<int(o.xp)<<':'<<int(o.strength)<<':'<<int(o.dexterity)<<':'<<int(o.speed)<<':'<<int(o.hunger)<<':'<<int(o.radius)<<':'<<o.yendor<<':'<<o.pending_pickups<<':'<<o.actions<<':'<<o.turns<<':'<<o.attacked<<':'<<o.incoming_attack<<':'<<int(o.hp_loss);
+    s<<':'<<int(o.reported_attacker)<<':'<<int(o.reported_species.strength)<<':'<<o.reported_species.traits;
     for(auto b:o.equipped) s<<int(b)<<',';
     for(auto b:{o.weakened,o.confused,o.paralyzed,o.slowed,o.invisible,o.blindness}) s<<int(b)<<',';
     for(auto& i:o.inventory) item_text(s,i);
@@ -203,7 +205,7 @@ void navigation_and_tactics() {
     auto o=observe_explorer(0,0); auto a=p->choose_action(o);
     check(a.kind==ExplorerActionKind::Move && o.terrain[cell(10+a.dx,10+a.dy)]!=Terrain::Unknown,"path used unknown terrain");
     check(p->memory(0).down.x==255,"unknown down stair destination memorized");
-    game.down={11,10}; o=observe_explorer(1,1); a=p->choose_action(o);
+    game.hp=40; game.down={11,10}; o=observe_explorer(1,1); a=p->choose_action(o);
     check(a.kind==ExplorerActionKind::Move && a.dx==1,"observed stairs not approached");
     game.player=game.down; a=p->choose_action(observe_explorer(2,2)); check(a.kind==ExplorerActionKind::Stairs,"known stairs not used");
     // Retain same-generation floors; ascent generation preserves only history.
@@ -281,7 +283,7 @@ void navigation_and_tactics() {
 }
 void stationary_contact_detour() {
     arena(); auto o=observe_explorer(0,0); Game before=game;
-    ExplorerParameters prefs; prefs.stationary_contact_turns=32;
+    ExplorerParameters prefs; prefs.stationary_contact_turns=32; prefs.invisible_response=0;
     auto p=std::make_unique<ExplorerAgent>(prefs);
     o.contact_reported=true; o.contact={11,10}; o.contact_type=PHANTOM;
     for(unsigned turn=0;turn<32;++turn) {
@@ -322,6 +324,9 @@ void parameters_and_messages() {
     check(fitness_better({1,0,0,10},{0,0,0,1000000}),"escapes do not outrank total score");
     check(fitness_better({1,0,0,20},{1,0,0,10}),"score does not break escape ties");
     check(fitness_better({0,0,0,10},{100,1,0,1000000}),"simulator failure can win tuning");
+    TuningFitness deep,grinder; deep.progression=progression_credit(14,false,false,14); grinder.score=100000000; grinder.progression=progression_credit(0,false,false,0);
+    check(fitness_better(deep,grinder),"weak-monster farming outranks progression");
+    deep.lord=1; grinder.escaped=1; check(fitness_better(grinder,deep),"progression outranks escape");
     check(sha256("")=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","empty SHA256");
     check(sha256("abc")=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","SHA256 abc");
     check(sha256(std::string(1000,'a'))=="41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3","multi-block SHA256");
@@ -354,9 +359,76 @@ void parameters_and_messages() {
     messages.prepare(attempted,{10,10},true); messages.text("You miss"); messages.monster(PHANTOM);
     check(!observe_explorer(3,3).contact_reported,"confused action falsely inferred contact location");
 }
+void competence() {
+    ExplorerParameters prefs;
+    auto p=std::make_unique<ExplorerAgent>(prefs);
+    arena(); game.hp=60; game.inventory[0]={POTION_HEALING,2}; identify_type(POTION_HEALING);
+    auto o=observe_explorer(10,10);
+    check(p->choose_action(o).kind!=ExplorerActionKind::Use,"safe health uses combat healing threshold");
+    game.monsters[0]={{11,10},SNAKE,3,0,{0,0},MON_AGGRO}; p->reset();
+    check(p->choose_action(observe_explorer(10,10)).slot==0,"combat healing threshold remains redundant");
+    arena(); game.hp=25; game.monsters[0]={{11,10},LORD,112,0,{0,0},MON_AGGRO}; p->reset();
+    p->choose_action(observe_explorer(10,10));
+    check(p->risk.danger>=Danger::Serious,"lone high-damage monster recognized too late");
+    arena(); game.monsters[0]={{11,10},SNAKE,3,0,{0,0},MON_AGGRO}; p->reset(); p->choose_action(observe_explorer(10,10));
+    check(p->risk.danger==Danger::Caution,"trivial healthy encounter panics");
+    game.monsters[1]={{10,11},SNAKE,3,0,{0,0},MON_AGGRO}; game.hp=6; p->reset(); p->choose_action(observe_explorer(10,10));
+    check(p->risk.danger>=Danger::Serious && p->risk.attackers==2,"multiple weak enemies underestimated");
+    arena(); game.hp=10; game.inventory[0]={POTION_HEALING,1}; game.inventory[1]={SCROLL_TELEPORT,1};
+    identify_type(POTION_HEALING); identify_type(SCROLL_TELEPORT);
+    game.monsters[0]={{11,10},DRAGON,48,0,{0,0},MON_AGGRO}; p->reset(); auto a=p->choose_action(observe_explorer(10,10));
+    check(p->risk.fire && a.kind==ExplorerActionKind::Use && a.slot==1,"lethal dragon breath did not prefer teleport to inadequate heal");
+    game.inventory[1]={}; game.inventory[2]={POTION_PARALYSIS,1}; identify_type(POTION_PARALYSIS); p->reset();
+    a=p->choose_action(observe_explorer(10,10));
+    check(a.kind==ExplorerActionKind::Throw && a.slot==2 && a.dx==1,"lethal encounter did not prefer disabling to inadequate heal");
+    arena(); game.hp=30; game.inventory[0]={POTION_HEALING,1}; identify_type(POTION_HEALING); p->reset();
+    check(p->choose_action(observe_explorer(10,10)).slot==0,"safe low HP did not heal");
+    arena(); game.hp=20; game.confused=4; game.inventory[0]={SCROLL_TELEPORT,1}; identify_type(SCROLL_TELEPORT);
+    game.monsters[0]={{11,10},ANGEL,24,0,{0,0},MON_AGGRO}; p->reset(); a=p->choose_action(observe_explorer(10,10));
+    check(a.kind==ExplorerActionKind::Use && a.slot==0,"confused defense ignored escape");
+    game.paralyzed=2; p->reset(); check(p->choose_action(observe_explorer(10,10)).kind==ExplorerActionKind::Wait,"paralysis attempted unavailable action");
+    arena(); game.inventory[0]={LANTERN,150}; game.inventory[1]=make_equipment(BUCKLER,0); game.offhand_slot=1;
+    p->reset(); a=p->choose_action(observe_explorer(10,10)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"exploration undervalues lantern");
+    game.inventory[2]={AMULET_BRILLIANCE,uint8_t(ITEM_IDENTIFIED|1)}; identify_type(AMULET_BRILLIANCE); game.amulet_slot=2;
+    p->reset(); a=p->choose_action(observe_explorer(10,10)); check(!(a.kind==ExplorerActionKind::Use && a.slot==0),"permanent sight did not preserve shield option");
+    game.blindness=4; p->reset(); a=p->choose_action(observe_explorer(10,10)); check(!(a.kind==ExplorerActionKind::Use && a.slot==0),"blindness incorrectly values light");
+    // Constructed memory has unknown cells behind a known closed barrier.
+    ExplorerFloor f; for(auto& tile:f.tiles) { tile.terrain=Terrain::Wall; tile.surveyed=true; }
+    f.tiles[cell(10,10)].terrain=Terrain::Floor;
+    f.tiles[cell(11,10)].terrain=Terrain::ClosedDoor;
+    for(int x=12;x<17;++x) { f.tiles[cell(x,10)].terrain=Terrain::Unknown; f.tiles[cell(x,10)].surveyed=false; }
+    check(expected_information(f,{10,10},6,true)==0 && expected_information(f,{10,10},6,false)>0,"frontier gain sees through known closed doors");
+    f.tiles[cell(11,10)].terrain=Terrain::OpenDoor;
+    check(expected_information(f,{10,10},3,true)==4,"circular optimistic unknown gain incorrect");
+    f.tiles[cell(12,10)].terrain=Terrain::Floor; f.tiles[cell(12,10)].surveyed=false;
+    check(expected_information(f,{10,10},3,true)==3,"mapped unsurveyed terrain counted as unknown");
+    arena(); o=observe_explorer(0,0); o.attacked=o.incoming_attack=true; o.reported_attacker=PHANTOM;
+    auto info=monster_info(PHANTOM); o.reported_species={{},PHANTOM,info.strength,info.speed,info.armor,info.flags};
+    p->reset(); bool moved=false;
+    for(int turn=0;turn<12;++turn) { o.turns=o.actions=turn; o.hp=uint8_t(40-turn*2); o.contact_reported=true; o.contact={11,10}; a=p->choose_action(o); if(a.kind==ExplorerActionKind::Move && a.dx!=1) { moved=true; break; } }
+    check(moved,"invisible attrition not reassessed before old 128-turn fallback");
+    check(o.reported_species.pos.x==255,"public attacker definition includes bearing");
+    ExplorerMessages messages; ExplorerMessageScope scope(&messages);
+    ExplorerAction attempted; attempted.kind=ExplorerActionKind::Move; attempted.dx=1;
+    for(uint8_t type:{uint8_t(PHANTOM),uint8_t(ORC)}) {
+        arena(); game.monsters[0]={{11,10},type,20,0,{0,0},MON_AGGRO};
+        if(type==ORC) set_monster_effect(game.monsters[0],MON_INVISIBLE,6);
+        messages.prepare(attempted,{10,10},false);
+        status(game.monsters[0]); status("hits you!");
+        auto hidden=observe_explorer(1,1);
+        check(hidden.incoming_attack && hidden.reported_attacker==0 && hidden.reported_species.type==0 && hidden.contact.x==255,"something hit message disclosed species or bearing");
+        messages.prepare(attempted,{10,10},false); status("You miss"); status(game.monsters[0],'.');
+        hidden=observe_explorer(2,2);
+        check(hidden.contact_reported && hidden.contact==SeenPosition{11,10} && hidden.contact_type==0,"anonymous melee contact lost confirmation or disclosed identity");
+    }
+    arena(); game.monsters[0]={{11,10},PHANTOM,20,0,{0,0},MON_AGGRO};
+    game.inventory[0]={RING_SEE_INVISIBLE,uint8_t(ITEM_IDENTIFIED|1)}; game.ring_slots[0]=0; identify_type(RING_SEE_INVISIBLE);
+    messages.prepare(attempted,{10,10},false); status(game.monsters[0]); status("hits you!");
+    check(observe_explorer(1,1).reported_attacker==PHANTOM,"see-invisible did not reveal legitimately printed identity");
+}
 }
 int main() {
-    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); controlled_roundtrip(); replay(); parameters_and_messages();
+    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }

@@ -3,6 +3,10 @@
 #include "game_internal.hpp"
 #include "inventory_view.hpp"
 #include "world.hpp"
+#include "status_advances.hpp"
+#if defined(__AVM__)
+#include <avm.h>
+#endif
 #include <string.h>
 
 using namespace rogue;
@@ -11,6 +15,10 @@ using namespace rogue;
 // Name, description, UI preparation, final button, terrain, inventory item,
 // unmeasured DOWN/UP presses within the inventory modal.
 #define TURN_BENCHMARKS(X) \
+    X(awareness_1, "Twelve unalerted enemies at radius one", wait, A, dense, NO_ITEM, 0, 0) \
+    X(awareness_3, "Twelve unalerted enemies at radius three", wait, A, dense, NO_ITEM, 0, 0) \
+    X(awareness_4, "Twelve unalerted enemies at radius four", wait, A, dense, NO_ITEM, 0, 0) \
+    X(awareness_6, "Twelve unalerted enemies at radius six", wait, A, dense, NO_ITEM, 0, 0) \
     X(light_full_dense, "Radius six with twelve enemies", wait, A, dense, NO_ITEM, 0, 0) \
     X(light_blind_dense, "Blinded turn with twelve enemies", wait, A, dense, NO_ITEM, 0, 0) \
     X(fuel_out, "Torch exhaustion and reference cleanup", wait, A, room, NO_ITEM, 0, 0) \
@@ -423,6 +431,20 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     case Case::pickup_food: add_ground(0, {33, 16}); break;
     default: break;
     }
+    if(scenario == Case::awareness_1 || scenario == Case::awareness_3 ||
+       scenario == Case::awareness_4 || scenario == Case::awareness_6) {
+        for(auto& m:game.monsters) if(m.type) m.state=0;
+        game.offhand_slot=game.amulet_slot=NONE;
+        if(scenario != Case::awareness_1) {
+            game.inventory[15]={uint8_t(scenario==Case::awareness_3 ? TORCH : LANTERN),255};
+            game.offhand_slot=15;
+        }
+        if(scenario==Case::awareness_6) {
+            game.inventory[14]={AMULET_BRILLIANCE,uint8_t(1|ITEM_IDENTIFIED)};
+            game.amulet_slot=14;
+        }
+        return;
+    }
     // Preserve radius-six coverage for existing play and ranged benchmarks.
     if((item == NO_ITEM || scenario == Case::monster_trap_force || scenario == Case::monster_trap_hammer ||
         scenario == Case::monster_trap_spread) &&
@@ -457,6 +479,14 @@ uint8_t bench_count() { return static_cast<uint8_t>(Case::count); }
 
 void bench_setup()
 {
+#if defined(__AVM__)
+    // Detect SDK/font drift before measuring any case; no runtime game cost.
+    for(uint8_t n=0;n<95;++n)
+        if(AVM_FONT_BR5D->glyph_first!=32 || AVM_FONT_BR5D->num_glyphs!=95 ||
+           STATUS_ADVANCES[n]!=AVM_FONT_BR5D->data[uint16_t(n)*sizeof(avm_font_glyph_t)+6]) {
+            game.valid=0; return;
+        }
+#endif
     switch(static_cast<Case>(bench_case)) {
 #define CASE_DISPATCH(name, description, setup, button, terrain, item, down, up) \
     case Case::name: bench_##name(); return;

@@ -425,3 +425,29 @@ content, placement, fuel rules and executable. Same-location shield removal uses
 `remove-item:BUCKLER`, `remove-item:ROUND_SHIELD`, and `remove-item:TOWER_SHIELD`.
 See [the implementation report](../docs/LIGHTING_OFFHAND_BLINDNESS.md) for paired
 results, policy compatibility limits, and reproducible commands.
+
+## Explorer competence and awareness
+
+See [the full report](../docs/EXPLORER_COMPETENCE_AND_REBALANCE.md) for the
+current results and [seed ledger](../docs/EXPLORER_SEED_LEDGER.json). Explorer
+protocol 2 supplies anonymous incoming feedback without hidden species or
+bearing. There are 101 preferences; tuning rewards escapes, Yendor, Lord kills,
+progression, fewer actions, then score. Core telemetry is version 7 and
+exploration telemetry is version 4. `OBS` trace lines are policy observations;
+other trace lines remain privileged reporting and never feed decisions.
+
+Monster awareness is now the engine default. `--intervention legacy-awareness`
+restores historical detection; `--intervention light-awareness` selects the
+current behavior explicitly. Either combines with `full-light`. These controls
+do not alter the observation boundary or consume gameplay RNG themselves.
+
+```sh
+python sim/competence_experiments.py --simulator build/competence/native/sim/ardurogue2_sim.exe --suite awareness --seeds 1:10000 --jobs 12 --output build/competence/reproduce-ab
+python sim/competence_experiments.py --simulator build/competence/native/sim/ardurogue2_sim.exe --suite offhand --seeds 1:1000 --jobs 8 --output build/competence/reproduce-offhand
+python sim/competence_experiments.py --simulator build/competence/native/sim/ardurogue2_sim.exe --suite balance --seeds 30001:32000 --jobs 8 --output build/competence/reproduce-c
+```
+
+Fresh output directories are required. Each suite retains an executable and DLLs,
+complete parameters, commands embodied in the experiment specification, manifests,
+raw seals, summaries and paired reports. The comparison command supports explicit
+`--policy-comparison` labeling; gameplay pairs require identical policy hashes.

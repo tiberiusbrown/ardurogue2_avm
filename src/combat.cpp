@@ -506,6 +506,51 @@ __attribute__((noinline)) static bool monster_melee(uint8_t index)
     return melee_damage;
 }
 
+__attribute__((noinline)) bool monster_detects_player(const Monster& monster, uint16_t flags)
+{
+    if(!(flags & MON_MEAN) || (flags & MON_NOMOVE) ||
+       (player_is_invisible() && !(flags & MON_SEE_INVIS))) return false;
+    uint8_t illumination=player_light_radius();
+    // Blindness hides the player's view; it does not extinguish worn sources.
+    if(game.blindness) {
+#if defined(ARDUROGUE2_SIM)
+        if(sim::full_light()) illumination=6;
+        else
+#endif
+        {
+            int16_t light=1+artifact_ring_bonus(RING_ILLUMINATION,2,-1);
+            if(game.offhand_slot<INVENTORY) {
+                auto item=game.inventory[game.offhand_slot];
+                if(item.type==GLOWING_ORB || (is_fueled_light(item.type) && item.info)) light+=light_bonus(item.type);
+            }
+            if(game.amulet_slot<INVENTORY && game.inventory[game.amulet_slot].type==AMULET_BRILLIANCE)
+                light+=item_is_cursed(game.inventory[game.amulet_slot]) ? -1 : 3;
+            illumination=light<0 ? 0 : light>6 ? 6 : uint8_t(light);
+        }
+    }
+    uint8_t radius = static_cast<uint8_t>(illumination + 1);
+    if(radius < 2) radius = 2;
+    // Supernatural sensing and major late enemies retain useful dark awareness.
+    uint8_t minimum = monster.type == LORD ? 6 : monster.type == DRAGON ? 4 :
+        monster.type == PHANTOM ? 3 : 2;
+    if(radius < minimum) radius = minimum;
+    int16_t x = game.player.x, y = game.player.y;
+    int16_t dx = monster.pos.x > x ? monster.pos.x - x : x - monster.pos.x;
+    int16_t dy = monster.pos.y > y ? monster.pos.y - y : y - monster.pos.y;
+    if(dx * dx + dy * dy > radius * radius) return false;
+    // One bounded ray for an unalerted enemy, never a whole visibility scan.
+    int16_t sx = x < monster.pos.x ? 1 : -1;
+    int16_t sy = y < monster.pos.y ? 1 : -1;
+    int16_t error = dx - dy;
+    while(x != monster.pos.x || y != monster.pos.y) {
+        int16_t twice = 2 * error;
+        if(twice > -dy) { error -= dy; x += sx; }
+        if(twice < dx) { error += dx; y += sy; }
+        if(blocked(x, y)) return false;
+    }
+    return true;
+}
+
 __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
 {
     Monster& monster = game.monsters[index];
@@ -525,9 +570,19 @@ __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
             monster_status(monster, F("can move again."));
     } else if(!(flags & MON_NOMOVE) || (monster.state & MON_AGGRO)) {
         uint8_t range = distance(monster.pos, game.player);
-        bool pursuing = (flags & MON_MEAN) || (monster.state & MON_AGGRO);
+        bool pursuing;
+#if defined(ARDUROGUE2_SIM)
+        if(!sim::light_awareness()) pursuing = (flags & MON_MEAN) || (monster.state & MON_AGGRO);
+        else
+#endif
+        {
+            if(!(monster.state & MON_AGGRO) && monster_detects_player(monster, flags))
+                monster.state |= MON_AGGRO;
+            pursuing = (monster.state & MON_AGGRO) != 0;
+        }
         if(player_is_invisible() && !(flags & MON_SEE_INVIS))
             pursuing = false;
+        if(pursuing) SIM_EVENT(sim::EventKind::MonsterAware, index, monster.type, range, player_light_radius());
         if(!afraid && pursuing && !confused && (flags & MON_FIRE_BREATH) &&
            fire_line_clear(monster) && roll(3) == 0) {
             return 2;
