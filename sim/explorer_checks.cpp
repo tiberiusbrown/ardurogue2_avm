@@ -31,7 +31,10 @@ void item_text(std::ostream& s,const SeenItem& i) {
 std::string observation_text(const ExplorerObservation& o) {
     std::ostringstream s;
     s<<int(o.player.x)<<':'<<int(o.player.y)<<':'<<int(o.floor)<<':'<<int(o.hp)<<':'<<int(o.max_hp)<<':'<<int(o.level)<<':'<<int(o.xp)<<':'<<int(o.strength)<<':'<<int(o.dexterity)<<':'<<int(o.speed)<<':'<<int(o.hunger)<<':'<<int(o.radius)<<':'<<o.yendor<<':'<<o.pending_pickups<<':'<<o.actions<<':'<<o.turns<<':'<<o.attacked<<':'<<o.incoming_attack<<':'<<int(o.hp_loss);
-    s<<':'<<int(o.reported_attacker)<<':'<<int(o.reported_species.strength)<<':'<<o.reported_species.traits;
+    s<<':'<<int(o.reported_attacker)<<':'<<int(o.reported_species.strength)<<':'<<o.reported_species.traits
+        <<':'<<o.contact_reported<<':'<<int(o.contact_type)<<':'<<int(o.contact.x)<<':'<<int(o.contact.y)
+        <<':'<<int(o.contact_origin.x)<<':'<<int(o.contact_origin.y)<<':'<<int(o.melee_feedback)
+        <<':'<<int(o.incoming_attacks)<<':'<<int(o.anonymous_attacks)<<':'<<o.encounter_changed<<':'<<o.summoning_reported;
     for(auto b:o.equipped) s<<int(b)<<',';
     for(auto b:{o.weakened,o.confused,o.paralyzed,o.slowed,o.invisible,o.blindness}) s<<int(b)<<',';
     for(auto& i:o.inventory) item_text(s,i);
@@ -283,7 +286,7 @@ void navigation_and_tactics() {
 }
 void stationary_contact_detour() {
     arena(); auto o=observe_explorer(0,0); Game before=game;
-    ExplorerParameters prefs; prefs.stationary_contact_turns=32; prefs.invisible_response=0;
+    ExplorerParameters prefs; prefs.stationary_contact_turns=32; prefs.invisible_response=0; prefs.contact_aware=0;
     auto p=std::make_unique<ExplorerAgent>(prefs);
     o.contact_reported=true; o.contact={11,10}; o.contact_type=PHANTOM;
     for(unsigned turn=0;turn<32;++turn) {
@@ -294,6 +297,149 @@ void stationary_contact_detour() {
     check(a.kind==ExplorerActionKind::Move && !(a.dx==1 && a.dy==0),"stationary contact did not take an observed alternate route");
     check(o.terrain[cell(10+a.dx,10+a.dy)]!=Terrain::Unknown,"contact detour invented an unknown escape route");
     check(std::memcmp(&before,&game,sizeof game)==0,"contact detour mutated production state");
+}
+void invisible_contact_checks() {
+    arena(); auto o=observe_explorer(0,0); auto p=std::make_unique<ExplorerAgent>();
+    o.contact_reported=true; o.contact={11,10}; o.contact_origin=o.player;
+    o.melee_feedback=MeleeFeedback::Miss; o.incoming_attack=true; o.anonymous_attacks=o.incoming_attacks=1;
+    Game before=game;
+    for(int turn=0;turn<48;++turn) {
+        o.actions=o.turns=turn; auto a=p->choose_action(o);
+        check(a.kind==ExplorerActionKind::Move && a.dx==1 && a.dy==0,"favorable roll misses abandoned fresh east contact");
+        check(p->contact_memory().state==ContactState::Confirmed,"melee miss failed to confirm contact");
+    }
+    check(std::memcmp(&before,&game,sizeof game)==0,"contact policy mutated production state/RNG");
+    p->reset(); o.melee_feedback=MeleeFeedback::Hit;
+    for(int turn=0;turn<160;++turn) {
+        o.actions=o.turns=turn; auto a=p->choose_action(o);
+        check(a.kind==ExplorerActionKind::Move && a.dx==1,"productive healthy contact timed out");
+    }
+    // Noncombat feedback reduces confidence briefly; it does not erase the square.
+    o.actions=o.turns=160; o.contact_reported=false; o.incoming_attack=false; o.anonymous_attacks=0;
+    o.pending_pickups=true; p->choose_action(o);
+    // The preceding action WAS a strike, so missing its result invalidates it.
+    check(p->contact_memory().square.x==255,"failed repeated strike retained certainty");
+    o.pending_pickups=false; o.actions=o.turns=161; o.incoming_attack=true; o.anonymous_attacks=1;
+    auto a=p->choose_action(o); check(!(a.kind==ExplorerActionKind::Move && a.dx==1),"failed strike immediately retested east");
+    p->reset(); o.actions=o.turns=0; o.contact_reported=true; o.melee_feedback=MeleeFeedback::Hit; p->choose_action(o);
+    o.actions=o.turns=1; o.contact_reported=false; o.player={10,9}; p->choose_action(o);
+    check(p->contact_memory().square.x==255,"player movement translated stale contact bearing");
+    o.player={10,10}; p->reset(); o.actions=o.turns=0; o.contact_reported=true; o.encounter_changed=true;
+    p->choose_action(o); check(p->contact_memory().state==ContactState::Uncertain,"knockback retained certainty");
+    o.encounter_changed=false; o.melee_feedback=MeleeFeedback::Defeat; o.incoming_attack=false; o.anonymous_attacks=0;
+    o.actions=o.turns=1; p->choose_action(o); check(p->contact_memory().square.x==255,"defeat retained occupied square");
+    // A different action can preserve uncertain contact for a short retry.
+    p->reset(); o.actions=o.turns=0; o.contact_reported=true; o.melee_feedback=MeleeFeedback::Hit;
+    o.inventory[0]={ItemCategory::Potion,POTION_HEALING,255,1}; o.hp=30;
+    a=p->choose_action(o); check(a.kind==ExplorerActionKind::Use,"contact prevented healing");
+    o.inventory[0]={}; o.hp=80; o.actions=o.turns=1; o.contact_reported=false;
+    p->choose_action(o); check(p->contact_memory().state==ContactState::Uncertain && p->contact_memory().square==SeenPosition{11,10},"healing instantly forgot contact");
+    o.actions=o.turns=5; p->choose_action(o); check(p->contact_memory().square.x==255,"unconfirmed square never expired");
+    // No bearing is supplied by two anonymous messages; probing stays bounded.
+    arena(); o=observe_explorer(0,0); o.incoming_attack=true; o.incoming_attacks=o.anonymous_attacks=2;
+    p->reset(); unsigned probes=0;
+    for(int turn=0;turn<8;++turn) {
+        o.actions=o.turns=turn; a=p->choose_action(o); probes+=a.goal=="probe unseen contact candidates";
+        check(p->contact_memory().square.x==255,"incoming attacks invented a bearing");
+    }
+    check(probes<=4 && p->risk.unseen && p->risk.attackers>=2,"multiple attacker probing/risk unbounded or absent");
+    o.contact_reported=true; o.contact={11,10}; o.contact_origin=o.player; o.melee_feedback=MeleeFeedback::Hit;
+    o.hp=10; o.hp_loss=12; o.inventory[0]={ItemCategory::Scroll,SCROLL_TELEPORT,255,1}; o.actions=o.turns=9;
+    a=p->choose_action(o); check(a.kind==ExplorerActionKind::Use && a.slot==0,"dangerous confirmed contact prevented escape");
+    arena(); o=observe_explorer(0,0); o.hp=10; o.hp_loss=8; o.incoming_attack=true; o.anonymous_attacks=1;
+    p->reset(); a=p->choose_action(o);
+    check(p->contact_memory().state==ContactState::Disengaging && a.kind==ExplorerActionKind::Move,"unknown lethal pressure did not start retreat");
+    o.actions=o.turns=1; o.hp_loss=0; o.contact_reported=true; o.contact_origin=o.player;
+    o.contact={uint8_t(int(o.player.x)+a.dx),uint8_t(int(o.player.y)+a.dy)}; o.melee_feedback=MeleeFeedback::Miss;
+    auto retreat=p->choose_action(o);
+    check(p->contact_memory().square==o.contact && retreat.kind==ExplorerActionKind::Move && retreat.destination!=o.contact,"new contact during disengagement selected the occupied escape square");
+    p->reset(); o=observe_explorer(0,0); o.hp=10; o.hp_loss=8; o.attacked=o.incoming_attack=true; o.anonymous_attacks=2;
+    unsigned retreat_attempts=0; a=p->choose_action(o);
+    for(int turn=1;turn<20;++turn) {
+        retreat_attempts+=a.goal=="disengage from unseen encounter";
+        o.actions=o.turns=turn; o.hp_loss=0; o.contact_reported=a.kind==ExplorerActionKind::Move;
+        o.contact_origin=o.player; o.contact={uint8_t(int(o.player.x)+a.dx),uint8_t(int(o.player.y)+a.dy)};
+        o.melee_feedback=MeleeFeedback::Miss; a=p->choose_action(o);
+    }
+    check(retreat_attempts<=unsigned(p->parameters.retreat_steps),"failed unseen retreats ignored the existing movement budget");
+    // Mixed threats preserve anonymous pressure and prioritize visible combat.
+    arena(); o=observe_explorer(0,0); auto info=monster_info(LORD);
+    o.monsters[0]={{10,9},LORD,info.strength,info.speed,info.armor,info.flags}; o.monster_count=1;
+    o.incoming_attack=true; o.incoming_attacks=o.anonymous_attacks=1; o.contact_reported=true; o.contact={11,10};
+    o.melee_feedback=MeleeFeedback::Hit; p->reset(); a=p->choose_action(o);
+    check(p->risk.unseen && p->risk.attackers>=2,"visible enemy erased anonymous danger");
+    check(!(a.kind==ExplorerActionKind::Move && a.dx==1),"contact outranked visible lethal threat");
+    o.monster_count=0; o.hp=100; o.confused=1; p->reset(); p->choose_action(o);
+    check(p->contact_memory().square.x==255,"confused intention established contact");
+    o.confused=0; o.summoning_reported=true; o.hp_loss=0; p->reset(); bool disengaged=false;
+    for(int turn=0;turn<40;++turn) {
+        o.actions=o.turns=turn; a=p->choose_action(o);
+        if(p->contact_memory().state==ContactState::Disengaging) { disengaged=true; break; }
+    }
+    check(disengaged,"reported summoning replenishment caused indefinite combat");
+    o.summoning_reported=false; p->reset(); o.melee_feedback=MeleeFeedback::Miss; disengaged=false;
+    for(int turn=0;turn<80;++turn) { o.actions=o.turns=turn; p->choose_action(o); if(p->contact_memory().state==ContactState::Disengaging) { disengaged=true; break; } }
+    check(disengaged,"no-progress misses lacked a separate loop safeguard");
+    // Separate deaths can reset short episodes while replacements hold the
+    // player stationary. A final position-based guard must survive those resets.
+    p->reset(); o.incoming_attack=false; o.anonymous_attacks=0; disengaged=false;
+    for(int turn=0;turn<1030;++turn) {
+        o.actions=o.turns=turn; o.contact_reported=turn%2==0;
+        o.melee_feedback=o.contact_reported ? MeleeFeedback::Hit : MeleeFeedback::Defeat;
+        p->choose_action(o);
+        if(p->contact_memory().state==ContactState::Disengaging) { disengaged=true; break; }
+    }
+    check(disengaged,"stationary replacement deaths reset the absolute loop guard");
+    p->reset(); o.melee_feedback=MeleeFeedback::Hit; o.actions=o.turns=0; p->choose_action(o);
+    o.floor=1; o.contact_reported=false; o.incoming_attack=false; o.actions=o.turns=1; p->choose_action(o);
+    check(p->contact_memory().state==ContactState::None,"contact survived floor transition");
+    // Actual production dispatch supplies miss, hit and defeat, sanitized first.
+    ExplorerMessages messages; ExplorerMessageScope scope(&messages); ExplorerAction attempted;
+    attempted.kind=ExplorerActionKind::Move; attempted.dx=1; bool hit=false,miss=false,defeat=false;
+    for(int seed=1;seed<64 && !(hit&&miss&&defeat);++seed) {
+        arena(); game.random_state=uint16_t(seed); game.monsters[0]={{11,10},PHANTOM,uint8_t(seed%2 ? 100 : 1),0,{0,0},MON_AGGRO};
+        messages.prepare(attempted,{10,10},false); Action act; act.kind=ActionKind::Move; act.dx=1; dispatch(act);
+        auto actual=observe_explorer(1,1);
+        if(actual.melee_feedback==MeleeFeedback::Defeat) check(!actual.contact_reported,"defeat invented a target association");
+        else check(actual.contact_reported && actual.contact_type==0 && actual.contact_origin==SeenPosition{10,10},"production melee feedback missing or leaked species");
+        hit|=actual.melee_feedback==MeleeFeedback::Hit; miss|=actual.melee_feedback==MeleeFeedback::Miss; defeat|=actual.melee_feedback==MeleeFeedback::Defeat;
+    }
+    check(hit&&miss&&defeat,"production status cases not exercised");
+    arena(); messages.prepare(attempted,{10,10},false); Action act; act.kind=ActionKind::Move; act.dx=1; dispatch(act);
+    check(!observe_explorer(1,1).contact_reported,"empty movement confirmed melee");
+    arena(); game.walls[cell(11,10)>>3]|=uint8_t(1u<<(cell(11,10)&7)); messages.prepare(attempted,{10,10},false); dispatch(act);
+    check(!observe_explorer(1,1).contact_reported,"wall bump confirmed melee");
+    // An unrelated death during an empty move cannot reveal a false bearing.
+    messages.prepare(attempted,{10,10},false); messages.text("You defeat"); messages.monster(0);
+    check(!observe_explorer(2,2).contact_reported,"unattributed death disclosed attempted square");
+    for(const char* change:{"is blasted back!","disappears!","changes form!","triggers a teleport trap!"}) {
+        messages.prepare(attempted,{10,10},false); messages.text("You hit"); messages.monster(0);
+        messages.text(change); check(observe_explorer(2,2).encounter_changed,"observable displacement/form change lost");
+    }
+    messages.prepare(attempted,{10,10},false); messages.monster(0); messages.text("hits you!"); messages.monster(0); messages.text("misses you.");
+    auto anonymous=observe_explorer(2,2);
+    check(anonymous.anonymous_attacks==2 && anonymous.incoming_attacks==2 && anonymous.contact.x==255,"multiple printed attacks disclosed bearing or disappeared");
+    // Identical contact histories remain identical under hidden HP/position/RNG changes.
+    arena(); auto first=observe_explorer(0,0); first.contact_reported=true; first.contact={11,10}; first.contact_origin=first.player; first.melee_feedback=MeleeFeedback::Miss;
+    auto other=std::make_unique<ExplorerAgent>(); p->reset(); other->reset();
+    for(int turn=0;turn<20;++turn) {
+        first.actions=first.turns=turn; auto expected=p->choose_action(first);
+        game.random_state=uint16_t(200+turn); game.monsters[0]={{uint8_t(20+turn),20},PHANTOM,uint8_t(1+turn),0,{0,0},MON_AGGRO};
+        Game unchanged=game; auto actual=other->choose_action(first);
+        check(action_text(expected)==action_text(actual) && !std::memcmp(&unchanged,&game,sizeof game),"contact history read/mutated hidden state or RNG");
+    }
+    // Production telemetry accounts an initially unseen kill without informing policy.
+    arena(); game.monsters[0]={{11,10},PHANTOM,1,0,{0,0},MON_AGGRO}; Collector collector; collector.data.agent="explorer-v1";
+    CollectScope collection(collector); collector.enter_floor(); ExplorerObserver observer;
+    for(unsigned turn=0;turn<64 && game.monsters[0].type;++turn) {
+        collector.observe_exploration(observer.observe(turn,turn)); collector.prepare_action(act);
+        messages.prepare(attempted,{10,10},false); dispatch(act); collector.observe_contact(observer.observe(turn+1,turn+1));
+    }
+    collector.close_floor(false); auto metrics=collector.data.floors.back().exploration.invisible;
+    check(metrics.encounters==1 && metrics.kills==1 && metrics.ordinary_kills==1,"invisible encounter/kill telemetry failed production dispatch");
+    check(metrics.confirmations==metrics.hits+metrics.misses && metrics.damage==metrics.ordinary_damage+metrics.hazard_damage,"invisible telemetry does not reconcile");
+    std::ostringstream header,row; write_exploration_header(header); write_exploration(row,collector.data);
+    check(header.str().find("unseen_probes_to_first_contact")!=std::string::npos && header.str().find("phantom_deaths")!=std::string::npos,"invisible schema counters missing");
 }
 void controlled_roundtrip() {
     arena(); game.floor=15; game.down={50,20}; game.up=game.player;
@@ -428,7 +574,7 @@ void competence() {
 }
 }
 int main() {
-    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
+    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }

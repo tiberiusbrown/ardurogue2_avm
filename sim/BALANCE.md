@@ -6,6 +6,15 @@ agent-policy change is part of this framework. See [README.md](README.md) for
 simulator mechanics and [BALANCE_RESULTS.md](BALANCE_RESULTS.md) for the milestone
 demonstrations. Raw outputs belong in ignored `build/`.
 
+Exploration schema 5 appends `unseen_*` contact counters and `phantom_deaths`.
+The nine core streams retain version 7. Hit/miss and probe feedback is public;
+actual episode damage, kills, hidden summoning-hazard classifications and
+death attribution are privileged reporting only. The explorer never receives
+the collector. Precise definitions and denominators are in
+[EXPLORER_INVISIBLE_CONTACT.md](../docs/EXPLORER_INVISIBLE_CONTACT.md).
+Use `invisible_contact_experiments.py` for descriptive comparisons between
+policy hashes, with production gameplay and all unrelated preferences fixed.
+
 ## Build and dependencies
 
 Run from the ArduRogue 2 repository root. Python dependencies are optional for

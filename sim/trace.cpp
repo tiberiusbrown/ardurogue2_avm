@@ -6,7 +6,10 @@ void trace_explorer(std::ostream& out,const ExplorerObservation& o,const Surviva
     out<<"  OBS radius="<<int(o.radius)<<" danger="<<int(r.danger)<<" incoming="<<r.one<<'/'<<r.two
         <<" retreat="<<r.retreat<<" attacker="<<int(o.reported_attacker)<<" statuses="<<int(o.confused)<<','<<int(o.paralyzed)<<','<<int(o.weakened)<<','<<int(o.slowed)<<','<<int(o.blindness)<<" worn=";
     for(auto slot:o.equipped) out<<int(slot)<<',';
-    out<<" visible=";
+    out<<" contact="<<o.contact_reported<<':'<<int(o.melee_feedback)<<'@'<<int(o.contact.x)<<':'<<int(o.contact.y)
+        <<" contact_origin="<<int(o.contact_origin.x)<<':'<<int(o.contact_origin.y)
+        <<" attacks="<<int(o.incoming_attacks)<<':'<<int(o.anonymous_attacks)
+        <<" changed="<<o.encounter_changed<<" summoning="<<o.summoning_reported<<" visible=";
     for(int m=0;m<o.monster_count;++m) out<<int(o.monsters[m].type)<<'@'<<int(o.monsters[m].pos.x)<<':'<<int(o.monsters[m].pos.y)<<';';
     out<<" pack=";
     for(size_t s=0;s<o.inventory.size();++s) {

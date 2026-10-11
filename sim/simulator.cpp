@@ -70,6 +70,7 @@ RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
             c.observe_exploration(observation);
             a=decide(agent,observation,r.actions,r.turns);
             policy_metrics(c,agent);
+            c.decide_contact(observation,a,c.decision_risk);
             if(options.trace && r.agent=="explorer-v1") trace_explorer(*options.trace,observation,c.decision_risk);
         }
         catch(const std::exception& error) {
@@ -115,6 +116,7 @@ RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
         }
         if(r.stuck && std::string(agent.name())=="explorer-v1") r.reason += std::string("; goal=")+a.goal+"; position="+std::to_string(before.player.x)+":"+std::to_string(before.player.y);
     }
+    c.observe_contact(observer.observe(r.actions,r.turns));
     c.observe(); c.close_floor(false);
     if(session.ended) {
         r.result = session.result == ESCAPED ? "escaped" : session.result == DEATH ? "death" : "abandoned";

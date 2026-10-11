@@ -4,6 +4,22 @@ For manifests, adjusted visit factors, paired A/B experiments and controlled
 content interventions, see [BALANCE.md](BALANCE.md). Demonstration results are in
 [BALANCE_RESULTS.md](BALANCE_RESULTS.md).
 
+The current explorer invisible-contact state machine, observation protocol 3,
+schema-5 diagnostics and descriptive policy comparisons are documented in
+[EXPLORER_INVISIBLE_CONTACT.md](../docs/EXPLORER_INVISIBLE_CONTACT.md).
+`sim/invisible_contact_experiments.py` snapshots the executable and complete
+parameters, runs legacy/disabled/contact variants on identical seeds, seals
+raw CSVs, rejects simulator failures and retains paired traces under ignored
+`build/` directories. Use a fresh output directory:
+
+```sh
+python sim/invisible_contact_experiments.py --simulator build/sim-native/sim/ardurogue2_sim --seeds 1:1000 --jobs 8 --traces --output build/invisible-contact/exploratory
+python sim/invisible_contact_experiments.py --simulator build/sim-native/sim/ardurogue2_sim --seeds 10001:20000 --jobs 8 --traces --output build/invisible-contact/validation
+```
+
+These comparisons have distinct policy hashes and fixed production mechanics;
+they are not same-policy causal gameplay interventions.
+
 `ardurogue2_sim` runs the production rules directly, from `start_new(seed)` to
 `session.ended`. It has no AVM, input handling, renderer, framebuffer, timers,
 sleep or animation dependencies. All generated data and save state remain in
@@ -430,10 +446,10 @@ results, policy compatibility limits, and reproducible commands.
 
 See [the full report](../docs/EXPLORER_COMPETENCE_AND_REBALANCE.md) for the
 current results and [seed ledger](../docs/EXPLORER_SEED_LEDGER.json). Explorer
-protocol 2 supplies anonymous incoming feedback without hidden species or
-bearing. There are 101 preferences; tuning rewards escapes, Yendor, Lord kills,
+protocol 3 supplies anonymous incoming feedback without hidden species or
+bearing. There are 102 preferences; tuning rewards escapes, Yendor, Lord kills,
 progression, fewer actions, then score. Core telemetry is version 7 and
-exploration telemetry is version 4. `OBS` trace lines are policy observations;
+exploration telemetry is version 5. `OBS` trace lines are policy observations;
 other trace lines remain privileged reporting and never feed decisions.
 
 Monster awareness is now the engine default. `--intervention legacy-awareness`

@@ -323,11 +323,16 @@ SurvivalRisk estimate_risk(const ExplorerObservation& o,const ExplorerFloor& f,c
         for(int m=0;m<o.monster_count;++m) if(o.monsters[m].type==o.reported_attacker) visible=true;
         if(!visible) { add(o.reported_species,1,false); r.unseen=true; }
     }
-    if(o.incoming_attack && !o.monster_count && !o.reported_attacker) {
+    if(o.incoming_attack && !o.reported_attacker &&
+        (prefs.contact_aware ? o.anonymous_attacks || !o.monster_count : !o.monster_count)) {
         // "Something hits/misses you" supplies neither species nor bearing.
         // Displayed HP loss is a lower bound after healing, with bounded padding.
         int damage=std::min(40,std::max(3,int(o.hp_loss)+2));
-        ++r.attackers; r.one+=damage; r.two+=2*damage+3; r.unseen=true;
+        int attacks=prefs.contact_aware ? std::clamp(int(o.anonymous_attacks),1,3) : 1;
+        r.attackers+=attacks; r.one+=damage; r.two+=2*damage+3*attacks; r.unseen=true;
+    } else if(prefs.contact_aware && o.anonymous_attacks) {
+        int damage=std::min(40,std::max(3,int(o.hp_loss)+2));
+        r.attackers+=std::min(3,int(o.anonymous_attacks)); r.one+=damage; r.two+=2*damage+3; r.unseen=true;
     }
     for(auto& m:f.enemies) if(m.type && m.seen<o.turns && o.turns<=m.seen+prefs.monster_memory_turns &&
         !sees_monster(o,m.pos) && distance(o.player,m.pos)<=3) add(m.species,distance(o.player,m.pos),true);
@@ -357,7 +362,77 @@ void ExplorerAgent::reset() {
     last_position=frontier=last_retreat=shadow={}; shadow_turn=0; probe_direction=0; previous={}; retreat_budget=quiet_turns=stalled=bow_cooldown=0;
     pending_ring=255;
     blocked_contact={}; blocked_contact_until=0;
+    blocked_origin={}; invisible_contact={}; previous_healing=false;
     previous_hp=0; unseen_turns=contact_damage=0; last_offhand_switch=last_control=0; controlled_position={}; risk={};
+}
+void ExplorerAgent::remember_contact(const ExplorerObservation& o) {
+    auto& c=invisible_contact;
+    bool named_visible=false;
+    for(int m=0;m<o.monster_count;++m) if(o.monsters[m].type==o.reported_attacker) named_visible=true;
+    bool fresh=o.incoming_attack && (o.anonymous_attacks || !o.monster_count || (o.reported_attacker && !named_visible));
+    bool contact=o.contact_reported && o.contact.x<64 && o.contact.y<32;
+    bool unseen_contact=contact && !o.contact_type && !sees_monster(o,o.contact);
+    if(c.state==ContactState::None && (fresh || unseen_contact)) {
+        c={}; c.state=ContactState::Suspected; c.started=c.progress=c.threat=o.turns;
+        c.observed_hp=o.hp;
+    }
+    if(c.state==ContactState::None) return;
+    if(fresh || unseen_contact) c.threat=o.turns;
+    c.recent_attacks=std::max<uint8_t>(o.anonymous_attacks,fresh ? 1 : 0);
+    uint8_t loss=std::max(o.hp_loss,uint8_t(c.observed_hp>o.hp ? c.observed_hp-o.hp : 0));
+    c.observed_hp=o.hp; c.damage+=loss;
+    c.losses[o.actions%c.losses.size()]=loss;
+    c.recent_damage=0; for(auto loss:c.losses) c.recent_damage+=loss;
+    if(previous_healing && !o.last_rejected) ++c.healing;
+    if(o.summoning_reported) ++c.summons;
+    if(c.probe_origin!=o.player) {
+        c.tested=0; c.probe_origin=o.player;
+        // A just-vacated square is a tested empty hypothesis. Prevent immediate
+        // reverse probes when a successful probe merely walked into empty space.
+        if(previous.goal=="probe unseen contact candidates" && last_position.x!=255)
+            for(int d=0;d<4;++d) if(int(last_position.x)==int(o.player.x)+dxs[d] &&
+                int(last_position.y)==int(o.player.y)+dys[d]) c.tested|=uint8_t(1u<<d);
+    }
+    bool moved=last_position.x!=255 && last_position!=o.player;
+    bool lost_strike=previous.kind==ExplorerActionKind::Move && previous.destination==c.square && !contact;
+    if(lost_strike && !moved) for(int d=0;d<4;++d)
+        if(previous.dx==dxs[d] && previous.dy==dys[d]) c.tested|=uint8_t(1u<<d);
+    if(moved || lost_strike || o.confused || (c.square.x!=255 && distance(o.player,c.square)!=1)) {
+        c.square={};
+        if(c.state!=ContactState::Disengaging) c.state=ContactState::Suspected;
+    } else if(c.state==ContactState::Confirmed && !contact) c.state=ContactState::Uncertain;
+    if(o.melee_feedback==MeleeFeedback::Defeat) {
+        ++c.defeats; c.progress=o.turns; c.misses=0; c.square={}; c.tested=0;
+        if(c.state!=ContactState::Disengaging) c.state=fresh || o.summoning_reported || c.summons ? ContactState::Suspected : ContactState::None;
+    } else if(unseen_contact && !o.confused &&
+        (o.contact_origin.x==255 ? !moved : o.contact_origin==o.player) && distance(o.player,o.contact)==1) {
+        c.square=o.contact; c.origin=o.player; c.confirmed=o.turns;
+        c.feedback=o.melee_feedback; ++c.confirmations; c.tested=0;
+        if(c.state==ContactState::Disengaging) {
+            // Discovering a bearing during retreat changes which squares to
+            // avoid, without changing the strategic decision to disengage.
+            blocked_contact=c.square; blocked_contact_until=c.disengage_until;
+        }
+        if(o.melee_feedback==MeleeFeedback::Hit) { c.progress=o.turns; c.misses=0; }
+        else ++c.misses; // A roll miss confirms presence, without proving damage.
+        if(c.state!=ContactState::Disengaging) c.state=ContactState::Confirmed;
+    }
+    if(o.encounter_changed && c.square.x!=255 && c.state!=ContactState::Disengaging)
+        c.state=ContactState::Uncertain;
+    if(c.square.x!=255 && sees_monster(o,c.square)) {
+        c.square={}; if(c.state!=ContactState::Disengaging) c.state=ContactState::Suspected;
+    }
+    if(c.square.x!=255 && o.turns>c.confirmed+3) c.square={};
+    if(c.state==ContactState::Disengaging && o.turns>=c.disengage_until) {
+        c.state=fresh ? ContactState::Suspected : ContactState::None;
+        c.square={}; c.tested=0; c.started=c.progress=o.turns; c.damage=c.healing=c.defeats=c.summons=0;
+    }
+    // Completing a retreat ends the tactical episode. Avoidance remains a
+    // separate route cooldown; it must not force sixty-four turns of wandering.
+    if(o.turns>c.threat+6) c={};
+    if(previous.goal=="probe unseen contact candidates" && !contact && !moved) {
+        for(int d=0;d<4;++d) if(previous.dx==dxs[d] && previous.dy==dys[d]) c.tested|=uint8_t(1u<<d);
+    }
 }
 void ExplorerAgent::remember(const ExplorerObservation& o) {
     const auto& prefs=parameters;
@@ -366,6 +441,7 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
     if(active_floor!=o.floor) {
         active_floor=o.floor; frontier=shadow={}; last_position={}; last_retreat={}; retreat_budget=quiet_turns=stalled=0;
         blocked_contact={}; blocked_contact_until=0;
+        blocked_origin={}; invisible_contact={}; previous_healing=false;
         unseen_turns=contact_damage=0; previous_hp=o.hp; controlled_position={}; last_offhand_switch=0;
         // Production regenerates a DIFFERENT layout after Yendor; preserve history,
         // but never route through it as current known terrain.
@@ -383,8 +459,19 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
         if(last_position!=o.player) contact_damage=0;
         previous_hp=o.hp;
     }
-    if(o.contact_reported && o.contact.x<64 && o.contact.y<32) { shadow=o.contact; shadow_turn=o.turns; }
-    else if(o.turns>shadow_turn+3 || (previous.goal=="repeat reported melee contact" && !o.contact_reported)) shadow={};
+    if(prefs.contact_aware) {
+        if(changed) remember_contact(o);
+        if(invisible_contact.state!=ContactState::None) {
+            shadow=invisible_contact.square; shadow_turn=invisible_contact.confirmed;
+        } else if(o.contact_reported && o.contact_type) {
+            // Keep ordinary visible-combat action history behavior unchanged.
+            shadow=o.contact; shadow_turn=o.turns;
+        } else if(o.melee_feedback==MeleeFeedback::Defeat && invisible_contact.confirmations) shadow={};
+        else if(o.turns>shadow_turn+3 || (previous.goal=="repeat reported melee contact" && !o.contact_reported)) shadow={};
+    } else {
+        if(o.contact_reported && o.contact.x<64 && o.contact.y<32) { shadow=o.contact; shadow_turn=o.turns; }
+        else if(o.turns>shadow_turn+3 || (previous.goal=="repeat reported melee contact" && !o.contact_reported)) shadow={};
+    }
     if(changed && last_position.x!=255 && previous.kind==ExplorerActionKind::Move && last_position==o.player && o.last_rejected) {
         int x=int(last_position.x)+previous.dx,y=int(last_position.y)+previous.dy;
         if(inside(x,y)) {
@@ -427,7 +514,7 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
     for(auto& t:f.tiles) if(t.has_item && !t.item.type && t.item.appearance<16)
         t.item.type=identities[identity_group(t.item.category)][t.item.appearance];
     bool reassess=prefs.invisible_response && unseen_turns>=4 && (contact_damage>=std::max(3,int(o.max_hp)/5) || o.hunger<40 || o.hp*2<o.max_hp);
-    if(changed && (stalled>=unsigned(prefs.stationary_contact_turns) || reassess) && o.contact_reported && distance(o.player,o.contact)==1) {
+    if(!prefs.contact_aware && changed && (stalled>=unsigned(prefs.stationary_contact_turns) || reassess) && o.contact_reported && distance(o.player,o.contact)==1) {
         // An accepted attack may still block travel indefinitely. Our own contact
         // square and lack of movement justify a temporary detour, without knowing
         // which creature is there now or where it originated.
@@ -470,7 +557,10 @@ void ExplorerAgent::paths(const ExplorerObservation& o) {
             int n=y*EXPLORER_W+x; auto& t=f.tiles[n];
             if(!passable(t.terrain) || t.failures>=2) continue;
             if(o.turns<blocked_contact_until && position(n)==blocked_contact) continue;
+            if(prefs.contact_aware && o.turns<blocked_contact_until && position(n)==blocked_origin) continue;
             int penalty=trap_penalty(prefs,t.feature)+(t.terrain==Terrain::ClosedDoor ? 1 : 0);
+            if(prefs.contact_aware && t.feature==FEATURE_SUMMONING_TRAP && t.visits)
+                penalty+=1000*std::min(10,int(t.visits));
             for(auto& m:f.enemies) if(m.type>=ORC && o.turns<=m.seen+prefs.monster_memory_turns && distance(position(n),m.pos)<=1) penalty+=prefs.remembered_threat_cost;
             if(prefs.tactical_risk && risk.danger>=Danger::Serious) for(int m=0;m<o.monster_count;++m)
                 if(distance(position(n),o.monsters[m].pos)<=2) penalty+=80;
@@ -500,8 +590,10 @@ ExplorerAction ExplorerAgent::pickup(const ExplorerObservation& o) {
 }
 ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming) {
     const auto& prefs=parameters;
-    remember(incoming);
     auto o=incoming;
+    // Reproduce the frozen policy's older feedback semantics for comparisons.
+    if(!prefs.contact_aware && o.melee_feedback==MeleeFeedback::Defeat) { o.contact_reported=false; o.contact={}; }
+    remember(o);
     // Keep a shield briefly when an observed nearby enemy drops out of sight
     // after changing offhand gear. This is uncertainty from our own sightings,
     // not a fresh enemy position, and never creates a combat target.
@@ -509,7 +601,14 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         distance(o.player,m.pos)<=prefs.shield_contact_distance) o.attacked=true;
     auto decide=[&]() -> ExplorerAction {
         auto& f=floors[o.floor];
-        risk=estimate_risk(o,f,prefs);
+        auto risk_observation=o;
+        auto& contact=invisible_contact;
+        if(prefs.contact_aware && contact.state!=ContactState::None && o.turns<=contact.threat+3 && !o.incoming_attack) {
+            risk_observation.incoming_attack=true;
+            risk_observation.anonymous_attacks=std::max<uint8_t>(1,contact.recent_attacks);
+            risk_observation.hp_loss=uint8_t(std::min(255u,contact.recent_damage/4));
+        }
+        risk=estimate_risk(risk_observation,f,prefs);
         if(o.pending_pickups) return pickup(o);
         if(o.paralyzed) { ExplorerAction a; a.goal="recover from paralysis"; return a; }
         int adjacent=-1, threats=0,nearest=100; bool dragon_threat=false,mass_target=false;
@@ -531,6 +630,27 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         if(dragon_threat && o.hp*100<o.max_hp*prefs.dragon_escape_percent) emergency=true;
         if(prefs.tactical_risk) emergency=risk.danger>=Danger::Serious;
         bool lethal=prefs.tactical_risk && risk.danger==Danger::Lethal;
+        bool disengaging=prefs.contact_aware && contact.state==ContactState::Disengaging;
+        if(prefs.contact_aware && contact.state!=ContactState::None && !disengaging) {
+            bool hazard=false;
+            for(int y=std::max(0,int(o.player.y)-2);y<=std::min(31,int(o.player.y)+2);++y)
+                for(int x=std::max(0,int(o.player.x)-2);x<=std::min(63,int(o.player.x)+2);++x)
+                    if(f.tiles[y*64+x].feature==FEATURE_SUMMONING_TRAP) hazard=true;
+            bool unsafe=(emergency && (lethal || contact.recent_damage>=std::max(4,int(o.hp)/3) || risk.status || risk.attackers>1)) ||
+                (o.hp*2<o.max_hp && contact.recent_damage>=unsigned(std::max(6,int(o.hp)/2)));
+            bool futile=(contact.misses>=64 && o.turns>=contact.progress+64) ||
+                (contact.healing>=2 && contact.damage>=unsigned(o.max_hp)*2) ||
+                (o.hunger<40 && find(o,FOOD)<0 && o.turns>=contact.started+16) ||
+                (o.turns>=contact.started+32 && (contact.summons>=2 || (hazard && contact.defeats>=3))) ||
+                o.turns>=contact.started+512 || stalled>=1024;
+                // Final guards, independent of contact refresh and death-driven
+                // episode resets. Ordinary long favorable melee stays committed.
+            if(unsafe || futile) {
+                contact.state=ContactState::Disengaging; contact.disengage_until=o.turns+64;
+                blocked_contact=contact.square; blocked_origin=o.player; blocked_contact_until=contact.disengage_until;
+                frontier={}; disengaging=true;
+            }
+        }
         int healing=find(o,POTION_HEALING);
         int xp=find(o,POTION_EXPERIENCE);
         int xp_gain=o.equipped[3]<16 && o.inventory[o.equipped[3]].type==AMULET_WISDOM && o.inventory[o.equipped[3]].cursed ? 25 : 50;
@@ -579,7 +699,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             if(invis>=0 && !o.invisible && !sees_invisible) return use(invis,"conceal from observed attackers");
             return {};
         };
-        if(prefs.context_healing && emergency && (lethal || !heal_survives || healing<0 || risk.status || risk.attackers>1)) {
+        if(prefs.context_healing && (emergency || disengaging) && (lethal || !heal_survives || healing<0 || risk.status || risk.attackers>1 || disengaging)) {
             auto a=control(); if(a.kind!=ExplorerActionKind::Wait) return a;
         }
         if(healing>=0) {
@@ -599,7 +719,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                 int s=find(o,t); if(s>=0) { last_mass_scroll=o.turns; return use(s,"control observed dangerous group"); }
             }
         }
-        if(emergency) {
+        if(emergency || disengaging) {
             if(prefs.context_healing) { auto a=control(); if(a.kind!=ExplorerActionKind::Wait) return a; }
             for(int t:{SCROLL_FEAR,SCROLL_TELEPORT,POTION_INVISIBILITY}) {
                 if(prefs.context_healing) break;
@@ -609,17 +729,24 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         }
         int food=find(o,FOOD);
         if(food>=0 && o.hunger<prefs.food_threshold) return use(food,"maintain hunger");
-        if(o.turns<blocked_contact_until && distance(o.player,blocked_contact)==1) {
+        if(o.turns<blocked_contact_until && (distance(o.player,blocked_contact)==1 || (prefs.contact_aware && disengaging))) {
             int best=-1,visits=256;
             for(int d=0;d<4;++d) {
                 int x=int(o.player.x)+dxs[d],y=int(o.player.y)+dys[d]; if(!inside(x,y)) continue;
                 auto p=SeenPosition{uint8_t(x),uint8_t(y)}; auto& t=f.tiles[cell(p)];
-                if(p!=blocked_contact && passable(t.terrain) && !t.feature && !sees_monster(o,p) && int(t.visits)<visits) {
+                bool safe=true;
+                if(prefs.contact_aware) for(int m=0;m<o.monster_count;++m) if(distance(p,o.monsters[m].pos)<=1) safe=false;
+                if(p!=blocked_contact && p!=blocked_origin && (!prefs.contact_aware || p!=shadow) && passable(t.terrain) && (!prefs.contact_aware || t.terrain!=Terrain::ClosedDoor) && !t.feature && !sees_monster(o,p) && safe && int(t.visits)<visits) {
                     best=d; visits=t.visits;
                 }
             }
-            if(best>=0) return move(best,"detour around repeated melee contact",{uint8_t(int(o.player.x)+dxs[best]),uint8_t(int(o.player.y)+dys[best])});
-            ExplorerAction a; a.goal="wait for observed contact detour"; return a;
+            if(best>=0 && (!prefs.contact_aware || retreat_budget<unsigned(prefs.retreat_steps))) {
+                if(prefs.contact_aware) { ++retreat_budget; last_retreat=o.player; }
+                return move(best,prefs.contact_aware ? "disengage from unseen encounter" : "detour around repeated melee contact",{uint8_t(int(o.player.x)+dxs[best]),uint8_t(int(o.player.y)+dys[best])});
+            }
+            // A corridor may offer no retreat. Keep defending the plausible
+            // contact rather than waiting to die while an avoidance timer runs.
+            if(!prefs.contact_aware) { ExplorerAction a; a.goal="wait for observed contact detour"; return a; }
         }
         if(pending_ring<16) {
             auto i=o.inventory[pending_ring];
@@ -746,10 +873,27 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                 for(int d=0;d<4;++d) if(int(p.x)==int(o.player.x)+dxs[d] && int(p.y)==int(o.player.y)+dys[d]) return move(d,"melee visible monster",p);
             }
         }
-        if(shadow.x!=255 && distance(shadow,o.player)==1 && o.turns<=shadow_turn+3) {
+        if(shadow.x!=255 && distance(shadow,o.player)==1 && o.turns<=shadow_turn+3 && (!prefs.contact_aware || !o.confused)) {
             for(int d=0;d<4;++d) if(int(shadow.x)==int(o.player.x)+dxs[d] && int(shadow.y)==int(o.player.y)+dys[d]) return move(d,"repeat reported melee contact",shadow);
         }
-        if(o.incoming_attack && !o.monster_count && !o.confused) {
+        if(prefs.contact_aware && contact.state!=ContactState::None && !disengaging && !o.confused && o.turns<=contact.threat+6) {
+            // Known traversable hypotheses first, unknown terrain only as a
+            // labelled tactile probe. Closed doors/walls/hazards are not melee probes.
+            for(int unknown=0;unknown<2;++unknown) for(int k=0;k<4;++k) {
+                int d=(contact.next_direction+k)%4,x=int(o.player.x)+dxs[d],y=int(o.player.y)+dys[d];
+                if(!inside(x,y) || (contact.tested&(1u<<d))) continue;
+                auto& t=f.tiles[y*64+x]; auto p=SeenPosition{uint8_t(x),uint8_t(y)};
+                if(t.terrain==Terrain::Wall || t.terrain==Terrain::ClosedDoor || t.feature || sees_monster(o,p)) continue;
+                if((t.terrain==Terrain::Unknown)!=bool(unknown)) continue;
+                contact.tested|=uint8_t(1u<<d); contact.next_direction=uint8_t((d+1)%4); ++contact.probes;
+                return move(d,"probe unseen contact candidates",p);
+            }
+            // Exhausting a local candidate set is not fresh evidence to repeat
+            // it. Explore/reposition for a bounded interval before another set.
+            contact.state=ContactState::Disengaging; contact.disengage_until=o.turns+8;
+            blocked_origin=o.player; blocked_contact_until=contact.disengage_until;
+        }
+        if(!prefs.contact_aware && o.incoming_attack && !o.monster_count && !o.confused) {
             // The message reports species, never bearing. Probe cardinal known
             // cells deterministically; a hit/miss message can establish contact.
             for(int k=0;k<4;++k) {
@@ -904,7 +1048,10 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         if(o.turns<blocked_contact_until) { a.goal="wait for observed contact detour"; return a; }
         a.no_path=true; a.goal="exploration exhausted: no known stairs or reachable frontier"; return a;
     };
-    auto a=decide(); previous=a; return a;
+    auto a=decide();
+    previous_healing=a.kind==ExplorerActionKind::Use && a.slot<16 &&
+        (o.inventory[a.slot].type==POTION_HEALING || o.inventory[a.slot].type==POTION_EXPERIENCE);
+    previous=a; return a;
 }
 SeenFeatureChoice ExplorerAgent::choose_feature(const ExplorerObservation& o) const {
     const auto& prefs=parameters;

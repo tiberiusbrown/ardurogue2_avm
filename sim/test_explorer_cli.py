@@ -49,8 +49,8 @@ def main():
         a=json.loads((serial/'manifest.json').read_text()); b=json.loads((omni/'manifest.json').read_text())
         assert a['agent']=='explorer-v1' and b['agent']=='omniscient-v2'
         assert len(a['agent_policy_hash'])==64 and a['agent_policy_hash']!=b['agent_policy_hash']
-        assert a['observation_interface_version']==2 and len(a['observation_interface_hash'])==64
-        assert a['exploration_schema_version']==4 and a['effective_seed_count']==9
+        assert a['observation_interface_version']==3 and len(a['observation_interface_hash'])==64
+        assert a['exploration_schema_version']==5 and a['effective_seed_count']==9
         assert Path(a['executable']).is_file()
         assert a['agent_parameters']['shield_contact_bonus']==250
         canonical=json.dumps(a['agent_parameters'],indent=2)+'\n'

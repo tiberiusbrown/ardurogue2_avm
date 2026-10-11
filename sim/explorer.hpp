@@ -7,7 +7,7 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 2;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 3;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
     uint8_t x=255, y=255;
@@ -28,6 +28,7 @@ struct SeenMonster {
     uint8_t type=0, strength=0, speed=0, armor=0;
     uint16_t traits=0; // Public species definitions, never live HP/status/AI.
 };
+enum class MeleeFeedback : uint8_t { None, Miss, Hit, Defeat };
 struct ExplorerObservation {
     SeenPosition player;
     uint8_t floor=0, hp=0, max_hp=0, level=0, xp=0, strength=0, dexterity=0, speed=0, hunger=0;
@@ -51,6 +52,10 @@ struct ExplorerObservation {
     SeenMonster reported_species; // Public definition from printed name; position stays unknown.
     SeenPosition contact; // Our own attempted melee square, only after hit/miss feedback.
     bool contact_reported=false;
+    SeenPosition contact_origin; // Player at attack time, not after enemy turns.
+    MeleeFeedback melee_feedback=MeleeFeedback::None;
+    uint8_t incoming_attacks=0, anonymous_attacks=0; // Printed attacks, no bearings.
+    bool encounter_changed=false, summoning_reported=false; // Public status prose.
 };
 enum class ExplorerActionKind { Move, Wait, Take, Stairs, Use, Throw, Wand, Drop };
 struct ExplorerAction {
@@ -84,6 +89,18 @@ struct SurvivalRisk {
     bool fire=false, unseen=false, status=false, retreat=false;
     Danger danger=Danger::Quiet;
 };
+enum class ContactState : uint8_t { None, Suspected, Confirmed, Uncertain, Disengaging };
+// One local hypothesis, derived only from observations and our own actions.
+struct InvisibleContact {
+    ContactState state=ContactState::None;
+    SeenPosition square, origin, probe_origin;
+    uint64_t confirmed=0, threat=0, started=0, progress=0, disengage_until=0;
+    uint8_t tested=0, next_direction=0, recent_attacks=0, observed_hp=0;
+    unsigned probes=0, confirmations=0, misses=0, healing=0, defeats=0, summons=0;
+    unsigned damage=0, recent_damage=0;
+    std::array<uint8_t,8> losses{};
+    MeleeFeedback feedback=MeleeFeedback::None;
+};
 // These helpers accept only public observations and legitimate memory.
 SurvivalRisk estimate_risk(const ExplorerObservation&,const ExplorerFloor&,const ExplorerParameters&);
 int expected_information(const ExplorerFloor&,SeenPosition,int radius,bool obstruction=true);
@@ -96,6 +113,7 @@ class ExplorerAgent final {
     SeenPosition shadow;
     uint64_t shadow_turn=0;
     SeenPosition blocked_contact;
+    SeenPosition blocked_origin;
     uint64_t blocked_contact_until=0;
     unsigned probe_direction=0;
     unsigned retreat_budget=0, quiet_turns=0, stalled=0, bow_cooldown=0;
@@ -105,6 +123,9 @@ class ExplorerAgent final {
     uint64_t last_offhand_switch=0, last_control=0;
     SeenPosition controlled_position;
     ExplorerAction previous;
+    InvisibleContact invisible_contact;
+    bool previous_healing=false;
+    void remember_contact(const ExplorerObservation&);
     std::array<int16_t,EXPLORER_CELLS> costs{}, steps{};
     std::array<int8_t,EXPLORER_CELLS> first{};
     void remember(const ExplorerObservation&);
@@ -121,5 +142,6 @@ public:
     ExplorerAction choose_action(const ExplorerObservation&);
     SeenFeatureChoice choose_feature(const ExplorerObservation&) const;
     const ExplorerFloor& memory(unsigned f) const { return floors.at(f); }
+    const InvisibleContact& contact_memory() const { return invisible_contact; }
 };
 }

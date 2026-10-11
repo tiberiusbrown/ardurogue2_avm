@@ -40,6 +40,21 @@ const Field<MonsterMetrics> monster_fields[] = {
     {"damage_to_player",&MonsterMetrics::player_damage},{"deaths_caused",&MonsterMetrics::deaths},
     {"poison",&MonsterMetrics::poison},{"confusion",&MonsterMetrics::confusion},
     {"paralysis",&MonsterMetrics::paralysis},{"fire",&MonsterMetrics::fire}};
+const Field<InvisibleMetrics> invisible_fields[] = {
+    {"unseen_encounters",&InvisibleMetrics::encounters},{"unseen_probes",&InvisibleMetrics::probes},
+    {"unseen_probes_to_first_contact",&InvisibleMetrics::probes_to_first},{"unseen_located",&InvisibleMetrics::located},
+    {"unseen_confirmations",&InvisibleMetrics::confirmations},{"unseen_contact_hits",&InvisibleMetrics::hits},
+    {"unseen_contact_misses",&InvisibleMetrics::misses},{"unseen_max_consecutive",&InvisibleMetrics::max_consecutive},
+    {"unseen_contact_turns",&InvisibleMetrics::contact_turns},{"unseen_contact_losses",&InvisibleMetrics::losses},
+    {"unseen_premature_abandonments",&InvisibleMetrics::premature_abandonments},{"unseen_damage_total",&InvisibleMetrics::damage},
+    {"unseen_healing",&InvisibleMetrics::healing},{"unseen_disengagements",&InvisibleMetrics::disengagements},
+    {"unseen_kills",&InvisibleMetrics::kills},{"unseen_over_12",&InvisibleMetrics::over_12},
+    {"unseen_over_32",&InvisibleMetrics::over_32},{"unseen_over_64",&InvisibleMetrics::over_64},
+    {"unseen_over_128",&InvisibleMetrics::over_128},{"unseen_summons",&InvisibleMetrics::summons},
+    {"unseen_stationary_starvation",&InvisibleMetrics::stationary_starvation},{"phantom_deaths",&InvisibleMetrics::phantom_deaths},
+    {"unseen_hazard_encounters",&InvisibleMetrics::hazard_encounters},{"unseen_ordinary_damage",&InvisibleMetrics::ordinary_damage},
+    {"unseen_hazard_damage",&InvisibleMetrics::hazard_damage},{"unseen_ordinary_kills",&InvisibleMetrics::ordinary_kills},
+    {"unseen_hazard_kills",&InvisibleMetrics::hazard_kills}};
 template<class T, size_t N> void field_header(std::ostream& o,const Field<T> (&fields)[N]) {
     for(const auto& f:fields) o<<','<<f.name;
     o<<'\n';
@@ -143,6 +158,64 @@ void Collector::prepare_action(const Action& a) {
     if(a.kind == ActionKind::Drop) drop_slot = a.slot;
     if(a.kind == ActionKind::Move && !data.floors.empty()) ++data.floors.back().moves;
 }
+void Collector::begin_invisible() {
+    if(!enabled || data.agent!="explorer-v1" || data.floors.empty()) return;
+    invisible_evidence=data.turns;
+    if(invisible_engagement) return;
+    invisible_engagement=true; invisible_hazard=invisible_located=invisible_disengaging=false;
+    invisible_started=data.turns; invisible_probes=contact_streak=invisible_duration=invisible_damage=invisible_kills=0;
+    contact_square=contact_player={}; initially_unseen.fill(false);
+    ++data.floors.back().exploration.invisible.encounters;
+    // Privileged reporting classification only; even undiscovered hazards may
+    // label an episode, but never alter observations or tactical decisions.
+    for(auto& feature:rogue::game.features) if(rogue::feature_type(feature.id)==rogue::FEATURE_SUMMONING_TRAP &&
+        std::abs(int(feature.pos.x)-rogue::game.player.x)+std::abs(int(feature.pos.y)-rogue::game.player.y)<=3) invisible_hazard=true;
+}
+void Collector::close_invisible() {
+    if(!invisible_engagement || data.floors.empty()) return;
+    auto& e=data.floors.back().exploration.invisible;
+    e.over_12+=invisible_duration>12; e.over_32+=invisible_duration>32;
+    e.over_64+=invisible_duration>64; e.over_128+=invisible_duration>128;
+    e.hazard_encounters+=invisible_hazard;
+    if(invisible_hazard) { e.hazard_damage+=invisible_damage; e.hazard_kills+=invisible_kills; }
+    else { e.ordinary_damage+=invisible_damage; e.ordinary_kills+=invisible_kills; }
+    invisible_engagement=false; contact_square=contact_player={}; initially_unseen.fill(false);
+}
+void Collector::observe_contact(const ExplorerObservation& o) {
+    if(!enabled || data.agent!="explorer-v1" || data.floors.empty() || contact_last_action==o.actions) return;
+    contact_last_action=o.actions;
+    bool contact=o.contact_reported && !o.contact_type && o.melee_feedback!=MeleeFeedback::Defeat;
+    if(o.anonymous_attacks || contact) begin_invisible();
+    if(!invisible_engagement) return;
+    if(o.anonymous_attacks || contact) invisible_evidence=data.turns;
+    auto& e=data.floors.back().exploration.invisible;
+    if(contact) {
+        ++e.confirmations; e.hits+=o.melee_feedback==MeleeFeedback::Hit; e.misses+=o.melee_feedback==MeleeFeedback::Miss;
+        contact_streak=contact_square==o.contact && contact_player==o.player ? contact_streak+1 : 1;
+        e.max_consecutive=std::max(e.max_consecutive,contact_streak); ++e.contact_turns;
+        contact_square=o.contact; contact_player=o.player;
+        if(!invisible_located) { invisible_located=true; ++e.located; e.probes_to_first+=invisible_probes; }
+    } else if(contact_square.x!=255) {
+        ++e.losses; contact_square={}; contact_streak=0;
+    }
+    if(data.turns>invisible_evidence+6) {
+        if(invisible_disengaging && !rogue::session.ended) ++e.disengagements;
+        close_invisible();
+    }
+}
+void Collector::decide_contact(const ExplorerObservation& o,const Action& a,const SurvivalRisk& risk) {
+    if(!enabled || !invisible_engagement || data.floors.empty()) return;
+    auto& e=data.floors.back().exploration.invisible;
+    if(a.goal=="probe unseen contact candidates" || a.goal=="probe for reported unseen attacker") {
+        ++e.probes; ++invisible_probes;
+    }
+    bool other_move=a.kind==ActionKind::Move && (int(o.player.x)+a.dx!=o.contact.x || int(o.player.y)+a.dy!=o.contact.y);
+    if(o.contact_reported && !o.contact_type && o.melee_feedback!=MeleeFeedback::Defeat && !o.encounter_changed &&
+        other_move && risk.danger<Danger::Serious && a.goal!="disengage from unseen encounter") ++e.premature_abandonments;
+    invisible_disengaging=invisible_disengaging || a.goal=="disengage from unseen encounter" ||
+        a.goal=="detour around repeated melee contact" || a.goal=="bounded observed retreat" ||
+        (a.kind==ActionKind::Use && a.slot<rogue::INVENTORY && rogue::game.inventory[a.slot].type==rogue::SCROLL_TELEPORT);
+}
 void Collector::enter_floor() {
     const auto& g = rogue::game;
     close_floor(true);
@@ -241,6 +314,7 @@ void Collector::enter_floor() {
 }
 void Collector::close_floor(bool exited) {
     if(data.floors.empty() || data.floors.back().exited) return;
+    close_invisible();
     auto& f = data.floors.back();
     if(data.agent=="explorer-v1") {
         f.exploration.frontier_changes=explorer_stats.frontier_changes-entry_explorer_stats.frontier_changes;
@@ -289,6 +363,7 @@ void Collector::observe() {
 }
 void Collector::observe_exploration(const ExplorerObservation& o) {
     if(!enabled || data.floors.empty()) return;
+    observe_contact(o);
     auto& e=data.floors.back().exploration;
     combat_action=o.attacked;
     for(int m=0;m<o.monster_count;++m) if(std::abs(int(o.player.x)-o.monsters[m].pos.x)+std::abs(int(o.player.y)-o.monsters[m].pos.y)<=2) combat_action=true;
@@ -332,6 +407,27 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
     }
 }
 void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount, uint8_t detail) {
+    if(enabled && data.agent=="explorer-v1" && !data.floors.empty()) {
+        if((k==EventKind::MonsterAttack || k==EventKind::PlayerAttack) && index<rogue::MONSTERS && !visible_before[index]) {
+            begin_invisible(); initially_unseen[index]=true;
+        }
+        auto& e=data.floors.back().exploration.invisible;
+        if(invisible_engagement) {
+            if(k==EventKind::Turn) ++invisible_duration;
+            if(k==EventKind::PlayerDamage) { e.damage+=amount; invisible_damage+=amount; }
+            if(k==EventKind::Consumed && (type==rogue::POTION_HEALING || type==rogue::POTION_EXPERIENCE)) e.healing+=amount;
+            if(k==EventKind::MonsterKilled && index<rogue::MONSTERS && initially_unseen[index]) {
+                ++e.kills; ++invisible_kills; initially_unseen[index]=false;
+            }
+            if((k==EventKind::FeatureActivated || k==EventKind::MonsterTrapActivated) && type==rogue::FEATURE_SUMMONING_TRAP) {
+                ++e.summons; invisible_hazard=true;
+            }
+            if(k==EventKind::Finished && type==rogue::DEATH && data.death_cause=="starvation" && contact_streak>1) ++e.stationary_starvation;
+        }
+        if(k==EventKind::Finished && type==rogue::DEATH && data.death_cause=="PHANTOM") ++e.phantom_deaths;
+        if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn)
+            if(index<rogue::MONSTERS) initially_unseen[index]=false;
+    }
     if(k==EventKind::MonsterKilled && type==rogue::LORD) data.lord_killed=true;
     if(k==EventKind::Finished && type==rogue::DEATH && healing_action && !data.floors.empty()) ++data.floors.back().exploration.healing_then_death;
     if(k==EventKind::Consumed && type==rogue::FOOD && !data.floors.empty()) data.floors.back().exploration.food_waste+=std::max(0,int(rogue::game.hunger)-145);
@@ -560,7 +656,7 @@ void write_exploration_header(std::ostream& o) {
     for(int d=0;d<=8;++d) o<<",initial_alert_distance_"<<d;
     for(int d=0;d<=6;++d) o<<",initial_alert_light_"<<d;
     o<<",first_hostile_contact_turn";
-    o<<'\n';
+    field_header(o,invisible_fields);
 }
 void write_exploration(std::ostream& o,const RunMetrics& r) {
     for(const auto& f:r.floors) {
@@ -573,7 +669,7 @@ void write_exploration(std::ostream& o,const RunMetrics& r) {
         for(auto n:e.alert_distances) o<<','<<n;
         for(auto n:e.alert_light) o<<','<<n;
         o<<','<<e.first_contact;
-        o<<'\n';
+        field_values(o,e.invisible,invisible_fields);
     }
 }
 void write_runs_header(std::ostream& o) {

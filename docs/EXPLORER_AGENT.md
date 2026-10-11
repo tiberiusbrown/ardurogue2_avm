@@ -51,7 +51,7 @@ rules. They supply position and public species definitions, without HP, live
 effects, stun, AI targets or aggression flags. Native status adapters also
 supply information actually printed to the player: an incoming attacker name,
 or confirmation that the agent's own attempted melee square made contact.
-An incoming attack supplies **no bearing**. Protocol version 2 also removes
+An incoming attack supplies **no bearing**. Protocol version 3 retains the correction removing
 the historical native status leak: a creature printed as “something” supplies
 no species identity. Its own attempted melee square can still establish contact. Confused movement cannot establish
 an inferred contact square. Damage events and telemetry never feed this path.
@@ -88,11 +88,17 @@ rejection limits produce simulator failures, never synthetic deaths.
 Tactics include known healing, experience/stat potions, hunger management,
 equipment upgrades, observed straight-line ranged attacks, fire safety,
 bounded retreat, committed adjacent melee and emergency teleport/invisibility.
-Repeated contact without movement has a configurable retry budget. Once it is
-exhausted, the policy temporarily avoids its own confirmed melee square and
-tries an observed alternate route. This prevents indefinitely fighting freshly
-spawned invisible creatures while healing offsets starvation. It never learns
-the spawn location or the unseen creature's current coordinates.
+Invisible contact has explicit suspected, confirmed, uncertain and disengaging
+states. Printed melee hits and roll misses confirm the attempted square at
+attack time and refresh commitment. Favorable fights have no 12-turn stationary
+cutoff. Missing feedback, movement, confusion and observable encounter changes
+reduce or invalidate contact. SurvivalRisk, displayed HP loss, hunger, resources
+and observable replenishment can justify disengagement independently of contact
+confidence. A four-direction tested mask bounds probes at each player position;
+known traversable squares precede unknown tactile probes. Route avoidance
+survives a completed retreat independently of contact certainty. See
+[the invisible-contact report](EXPLORER_INVISIBLE_CONTACT.md) for inference rules,
+loop safeguards, telemetry definitions and measured comparisons.
 Unknown jewelry can be tried even when a mediocre identified item occupies its
 slot, with an upper protection threshold for valuable known gear. Planned ring
 replacement retains its intended new slot across the removal action, preventing
@@ -121,7 +127,7 @@ quiet ascent lighting have separate preferences. None reveals unseen entities.
 
 ## Runtime preferences and evolution
 
-`explorer_parameters.hpp` defines integer defaults, names and bounds for 101
+`explorer_parameters.hpp` defines integer defaults, names and bounds for 102
 runtime preferences. They cover frontier costs, loot costs, threat memory,
 trap avoidance, healing/emergency thresholds, food, safe experimentation,
 equipment ratings, unknown-item values, early experience and retreats.
@@ -180,14 +186,20 @@ public definitions and preferences have a separate code hash. An explorer
 manifest records the complete runtime parameters and their canonical SHA-256.
 `agent_policy_hash = SHA256(code_hash + ":" + parameter_hash)`.
 Partial and full files resolving to the same configuration have the same
-identity. Changing any preference changes policy identity. Paired comparisons
-require matching policy hashes and thus matching parameters.
+identity. Changing any preference changes policy identity. Same-policy gameplay
+interventions require matching hashes and parameters. Comparisons of distinct
+policies are descriptive, using identical seed sets with differing policy hashes.
 
 Core telemetry is version 7, appending `lord_killed` to runs. The additional
-`exploration.csv` has its own schema version (4) and records per-visit terrain/floor
+`exploration.csv` has its own schema version (5) and records per-visit terrain/floor
 coverage, actually surveyed floor cells, exploration turns, travel, repeated visits, frontier changes, failed
 routes, stale items, unseen damage, observed items, discovery-distance bins,
-stair discovery/reach times and displacement. Reachable area and geometric
+stair discovery/reach times and displacement. Version 5 appends invisible-contact
+probes, hit/miss confirmations, loss and abandonment proxies, episode lengths,
+damage, healing, kills, disengagements and summoning classifications. Their
+observation/reporting boundary is documented in
+[EXPLORER_INVISIBLE_CONTACT.md](EXPLORER_INVISIBLE_CONTACT.md).
+Reachable area and geometric
 stair-route length are ground-truth **reporting denominators only**, never
 inputs to the agent. Darkness can reduce what is learned without removing
 retained knowledge. The oracle's sidecar describes its visible surroundings;
@@ -411,6 +423,15 @@ file, the project `README.md`, `sim/README.md` and `sim/BALANCE.md`.
 These statements describe the historical explorer implementation. The current
 pass changes initial monster awareness and repairs an oracle light-reserve swap
 cycle; save layout remains unchanged. See the current competence report.
+
+The contact-aware policy supersedes the historical stationary budget and
+invisible-response measurements above. `contact_aware=0` retains the frozen
+decision logic; combining it with `invisible_response=0` reproduces the existing
+reassessment ablation, which still probes and repeats contact.
+`stationary_contact_turns` is a legacy-only preference. All other defaults are
+held fixed in the [new policy report](EXPLORER_INVISIBLE_CONTACT.md). Protocol 3
+adds public melee outcomes, attack counts, attack origin and conservative
+encounter-change/summoning messages, without hidden species or live positions.
 
 ## Current competence pass
 

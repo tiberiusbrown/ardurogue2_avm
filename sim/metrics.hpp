@@ -33,7 +33,16 @@ struct FeatureMetrics {
     uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0, repeated=0, max_entries=0, displacement=0;
     uint64_t monster_activated=0, monster_damage=0, monster_killed=0, monster_teleported=0, monster_status=0, monster_spawned=0;
 };
+struct InvisibleMetrics {
+    uint64_t encounters=0, probes=0, probes_to_first=0, located=0, confirmations=0,
+        hits=0, misses=0, max_consecutive=0, contact_turns=0, losses=0,
+        premature_abandonments=0, damage=0, healing=0, disengagements=0, kills=0,
+        over_12=0, over_32=0, over_64=0, over_128=0, summons=0,
+        stationary_starvation=0, phantom_deaths=0, hazard_encounters=0,
+        ordinary_damage=0, hazard_damage=0, ordinary_kills=0, hazard_kills=0;
+};
 struct ExplorationMetrics {
+    InvisibleMetrics invisible;
     uint64_t terrain_cells=0, floor_cells=0, surveyed_floor_cells=0, exploring_turns=0, travel=0, repeated_visits=0,
         frontier_changes=0, unreachable=0, missing_items=0, unseen_damage=0, items_observed=0, displacements=0;
     int reachable=0, shortest=0;
@@ -91,6 +100,15 @@ struct RunMetrics {
     std::string experiment="baseline", variant="control";
 };
 struct Collector {
+    bool invisible_engagement=false, invisible_hazard=false, invisible_located=false, invisible_disengaging=false;
+    uint64_t invisible_started=0, invisible_evidence=0, invisible_probes=0, contact_streak=0, invisible_duration=0;
+    uint64_t invisible_damage=0, invisible_kills=0, contact_last_action=UINT64_MAX;
+    std::array<bool,rogue::MONSTERS> initially_unseen{};
+    SeenPosition contact_square, contact_player;
+    void begin_invisible();
+    void close_invisible();
+    void observe_contact(const ExplorerObservation&);
+    void decide_contact(const ExplorerObservation&,const struct Action&,const SurvivalRisk&);
     ExplorerStats explorer_stats, entry_explorer_stats;
     std::bitset<EXPLORER_CELLS> observed_terrain, observed_floor, surveyed_floor, visited_tiles;
     std::array<bool,rogue::MONSTERS> visibly_observed{}, visible_before{};
@@ -149,7 +167,7 @@ void write_interventions(std::ostream&, const RunMetrics&);
 inline constexpr unsigned ENTRY_STATE_SCHEMA_VERSION=1;
 void write_entry_state_header(std::ostream&);
 void write_entry_state(std::ostream&, const RunMetrics&);
-inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=4;
+inline constexpr unsigned EXPLORATION_SCHEMA_VERSION=5;
 void write_exploration_header(std::ostream&);
 void write_exploration(std::ostream&,const RunMetrics&);
 struct CsvStream {
