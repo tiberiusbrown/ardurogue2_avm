@@ -54,7 +54,7 @@ constexpr uint8_t PHANTOM_HEALTH = 10;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 29;
+constexpr uint8_t SAVE_VERSION = 30;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -106,8 +106,25 @@ enum ItemType : uint8_t {
     WAND_FIRST,
     WAND_FORCE = WAND_FIRST, WAND_TELEPORT, WAND_DIGGING, WAND_FIRE,
     WAND_STRIKING, WAND_ICE, WAND_POLYMORPH,
-    WAND_LAST = WAND_POLYMORPH
+    WAND_LAST = WAND_POLYMORPH,
+    SPELLBOOK
 };
+enum Spell : uint8_t {
+    MAGIC_DART, FROSTBIND, REPULSION, CONFOUND, SENSE_TRAPS, BLINK,
+    SHOCKWAVE, PIERCING_BOLT, BANISH, EXCHANGE, CLEANSE, SPELL_COUNT
+};
+constexpr uint16_t spell_bit(uint8_t spell) { return spell < SPELL_COUNT ? uint16_t(1u << spell) : 0; }
+constexpr uint8_t spell_cost(uint8_t spell) {
+    return spell == MAGIC_DART ? 2 : spell <= SENSE_TRAPS ? 3 : spell == BLINK ? 4 : 5;
+}
+constexpr uint8_t spell_study_turns(uint8_t spell) { return spell <= SENSE_TRAPS ? 40 : spell == EXCHANGE ? 80 : 60; }
+constexpr bool spell_directional(uint8_t spell) {
+    return spell <= CONFOUND || spell == PIERCING_BOLT || spell == BANISH;
+}
+// Hunger is 0..255; ordinary food consumption is at most one unit per turn.
+// Reading stops below 60. Reserve covers the whole study even with cursed sustenance.
+constexpr uint8_t STUDY_HUNGRY = 60, STUDY_FOOD_MARGIN = 12;
+constexpr uint8_t study_food_required(uint8_t spell) { return STUDY_HUNGRY + STUDY_FOOD_MARGIN + spell_study_turns(spell); }
 constexpr uint8_t MAX_BOW_RANGE = MAX_LIGHT_RADIUS;
 constexpr bool is_ammo(uint8_t type) { return type >= AMMO_FIRST && type <= AMMO_LAST; }
 constexpr bool is_bow(uint8_t type) { return type == SHORT_BOW || type == LONG_BOW; }
@@ -129,7 +146,7 @@ constexpr bool is_fueled_light(uint8_t type) { return type >= CANDLE && type <= 
 constexpr bool is_shield(uint8_t type) { return type >= BUCKLER && type <= TOWER_SHIELD; }
 constexpr bool is_offhand(uint8_t type) { return type >= OFFHAND_FIRST && type <= OFFHAND_LAST; }
 constexpr bool is_equipment(uint8_t type) { return is_weapon(type) || is_armor(type) || is_shield(type); }
-constexpr bool uses_full_info(uint8_t type) { return is_ammo(type) || is_light(type); }
+constexpr bool uses_full_info(uint8_t type) { return is_ammo(type) || is_light(type) || type == SPELLBOOK; }
 constexpr uint8_t light_bonus(uint8_t type) {
     return type == CANDLE ? 1 : type == TORCH || type == GLOWING_ORB ? 2 : type == LANTERN ? 3 : 0;
 }
@@ -439,6 +456,8 @@ struct Game {
     uint8_t offhand_slot, blindness;
     uint8_t see_invisible; // Remaining temporary sight turns; saved across floors/resume.
     uint8_t haste, levitation, fire_resistance; // Zero means inactive; append saved timers.
+    uint8_t mana;
+    uint16_t known_spells;
 };
 
 enum RunResult : uint8_t {
@@ -457,13 +476,16 @@ struct Session {
     bool pending_pickups = false;
     uint8_t pickup_turns = 0;
     bool object_detection = false; // One display request, never saved.
+    uint8_t study_slot = NONE, study_spell = NONE, study_progress = 0, study_floor = 0;
+    Position study_origin = {};
+    bool study_message = false;
 };
 
 extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 817 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
+static_assert(sizeof(Game) == 820 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -488,6 +510,11 @@ static_assert(offsetof(Game, features) == 775 + 4 * (GROUND_ITEMS - 16) + 2 * (I
 static_assert(offsetof(Game, haste) == offsetof(Game, see_invisible) + 1 &&
               offsetof(Game, fire_resistance) == offsetof(Game, haste) + 2,
               "new timers must append to saved layout");
+#if defined(__AVM__)
+static_assert(offsetof(Game, mana) == offsetof(Game, fire_resistance) + 1 &&
+              offsetof(Game, known_spells) == offsetof(Game, mana) + 1,
+              "magic must append exactly three saved bytes");
+#endif
 static_assert(POTION_COUNT == 18 && SCROLL_COUNT == 15 &&
               RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 7,
               "item table counts changed");

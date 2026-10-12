@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include "game.hpp"
 #include "features.hpp"
 #include "game_internal.hpp"
@@ -151,12 +152,13 @@ __attribute__((noinline)) static PickupResult apply_pickup(uint8_t index)
     }
     ground.item.type = NO_ITEM;
     SIM_EVENT(sim::EventKind::Pickup, index, item.type,
-              stackable(item.type) ? item_value(item) : 1);
+              stackable(item.type) ? item_value(item) : 1, item.info);
     return PICKUP_TAKEN;
 }
 // Inventory and message temporaries unwind before retaliation/status rendering.
 __attribute__((noinline)) PickupResult take_item(uint8_t index)
 {
+    if(studying()) return PICKUP_INVALID;
     PickupResult result = apply_pickup(index);
     if(result == PICKUP_TAKEN) finish_pickup_turn();
     return result;
@@ -241,7 +243,7 @@ __attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t s
     // Keep the player's item in the slot being collected.
     game.ground[index].item = outgoing;
     SIM_EVENT(sim::EventKind::Pickup, index, incoming.type,
-              stackable(incoming.type) ? item_value(incoming) : 1);
+              stackable(incoming.type) ? item_value(incoming) : 1, incoming.info);
     SIM_EVENT(sim::EventKind::Dropped, index, outgoing.type,
               stackable(outgoing.type) ? item_value(outgoing) : 1);
     session.repeat_slot = NONE;
@@ -256,6 +258,7 @@ __attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t s
 
 __attribute__((noinline)) bool swap_ground_item(uint8_t index, uint8_t slot)
 {
+    if(studying()) return false;
     if(!apply_ground_swap(index, slot))
         return false;
     finish_pickup_turn();
@@ -749,6 +752,8 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
 
 __attribute__((noinline)) bool use_inventory(uint8_t slot, uint8_t target_slot)
 {
+    if(studying()) return false;
+    if(slot < INVENTORY && game.inventory[slot].type == SPELLBOOK) return begin_study(slot);
     uint8_t used_type = slot < INVENTORY ? game.inventory[slot].type : NO_ITEM;
     if(!apply_inventory(slot))
         return false;
@@ -866,6 +871,7 @@ __attribute__((noinline)) static bool apply_arrow(uint8_t slot, int8_t dx, int8_
 
 __attribute__((noinline)) bool throw_or_shoot(uint8_t slot, int8_t dx, int8_t dy)
 {
+    if(studying()) return false;
     if(slot < INVENTORY && is_potion(game.inventory[slot].type)) return throw_potion(slot, dx, dy);
     if(!apply_arrow(slot, dx, dy)) return false;
     // Arrow/animation temporaries have unwound before the enemy/status chain.
@@ -1200,6 +1206,7 @@ __attribute__((noinline)) static void finish_wand(uint8_t slot)
 }
 __attribute__((noinline)) bool use_wand(uint8_t slot, int8_t dx, int8_t dy)
 {
+    if(studying()) return false;
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope damage_source(sim::Cause::Item, slot < INVENTORY ? game.inventory[slot].type : NO_ITEM);
 #endif
@@ -1275,6 +1282,7 @@ __attribute__((noinline)) static bool apply_drop(uint8_t slot, bool discard)
 
 bool drop_inventory(uint8_t slot, bool discard)
 {
+    if(studying()) return false;
     if(!apply_drop(slot, discard))
         return false;
     end_turn();

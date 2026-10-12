@@ -48,9 +48,9 @@ Arrows use all eight info bits as unsigned quantity
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 29 stores one active floor in an 841-byte AVM `Game`. Generation
+Save version 30 stores one active floor in an 844-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 28 and older saves are incompatible; no migration is attempted.
+Version 29 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
@@ -76,6 +76,14 @@ teleport the player, map the floor, or affect visible monsters with fear,
 torment, confusion, or poison. Reading a scroll reveals its type. Each run
 randomly assigns unknown scroll descriptions, and scrolls of the same type
 stack in inventory.
+
+Every character starts with Magic Dart and 6/6 MP. Learn ten other spells from
+explicitly named, nonstacking spellbooks through 40–80 ordinary turns of study.
+Prepare food and light, choose a quiet location, and press B to cancel between
+animated study updates. Any gameplay message interrupts learning and keeps the
+book. **CAST SPELL** is in the scrolling action menu; the HUD shows MP. Mana
+regenerates every 16 nonstarving turns. See the complete roster, targeting,
+controls and validation in [the magic guide](docs/SPELLS.md).
 
 The six additional scrolls hold nearby visible monsters, discover traps, summon
 a hostile creature, teleport visible monsters, explode in fire, or display ground
@@ -444,10 +452,10 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
-The AVM build uses an 841-byte saved layout and two-byte items, eight-byte
-monsters, and four-byte ground items. The consumables build has a complete
-250-byte production maximum stack bound (252 bytes for benchmarks) and zero analysis gaps within the 256-byte VM
+The AVM build uses an 844-byte saved layout and two-byte items, eight-byte
+monsters, and four-byte ground items. The magic build has a complete
+247-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM
 stack. Future changes must continue checking the linker report. Rendering
 reuses transient row scratch outside the saved layout and preserves explored
-terrain separately from current sight. See the lighting implementation report
+terrain separately from current sight. See the [magic implementation report](docs/SPELLS-RESULTS.md)
 for RAM, flash, final-ELF benchmarks and paired balance validation.

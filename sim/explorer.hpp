@@ -7,7 +7,7 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 5;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 6;
 inline constexpr int EXPLORER_APPEARANCES = 18;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
@@ -16,11 +16,12 @@ struct SeenPosition {
     bool operator!=(SeenPosition b) const { return !(*this==b); }
 };
 enum class Terrain : uint8_t { Unknown, Floor, Wall, ClosedDoor, OpenDoor, Up, Down };
-enum class ItemCategory : uint8_t { None, Ammo, Food, Potion, Weapon, Armor, Amulet, Ring, Scroll, Wand, Light, Shield };
+enum class ItemCategory : uint8_t { None, Ammo, Food, Potion, Weapon, Armor, Amulet, Ring, Scroll, Wand, Light, Shield, Spellbook };
 struct SeenItem {
     ItemCategory category=ItemCategory::None;
     uint8_t type=0, appearance=255, quantity=0, magnitude=0, modifier=0;
     int8_t enchant=0;
+    uint8_t spell=255;
     bool individual=false, cursed=false;
 };
 struct SeenGround { SeenPosition pos; SeenItem item; uint8_t handle=255; };
@@ -28,6 +29,7 @@ struct SeenMonster {
     SeenPosition pos;
     uint8_t type=0, strength=0, speed=0, armor=0;
     uint16_t traits=0; // Public species definitions, never live HP/status/AI.
+    uint8_t handle=255;
 };
 enum class MeleeFeedback : uint8_t { None, Miss, Hit, Defeat };
 struct ExplorerObservation {
@@ -35,6 +37,9 @@ struct ExplorerObservation {
     uint8_t floor=0, hp=0, max_hp=0, level=0, xp=0, strength=0, dexterity=0, speed=0, hunger=0;
     uint8_t weakened=0, confused=0, paralyzed=0, slowed=0, invisible=0, blindness=0; // Known flags, not hidden timers.
     uint8_t radius=0, inventory_capacity=20;
+    uint16_t known_spells=0;
+    uint8_t mana=0, max_mana=0, study_spell=255, study_progress=0;
+    bool studying=false;
     bool vitality_drained=false;
     bool haste=false, levitation=false, fire_resistance=false;
     std::bitset<EXPLORER_CELLS> detected_objects; // Positions only, one public map snapshot.
@@ -62,7 +67,7 @@ struct ExplorerObservation {
     uint8_t incoming_attacks=0, anonymous_attacks=0; // Printed attacks, no bearings.
     bool encounter_changed=false, summoning_reported=false; // Public status prose.
 };
-enum class ExplorerActionKind { Move, Wait, Take, Stairs, Use, Throw, Wand, Drop };
+enum class ExplorerActionKind { Move, Wait, Take, Stairs, Use, Throw, Wand, Drop, Cast, CancelStudy };
 struct ExplorerAction {
     ExplorerActionKind kind=ExplorerActionKind::Wait;
     int8_t dx=0, dy=0;
@@ -127,6 +132,10 @@ class ExplorerAgent final {
     uint64_t blocked_contact_until=0;
     unsigned probe_direction=0;
     unsigned retreat_budget=0, quiet_turns=0, stalled=0, bow_cooldown=0;
+    SeenPosition prolonged_target;
+    unsigned prolonged_melee=0;
+    uint64_t study_defer_until=0, magic_control_until=0, trap_sense_until=0;
+    uint8_t previous_study=255;
     uint8_t pending_ring=255;
     uint8_t previous_hp=0;
     unsigned unseen_turns=0, contact_damage=0;

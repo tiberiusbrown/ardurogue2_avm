@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
 #include "status.hpp"
@@ -317,6 +318,8 @@ void start_new(uint16_t seed)
     game.speed = 4;
     game.magic_resistance = 2;
     game.hunger = 220;
+    game.mana = 6;
+    game.known_spells = BALANCE_VALUE("magic", 1) ? spell_bit(MAGIC_DART) : 0;
     game.weapon_slot = game.armor_slot = NONE;
     game.amulet_slot = game.offhand_slot = NONE;
     game.ring_slots[0] = game.ring_slots[1] = NONE;
@@ -328,6 +331,7 @@ void start_new(uint16_t seed)
 
 void finish(RunResult result)
 {
+    cancel_study(false);
     SIM_EVENT(sim::EventKind::Finished, NONE, result);
     if(game.score > game.best_score)
         game.best_score = game.score;
@@ -338,6 +342,7 @@ void finish(RunResult result)
 
 void change_floor(int8_t delta)
 {
+    cancel_study(false);
     SIM_EVENT(sim::EventKind::FloorExited);
     game.floor = static_cast<uint8_t>(game.floor + delta);
     make_floor();
@@ -346,7 +351,7 @@ void change_floor(int8_t delta)
 
 bool take_stairs()
 {
-    if(game.paralyzed) return false;
+    if(game.paralyzed || studying()) return false;
     if(game.player == game.up) {
         if(!game.has_amulet) {
             status(F("The way up is closed until you find"));
@@ -371,6 +376,7 @@ bool take_stairs()
 
 void action()
 {
+    if(studying()) return;
     if(game.paralyzed) {
         status(F("You cannot act!"));
         end_turn();

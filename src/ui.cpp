@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -204,6 +205,22 @@ static void begin_new_game()
     status(F("Welcome to the dungeon."));
 }
 
+static uint8_t next_known_spell(uint8_t from, int8_t step) {
+    for(uint8_t n = 0; n < SPELL_COUNT; ++n) {
+        from = from == NONE ? (step > 0 ? 0 : SPELL_COUNT - 1) :
+            static_cast<uint8_t>((from + SPELL_COUNT + step) % SPELL_COUNT);
+        if(game.known_spells & spell_bit(from)) return from;
+    }
+    return NONE;
+}
+static uint8_t next_exchange_target(uint8_t from, int8_t step) {
+    for(uint8_t n = 0; n < MONSTERS; ++n) {
+        from = from == NONE ? (step > 0 ? 0 : MONSTERS - 1) :
+            static_cast<uint8_t>((from + MONSTERS + step) % MONSTERS);
+        if(exchange_target(from)) return from;
+    }
+    return NONE;
+}
 // Defer wand/projectile activation to the main loop so this UI frame unwinds first.
 __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
 {
@@ -211,7 +228,43 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
     InputAction pending = INPUT_NONE;
     uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
     ui.previous_buttons = buttons;
+    if(ui.mode == PLAY && studying()) {
+        if(edges & AVM_BUTTON_B) {
+            status_clear(); cancel_study(); ui.dirty = true;
+        } else if(static_cast<int16_t>(avm_millis() - ui.next_repeat_ms) >= 0) {
+            ui.next_repeat_ms = static_cast<uint16_t>(avm_millis() + 90);
+            ui.dirty = true;
+            return INPUT_STUDY_TURN;
+        }
+        return INPUT_NONE;
+    }
     uint8_t direction = directional_press(buttons, edges);
+    if(ui.mode == SPELL_MENU || ui.mode == SPELL_TARGET) {
+        if(edges & AVM_BUTTON_B) {
+            ui.mode = PLAY; status_clear(); ui.dirty = true;
+        } else if(direction) {
+            int8_t step = direction == AVM_BUTTON_U || direction == AVM_BUTTON_L ? -1 : 1;
+            if(ui.mode == SPELL_MENU) ui.selection = next_known_spell(ui.selection, step);
+            else ui.use_target = next_exchange_target(ui.use_target, step);
+            ui.dirty = true;
+        } else if(edges & AVM_BUTTON_A) {
+            status_clear(); defer_play_render();
+            if(game.paralyzed) { ui.mode = PLAY; status(F("You cannot cast now.")); }
+            else if(game.mana < spell_cost(ui.selection)) { ui.mode = PLAY; status(F("Not enough mana.")); }
+            else if(ui.mode == SPELL_TARGET) {
+                ui.mode = PLAY; ui.dirty = true; return INPUT_CAST_IMMEDIATE;
+            } else if(spell_directional(ui.selection)) ui.mode = SPELL_DIRECTION;
+            else if(ui.selection == EXCHANGE) {
+                ui.use_target = next_exchange_target(NONE, 1);
+                ui.mode = ui.use_target == NONE ? PLAY : SPELL_TARGET;
+                if(ui.use_target == NONE) status(F("No visible target in range."));
+            } else {
+                ui.use_target = NONE; ui.mode = PLAY; ui.dirty = true; return INPUT_CAST_IMMEDIATE;
+            }
+            ui.dirty = true;
+        }
+        return INPUT_NONE;
+    }
     if(ui.mode == TITLE) {
         if(edges & AVM_BUTTON_A) {
             if(ui.has_save) {
@@ -245,17 +298,22 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         }
         return INPUT_NONE;
     }
-    if(ui.mode == PROJECTILE_DIRECTION || ui.mode == WAND_DIRECTION) {
+    if(ui.mode == PROJECTILE_DIRECTION || ui.mode == WAND_DIRECTION || ui.mode == SPELL_DIRECTION) {
         if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY;
             status_clear();
             ui.dirty = true;
         } else if(direction) {
             bool wand_direction = ui.mode == WAND_DIRECTION;
+            bool spell_direction = ui.mode == SPELL_DIRECTION;
             ui.mode = PLAY;
             status_clear();
             defer_play_render();
-            if(wand_direction) {
+            if(spell_direction) {
+                ui.dirty = true;
+                return direction == AVM_BUTTON_U ? INPUT_CAST_UP : direction == AVM_BUTTON_R ? INPUT_CAST_RIGHT :
+                       direction == AVM_BUTTON_D ? INPUT_CAST_DOWN : INPUT_CAST_LEFT;
+            } else if(wand_direction) {
                 ui.dirty = true;
                 return direction == AVM_BUTTON_U ? INPUT_WAND_UP :
                        direction == AVM_BUTTON_R ? INPUT_WAND_RIGHT :
@@ -274,7 +332,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         if(direction == AVM_BUTTON_U && ui.selection) {
             --ui.selection;
             ui.dirty = true;
-        } else if(direction == AVM_BUTTON_D && ui.selection < 6) {
+        } else if(direction == AVM_BUTTON_D && ui.selection < 7) {
             ++ui.selection;
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_B) {
@@ -366,6 +424,12 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                 ui.has_save = true;
                 ui.mode = TITLE;
                 break;
+            case 7:
+                status_clear();
+                ui.mode = SPELL_MENU;
+                ui.selection = next_known_spell(NONE, 1);
+                if(ui.selection == NONE) { ui.mode = PLAY; status(F("You know no spells.")); }
+                break;
             case 6:
                 render_play();
                 if(yesno(F("Abandon this game?")))
@@ -390,12 +454,20 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         moved = !session.ended && game.player != old;
     } else if(edges & AVM_BUTTON_A) {
         status_clear();
-        action();
+        if(!game.paralyzed && session.repeat_slot < INVENTORY &&
+           (is_equipment(game.inventory[session.repeat_slot].type) || is_offhand(game.inventory[session.repeat_slot].type) ||
+            is_ring(game.inventory[session.repeat_slot].type) || is_amulet(game.inventory[session.repeat_slot].type))) {
+            ui.selection = session.repeat_slot; ui.use_target = NONE; pending = INPUT_USE_INVENTORY;
+        } else {
+            session.repeat_slot = NONE;
+            status(game.paralyzed ? F("You cannot act!") : F("There is nothing here."));
+            end_turn();
+        }
     } else {
         return INPUT_NONE;
     }
     ui.dirty = true;
-    return moved ? INPUT_MOVED : INPUT_NONE;
+    return moved ? INPUT_MOVED : pending;
 }
 
 uint8_t choose_item(const char AVM_PROGMEM* prompt_text,

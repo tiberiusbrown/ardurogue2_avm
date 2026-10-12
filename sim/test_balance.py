@@ -135,6 +135,20 @@ class Paired(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "policy hashes"):
             b.pair_runs(legacy, r, legacy, r)
 
+    def test_primary_only_scope_retains_failure_checks(self):
+        r, m = runs()
+        m = {**m, "options": {**m["options"], "telemetry": False}}
+        with self.assertRaisesRegex(ValueError, "full telemetry"):
+            b.pair_runs(m, r, m, r)
+        baseline, candidate = b.pair_runs(m, r, m, r, primary_only=True)
+        pd.testing.assert_frame_equal(baseline, candidate)
+        detailed = {**m, "options": {**m["options"], "telemetry": True}}
+        with self.assertRaisesRegex(ValueError, "telemetry scopes"):
+            b.pair_runs(m, r, detailed, r, primary_only=True)
+        failed = r.copy(); failed.loc[0, "result"] = "SIM_STUCK"
+        with self.assertRaisesRegex(ValueError, "failures"):
+            b.pair_runs(m, failed, m, r, primary_only=True)
+
     def test_bootstrap_stable(self):
         d = np.arange(-10, 20)
         self.assertEqual(b.paired_bootstrap(d), b.paired_bootstrap(d))

@@ -1,7 +1,7 @@
 add_library(ardurogue2_sim_core STATIC
     simulator.cpp omniscient_agent.cpp explorer_observation.cpp explorer_events.cpp explorer_parameters.cpp policy_hash.cpp metrics.cpp survival_diagnostics.cpp trace.cpp frontend.cpp experiment.cpp
     ../src/features.cpp
-    ../src/state.cpp ../src/combat.cpp ../src/combat_math.cpp ../src/items.cpp
+    ../src/spells.cpp ../src/state.cpp ../src/combat.cpp ../src/combat_math.cpp ../src/items.cpp
     ../src/world.cpp ../src/world_gen.cpp ../src/world_gen_population.cpp)
 target_compile_features(ardurogue2_sim_core PUBLIC cxx_std_17)
 target_compile_definitions(ardurogue2_sim_core PUBLIC ARDUROGUE2_SIM)
@@ -51,11 +51,12 @@ if(GIT_FOUND)
     endif()
 endif()
 # Configure dependencies make the policy identity follow ordinary incremental builds.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS agent.hpp omniscient_agent.cpp ../src/features.hpp)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS agent.hpp omniscient_agent.cpp ../src/features.hpp ../src/model.hpp)
 file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/agent.hpp" POLICY_API_HASH)
 file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/omniscient_agent.cpp" POLICY_IMPL_HASH)
 file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/../src/features.hpp" POLICY_OBSERVATION_HASH)
-string(SHA256 SIM_AGENT_POLICY_HASH "${POLICY_API_HASH}:${POLICY_IMPL_HASH}:${POLICY_OBSERVATION_HASH}")
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/../src/model.hpp" POLICY_RULES_HASH)
+string(SHA256 SIM_AGENT_POLICY_HASH "${POLICY_API_HASH}:${POLICY_IMPL_HASH}:${POLICY_OBSERVATION_HASH}:${POLICY_RULES_HASH}")
 set(EXPLORER_DEPENDENCIES explorer.hpp explorer_agent.cpp explorer_parameters.hpp explorer_parameters.cpp policy_hash.hpp policy_hash.cpp explorer_observation.hpp explorer_observation.cpp explorer_events.hpp explorer_events.cpp frontend.cpp)
 set(EXPLORER_HASH_INPUT "")
 foreach(FILE IN LISTS EXPLORER_DEPENDENCIES)

@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include "persistence.hpp"
 #include <string.h>
 #if defined(__AVM__)
@@ -8,6 +9,7 @@ namespace rogue {
 
 bool restore_startup_save(bool loaded)
 {
+    cancel_study(false);
     if(loaded && game.magic == SAVE_MAGIC &&
        game.version == SAVE_VERSION)
         return game.valid != 0;
@@ -35,6 +37,7 @@ void resume_saved_game()
 
 void save_resumable_game()
 {
+    cancel_study(false);
     game.valid = 1;
     avm_save();
 }

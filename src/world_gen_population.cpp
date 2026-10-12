@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include "world_gen.hpp"
 #include "features.hpp"
 #include "world.hpp"
@@ -395,6 +396,7 @@ void populate_items(uint16_t seed, uint16_t equipment_seed)
 #else
     place_artifacts();
 #endif
+    generate_spellbooks();
     if(game.floor >= 1 && game.floor <= 3) {
         for(const GroundItem& ground : game.ground) if(is_light(ground.item.type)) return;
         for(GroundItem& ground : game.ground) {

@@ -14,8 +14,9 @@ void trace_explorer(std::ostream& out,const ExplorerObservation& o,const Surviva
     out<<" pack=";
     for(size_t s=0;s<o.inventory.size();++s) {
         auto& i=o.inventory[s]; if(i.category==ItemCategory::None) continue;
-        out<<s<<':'<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<i.individual<<':'<<i.cursed<<':'<<int(i.enchant)<<':'<<int(i.modifier)<<';';
+        out<<s<<':'<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<i.individual<<':'<<i.cursed<<':'<<int(i.enchant)<<':'<<int(i.modifier)<<':'<<int(i.spell)<<';';
     }
+    out<<" mana="<<int(o.mana)<<'/'<<int(o.max_mana)<<" spells="<<o.known_spells<<" study="<<int(o.study_spell)<<':'<<int(o.study_progress);
     out<<" sight=";
     for(int n=0;n<EXPLORER_CELLS;++n) if(o.visible[n]) out<<n<<':'<<int(o.terrain[n])<<':'<<int(o.features[n])<<';';
     out<<'\n';
@@ -32,6 +33,8 @@ std::string action_text(const Action& a) {
     case ActionKind::Throw: return std::string(a.slot<rogue::INVENTORY && rogue::is_ammo(rogue::game.inventory[a.slot].type) ?
         (rogue::game.weapon_slot<rogue::INVENTORY && rogue::is_bow(rogue::game.inventory[rogue::game.weapon_slot].type) ? "shoot arrow slot=" : "throw arrow slot=") : "throw potion slot=")+std::to_string(a.slot)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
     case ActionKind::Wand: return "WAND slot="+std::to_string(a.slot)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
+    case ActionKind::Cast: return "CAST spell="+std::to_string(a.slot)+" target="+std::to_string(a.target)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
+    case ActionKind::CancelStudy: return "CANCEL_STUDY";
     case ActionKind::Drop: return "DROP slot="+std::to_string(a.slot)+" discard="+std::to_string(a.discard);
     }
     return "INVALID";
@@ -44,7 +47,7 @@ void trace_action(std::ostream& out, uint64_t action, uint64_t turn, const Actio
         << " POS " << int(g.player.x) << ',' << int(g.player.y)
         << " goal=" << a.goal;
     if(a.destination.x != rogue::NONE) out << " target=" << int(a.destination.x) << ',' << int(a.destination.y);
-    if(a.slot < rogue::INVENTORY && g.inventory[a.slot].type)
+    if(a.kind != ActionKind::Cast && a.slot < rogue::INVENTORY && g.inventory[a.slot].type)
         out << " item=" << item_name(g.inventory[a.slot].type);
     for(const auto& ground : g.ground) if(ground.item.type && ground.pos == a.destination)
         out << " loot=" << item_name(ground.item.type);
@@ -69,6 +72,10 @@ void trace_event(std::ostream& out, EventKind kind, uint8_t, uint8_t type, uint1
     case EventKind::ItemUsed: out << "  used " << item_name(type) << '\n'; break;
     case EventKind::PotionThrown: out << "  threw " << item_name(type) << '\n'; break;
     case EventKind::ChargeUsed: out << "  wand " << item_name(type) << '\n'; break;
+    case EventKind::SpellCast: out<<"  spell="<<int(type)<<" MP spent="<<amount<<'\n'; break;
+    case EventKind::StudyStarted: out<<"  study started="<<int(type)<<'\n'; break;
+    case EventKind::StudyInterrupted: out<<"  study interrupted="<<int(type)<<'\n'; break;
+    case EventKind::SpellLearned: out<<"  learned="<<int(type)<<'\n'; break;
     case EventKind::Finished: out << "  ended result=" << int(type) << '\n'; break;
     default: break;
     }

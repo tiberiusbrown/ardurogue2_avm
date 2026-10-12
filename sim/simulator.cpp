@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 #include "trace.hpp"
 #include "world.hpp"
+#include "spells.hpp"
 #include "explorer_observation.hpp"
 #include "explorer_events.hpp"
 #include <cstring>
@@ -34,6 +35,8 @@ Action decide(ExplorerAgent& agent,const ExplorerObservation& o,uint64_t,uint64_
     case ExplorerActionKind::Throw:a.kind=ActionKind::Throw;break;
     case ExplorerActionKind::Wand:a.kind=ActionKind::Wand;break;
     case ExplorerActionKind::Drop:a.kind=ActionKind::Drop;break;
+    case ExplorerActionKind::Cast:a.kind=ActionKind::Cast;break;
+    case ExplorerActionKind::CancelStudy:a.kind=ActionKind::CancelStudy;break;
     }
     a.dx=e.dx; a.dy=e.dy; a.slot=e.slot; a.target=e.target; a.discard=e.discard;
     a.goal=std::move(e.goal); a.destination={e.destination.x,e.destination.y};
@@ -153,7 +156,9 @@ bool dispatch(const Action& a) {
         }
         return std::memcmp(&before,&game,sizeof game) != 0;
     }
-    case ActionKind::Wait: wait_search(); return true;
+    case ActionKind::Wait: if(studying()) return advance_study(); wait_search(); return true;
+    case ActionKind::Cast: return cast_spell(a.slot,a.dx,a.dy,a.target);
+    case ActionKind::CancelStudy: if(!studying()) return false; cancel_study(); return true;
     case ActionKind::Take: {
         if(game.paralyzed || !ground_here(a.target)) return false;
         PickupResult result = take_item(a.target);

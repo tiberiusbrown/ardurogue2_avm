@@ -16,7 +16,7 @@ int integer(const std::string& s) {
     return n;
 }
 uint8_t content(const std::string& s, bool monster) {
-    int last=monster ? rogue::LORD : rogue::WAND_POLYMORPH;
+    int last=monster ? rogue::LORD : rogue::SPELLBOOK;
     for(int i=1;i<=last;++i) {
         const char* name=monster ? monster_name(uint8_t(i)) : item_name(uint8_t(i));
         // CSV labels retain schema-2 spellings; accept renamed potion enums too.
@@ -38,7 +38,10 @@ Rule parse_rule(const std::string& text) {
         Rule r; r.balance_parameter=text.substr(8,equal-8); int value=integer(text.substr(equal+1));
         int min=0,max=100;
         auto& n=r.balance_parameter;
-        if(n=="new-consumables-percent") max=100;
+        if(n=="magic") max=1;
+        else if(n=="spellbook-percent") max=100;
+        else if(n=="spellbook-depth-bias") max=16;
+        else if(n=="new-consumables-percent") max=100;
         else if(n=="ground") { min=16; max=24; }
         else if(n=="inventory") { min=16; max=20; }
         else if(n=="monsters" || n=="phantom-count") { min=1; max=12; }

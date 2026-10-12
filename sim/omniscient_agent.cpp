@@ -1,6 +1,7 @@
 #include "agent.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
+#include "spells.hpp"
 #include "sim_hooks.hpp"
 #include <algorithm>
 #include <cstdlib>
@@ -18,6 +19,58 @@ Action use(int s, const char* goal, int target = NONE) {
     Action a; a.kind = ActionKind::Use; a.slot = static_cast<uint8_t>(s);
     a.target = static_cast<uint8_t>(target); a.goal = goal; return a;
 }
+Action cast(uint8_t spell,int direction=-1,uint8_t target=NONE) {
+    Action a; a.kind=ActionKind::Cast; a.slot=spell; a.target=target; a.goal="cast learned spell";
+    if(direction>=0) { a.dx=dxs[direction]; a.dy=dys[direction]; } return a;
+}
+Action plan_magic() {
+    auto available=[](uint8_t s) { return (game.known_spells & spell_bit(s)) && game.mana>=spell_cost(s); };
+    int nearby=0,adjacent=0,escapes=0;
+    for(const auto& m:game.monsters) if(m.type) {
+        if(square_contains(game.player,m.pos,1)) ++adjacent;
+        if(distance(m.pos,game.player)<=3) ++nearby;
+    }
+    for(int d=0;d<4;++d) { Position p{uint8_t(game.player.x+dxs[d]),uint8_t(game.player.y+dys[d])};
+        if(!blocked(p.x,p.y) && monster_at(p)==NONE && !feature_is_trap(observed_feature_at(game,p))) ++escapes;
+    }
+    bool urgent=(game.hp*3<player_max_hp() && nearby) || adjacent>=3;
+    uint8_t reserve=0;
+    for(uint8_t s : {uint8_t(BLINK),uint8_t(SHOCKWAVE),uint8_t(BANISH),uint8_t(EXCHANGE)})
+        if(game.known_spells & spell_bit(s)) reserve=std::max(reserve,spell_cost(s));
+    if(available(CLEANSE) && (game.blindness || (nearby && (game.confused || game.slowed)))) return cast(CLEANSE);
+    if(urgent && available(SHOCKWAVE) && adjacent>=2) return cast(SHOCKWAVE);
+    if(urgent && available(EXCHANGE)) for(uint8_t i=0;i<MONSTERS;++i) if(exchange_target(i) && distance(game.player,game.monsters[i].pos)>=2) {
+        Position p=game.monsters[i].pos;
+        if(feature_is_trap(observed_feature_at(game,p))) continue;
+        int enemies=0; for(uint8_t n=0;n<MONSTERS;++n) if(n!=i && game.monsters[n].type && square_contains(p,game.monsters[n].pos,1)) ++enemies;
+        if(enemies<adjacent) return cast(EXCHANGE,-1,i);
+    }
+    if(urgent && available(BLINK) && (!escapes || adjacent>=2)) return cast(BLINK);
+    for(int d=0;d<4;++d) {
+        RayResult ray=scan_ray(game.player,dxs[d],dys[d],5);
+        if(ray.monster==NONE || (!urgent && (!player_can_see_monster(ray.monster) || !can_see(ray.end)))) continue;
+        const auto& m=game.monsters[ray.monster];
+        if(urgent && adjacent && ray.steps>1) continue;
+        if(urgent && available(BANISH)) return cast(BANISH,d);
+        Position pushed{uint8_t(m.pos.x+dxs[d]),uint8_t(m.pos.y+dys[d])};
+        if(available(REPULSION) && ray.steps<=2 && !blocked(pushed.x,pushed.y) && monster_at(pushed)==NONE &&
+           feature_is_trap(observed_feature_at(game,pushed)) && feature_type(observed_feature_at(game,pushed))!=FEATURE_SUMMONING_TRAP) return cast(REPULSION,d);
+        if(available(PIERCING_BOLT) && ray.steps<5) {
+            auto second=scan_ray(ray.end,dxs[d],dys[d],5-ray.steps);
+            if(second.monster!=NONE && player_can_see_monster(second.monster) && can_see(second.end) &&
+               (urgent || game.mana>=spell_cost(PIERCING_BOLT)+std::max<uint8_t>(2,reserve))) return cast(PIERCING_BOLT,d);
+        }
+        if(ray.steps<=2 && (urgent || monster_strength(m.type)>=player_strength()+2)) {
+            if(available(CONFOUND) && !monster_effect(m,MON_CONFUSED) && !m.stun) return cast(CONFOUND,d);
+            if(available(FROSTBIND) && !monster_effect(m,MON_SLOWED) && !m.stun) return cast(FROSTBIND,d);
+            if(urgent && available(REPULSION)) return cast(REPULSION,d);
+        }
+        if(available(MAGIC_DART) && (ray.steps>=2 || (urgent && m.hp<=4)) &&
+           (urgent || game.mana>=spell_cost(MAGIC_DART)+std::max<uint8_t>(2,reserve))) return cast(MAGIC_DART,d);
+    }
+    return {};
+}
+
 int find(uint8_t type) {
     for(int s = 0; s < inventory_capacity(); ++s) if(game.inventory[s].type == type) return s;
     return -1;
@@ -127,6 +180,10 @@ bool upgrade(Item i) {
     return (s == NONE || !item_is_cursed(game.inventory[s])) && equipment_score(i) > slot_score(s);
 }
 int value(Item i) {
+    if(i.type==SPELLBOOK) {
+        if(i.info>=SPELL_COUNT || (game.known_spells & spell_bit(i.info))) return 0;
+        return i.info==BLINK || i.info==SHOCKWAVE || i.info==BANISH ? 180 : i.info==SENSE_TRAPS ? 75 : 120;
+    }
     if(i.type == YENDOR_AMULET) return 10000;
     if(is_bow(i.type)) {
         int best=best_bow();
@@ -584,7 +641,10 @@ Action OmniscientAgent::choose_pickup(const DecisionContext&) {
     }
     return best >= 0 ? pickup(best) : Action{};
 }
-Action OmniscientAgent::choose_action(const DecisionContext&) {
+Action OmniscientAgent::choose_action(const DecisionContext& context) {
+    if(previous_study!=NONE && !studying() && !(game.known_spells & spell_bit(previous_study))) study_defer_until=context.turns+128;
+    previous_study=studying() ? session.study_spell : uint8_t(NONE);
+    if(studying()) { Action a; a.goal="continue spellbook study"; return a; }
     if(game.paralyzed) { Action a; a.goal = "wait for paralysis"; return a; }
     int adjacent = -1, threats = 0;
     for(int i = 0; i < MONSTERS; ++i) if(game.monsters[i].type) {
@@ -592,6 +652,39 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         int d = distance(m.pos,game.player);
         if(d <= 5 && can_see(m.pos)) ++threats;
         if(d == 1 && (adjacent < 0 || m.hp < game.monsters[adjacent].hp)) adjacent = i;
+    }
+    Action magic=plan_magic(); if(magic.kind==ActionKind::Cast) return magic;
+    if(!threats && game.floor>=2 && context.turns>=sense_until && game.mana==player_max_mana() &&
+       (game.known_spells & spell_bit(SENSE_TRAPS))) {
+        bool known=false; for(const auto& f:observed_features(game)) if(feature_is_trap(f.id) && distance(f.pos,game.player)<=4) known=true;
+        if(!known) { sense_until=context.turns+96; return cast(SENSE_TRAPS); }
+    }
+    if(!game.blindness && !game.confused && game.hp*4>=player_max_hp()*3 && context.turns>=study_defer_until) {
+        bool safe=true; for(const auto& m:game.monsters) if(m.type && distance(m.pos,game.player)<10) safe=false;
+        int exits=0; for(int d=0;d<4;++d) { Position p{uint8_t(game.player.x+dxs[d]),uint8_t(game.player.y+dys[d])};
+            if(!blocked(p.x,p.y) && !feature_is_trap(observed_feature_at(game,p))) ++exits;
+        }
+        Item light=game.offhand_slot<INVENTORY ? game.inventory[game.offhand_slot] : Item{};
+        for(uint8_t s=0;s<INVENTORY && safe && exits>=2;++s) {
+            Item book=game.inventory[s];
+            if(book.type!=SPELLBOOK || book.info>=SPELL_COUNT || (game.known_spells & spell_bit(book.info))) continue;
+            bool fuel=light.type==GLOWING_ORB || (is_fueled_light(light.type) && light.info*fuel_denominator(light.type)>=spell_study_turns(book.info)+24);
+            if((!fuel || player_light_radius()<2) && !item_is_cursed(light)) {
+                for(uint8_t l=0;l<inventory_capacity();++l) {
+                    const Item& candidate=game.inventory[l];
+                    if(l!=game.offhand_slot && (candidate.type==GLOWING_ORB ||
+                       (is_fueled_light(candidate.type) && candidate.info*fuel_denominator(candidate.type)>=spell_study_turns(book.info)+24)))
+                        return use(l,"light for spellbook study");
+                }
+            }
+            if(fuel && !feature_is_trap(observed_feature_at(game,game.player))) {
+                if(game.hunger>=study_food_required(book.info)) {
+                    previous_study=book.info; return use(s,"study unknown spellbook");
+                }
+                int food=find(FOOD);
+                if(food>=0) return use(food,"prepare food for spellbook study");
+            }
+        }
     }
     if(game.confused && !threats && feature_is_trap(observed_feature_at(game, game.player))) {
         Action a; a.goal = "recover senses on a discovered trap"; return a;

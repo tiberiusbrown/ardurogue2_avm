@@ -9,6 +9,7 @@ add_executable(game_native
     lighting_checks.cpp
     sight_checks.cpp
     recovery_checks.cpp
+    spell_checks.cpp
     consumable_checks.cpp
     awareness_checks.cpp
     combat_checks.cpp
@@ -23,6 +24,7 @@ add_executable(game_native
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
+    ../src/spells.cpp
     ../src/items.cpp
     ../src/world.cpp
     ../src/world_gen.cpp
@@ -34,6 +36,7 @@ target_include_directories(game_native PRIVATE ../src)
 
 add_test(NAME game_native COMMAND game_native)
 add_test(NAME temporary_sight COMMAND game_native --sight)
+add_test(NAME spells COMMAND game_native --spells)
 add_test(NAME player_recovery COMMAND game_native --recovery)
 add_test(NAME new_consumables COMMAND game_native --consumables)
 add_test(NAME lighting_offhand COMMAND game_native --lighting)
@@ -58,6 +61,7 @@ add_executable(ui_native
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
+    ../src/spells.cpp
     ../src/items.cpp
     ../src/world.cpp
     ../src/world_gen.cpp
@@ -75,6 +79,7 @@ add_executable(render_native
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
+    ../src/spells.cpp
     ../src/items.cpp
     ../src/world.cpp
     ../src/world_gen.cpp

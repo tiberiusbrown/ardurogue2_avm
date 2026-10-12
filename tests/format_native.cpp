@@ -16,6 +16,7 @@ uint8_t avm_test_button_index = 0;
 void (*avm_test_text_hook)(int16_t, int16_t, const char*) = nullptr;
 
 namespace rogue {
+Session session = {};
 Ui ui = {};
 bool can_see(Position) { return true; }
 bool player_can_see_monster(const Monster&) { return true; }
@@ -559,6 +560,9 @@ int main()
         std::fprintf(stderr,"shield formatting: %s\n",text); return 1;
     }
     check_drawn_item(shield);
+    Item book{SPELLBOOK,EXCHANGE}; format_item(book,text);
+    if(!std::strstr(text,"Exchange")) { std::fprintf(stderr,"spellbook name: %s\n",text); return 1; }
+    check_drawn_item(book);
     check_streaming_status();
     check_item_status();
     check_equipment_roster_text();

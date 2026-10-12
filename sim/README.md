@@ -7,9 +7,14 @@ content interventions, see [BALANCE.md](BALANCE.md). Demonstration results are i
 The explorer invisible-contact state machine, historical observation protocol 3,
 schema-5 diagnostics and descriptive policy comparisons are documented in
 [EXPLORER_INVISIBLE_CONTACT.md](../docs/EXPLORER_INVISIBLE_CONTACT.md).
-Current consumables support keeps the same `explorer-v1` name, uses observation
-protocol 5, core telemetry 9 and exploration telemetry 6; see
+Current magic support keeps the same `explorer-v1` name, uses observation
+protocol 6, core telemetry 9 and exploration telemetry 6; see
 [CONSUMABLES.md](../docs/CONSUMABLES.md).
+Both agents support real multi-turn learning and all spells. Magic, book identity,
+study state and visible Exchange handles are public observations; hidden hazards
+remain privileged. See [SPELLS.md](../docs/SPELLS.md). `spells.csv` is an additional
+version-1 sidecar. Run `python sim/spell_report.py DATASET --output REPORT_DIRECTORY`
+with the balance Python dependencies to report study, spells and retained resources.
 `sim/invisible_contact_experiments.py` snapshots the executable and complete
 parameters, runs legacy/disabled/contact variants on identical seeds, seals
 raw CSVs, rejects simulator failures and retains paired traces under ignored
@@ -95,7 +100,7 @@ batches return zero even when an individual seed hits a simulator limit.
 | `sim/agent.hpp` | `Agent`, read-only decision context, mechanical `Action`, typed diagnostics, BFS interface |
 | `sim/omniscient_agent.cpp` | Deterministic policy and cardinal BFS |
 | `sim/simulator.hpp`, `sim/simulator.cpp` | Production API dispatch, lifecycle, safety and action digest |
-| `sim/frontend.cpp` | Native `Game` definition; no-op status and animation frontend |
+| `sim/frontend.cpp` | Native `Game` definition; status/study interruption bridge and animation stubs |
 | `sim/metrics.hpp`, `sim/metrics.cpp` | Host collectors, death attribution, typed visits and table-driven CSV writers |
 | `sim/trace.hpp`, `sim/trace.cpp` | Human-readable action and gameplay event trace |
 | `sim/tests.cpp` | Determinism, RNG isolation, mechanics dispatch, policy, telemetry, safety, competence |
@@ -108,19 +113,21 @@ Existing files changed: root `README.md` links these instructions; root
 `CMakeLists.txt` adds the host-only subdirectory
 and the production hook-header build dependency; `src/state.cpp`,
 `src/combat.cpp`, `src/items.cpp`, `src/world_gen.cpp` gain gated hooks.
-Instrumentation adds no saved fields. The current consumables gameplay uses
-save version 29 and an 841-byte AVM `Game`; see [the consumables guide](../docs/CONSUMABLES.md).
+Instrumentation adds no saved fields. Current gameplay uses save version 30 and
+an 844-byte AVM `Game`; magic appends three bytes to the earlier consumables
+layout. See [the magic guide](../docs/SPELLS.md) and [the consumables guide](../docs/CONSUMABLES.md).
 
 The simulator library compiles and links `state.cpp`, `combat.cpp`,
 `combat_math.cpp`, `items.cpp`, `world.cpp`, `world_gen.cpp` and
-`world_gen_population.cpp` and `features.cpp`. It does not link `main.cpp`, `ui.cpp`, `render.cpp`,
+`world_gen_population.cpp`, `features.cpp` and `spells.cpp`. It does not link `main.cpp`, `ui.cpp`, `render.cpp`,
 `status.cpp` or persistence. Normal SDK configurations never enter `sim/`.
 
 The runner owns execution, counters and output. Agents return choices and never
 receive a metrics or trace object. `Action` supports cardinal movement, waiting,
 pickup with an optional full-pack replacement, explicit ground swap, stairs,
 inventory use with an optional target slot, potion throwing, directional or
-immediate wand use, and dropping with the production discard-confirmation flag.
+immediate wand use, spellcasting with directional/visible targets, study cancellation,
+and dropping with the production discard-confirmation flag.
 Dispatch validates cardinal moves and current-tile pickups, then calls only
 the production APIs. Waiting calls `wait_search()`; `action()` is a UI
 repeat-equipment operation and would be inappropriate for waiting.

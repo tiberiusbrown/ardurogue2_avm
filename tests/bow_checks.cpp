@@ -33,7 +33,7 @@ void hit_seed(bool hit) {
 }
 
 void check_bows() {
-    static_assert(sizeof(Item)==2 && offsetof(Game,see_invisible)==813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==29,"saved state changed");
+    static_assert(sizeof(Item)==2 && offsetof(Game,see_invisible)==813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==30,"saved state changed");
     for(unsigned t=0;t<=255;++t) {
         require(is_ammo(t)==(t==ARROWS),"ammo range overlaps another category");
         require(is_bow(t)==(t==SHORT_BOW || t==LONG_BOW),"bow range overlaps another category");
@@ -129,9 +129,9 @@ void check_bows() {
     using namespace rogue::generation;
     unsigned changed=0;
     for(uint16_t seed=1;seed<=256;++seed) {
-        arena(); populate_items(seed,seed^0x4a71); Game original=game;
+        arena(); populate_ordinary_items(seed,seed^0x4a71); Game original=game;
         game.run_seed=seed; std::memset(game.ground,0,sizeof game.ground);
-        populate_items(seed,seed^0x4a71);
+        populate_ordinary_items(seed,seed^0x4a71);
         require(game.random_state==original.random_state,"ammo generation used gameplay RNG");
         for(unsigned s=0;s<GROUND_ITEMS;++s) {
             auto a=original.ground[s], b=game.ground[s];

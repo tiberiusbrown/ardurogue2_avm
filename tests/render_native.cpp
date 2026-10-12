@@ -1,5 +1,6 @@
 #include "app_state.hpp"
 #include "game.hpp"
+#include "spells.hpp"
 #include "features.hpp"
 #include "feature_icons.hpp"
 #include "game_internal.hpp"
@@ -729,8 +730,30 @@ static bool check_feature_rendering()
     return true;
 }
 
+static bool check_study_render() {
+    using namespace rogue;
+    game={}; session={NONE,DEATH,false}; ui={}; ui.mode=PLAY;
+    game.player={20,15}; game.up={2,2}; game.down={40,25}; game.hp=game.max_hp=100; game.hunger=255; game.level=1;
+    game.run_seed=game.random_state=71; game.speed=1;
+    game.weapon_slot=game.armor_slot=game.amulet_slot=game.offhand_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
+    game.inventory[2]={SPELLBOOK,FROSTBIND}; game.known_spells=1;
+    if(!begin_study(2)) return false;
+    unsigned start=avm_test_displays;
+    uint32_t previous=0;
+    for(unsigned turn=1;turn<=40;++turn) {
+        status_clear(); advance_study(); render();
+        if(game.turns!=turn || avm_test_displays!=start+turn) return false;
+        if(turn<40) {
+            uint32_t hash=hash_bytes(2166136261u,__avm_framebuffer,sizeof __avm_framebuffer);
+            if(hash==previous || session.study_progress!=turn) return false;
+            previous=hash;
+        }
+    }
+    return !studying() && (game.known_spells & spell_bit(FROSTBIND));
+}
 int main()
 {
+    if(!check_study_render()) { std::fprintf(stderr,"Study rendering cadence/rune failed\n"); return 1; }
     using namespace rogue;
     if(!check_feature_rendering()) { std::fprintf(stderr,"Feature visibility, atlas or rendering priority failed\n"); return 1; }
     if(!check_direction_prompt()) {

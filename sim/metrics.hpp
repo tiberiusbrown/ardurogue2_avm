@@ -15,6 +15,11 @@ struct ItemMetrics {
         charges_used=0, drunk=0, thrown=0, scrolls_read=0, turns_equipped=0,
         wands_picked_up=0, wands_activated=0, identified=0, expired=0, active_turns=0, pack_full=0;
 };
+struct SpellMetrics {
+    uint64_t generated=0, collected=0, studied=0, study_turns=0, learned=0, interrupted=0,
+        message_interruptions=0, hunger_interruptions=0, canceled=0, casts=0, mana_spent=0, damage=0, kills=0,
+        displaced=0, displacement_tiles=0, multi_tile_pushes=0;
+};
 struct MonsterMetrics {
     uint64_t generated=0, encountered=0, engaged=0, killed=0,
         player_attacks=0, damage_taken=0, attacks=0, hits=0,
@@ -79,7 +84,7 @@ struct FloorMetrics {
     std::string archetype;
     int floor_tiles=0, major_features=0, corridors=0, loops=0, open_connections=0;
     std::array<uint8_t,16> families{};
-    std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> items{};
+    std::array<ItemMetrics, rogue::SPELLBOOK+1> items{};
     std::array<MonsterMetrics, rogue::LORD+1> monsters{};
     uint64_t turns=0, actions=0, kills=0, damage_taken=0, damage_dealt=0,
         pickups=0, consumables=0;
@@ -87,6 +92,8 @@ struct FloorMetrics {
 struct RunMetrics {
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     RangedMetrics ranged;
+    std::array<SpellMetrics,rogue::SPELL_COUNT> spells{};
+    uint64_t mana_regenerated=0;
     std::array<uint64_t,7> light_turns{};
     uint64_t fuel_exhaustions=0, blind_turns=0, blind_deaths=0, shield_turns=0, offhand_light_turns=0;
     uint16_t seed=0, effective_seed=0;
@@ -95,7 +102,7 @@ struct RunMetrics {
     int xp=0, final_hunger=0, score=0, deepest=0, final_floor=0, level=0, hp=0, max_hp=0,
         floors_entered=0, floors_exited=0;
     bool has_yendor=false, stuck=false, lord_killed=false;
-    std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> items{};
+    std::array<ItemMetrics, rogue::SPELLBOOK+1> items{};
     std::array<MonsterMetrics, rogue::LORD+1> monsters{};
     std::vector<FloorMetrics> floors;
     std::vector<Intervention> interventions;
@@ -182,7 +189,7 @@ struct Collector {
     std::array<size_t, rogue::GROUND_ITEMS> ground_wands{};
     std::vector<uint8_t> wand_flags{0};
     std::shared_ptr<const Experiment> experiment;
-    std::array<ItemMetrics, rogue::WAND_POLYMORPH+1> entry_items{};
+    std::array<ItemMetrics, rogue::SPELLBOOK+1> entry_items{};
     std::array<MonsterMetrics, rogue::LORD+1> entry_monsters{};
     uint8_t pickup_slot=rogue::NONE, drop_slot=rogue::NONE;
     size_t new_wand();
@@ -220,7 +227,7 @@ struct CsvStream {
     void (*rows)(std::ostream&, const RunMetrics&);
 };
 inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=9;
-inline constexpr size_t CSV_STREAM_COUNT=11;
+inline constexpr size_t CSV_STREAM_COUNT=12;
 inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=2;
 void write_encounters_header(std::ostream&);
 void write_encounters(std::ostream&,const RunMetrics&);

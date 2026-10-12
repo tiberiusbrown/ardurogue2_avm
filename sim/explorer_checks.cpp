@@ -1,6 +1,7 @@
 #include "explorer_observation.hpp"
 #include "simulator.hpp"
 #include "game_internal.hpp"
+#include "spells.hpp"
 #include "world.hpp"
 #include "status.hpp"
 #include "policy_hash.hpp"
@@ -26,7 +27,7 @@ void arena() {
     for(int y=8;y<=12;++y) for(int x=8;x<=12;++x) carve(uint8_t(x),uint8_t(y));
 }
 void item_text(std::ostream& s,const SeenItem& i) {
-    s<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<int(i.magnitude)<<':'<<int(i.modifier)<<':'<<int(i.enchant)<<':'<<i.individual<<':'<<i.cursed<<';';
+    s<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<int(i.magnitude)<<':'<<int(i.modifier)<<':'<<int(i.enchant)<<':'<<int(i.spell)<<':'<<i.individual<<':'<<i.cursed<<';';
 }
 std::string observation_text(const ExplorerObservation& o) {
     std::ostringstream s;
@@ -35,13 +36,14 @@ std::string observation_text(const ExplorerObservation& o) {
         <<':'<<o.contact_reported<<':'<<int(o.contact_type)<<':'<<int(o.contact.x)<<':'<<int(o.contact.y)
         <<':'<<int(o.contact_origin.x)<<':'<<int(o.contact_origin.y)<<':'<<int(o.melee_feedback)
         <<':'<<int(o.incoming_attacks)<<':'<<int(o.anonymous_attacks)<<':'<<o.encounter_changed<<':'<<o.summoning_reported;
+    s<<':'<<o.known_spells<<':'<<int(o.mana)<<':'<<int(o.max_mana)<<':'<<o.studying<<':'<<int(o.study_spell)<<':'<<int(o.study_progress);
     for(auto b:o.equipped) s<<int(b)<<',';
     for(auto b:{o.weakened,o.confused,o.paralyzed,o.slowed,o.invisible,o.blindness}) s<<int(b)<<',';
     for(auto b:{o.see_invisible,o.haste,o.levitation,o.fire_resistance,o.vitality_drained}) s<<int(b)<<',';
     for(auto& i:o.inventory) item_text(s,i);
     for(int n=0;n<2048;++n) s<<int(o.terrain[n])<<':'<<int(o.features[n])<<':'<<o.visible[n]<<':'<<o.detected_objects[n]<<',';
     for(int g=0;g<o.ground_count;++g) { auto& a=o.ground[g]; s<<int(a.pos.x)<<':'<<int(a.pos.y)<<':'<<int(a.handle); item_text(s,a.item); }
-    for(int m=0;m<o.monster_count;++m) { auto& a=o.monsters[m]; s<<int(a.pos.x)<<':'<<int(a.pos.y)<<':'<<int(a.type)<<':'<<int(a.strength)<<':'<<int(a.speed)<<':'<<int(a.armor)<<':'<<a.traits; }
+    for(int m=0;m<o.monster_count;++m) { auto& a=o.monsters[m]; s<<int(a.pos.x)<<':'<<int(a.pos.y)<<':'<<int(a.type)<<':'<<int(a.strength)<<':'<<int(a.speed)<<':'<<int(a.armor)<<':'<<a.traits<<':'<<int(a.handle); }
     for(auto& group:o.identities) for(auto t:group) s<<int(t)<<',';
     return s.str();
 }
@@ -559,6 +561,32 @@ void replay() {
         check(!r.stuck && (r.result=="death" || r.result=="escaped"),
               "recorded summoning-frontier/empty-wand failure regressed");
     }
+    regression.max_actions=60000;
+    auto disabled=std::make_shared<RuleExperiment>();
+    disabled->rules={parse_rule("balance:magic=0")}; regression.experiment=disabled;
+    auto r=run(43779,*p,regression);
+    check(!r.stuck && (r.result=="death" || r.result=="escaped"),
+          "recorded perpetual visible-combat failure regressed");
+}
+void prolonged_visible_combat() {
+    arena(); game.monsters[0]={{11,10},SNAKE,3,0,{0,0},MON_AGGRO};
+    auto o=observe_explorer(0,0);
+    // A single known exit is sufficient after a prolonged fight. The policy
+    // receives no live monster HP, spawning source or hidden regeneration data.
+    o.terrain[cell(10,9)]=o.terrain[cell(10,11)]=Terrain::Wall;
+    auto p=std::make_unique<ExplorerAgent>(); p->reset();
+    for(unsigned n=0;n<64;++n) {
+        o.actions=o.turns=n;
+        o.melee_feedback=n%5 ? MeleeFeedback::Hit : MeleeFeedback::Defeat;
+        auto a=p->choose_action(o);
+        check(a.goal=="melee visible monster","ordinary visible fight disengaged before guard");
+    }
+    o.actions=o.turns=64;
+    auto a=p->choose_action(o);
+    check(a.goal=="bounded observed retreat" && a.dx==-1 && !a.dy,
+          "replacement visible opponents reset bounded combat guard");
+    p->reset();
+    check(p->choose_action(o).goal=="melee visible monster","reset retained prolonged-combat history");
 }
 void parameters_and_messages() {
     check(fitness_better({1,0,0,10},{0,0,0,1000000}),"escapes do not outrank total score");
@@ -728,8 +756,100 @@ void consumable_observations() {
     for(uint16_t seed : {uint16_t(6725),uint16_t(7523),uint16_t(6025)})
         check(!run(seed,*p,options).stuck,"new-content explorer blind-probe/loot regression reached action guard");
 }
+void magic_observations() {
+    auto policy=std::make_unique<ExplorerAgent>();
+    auto setup=[&](uint8_t spell) {
+        arena(); game.known_spells=spell_bit(spell); game.mana=16;
+        game.inventory[18]={GLOWING_ORB,0}; game.offhand_slot=18;
+        game.inventory[19]={AMULET_BRILLIANCE,1}; game.amulet_slot=19;
+        for(uint8_t y=7;y<=13;++y) for(uint8_t x=7;x<=13;++x) carve(x,y);
+        policy->reset();
+    };
+    setup(MAGIC_DART); game.ground[0]={{11,10},{SPELLBOOK,BLINK}};
+    auto o=observe_explorer(0,0);
+    check(o.mana==16 && o.max_mana==6 && o.known_spells==1 && o.ground_count==1 && o.ground[0].item.type==SPELLBOOK && o.ground[0].item.spell==BLINK,"public magic/book identity absent");
+    Game public_world=game,hidden=game; hidden.ground[1]={{60,30},{SPELLBOOK,EXCHANGE}};
+    hidden.monsters[3]={{60,29},LORD,100,0,{0,0},0}; hidden.features[2]={{11,11},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    identical(public_world,hidden,"magic observation leaked hidden content");
+    setup(MAGIC_DART); game.monsters[0]={{12,10},GOBLIN,10,15,{0,0},0};
+    auto a=policy->choose_action(observe_explorer(0,0));
+    check(a.kind==ExplorerActionKind::Cast && a.slot==MAGIC_DART && a.dx==1 && !a.dy,"explorer ignored ranged dart");
+    check(cast_spell(a.slot,a.dx,a.dy) && game.mana==14 && game.turns==1,"explorer dart execution");
+    setup(MAGIC_DART); game.mana=2; game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Cast,"explorer wasted last mana in mild encounter");
+    setup(MAGIC_DART); game.known_spells|=spell_bit(BLINK); game.mana=5;
+    game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Cast,"explorer spent emergency Blink reserve on mild dart");
+    setup(SHOCKWAVE); game.hp=1;
+    game.monsters[0]={{11,10},GOBLIN,100,15,{0,0},0}; game.monsters[1]={{10,11},GOBLIN,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==SHOCKWAVE,"explorer missed defensive Shockwave");
+    check(cast_spell(a.slot) && game.monsters[0].pos.x>=13 && game.monsters[1].pos.y>=13,"agent Shockwave failed multi-tile execution");
+    setup(SHOCKWAVE); game.hp=1;
+    o=observe_explorer(0,0); o.incoming_attack=true; o.anonymous_attacks=2; o.hp_loss=10;
+    a=policy->choose_action(o); check(a.kind==ExplorerActionKind::Cast && a.slot==SHOCKWAVE,"explorer ignored public unseen crowd evidence");
+    setup(BANISH); game.hp=1; game.monsters[0]={{11,10},PHANTOM,100,15,{0,0},0};
+    o=observe_explorer(0,0); o.incoming_attack=true; o.anonymous_attacks=1;
+    o.contact_reported=true; o.contact={11,10}; o.contact_origin=o.player; o.melee_feedback=MeleeFeedback::Miss;
+    a=policy->choose_action(o); check(!o.monster_count && a.kind==ExplorerActionKind::Cast && a.slot==BANISH && a.dx==1,"explorer ignored confirmed unseen spell bearing");
+    o.contact_reported=false; policy->reset(); a=policy->choose_action(o);
+    check(a.kind!=ExplorerActionKind::Cast,"explorer invented an unseen spell bearing");
+    setup(BLINK); game.hp=1; game.monsters[0]={{11,10},LORD,100,15,{0,0},0};
+    game.monsters[1]={{10,11},LORD,100,15,{0,0},0};
+    o=observe_explorer(0,0); o.incoming_attack=true; o.hp_loss=20;
+    a=policy->choose_action(o); check(a.kind==ExplorerActionKind::Cast && a.slot==BLINK,"explorer missed emergency Blink");
+    setup(REPULSION); game.monsters[0]={{11,10},GOBLIN,100,15,{0,0},0}; game.features[0]={{12,10},FEATURE_SPIKE_TRAP};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==REPULSION && a.dx==1,"explorer ignored observed trap knockback");
+    for(uint8_t spell : {uint8_t(CONFOUND),uint8_t(FROSTBIND),uint8_t(BANISH)}) {
+        setup(spell); game.hp=1; game.monsters[0]={{11,10},LORD,100,15,{0,0},0};
+        a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==spell,"explorer missed dangerous ray control");
+    }
+    setup(PIERCING_BOLT); game.monsters[0]={{11,10},GOBLIN,100,15,{0,0},0}; game.monsters[1]={{13,10},GOBLIN,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==PIERCING_BOLT,"explorer missed two-target bolt");
+    setup(CLEANSE); game.blindness=10;
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==CLEANSE,"explorer missed harmful blindness cleanse");
+    setup(EXCHANGE); game.hp=1;
+    game.monsters[0]={{11,10},LORD,100,15,{0,0},0}; game.monsters[4]={{10,13},GOBLIN,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0));
+    check(a.kind==ExplorerActionKind::Cast && a.slot==EXCHANGE && a.target==4,"explorer failed visible Exchange escape selection");
+    game.features[0]={{10,13},FEATURE_SPIKE_TRAP}; policy->reset();
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Cast,"explorer exchanged onto known trap");
+    setup(SENSE_TRAPS); game.floor=2; game.mana=player_max_mana();
+    o=observe_explorer(0,0);
+    a=policy->choose_action(o); check(a.kind==ExplorerActionKind::Cast && a.slot==SENSE_TRAPS,"explorer missed unsurveyed trap detection opportunity");
+    o.turns=1; a=policy->choose_action(o); check(a.kind!=ExplorerActionKind::Cast,"explorer repeated trap detection without regeneration/navigation");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,EXCHANGE}; game.inventory[1]={FOOD,1}; game.hunger=90;
+    a=policy->choose_action(observe_explorer(0,0));
+    check(a.kind==ExplorerActionKind::Use && a.slot==1 && use_inventory(a.slot),"explorer failed food preparation for study");
+    a=policy->choose_action(observe_explorer(1,1)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed study after eating");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,BLINK}; game.inventory[19]={}; game.amulet_slot=NONE;
+    game.inventory[1]=make_equipment(ROUND_SHIELD,0); game.offhand_slot=1;
+    a=policy->choose_action(observe_explorer(0,0));
+    check(a.kind==ExplorerActionKind::Use && a.slot==18 && use_inventory(a.slot),"explorer failed lighting preparation for study");
+    a=policy->choose_action(observe_explorer(1,1)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed study after lighting");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,FROSTBIND};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer ignored safe study");
+    check(use_inventory(a.slot) && studying(),"explorer study initiation rejected");
+    a=policy->choose_action(observe_explorer(1,0)); check(a.kind==ExplorerActionKind::Wait,"explorer did another action while studying");
+    game.see_invisible=1; check(dispatch(Action{}),"study tick rejected");
+    check(!studying() && game.inventory[0].type==SPELLBOOK,"sim study interruption consumed book");
+    a=policy->choose_action(observe_explorer(2,1)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer retried interrupted study immediately");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,FROSTBIND}; game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer studied by visible hostile");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,MAGIC_DART};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer studied duplicate");
+    // The oracle uses the same authoritative spell rules, including safe study.
+    setup(SHOCKWAVE); game.hp=1; game.monsters[0]={{11,10},GOBLIN,100,15,{0,0},0}; game.monsters[1]={{10,11},GOBLIN,100,15,{0,0},0};
+    OmniscientAgent oracle; auto oa=oracle.choose_action({game,0,0});
+    check(oa.kind==ActionKind::Cast && oa.slot==SHOCKWAVE && dispatch(oa),"oracle Shockwave execution");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,EXCHANGE}; game.inventory[1]={FOOD,1}; game.hunger=90; oracle.reset();
+    oa=oracle.choose_action({game,0,0}); check(oa.kind==ActionKind::Use && oa.slot==1 && dispatch(oa),"oracle failed food preparation for study");
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,EXCHANGE}; oracle.reset(); oa=oracle.choose_action({game,0,0});
+    check(oa.kind==ActionKind::Use && oa.slot==0 && dispatch(oa) && studying(),"oracle safe study missing");
+    for(unsigned turn=0;turn<80;++turn) { oa=oracle.choose_action({game,turn+1,turn}); check(oa.kind==ActionKind::Wait && dispatch(oa),"oracle study skipped/rejected turn"); }
+    check((game.known_spells & spell_bit(EXCHANGE)) && !studying() && game.turns==80,"oracle failed complete learning");
+}
 int main() {
-    try { consumable_observations(); potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
+    try { magic_observations(); prolonged_visible_combat(); consumable_observations(); potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }

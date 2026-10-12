@@ -424,7 +424,7 @@ void hearts()
 void artifact_generation()
 {
     using namespace rogue::generation;
-    static_assert(sizeof(Item) == 2 && offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION == 29 &&
+    static_assert(sizeof(Item) == 2 && offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION == 30 &&
                   WEAPON_LAST + 1 == ARMOR_FIRST && ARMOR_LAST + 1 == OFFHAND_FIRST && OFFHAND_LAST + 1 == YENDOR_AMULET &&
                   RING_LAST + 1 == AMULET_FIRST && AMULET_LAST + 1 == SCROLL_FIRST,
                   "artifact groups or saved layout changed");
@@ -456,6 +456,10 @@ void artifact_generation()
             for(uint8_t slot = 0; slot < GROUND_ITEMS; ++slot) {
                 const GroundItem& item = generated.ground[slot];
                 require(item.pos == game.ground[slot].pos, "artifact moved an ordinary accessible placement");
+                if(item.item.type == SPELLBOOK) {
+                    require(game.ground[slot].item.type != FOOD && game.ground[slot].item.type != ARROWS && !is_light(game.ground[slot].item.type), "spellbooks replaced essential resources");
+                    continue;
+                }
                 if(!is_artifact(item.item.type)) {
                     require(item.item.type == game.ground[slot].item.type && item.item.info == game.ground[slot].item.info,
                             "artifact generation disturbed ordinary item stream"); continue;

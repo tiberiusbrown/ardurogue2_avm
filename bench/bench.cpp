@@ -1,5 +1,6 @@
 #include "bench.hpp"
 #include "game.hpp"
+#include "spells.hpp"
 #include "game_internal.hpp"
 #include "inventory_view.hpp"
 #include "world.hpp"
@@ -116,7 +117,21 @@ using namespace rogue;
     X(drink_fire, "Drink minor fire damage", use, A, room, POTION_FIRE, 0, 0) \
     X(throw_fire, "Thrown fire hits a group", projectile, RIGHT, room, POTION_FIRE, 0, 0) \
     X(throw_fire_wall, "Immediate wall fire burst consumes Phoenix Heart", projectile, RIGHT, room, POTION_FIRE, 0, 0) \
-    X(effects_expire, "Four beneficial effects expire together", wait, A, dense, NO_ITEM, 0, 0)
+    X(effects_expire, "Four beneficial effects expire together", wait, A, dense, NO_ITEM, 0, 0) \
+    X(magic_dart, "Cast Magic Dart at a monster", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_frost, "Frostbind existing monster condition", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_confound, "Confound existing monster condition", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_repulsion, "Repulsion through an intermediate spike trap", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_bolt, "Piercing Bolt against two targets", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_banish, "Banish a monster to another floor tile", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_shockwave, "Shockwave four adjacent monsters and spike traps", spell, A, room, NO_ITEM, 0, 0) \
+    X(magic_blink, "Blink and ordinary turn response", spell, A, room, NO_ITEM, 0, 0) \
+    X(magic_exchange, "Exchange target confirmation and trap entry", spell_target, A, room, NO_ITEM, 0, 0) \
+    X(magic_cleanse, "Cleanse blindness and restore sight", spell, A, room, NO_ITEM, 0, 0) \
+    X(magic_sense, "Sense nearby traps on full map", spell, A, room, NO_ITEM, 0, 0) \
+    X(study_turn, "One real spellbook study turn and rune redraw", study, A, room, NO_ITEM, 0, 0) \
+    X(study_interrupt, "Study interrupted by potion sight expiration", study, A, room, NO_ITEM, 0, 0)
+
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -140,7 +155,7 @@ void add_ground(uint8_t index, Position pos)
 
 void add_inventory(uint8_t slot, ItemType type)
 {
-    Item item = is_equipment(type) ? make_equipment(type, -3) : Item{type, is_light(type) ? light_initial_fuel(type) : uint8_t(15)};
+    Item item = is_equipment(type) ? make_equipment(type, -3) : Item{type, is_light(type) ? light_initial_fuel(type) : uint8_t(type == SPELLBOOK ? EXCHANGE : 15)};
     if(!uses_full_info(type)) item.info |= ITEM_IDENTIFIED;
     if(is_equipment(type)) item.info |= ITEM_CURSED;
     if(is_wand(type)) {
@@ -170,12 +185,13 @@ void prepare_full_inventory()
     add_inventory(14, LANTERN);
     add_inventory(15, ARROWS);
     for(uint8_t slot=16;slot<INVENTORY;++slot)
-        add_inventory(slot, slot==16 ? POTION_SEE_INVISIBLE : slot==17 ? AMULET_SPEED : slot==18 ? WAND_FORCE : FOOD);
+        add_inventory(slot, slot==16 ? POTION_SEE_INVISIBLE : slot==17 ? AMULET_SPEED : slot==18 ? WAND_FORCE : SPELLBOOK);
 }
 
 void prepare_singleton_inventory()
 {
-    // Eleven is the maximum group count. Empty leading slots increase scanning.
+    add_inventory(INVENTORY - 12, SPELLBOOK);
+    // Twelve is the maximum group count. Empty leading slots increase scanning.
     add_inventory(INVENTORY - 11, LANTERN);
     add_inventory(INVENTORY - 10, ARROWS);
     add_inventory(INVENTORY - 9, YENDOR_AMULET);
@@ -473,6 +489,31 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         break;
     case Case::titan_speed:
         game.armor_slot = 0; add_monster(0, {38, 16});
+        break;
+    case Case::magic_dart: case Case::magic_frost: case Case::magic_confound:
+    case Case::magic_repulsion: case Case::magic_bolt: case Case::magic_banish:
+    case Case::magic_shockwave: case Case::magic_blink: case Case::magic_exchange:
+    case Case::magic_cleanse: case Case::magic_sense: {
+        uint8_t spell=scenario==Case::magic_dart ? MAGIC_DART : scenario==Case::magic_frost ? FROSTBIND :
+            scenario==Case::magic_confound ? CONFOUND : scenario==Case::magic_repulsion ? REPULSION :
+            scenario==Case::magic_bolt ? PIERCING_BOLT : scenario==Case::magic_banish ? BANISH :
+            scenario==Case::magic_shockwave ? SHOCKWAVE : scenario==Case::magic_blink ? BLINK :
+            scenario==Case::magic_exchange ? EXCHANGE : scenario==Case::magic_cleanse ? CLEANSE : SENSE_TRAPS;
+        game.known_spells=spell_bit(spell); game.mana=6;
+        if(spell_directional(spell) || spell==EXCHANGE || spell==SHOCKWAVE) add_monster(0,{33,16});
+        if(spell==PIERCING_BOLT) add_monster(1,{35,16});
+        if(spell==SHOCKWAVE) { add_monster(1,{32,15}); add_monster(2,{31,16}); add_monster(3,{32,17}); }
+        for(auto& m:game.monsters) if(m.type) m.stun=15;
+        if(spell==REPULSION || spell==SHOCKWAVE) game.features[0]={{34,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        if(spell==EXCHANGE) game.features[0]={{33,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        if(spell==SENSE_TRAPS) game.features[0]={{35,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        if(spell==CLEANSE) game.blindness=10;
+        break;
+    }
+    case Case::study_turn: case Case::study_interrupt:
+        game.inventory[0]={SPELLBOOK,FROSTBIND}; game.known_spells=1;
+        begin_study(0);
+        if(scenario==Case::study_interrupt) game.see_invisible=1;
         break;
     case Case::open_door:
         game.doors[0] = {{33, 16}};

@@ -16,6 +16,7 @@ void status_clear();
 void defer_play_render();
 void restore_play_render();
 void render_play();
+void render_study();
 // Loading occupies the dungeon pane; the ordinary stats/status stay visible.
 void begin_generation_render();
 void update_generation_render(uint8_t percent = 255);

@@ -33,9 +33,16 @@ The benchmark adds one guest byte for the case selector. Setup returns before
 the initial render; no benchmark code runs inside a measured input response.
 The normal `ardurogue2.elf` and root `.arduboy` do not include the benchmark code.
 
+Magic adds eleven cast workloads and two real study updates (ordinary progress
+and a gameplay-message interruption). Shockwave captures four adjacent monsters,
+pushes multiple tiles and enters an intermediate trap. Cast confirmation uses the
+actual scrolling action menu and deferred targeting flow. Study benchmarks exclude
+the intentional 90 ms presentation pacing and measure gameplay plus rendering.
+The [magic report](../docs/SPELLS-RESULTS.md) records the final 115-case run.
+
 ## Run
 
-Build the game and run all 74 cases once:
+Build the game and run all 115 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>

@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include "game.hpp"
 #include "features.hpp"
 #include "game_internal.hpp"
@@ -824,6 +825,7 @@ void end_turn()
     }
     enemy_turn(player_speed);
     age_player_effects();
+    regenerate_mana();
 }
 
 void defeat_monster(uint8_t index)
@@ -971,6 +973,7 @@ __attribute__((noinline)) static bool apply_move(int8_t dx, int8_t dy)
 
 void begin_player_move(int8_t dx, int8_t dy)
 {
+    if(studying()) return;
     if(session.pending_move || session.ended) return;
     Position origin = game.player;
     if(!apply_move(dx, dy)) return;

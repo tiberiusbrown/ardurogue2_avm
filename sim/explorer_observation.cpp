@@ -1,6 +1,7 @@
 #include "explorer_observation.hpp"
 #include "explorer_events.hpp"
 #include "game.hpp"
+#include "spells.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
 #include <algorithm>
@@ -12,6 +13,7 @@ int cell(Position p) { return p.y*MAP_W+p.x; }
 SeenPosition pos(Position p) { return {p.x,p.y}; }
 ItemCategory category(uint8_t t) {
     if(is_ammo(t)) return ItemCategory::Ammo;
+    if(t==SPELLBOOK) return ItemCategory::Spellbook;
     if(t==FOOD) return ItemCategory::Food;
     if(is_potion(t)) return ItemCategory::Potion;
     if(is_weapon(t)) return ItemCategory::Weapon;
@@ -31,6 +33,7 @@ int identity_group(ItemCategory c) {
 }
 SeenItem describe(Item i, bool detailed) {
     SeenItem s; s.category=category(i.type);
+    if(i.type==SPELLBOOK) { s.type=SPELLBOOK; s.spell=i.info; s.individual=true; s.quantity=1; return s; }
     if(s.category==ItemCategory::None || !detailed) return s; // Empty slots carry no details; sprites communicate category only.
     bool shuffled=is_potion(i.type)||is_scroll(i.type)||is_ring(i.type)||is_amulet(i.type)||is_wand(i.type);
     s.type=shuffled && !item_type_identified(i.type) ? uint8_t(NO_ITEM) : i.type;
@@ -59,6 +62,8 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     static_assert(MAP_W==EXPLORER_W && MAP_H==EXPLORER_H && FLOORS==16);
     ExplorerObservation o;
     o.actions=actions; o.turns=turns; o.player=pos(game.player); o.floor=game.floor;
+    o.known_spells=game.known_spells; o.mana=game.mana; o.max_mana=player_max_mana();
+    o.studying=studying(); o.study_spell=session.study_spell; o.study_progress=session.study_progress;
     o.hp=game.hp; o.max_hp=player_max_hp(); o.level=game.level; o.xp=game.xp;
     o.strength=game.strength; o.dexterity=game.dexterity; o.speed=game.speed; o.hunger=game.hunger;
     // The interface announces effects, but does not disclose their remaining timers.
@@ -131,7 +136,7 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
             s.item.category=disguises[mimic_appearance(m)];
         } else {
             auto info=monster_info(m.type); auto& s=o.monsters[o.monster_count++];
-            s={pos(m.pos),m.type,info.strength,info.speed,info.armor,info.flags};
+            s={pos(m.pos),m.type,info.strength,info.speed,info.armor,info.flags,i};
         }
     }
     explorer_message_observation(o);

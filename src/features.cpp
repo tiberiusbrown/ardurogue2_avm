@@ -1,4 +1,5 @@
 #include "features.hpp"
+#include "spells.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
@@ -39,7 +40,7 @@ void resolve_forced_entry() {
     session.forced_entry = false;
     activate_entry_feature(feature_at(game.player), true);
 }
-void search_traps() {
+__attribute__((noinline)) void search_traps() {
     bool found = false;
     for(uint8_t i = 0; i < MAP_FEATURES; ++i) {
         const MapFeature& f = game.features[i];
@@ -50,6 +51,7 @@ void search_traps() {
     if(found) status(F("You discover a hidden trap!"));
 }
 void wait_search() {
+    if(studying()) return;
     if(!game.paralyzed) search_traps();
     end_turn();
 }

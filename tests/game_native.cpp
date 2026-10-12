@@ -1,13 +1,23 @@
+#include "spells.hpp"
 #include "game.hpp"
+#include "spells.hpp"
 #include "game_internal.hpp"
+#include "spells.hpp"
 #include "inventory_view.hpp"
+#include "spells.hpp"
 #include "persistence.hpp"
+#include "spells.hpp"
 #include "world.hpp"
 
+#include "spells.hpp"
 #include <array>
+#include "spells.hpp"
 #include <cstdio>
+#include "spells.hpp"
 #include <cstdlib>
+#include "spells.hpp"
 #include <cstring>
+#include "spells.hpp"
 #include <string>
 
 static std::string status_text;
@@ -32,22 +42,22 @@ void check_monster_awareness();
 
 namespace rogue {
 const char* status_word(const char*) { return nullptr; }
-void status_words(const char*) {}
+void status_words(const char*) { study_status_output();}
 void status_suffix(char) {}
 void status_capitalize() {}
-void status(const char* words) { status_text += words; status_text += ' '; }
-void status(const char* words, char punctuation) {
+void status(const char* words) { study_status_output(); status_text += words; status_text += ' '; }
+void status(const char* words, char punctuation) { study_status_output();
     status_text += words;
     if(punctuation) status_text += punctuation;
     status_text += ' ';
 }
-void status(Item item) { last_status_item = item; }
-void status(Item item, char) { last_status_item = item; }
-void status(const Monster&) { ++monster_status_count; }
-void status(const Monster&, char) { ++monster_status_count; }
+void status(Item item) { study_status_output(); last_status_item = item; }
+void status(Item item, char) { study_status_output(); last_status_item = item; }
+void status(const Monster&) { study_status_output(); ++monster_status_count; }
+void status(const Monster&, char) { study_status_output(); ++monster_status_count; }
 
-void status_number(uint8_t) {}
-void status_number(uint8_t, char) {}
+void status_number(uint8_t) { study_status_output();}
+void status_number(uint8_t, char) { study_status_output();}
 void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
 void animate_ray(Position origin, int8_t, int8_t, uint8_t steps) {
     ++ray_animations;
@@ -173,8 +183,9 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x38c26cafu, 0x091ec48cu}, {0xa0d1c903u, 0xc3c40c3bu},
-        {0x2715b297u, 0x5fe53bf0u}, {0x073aeba8u, 0x41e15138u}
+        // Descent includes isolated spellbook replacement; ascent stays identical.
+        {0x8ff7a04du, 0x091ec48cu}, {0x20de71bau, 0xc3c40c3bu},
+        {0x9c8c31fau, 0x5fe53bf0u}, {0xb8084bcau, 0x41e15138u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -2660,6 +2671,7 @@ bool generation_command(int argc, char** argv);
 int main(int argc, char** argv)
 {
     if(argc==2 && std::string(argv[1])=="--consumables") { extern void check_new_consumables(); check_new_consumables(); return 0; }
+    if(argc==2 && std::string(argv[1])=="--spells") { extern void check_spells(); check_spells(); return 0; }
     if(argc==2 && std::string(argv[1])=="--recovery") { extern void check_recovery(); check_recovery(); return 0; }
     if(argc==2 && std::string(argv[1])=="--sight") { extern void check_temporary_sight(); check_temporary_sight(); return 0; }
     if(argc == 2 && std::strcmp(argv[1], "--map-features") == 0) {
@@ -2684,6 +2696,7 @@ int main(int argc, char** argv)
     extern void check_lighting_offhand();
     check_lighting_offhand();
     extern void check_temporary_sight(); check_temporary_sight();
+    extern void check_spells(); check_spells();
     extern void check_recovery(); check_recovery();
     extern void check_new_consumables(); check_new_consumables();
     check_benchmark_scenarios();

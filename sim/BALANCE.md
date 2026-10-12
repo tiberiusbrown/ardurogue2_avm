@@ -6,6 +6,25 @@ agent-policy change is part of this framework. See [README.md](README.md) for
 simulator mechanics and [BALANCE_RESULTS.md](BALANCE_RESULTS.md) for the milestone
 demonstrations. Raw outputs belong in ignored `build/`.
 
+Magic adds `spells.csv` (sidecar schema 1), sealed alongside core streams.
+`balance:magic=0` disables initial Magic Dart and restores original ordinary loot
+at spellbook slots. `balance:spellbook-percent=0` restores that same-slot loot while
+retaining initial Dart. Both arms use one candidate executable and matching policy
+hashes. Book draws are isolated; subsequent gameplay RNG may diverge naturally.
+Replacement percentages 0–100 and `balance:spellbook-depth-bias=0..16` support
+exploratory tuning; production defaults are 6% and a three-floor bias. Magic validation uses
+60,000 actions in both arms because traced legitimate ascents exceeded 20,000;
+simulator failures are never deaths. See [the magic report](../docs/SPELLS-RESULTS.md).
+
+For a large terminal-outcome census, both arms may explicitly use
+`--no-telemetry`. The Python `pair_runs(..., primary_only=True)` entry point
+validates those runs without requiring detailed counters. It retains failure,
+seed, action-limit, agent, policy-hash and schema checks and requires matching
+telemetry scopes. Seal every output stream and the frozen executable as usual.
+This scope supports escape outcomes and paired gains/losses; disabled typed
+counters cannot support resource, floor-visit or spell-effect conclusions.
+Ordinary `compare`, `summarize` and factor analysis still require full telemetry.
+
 Exploration schema 6 includes `unseen_*` contact counters and `phantom_deaths`.
 The core streams use version 9: new consumable names, scroll-summoned encounter
 generation, and expiration/active-turn counters for all four temporary beneficial

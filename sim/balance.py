@@ -61,7 +61,7 @@ def read_manifest(directory):
     if m["telemetry_schema_version"] not in (6, 7, 8, SCHEMA):
         raise ValueError(f"incompatible telemetry schema: {path}")
     for name, digest in m.get("output_csv_sha256", {}).items():
-        if name not in {s + ".csv" for s in (*STREAMS, "exploration")} or sha256(Path(directory) / name) != digest:
+        if name not in {s + ".csv" for s in (*STREAMS, "exploration", "spells")} or sha256(Path(directory) / name) != digest:
             raise ValueError(f"output hash mismatch: {name}")
     return m
 
@@ -78,6 +78,8 @@ def seal_manifest(directory, executable=None, spec=None):
     m["output_csv_sha256"] = {s + ".csv": sha256(directory / (s + ".csv")) for s in STREAMS}
     if (directory / "exploration.csv").is_file():
         m["output_csv_sha256"]["exploration.csv"] = sha256(directory / "exploration.csv")
+    if (directory / "spells.csv").is_file():
+        m["output_csv_sha256"]["spells.csv"] = sha256(directory / "spells.csv")
     if spec is not None:
         m["experiment_specification"] = spec
         m["experiment_specification_sha256"] = specification_hash(spec)
@@ -98,7 +100,7 @@ def seal_manifest(directory, executable=None, spec=None):
     return m
 
 
-def validate_runs(runs, manifest):
+def validate_runs(runs, manifest, primary_only=False):
     if runs.empty or runs.effective_seed.duplicated().any():
         raise ValueError("empty data or duplicate effective seeds")
     seeds = runs.effective_seed.to_numpy()
@@ -114,7 +116,7 @@ def validate_runs(runs, manifest):
     expected = {s if s else 0xACE1 for s in range(first, last + 1)}
     if set(seeds) != expected or len(expected) != last - first + 1:
         raise ValueError("manifest seed population disagrees with runs")
-    if not manifest["options"].get("telemetry"):
+    if not primary_only and not manifest["options"].get("telemetry"):
         raise ValueError("full telemetry is required for balance analysis")
 
 
@@ -451,15 +453,17 @@ def paired_binary(baseline, candidate, census=False, repetitions=2000):
                 "two-sided exact McNemar/binomial test; deterministic paired percentile bootstrap 95% CI")
 
 
-def pair_runs(bm, bt, cm, ct):
-    validate_runs(bt, bm)
-    validate_runs(ct, cm)
+def pair_runs(bm, bt, cm, ct, primary_only=False):
+    validate_runs(bt, bm, primary_only)
+    validate_runs(ct, cm, primary_only)
     if not bm.get("agent_policy_hash") or bm["agent_policy_hash"] != cm.get("agent_policy_hash"):
         raise ValueError("agent policy hashes differ or are missing")
     if bm["agent"] != cm["agent"]:
         raise ValueError("agent versions differ")
     if bm["telemetry_schema_version"] != cm["telemetry_schema_version"]:
         raise ValueError("telemetry schemas differ")
+    if bool(bm["options"].get("telemetry")) != bool(cm["options"].get("telemetry")):
+        raise ValueError("telemetry scopes differ")
     if bm["options"]["max_actions"] != cm["options"]["max_actions"]:
         raise ValueError("simulator action limits differ")
     if set(bt.effective_seed) != set(ct.effective_seed):

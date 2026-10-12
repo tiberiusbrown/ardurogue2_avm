@@ -23,6 +23,105 @@ ExplorerAction use(int s,const char* goal,int target=255) {
 ExplorerAction move(int d,const char* goal,SeenPosition target={}) {
     ExplorerAction a; a.kind=ExplorerActionKind::Move; a.dx=dxs[d]; a.dy=dys[d]; a.goal=goal; a.destination=target; return a;
 }
+ExplorerAction magic_action(const ExplorerObservation& o,const ExplorerFloor& f,const SurvivalRisk& risk,
+                           uint64_t control_until,uint64_t sense_until) {
+    auto available=[&](uint8_t s) { return (o.known_spells & spell_bit(s)) && o.mana>=spell_cost(s); };
+    auto cast=[&](uint8_t s,int d=-1,uint8_t handle=255) {
+        ExplorerAction a; a.kind=ExplorerActionKind::Cast; a.slot=s; a.target=handle;
+        if(d>=0) { a.dx=dxs[d]; a.dy=dys[d]; }
+        a.goal="cast learned spell"; return a;
+    };
+    auto clear=[&](SeenPosition p) { return inside(p.x,p.y) && passable(f.tiles[cell(p)].terrain) &&
+        f.tiles[cell(p)].terrain!=Terrain::ClosedDoor && !feature_is_trap(f.tiles[cell(p)].feature); };
+    int adjacent=0, escapes=0;
+    for(int m=0;m<o.monster_count;++m) {
+        auto p=o.monsters[m].pos;
+        if(std::abs(int(p.x)-o.player.x)<=1 && std::abs(int(p.y)-o.player.y)<=1) ++adjacent;
+    }
+    for(int d=0;d<4;++d) {
+        SeenPosition p{uint8_t(o.player.x+dxs[d]),uint8_t(o.player.y+dys[d])};
+        bool occupied=false; for(int m=0;m<o.monster_count;++m) if(o.monsters[m].pos==p) occupied=true;
+        if(clear(p) && !occupied) ++escapes;
+    }
+    bool urgent=(risk.one>=o.hp || risk.two>=o.hp || (o.attacked && o.hp*3<o.max_hp) || adjacent>=3);
+    bool threatened=adjacent || o.incoming_attack;
+    uint8_t reserve=0;
+    for(uint8_t s : {uint8_t(BLINK),uint8_t(SHOCKWAVE),uint8_t(BANISH),uint8_t(EXCHANGE)})
+        if(o.known_spells & spell_bit(s)) reserve=std::max(reserve,spell_cost(s));
+    if(available(CLEANSE) && (o.blindness || (o.confused && threatened) || (o.slowed && threatened))) return cast(CLEANSE);
+    if(urgent && available(SHOCKWAVE) && (adjacent>=2 || o.anonymous_attacks>=2)) return cast(SHOCKWAVE);
+    if(urgent && available(EXCHANGE)) {
+        for(int m=0;m<o.monster_count;++m) {
+            auto p=o.monsters[m].pos; int dx=int(p.x)-o.player.x,dy=int(p.y)-o.player.y;
+            if(dx*dx+dy*dy>9 || distance(p,o.player)<2 || !clear(p)) continue;
+            int nearby=0; for(int n=0;n<o.monster_count;++n) if(n!=m && distance(p,o.monsters[n].pos)<=1) ++nearby;
+            if(nearby<adjacent) return cast(EXCHANGE,-1,o.monsters[m].handle);
+        }
+    }
+    if(urgent && available(BLINK) && (!escapes || risk.two>=o.hp)) {
+        bool option=false;
+        for(int y=std::max(0,int(o.player.y)-3);y<=std::min(31,int(o.player.y)+3);++y)
+            for(int x=std::max(0,int(o.player.x)-3);x<=std::min(63,int(o.player.x)+3);++x) {
+                int dx=x-o.player.x,dy=y-o.player.y;
+                if(dx*dx+dy*dy<=9 && dx*dx+dy*dy>=4 && clear({uint8_t(x),uint8_t(y)})) option=true;
+            }
+        if(option) return cast(BLINK);
+    }
+    for(int d=0;d<4;++d) {
+        int first=-1,hits=0,first_distance=0;
+        for(int step=1;step<=5;++step) {
+            SeenPosition p{uint8_t(o.player.x+step*dxs[d]),uint8_t(o.player.y+step*dys[d])};
+            if(!inside(p.x,p.y) || !passable(f.tiles[cell(p)].terrain) || f.tiles[cell(p)].terrain==Terrain::ClosedDoor) break;
+            for(int m=0;m<o.monster_count;++m) if(o.monsters[m].pos==p) {
+                if(first<0) { first=m; first_distance=step; } ++hits;
+            }
+        }
+        if(first<0) continue;
+        const auto& enemy=o.monsters[first];
+        if(urgent && adjacent && first_distance>1) continue;
+        if(urgent && available(BANISH)) return cast(BANISH,d);
+        if(available(REPULSION) && first_distance<=2) {
+            SeenPosition p{uint8_t(enemy.pos.x+dxs[d]),uint8_t(enemy.pos.y+dys[d])};
+            bool occupied=false; for(int m=0;m<o.monster_count;++m) if(o.monsters[m].pos==p) occupied=true;
+            if(inside(p.x,p.y) && !occupied && feature_is_trap(f.tiles[cell(p)].feature) &&
+               f.tiles[cell(p)].feature!=FEATURE_SUMMONING_TRAP) return cast(REPULSION,d);
+        }
+        if(available(PIERCING_BOLT) && hits>=2 && (urgent || o.mana>=spell_cost(PIERCING_BOLT)+std::max<uint8_t>(2,reserve))) return cast(PIERCING_BOLT,d);
+        if(o.turns>=control_until && first_distance<=2 && (urgent || enemy.strength>=o.strength+2)) {
+            if(available(CONFOUND)) return cast(CONFOUND,d);
+            if(available(FROSTBIND)) return cast(FROSTBIND,d);
+            if(available(REPULSION) && urgent) return cast(REPULSION,d);
+        }
+        if(available(MAGIC_DART) && (first_distance>=2 || (urgent && enemy.armor>=3)) &&
+           (urgent || o.mana>=spell_cost(MAGIC_DART)+std::max<uint8_t>(2,reserve)) && !(enemy.traits & MON_NOMOVE)) return cast(MAGIC_DART,d);
+    }
+    // A reported melee contact supplies a bearing even when no sprite is visible.
+    // Use only that just-confirmed square; never infer a hidden monster location.
+    if(urgent && o.contact_reported && distance(o.contact,o.player)==1 &&
+       (o.contact_origin.x==255 || o.contact_origin==o.player)) {
+        for(int d=0;d<4;++d) if(int(o.contact.x)==int(o.player.x)+dxs[d] && int(o.contact.y)==int(o.player.y)+dys[d]) {
+            if(available(BANISH)) return cast(BANISH,d);
+            if(o.turns>=control_until) {
+                if(available(CONFOUND)) return cast(CONFOUND,d);
+                if(available(FROSTBIND)) return cast(FROSTBIND,d);
+            }
+            if(available(MAGIC_DART)) return cast(MAGIC_DART,d);
+        }
+    }
+    if(available(SENSE_TRAPS) && !threatened && !o.monster_count && o.mana==o.max_mana && o.floor>=2 && o.turns>=sense_until) {
+        int uncertain=0;
+        for(int d=0;d<4;++d) {
+            SeenPosition p{uint8_t(o.player.x+dxs[d]),uint8_t(o.player.y+dys[d])};
+            // Seeing terrain does not reveal a hidden trap. Unvisited exits
+            // still benefit from detection; use only our own visit history.
+            if(inside(p.x,p.y) && passable(f.tiles[cell(p)].terrain) &&
+               !f.tiles[cell(p)].visits && !f.tiles[cell(p)].feature) ++uncertain;
+        }
+        if(uncertain>=3) return cast(SENSE_TRAPS);
+    }
+    return {};
+}
+
 bool equipped(const ExplorerObservation& o,int s) {
     return std::find(o.equipped.begin(),o.equipped.end(),s)!=o.equipped.end();
 }
@@ -147,6 +246,14 @@ bool upgrade(const ExplorerParameters& prefs,const ExplorerObservation& o,const 
 int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const SeenItem& i,bool retention=false) {
     if(i.category==ItemCategory::None || i.cursed) return 0;
     if(i.type==YENDOR_AMULET) return 10000;
+    if(i.type==SPELLBOOK) {
+        if(i.spell>=SPELL_COUNT || (o.known_spells & spell_bit(i.spell))) return 0;
+        for(const auto& own:o.inventory) if(&own!=&i && own.type==SPELLBOOK && own.spell==i.spell && !retention) return 0;
+        int utility=i.spell==BLINK || i.spell==SHOCKWAVE || i.spell==BANISH ? 180 : i.spell==SENSE_TRAPS ? 75 : 120;
+        if(i.spell==PIERCING_BOLT && best_weapon(prefs,o,true)<o.inventory_capacity) utility-=25;
+        if(o.hunger<STUDY_HUNGRY && !quantity(o,FOOD)) utility/=3;
+        return utility+(o.floor>=6 ? 20 : 0);
+    }
     if(!i.type) {
         switch(i.category) {
         case ItemCategory::Potion:return prefs.unknown_potion_value; case ItemCategory::Scroll:return prefs.unknown_scroll_value;
@@ -368,10 +475,12 @@ SurvivalRisk estimate_risk(const ExplorerObservation& o,const ExplorerFloor& f,c
     return r;
 }
 void ExplorerAgent::reset() {
+    study_defer_until=magic_control_until=trap_sense_until=0; previous_study=255;
     for(auto& f:floors) { f.tiles.fill({}); f.enemies.fill({}); f.up=f.down={}; f.visited=false; f.ascent_layout=false; }
     identities={}; stats={}; active_floor=255; last_actions=last_turns=UINT64_MAX; last_experiment=last_mass_scroll=0;
     last_position=frontier=last_retreat=shadow={}; shadow_turn=0; probe_direction=0; previous={}; retreat_budget=quiet_turns=stalled=bow_cooldown=0;
     pending_ring=255;
+    prolonged_target={}; prolonged_melee=0;
     blocked_contact={}; blocked_contact_until=0;
     blocked_origin={}; invisible_contact={}; previous_healing=false;
     previous_hp=0; unseen_turns=contact_damage=0; last_offhand_switch=last_control=0; controlled_position={}; risk={};
@@ -454,6 +563,7 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
     for(int g=0;g<6;++g) for(int a=0;a<EXPLORER_APPEARANCES;++a) if(o.identities[g][a]) identities[g][a]=o.identities[g][a];
     if(active_floor!=o.floor) {
         active_floor=o.floor; frontier=shadow={}; last_position={}; last_retreat={}; retreat_budget=quiet_turns=stalled=0;
+        prolonged_target={}; prolonged_melee=0;
         blocked_contact={}; blocked_contact_until=0;
         blocked_origin={}; invisible_contact={}; previous_healing=false;
         unseen_turns=contact_damage=0; previous_hp=o.hp; controlled_position={}; last_offhand_switch=0;
@@ -468,6 +578,15 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
         f.enemies.fill({}); f.visited=true; f.ascent_layout=o.yendor;
     }
     bool changed=last_actions!=o.actions || last_turns!=o.turns || last_position!=o.player;
+    if(changed) {
+        bool visible_strike=previous.kind==ExplorerActionKind::Move && previous.goal=="melee visible monster" &&
+            last_position==o.player && distance(o.player,previous.destination)==1 &&
+            sees_monster(o,previous.destination);
+        if(visible_strike) {
+            prolonged_melee=prolonged_target==previous.destination ? std::min(64u,prolonged_melee+1) : 1;
+            prolonged_target=previous.destination;
+        } else { prolonged_target={}; prolonged_melee=0; }
+    }
     if(changed) {
         bool unseen=o.incoming_attack && !o.monster_count;
         unseen_turns=unseen ? unseen_turns+1 : quiet_turns>3 ? 0 : unseen_turns;
@@ -754,6 +873,13 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             risk_observation.hp_loss=uint8_t(std::min(255u,contact.recent_damage/4));
         }
         risk=estimate_risk(risk_observation,f,prefs);
+        if(previous_study!=255 && !o.studying && !(o.known_spells & spell_bit(previous_study))) study_defer_until=o.turns+128;
+        previous_study=o.studying ? o.study_spell : uint8_t(255);
+        if(o.studying) {
+            ExplorerAction a; a.goal="continue spellbook study";
+            if(o.incoming_attack || risk.one>0 || o.monster_count) { a.kind=ExplorerActionKind::CancelStudy; a.goal="stop unsafe study"; }
+            return a;
+        }
         if(o.pending_pickups) return pickup(o);
         if(o.paralyzed) { ExplorerAction a; a.goal="recover from paralysis"; return a; }
         int adjacent=-1, threats=0,nearest=100; bool dragon_threat=false,mass_target=false;
@@ -767,13 +893,52 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         // Incoming status text establishes danger without establishing a bearing.
         // An invisible attacker still warrants combat healing and escape supplies.
         if(o.incoming_attack || (o.attacked && o.reported_attacker)) threats=std::max(1,threats);
+        auto magic=magic_action(o,f,risk,magic_control_until,trap_sense_until);
+        if(magic.kind==ExplorerActionKind::Cast) {
+            if(magic.slot==FROSTBIND || magic.slot==CONFOUND || magic.slot==REPULSION) magic_control_until=o.turns+8;
+            if(magic.slot==SENSE_TRAPS) trap_sense_until=o.turns+96;
+            return magic;
+        }
+        if(!o.monster_count && !o.attacked && !o.incoming_attack && contact.state==ContactState::None &&
+           !o.blindness && !o.confused && o.hp*4>=o.max_hp*3 && o.turns>=study_defer_until) {
+            bool recent=false; for(const auto& m:f.enemies) if(m.type && o.turns<m.seen+24) recent=true;
+            int exits=0;
+            for(int d=0;d<4;++d) { SeenPosition p{uint8_t(o.player.x+dxs[d]),uint8_t(o.player.y+dys[d])};
+                if(inside(p.x,p.y) && passable(f.tiles[cell(p)].terrain) && !feature_is_trap(f.tiles[cell(p)].feature)) ++exits;
+            }
+            auto light=o.equipped[2]<o.inventory_capacity ? o.inventory[o.equipped[2]] : SeenItem{};
+            for(int s=0;s<o.inventory_capacity && !recent && exits>=2;++s) {
+                const auto& book=o.inventory[s];
+                if(book.type!=SPELLBOOK || book.spell>=SPELL_COUNT || (o.known_spells & spell_bit(book.spell))) continue;
+                bool fuel=light.type==GLOWING_ORB || (is_fueled_light(light.type) && light.quantity*fuel_denominator(light.type)>=spell_study_turns(book.spell)+24);
+                if((!fuel || o.radius<2) && !light.cursed) {
+                    for(int l=0;l<o.inventory_capacity;++l) {
+                        const auto& candidate=o.inventory[l];
+                        if(l!=o.equipped[2] && (candidate.type==GLOWING_ORB ||
+                           (is_fueled_light(candidate.type) && candidate.quantity*fuel_denominator(candidate.type)>=spell_study_turns(book.spell)+24)))
+                            return use(l,"light for spellbook study");
+                    }
+                }
+                if(fuel && o.radius>=2 && !feature_is_trap(f.tiles[cell(o.player)].feature)) {
+                    if(o.hunger>=study_food_required(book.spell)) {
+                        previous_study=book.spell; return use(s,"study unknown spellbook");
+                    }
+                    int food=find(o,FOOD);
+                    if(food>=0) return use(food,"prepare food for spellbook study");
+                }
+            }
+        }
         // Finish an observed opponent instead of alternating between adjacent
         // species. This uses our own action history, never the target's live HP.
         if(previous.kind==ExplorerActionKind::Move && previous.goal=="melee visible monster")
             for(int m=0;m<o.monster_count;++m) if(o.monsters[m].pos==previous.destination && distance(o.player,o.monsters[m].pos)==1) adjacent=m;
-        bool emergency=threats && (o.hp<prefs.emergency_hp || o.hp*100<o.max_hp*prefs.emergency_percent || threats>=prefs.crowd_threshold);
+        // Sixty-four stationary attacks at a still-occupied visible square
+        // justify disengaging, even when replacement opponents appear there.
+        // This uses only our own attacks and public sightings, never live HP.
+        bool stalemate=adjacent>=0 && prolonged_melee>=64 && o.monsters[adjacent].pos==prolonged_target;
+        bool emergency=threats && (stalemate || o.hp<prefs.emergency_hp || o.hp*100<o.max_hp*prefs.emergency_percent || threats>=prefs.crowd_threshold);
         if(dragon_threat && o.hp*100<o.max_hp*prefs.dragon_escape_percent) emergency=true;
-        if(prefs.tactical_risk) emergency=risk.danger>=Danger::Serious;
+        if(prefs.tactical_risk) emergency=stalemate || risk.danger>=Danger::Serious;
         bool lethal=prefs.tactical_risk && risk.danger==Danger::Lethal;
         bool disengaging=prefs.contact_aware && contact.state==ContactState::Disengaging;
         if(prefs.contact_aware && contact.state!=ContactState::None && !disengaging) {
@@ -986,7 +1151,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                 for(int s=0;s<o.inventory_capacity;++s) if(o.inventory[s].category==ItemCategory::Wand && !o.inventory[s].individual) {
                     auto i=o.inventory[s];
                     bool known=i.type!=0;
-                    if(range<(known ? prefs.known_wand_experiment_range : prefs.unknown_wand_experiment_range)) continue;
+                    if(!stalemate && range<(known ? prefs.known_wand_experiment_range : prefs.unknown_wand_experiment_range)) continue;
                     if((!known || i.type==WAND_FIRE) && (adjacent>=0 || range<3)) continue;
                     if(i.type==WAND_DIGGING || (i.type==WAND_POLYMORPH && (!emergency || monster.type==LORD)) ||
                         ((i.type==WAND_TELEPORT || i.type==WAND_FORCE) && !emergency)) continue;
@@ -1023,7 +1188,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             bow_cooldown=4; return use(melee,"restore melee weapon");
         }
         if(adjacent>=0 || (prefs.tactical_risk && emergency && nearest<=3) || (prefs.invisible_response && risk.unseen && unseen_turns>=4)) {
-            if(emergency && retreat_budget<prefs.retreat_steps) {
+            if(emergency && (stalemate || retreat_budget<prefs.retreat_steps)) {
                 int best=-1,best_score=-10000;
                 for(int d=0;d<4;++d) {
                     int x=int(o.player.x)+dxs[d],y=int(o.player.y)+dys[d];
@@ -1036,7 +1201,12 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                     int score=separation*prefs.retreat_separation_weight+connections*prefs.retreat_connectivity_weight-(p==last_retreat ? prefs.retreat_reversal_cost : 0);
                     bool faster=false;
                     for(int m=0;m<o.monster_count;++m) if(o.monsters[m].speed<o.speed) faster=true;
-                    if((separation>nearest || (risk.unseen && p!=shadow)) && !faster && connections>=prefs.retreat_connections && score>best_score) { best=d; best_score=score; }
+                    // A prolonged fight may require the only known corridor.
+                    // Species speed cannot make perpetual stationary attacks
+                    // preferable to an unobstructed step away from the target.
+                    if((separation>nearest || (risk.unseen && p!=shadow)) &&
+                       (stalemate || !faster) && connections>=(stalemate ? 1 : prefs.retreat_connections) &&
+                       score>best_score) { best=d; best_score=score; }
                 }
                 if(best>=0) { ++retreat_budget; last_retreat=o.player; return move(best,"bounded observed retreat"); }
             }

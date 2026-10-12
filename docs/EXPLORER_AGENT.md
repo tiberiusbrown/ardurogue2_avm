@@ -6,9 +6,14 @@ pickup and return ascent. `omniscient-v2` remains the default balance oracle.
 The policy adds no firmware storage. The current engine awareness change,
 competence experiments and preserved historical reference are described in
 [the competence and rebalance report](EXPLORER_COMPETENCE_AND_REBALANCE.md).
-The new consumables extend this same `explorer-v1` policy in place; item tactics,
-observation protocol 5 and current paired validation are described in
+Consumable tactics and the earlier protocol-5 measurements are described in
 [the consumables report](CONSUMABLES.md).
+Learned magic extends the same policy with observation protocol 6, spellbook
+valuation, food/light preparation, safe study, interruption deferral and all eleven
+spell tactics. Mana reserves protect learned escapes. Urgent ray targets may use
+a just-confirmed public melee bearing; anonymous attack counts may justify an
+untargeted Shockwave, without revealing hidden coordinates. See
+[the magic guide](SPELLS.md) and [paired measurements](SPELLS-RESULTS.md).
 
 ## Observation boundary
 

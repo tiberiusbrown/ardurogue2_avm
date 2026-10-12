@@ -29,7 +29,8 @@ INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("AMULET_SPEED", "AMULET_BRILLIANCE", "AMULETS"),
                     ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
                     ("POTION_HEALING", "POTION_FIRE", "POTIONS"),
-                    ("SCROLL_IDENTIFY", "SCROLL_DETECT_OBJECTS", "SCROLLS"))
+                    ("SCROLL_IDENTIFY", "SCROLL_DETECT_OBJECTS", "SCROLLS"),
+                    ("SPELLBOOK", "SPELLBOOK", "SPELLBOOKS"))
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ def read_benchmarks(path):
                   for index, (name, description, setup, button, terrain, item, down, up) in enumerate(entries))
     require(all((case.setup in ("browse", "projectile_browse") and case.button in ("A", "DOWN", "UP") and
                  (case.button != "A" or not (case.down or case.up))) or
-                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile", "feature", "feature_item") and
+                (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile", "feature", "feature_item", "spell", "spell_ray", "spell_target", "study") and
                  case.button in ("RIGHT", "A") and (not (case.down or case.up) or case.setup in ("use", "wand")))
                 for case in cases), "unsupported benchmark input preparation")
     return cases
@@ -113,6 +114,12 @@ def state_fields(case):
             fields[name] = "rogue::game." + name
         fields["monster_stun"] = "rogue::game.monsters[0].stun"
         fields["object_map"] = "rogue::ui.mode == rogue::Mode::OBJECT_MAP"
+    if case.name.startswith(("magic_", "study_")):
+        fields["mana"]="rogue::game.mana"
+        fields["study_progress"]="rogue::session.study_progress"
+        fields["study_slot"]="rogue::session.study_slot"
+        fields["monster_x"]="rogue::game.monsters[0].pos.x"
+        fields["feature_id"]="rogue::game.features[0].id"
     if case.name == "scroll_traps":
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.name.startswith("visibility_trap_"):
@@ -177,6 +184,11 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         f"breakpoint set --file main.cpp --line {contract['main_idle']}", run,
         "avm time",  # Compiled setup and initial render have finished.
     ]
+    if case.setup in ("spell", "spell_ray", "spell_target"):
+        commands += press("B")
+        for _ in range(7): commands += press("DOWN")
+        commands += press("A")
+        if case.setup in ("spell_ray", "spell_target"): commands += press("A")
     if case.setup == "wait":
         commands += press("B")
     if case.setup in ("use", "drop", "wand", "browse", "projectile", "projectile_browse"):
@@ -225,7 +237,9 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         "--count `sizeof(rogue::game.explored)` `(unsigned int)&rogue::game.explored + 0x01000000`",
         f"memory read --binary --outfile {quote(folder / 'game.bin')} --size 1 "
         "--count `sizeof(rogue::game)` `(unsigned int)&rogue::game + 0x01000000`",
-        "thread backtrace",
+        # AVM LLDB can crash evaluating optimized inline arguments during a
+        # backtrace. The saved profile already contains call-stack diagnostics;
+        # ready/page PCs and typed snapshots validate the measurement endpoint.
         f"avm display save {quote(folder / 'frame.pgm')} --mode " + ("logical" if case.setup in ("browse", "projectile_browse") else "controller"),
     ]
     return "\n".join(commands) + "\n"
@@ -241,6 +255,11 @@ def validate_outcome(case, before, after, explored):
     require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup in ("browse", "projectile_browse")
             else "expected one completed game turn")
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
+    if case.name.startswith("magic_"):
+        require(after["mana"]<before["mana"],"spell did not spend mana")
+    if case.name=="magic_shockwave": require(after["monster_x"]>=35,"Shockwave failed multi-tile displacement")
+    if case.name=="study_turn": require(after["study_progress"]==before["study_progress"]+1 and after["study_slot"]!=255,"study did not advance once")
+    if case.name=="study_interrupt": require(after["study_slot"]==255 and after["study_progress"]==0,"study failed interruption")
     if case.name.startswith("visibility_trap_"):
         require((after['monster_x'],after['monster_y']) == (33,16) and after['monster_hp'] < before['monster_hp'],
                 'monster did not enter and suffer the production trap')
@@ -471,7 +490,7 @@ def validate_sample(case, contract, folder, output, more_pcs=(), completed_after
     renderer = "_ZN5rogue16render_inventoryE" if case.setup in ("browse", "projectile_browse") else "_ZN5rogue6renderEv"
     require(end["pc"] in more_pcs or any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
             "the measured turn did not execute the final render")
-    require(not any(("rogue::animate_" in row["function"] and case.setup not in ("projectile", "wand") and case.name != "scroll_fire") or
+    require(not any(("rogue::animate_" in row["function"] and case.setup not in ("projectile", "wand", "spell_ray") and case.name != "scroll_fire") or
                     row["linkage"] == "_ZN5rogue10make_floorEv" or
                     row["function"].lstrip(":").startswith("bench_") or
                     Path(row.get("file", "").replace("\\", "/")).name == "bench.cpp"

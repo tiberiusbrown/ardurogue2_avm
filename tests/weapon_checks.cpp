@@ -416,11 +416,21 @@ static void check_generated_equipment()
                         "generated mimic state is not a semantic appearance");
                 ++appearances[mimic_appearance(monster)];
             }
+            // Check the ordinary weighted source independently of later artifact,
+            // spellbook and early-light substitutions. Those have paired tests.
+            GroundItem finalized[GROUND_ITEMS];
+            std::memcpy(finalized, game.ground, sizeof finalized);
+            std::memset(game.ground, 0, sizeof game.ground);
+            generation::populate_ordinary_items(generation::floor_seed(generation::SUPPLIES),
+                                                generation::floor_seed(generation::EQUIPMENT));
+            for(const GroundItem& ground : game.ground) if(ground.item.type != NO_ITEM) {
+                ++generated;
+                ++category_counts[inventory_group(ground.item.type)];
+            }
+            std::memcpy(game.ground, finalized, sizeof finalized);
             for(const GroundItem& ground : game.ground) {
                 const Item& item = ground.item;
                 if(item.type == NO_ITEM) continue;
-                ++generated;
-                ++category_counts[inventory_group(item.type)];
                 if(is_ring(item.type)) ++ring_counts[item.type - RING_SEE_INVISIBLE];
                 if(is_amulet(item.type)) ++amulet_counts[item.type - AMULET_SPEED];
                 if(is_potion(item.type)) ++potion_counts[floor][item.type - POTION_HEALING];
@@ -460,12 +470,15 @@ static void check_generated_equipment()
                     "equipment curse probability depends on enchantment");
         }
     }
-    // Category weights out of 87; early guarantee modestly redistributes non-supplies.
-    const unsigned category_weights[] = {8, generation::AMMO_WEIGHT, 8, 15, 2, 2, 4, 20, 8, generation::FOOD_WEIGHT};
-    for(unsigned category = 0; category < sizeof category_weights / sizeof category_weights[0]; ++category)
+    // Category weights out of 87 before postprocessing; books are replacements.
+    const unsigned category_weights[] = {8, generation::AMMO_WEIGHT, 8, 15, 2, 2, 4, 20, 8, 0, generation::FOOD_WEIGHT};
+    require(!category_counts[SPELLBOOKS], "ordinary item source generated spellbooks");
+    for(unsigned category = 0; category < sizeof category_weights / sizeof category_weights[0]; ++category) {
+        if(!category_weights[category]) continue;
         require(category_counts[category] * 8700 > generated * (category_weights[category] * 100 - 110) &&
                 category_counts[category] * 8700 < generated * (category_weights[category] * 100 + 110),
                 "subtype generation changed overall loot category probability");
+    }
     for(unsigned subtype = 0; subtype < sizeof equipment_types; ++subtype) {
         unsigned total = 0, cursed = 0;
         for(const auto& bucket : subtype_counts[subtype]) {

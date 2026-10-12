@@ -1,12 +1,21 @@
+#include "spells.hpp"
 #include "app_state.hpp"
+#include "spells.hpp"
 #include "game.hpp"
+#include "spells.hpp"
 #include "inventory_view.hpp"
+#include "spells.hpp"
 #include "render.hpp"
+#include "spells.hpp"
 #include "ui.hpp"
 
+#include "spells.hpp"
 #include <cstdio>
+#include "spells.hpp"
 #include <cstdlib>
+#include "spells.hpp"
 #include <cstring>
+#include "spells.hpp"
 #include <initializer_list>
 
 uint8_t avm_test_buttons[16] = {};
@@ -24,17 +33,17 @@ static void require(bool condition, const char* message);
 namespace rogue {
 Game game = {};
 const char* status_word(const char*) { return nullptr; }
-void status_words(const char*) {}
+void status_words(const char*) { study_status_output();}
 void status_suffix(char) {}
 void status_capitalize() {}
-void status(const char*) {}
-void status(const char*, char) {}
-void status(Item) {}
-void status(Item, char) {}
-void status(const Monster&) {}
-void status(const Monster&, char) {}
-void status_number(uint8_t) {}
-void status_number(uint8_t, char) {}
+void status(const char*) { study_status_output();}
+void status(const char*, char) { study_status_output();}
+void status(Item) { study_status_output();}
+void status(Item, char) { study_status_output();}
+void status(const Monster&) { study_status_output();}
+void status(const Monster&, char) { study_status_output();}
+void status_number(uint8_t) { study_status_output();}
+void status_number(uint8_t, char) { study_status_output();}
 void status_clear() {}
 void defer_play_render() { ++deferred_renders; play_render_pending = true; }
 void render_play() { ++play_renders; play_render_pending = false; }
@@ -349,6 +358,35 @@ int main()
         offered_gift=true;
     }
     require(offered_gift,"statue gift pickup fixture never exercised");
-    std::puts("equipment, scroll, wand, inventory and feature UI flow passed");
+    game={}; session={NONE,DEATH,false}; ui={}; ui.mode=SPELL_MENU;
+    game.mana=6; game.known_spells=spell_bit(MAGIC_DART)|spell_bit(BLINK); ui.selection=MAGIC_DART;
+    Game unchanged=game;
+    require(handle_input(AVM_BUTTON_D)==INPUT_NONE && ui.selection==BLINK,"spell menu included unlearned spells");
+    handle_input(0); require(handle_input(AVM_BUTTON_B)==INPUT_NONE && ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"spell menu cancel spent resources");
+    ui={}; ui.mode=SPELL_MENU; ui.selection=MAGIC_DART;
+    require(handle_input(AVM_BUTTON_A)==INPUT_NONE && ui.mode==SPELL_DIRECTION,"spell direction prompt absent");
+    handle_input(0); handle_input(AVM_BUTTON_B);
+    require(ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"direction cancel spent resources");
+    ui={}; ui.mode=SPELL_DIRECTION; ui.selection=MAGIC_DART;
+    require(handle_input(AVM_BUTTON_R)==INPUT_CAST_RIGHT && ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"spell resolved inside UI frame");
+    ui={}; ui.mode=SPELL_MENU; ui.selection=BLINK;
+    require(handle_input(AVM_BUTTON_A)==INPUT_CAST_IMMEDIATE && !std::memcmp(&unchanged,&game,sizeof game),"immediate spell resolved inside UI frame");
+    game={}; session={NONE,DEATH,false}; game.player={20,15}; game.hp=game.max_hp=100;
+    game.inventory[0]={GLOWING_ORB,0}; game.offhand_slot=0;
+    game.mana=6; game.known_spells=spell_bit(EXCHANGE);
+    game.monsters[2]={{22,15},GOBLIN,10,15,{0,0},0}; game.monsters[5]={{20,13},GOBLIN,10,15,{0,0},0};
+    ui={}; ui.mode=SPELL_MENU; ui.selection=EXCHANGE; unchanged=game;
+    require(handle_input(AVM_BUTTON_A)==INPUT_NONE && ui.mode==SPELL_TARGET && ui.use_target==2,"Exchange target prompt missing");
+    handle_input(0); handle_input(AVM_BUTTON_D); require(ui.use_target==5,"Exchange target navigation ignored visible alternative");
+    handle_input(0); handle_input(AVM_BUTTON_B); require(ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"target cancel spent mana/turn/RNG");
+    ui={}; ui.mode=SPELL_MENU; ui.selection=EXCHANGE; game.mana=4; unchanged=game;
+    require(handle_input(AVM_BUTTON_A)==INPUT_NONE && ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"insufficient menu mana spent resources");
+    session.study_slot=2; session.study_spell=FROSTBIND;
+    ui={}; ui.mode=PLAY;
+    require(handle_input(AVM_BUTTON_R)==INPUT_STUDY_TURN,"held movement delayed automatic study");
+    ui.next_repeat_ms=0;
+    require(handle_input(AVM_BUTTON_R)==INPUT_STUDY_TURN,"held movement repeatedly paused study");
+    handle_input(0); handle_input(AVM_BUTTON_B); require(!studying(),"B failed to cancel between study turns");
+    std::puts("equipment, scroll, wand, inventory, spell and feature UI flow passed");
     return 0;
 }

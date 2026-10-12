@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -48,7 +49,7 @@ static_assert(sizeof(monster_icons) == 2 + 4 * (LORD + 1),
 // Shared visual categories are independent of ItemType ordering and roster size.
 enum ItemIconCategory : uint8_t {
     ICON_NONE, ICON_AMMO, ICON_FOOD, ICON_POTION, ICON_WEAPON, ICON_ARMOR,
-    ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ICON_LIGHT, ICON_SHIELD, ITEM_ICON_CATEGORIES
+    ICON_AMULET, ICON_RING, ICON_SCROLL, ICON_WAND, ICON_LIGHT, ICON_SHIELD, ICON_SPELLBOOK, ITEM_ICON_CATEGORIES
 };
 static const uint8_t PROGMEM item_icons[] = {
     4, 4, // width, height; four vertical columns per frame
@@ -64,12 +65,14 @@ static const uint8_t PROGMEM item_icons[] = {
     0x01, 0x02, 0x04, 0x08, // wand
     0x02, 0x0d, 0x02, 0x00, // light
     0x03, 0x0d, 0x0d, 0x03, // shield
+    0x0f, 0x09, 0x0b, 0x0f, // spellbook
 };
 static_assert(sizeof(item_icons) == 2 + 4 * ITEM_ICON_CATEGORIES,
               "item icon categories changed");
 
 uint8_t item_icon(uint8_t type)
 {
+    if(type == SPELLBOOK) return ICON_SPELLBOOK;
     if(is_light(type)) return ICON_LIGHT;
     if(is_shield(type)) return ICON_SHIELD;
     if(is_ammo(type)) return ICON_AMMO;
@@ -572,7 +575,8 @@ __attribute__((noinline)) static void render_stats()
 {
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
     avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
-    avm_draw_textf_P(67, 22, game.see_invisible ? F("LIGHT %u S") : F("LIGHT %u"), player_light_radius());
+    avm_draw_textf_P(67, 22, game.see_invisible ? F("MP%u/%u L%u S") : F("MP%u/%u L%u"),
+                       game.mana, player_max_mana(), player_light_radius());
 }
 
 __attribute__((noinline)) void render_play()
@@ -583,6 +587,23 @@ __attribute__((noinline)) void render_play()
     render_dungeon_view();
     avm_draw_filled_rect_white(64, 0, 1, 64);
     render_stats();
+    if(studying() && !session.study_message) render_study();
+}
+
+__attribute__((noinline)) void render_study()
+{
+    status_clear();
+    avm_draw_text_P(67, 30, F("STUDYING"));
+    avm_draw_text_P(67, 38, spell_name(session.study_spell));
+    uint8_t duration = spell_study_turns(session.study_spell);
+    avm_draw_filled_rect_white(68, 42, 56, 6);
+    avm_draw_filled_rect_black(69, 43, 54, 4);
+    avm_draw_filled_rect_white(70, 44, uint16_t(session.study_progress) * 52 / duration, 2);
+    avm_draw_textf_P(68, 56, F("%u/%u"), session.study_progress, duration);
+    // Four distinct rune phases, including turns without a bar-pixel change.
+    uint8_t phase = session.study_progress & 3;
+    avm_draw_filled_rect_white(114 + (phase & 1) * 5, 51 + (phase >> 1) * 5, 3, 3);
+    avm_draw_text_P(67, 63, F("B: CANCEL"));
 }
 
 __attribute__((noinline)) void update_generation_render(uint8_t percent)
@@ -657,13 +678,15 @@ __attribute__((noinline)) static void render_menu()
 {
     static const char AVM_PROGMEM* const AVM_PROGMEM names[] = {
         F("WAIT/SEARCH"), F("USE ITEM"), F("DROP ITEM"), F("Throw/Shoot"),
-        F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON")
+        F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON"), F("CAST SPELL")
     };
     avm_draw_text_P(10, 8, F("ACTION MENU"));
-    for(uint8_t i = 0; i < 7; ++i) {
+    uint8_t top = ui.selection < 7 ? 0 : ui.selection - 6;
+    for(uint8_t row = 0; row < 7 && top + row < 8; ++row) {
+        uint8_t i = top + row;
         if(i == ui.selection)
-            avm_draw_text_P(4, static_cast<int16_t>(17 + 7 * i), F(">"));
-        avm_draw_text_P(12, static_cast<int16_t>(17 + 7 * i), names[i]);
+            avm_draw_text_P(4, static_cast<int16_t>(17 + 7 * row), F(">"));
+        avm_draw_text_P(12, static_cast<int16_t>(17 + 7 * row), names[i]);
     }
 }
 
@@ -695,6 +718,7 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
             case WANDS: avm_draw_text_P(1, y, F("Wands")); break;
             case POTIONS: avm_draw_text_P(1, y, F("Potions")); break;
             case SCROLLS: avm_draw_text_P(1, y, F("Scrolls")); break;
+            case SPELLBOOKS: avm_draw_text_P(1, y, F("Spellbooks")); break;
             case FOODS: avm_draw_text_P(1, y, F("Food")); break;
             default: avm_draw_text_P(1, y, F("Quest")); break;
             }
@@ -721,10 +745,40 @@ __attribute__((noinline)) static void render_direction_prompt()
     render_play();
     status_clear();
     avm_draw_text_P(66, 30, ui.mode == WAND_DIRECTION
-        ? F("Use wand?") : F("Throw/Shoot?"));
+        ? F("Use wand?") : ui.mode == SPELL_DIRECTION ? F("Cast spell?") : F("Throw/Shoot?"));
     avm_draw_text_P(66, 42, F("D-pad:"));
     avm_draw_text_P(66, 49, F("Direction"));
     avm_draw_text_P(66, 63, F("B: Back"));
+}
+
+__attribute__((noinline)) static void render_spells()
+{
+    avm_draw_textf_P(1, 7, F("CAST SPELL MP%u/%u"), game.mana, player_max_mana());
+    uint8_t selected_row = 0;
+    for(uint8_t i = 0; i < ui.selection; ++i) if(game.known_spells & spell_bit(i)) ++selected_row;
+    uint8_t top = selected_row < 7 ? 0 : selected_row - 6, row = 0;
+    for(uint8_t spell = 0; spell < SPELL_COUNT; ++spell) {
+        if(!(game.known_spells & spell_bit(spell))) continue;
+        if(row++ < top) continue;
+        if(row > top + 7) break;
+        int16_t y = 17 + 7 * (row - top - 1);
+        if(spell == ui.selection) avm_draw_text_P(1, y, F(">"));
+        avm_draw_text_P(9, y, spell_name(spell));
+        avm_draw_textf_P(106, y, game.mana < spell_cost(spell) ? F("%u!") : F("%u"), spell_cost(spell));
+    }
+}
+__attribute__((noinline)) static void render_spell_target()
+{
+    render_play(); status_clear();
+    avm_draw_text_P(67, 30, F("EXCHANGE"));
+    avm_draw_text_P(67, 39, F("D-pad: target"));
+    avm_draw_text_P(67, 49, F("A: CAST"));
+    avm_draw_text_P(67, 63, F("B: BACK"));
+    if(exchange_target(ui.use_target)) {
+        const Position pos = game.monsters[ui.use_target].pos;
+        avm_draw_filled_rect_white((int16_t(pos.x) - game.player.x + 6) * 5,
+                                  (int16_t(pos.y) - game.player.y + 6) * 5 + 4, 4, 1);
+    }
 }
 
 static uint16_t full_map_wall_word(uint16_t index)
@@ -842,6 +896,9 @@ __attribute__((noinline)) void render()
     case MENU: render_menu(); break;
     case PROJECTILE_DIRECTION: render_direction_prompt(); break;
     case WAND_DIRECTION: render_direction_prompt(); break;
+    case SPELL_DIRECTION: render_direction_prompt(); break;
+    case SPELL_MENU: render_spells(); break;
+    case SPELL_TARGET: render_spell_target(); break;
     case FULL_MAP: render_full_map(); break;
     case OBJECT_MAP: render_full_map(); break;
     case END: render_end(); break;

@@ -17,7 +17,7 @@ def main():
         assert (p.returncode == 0) == valid, (args, p.stderr)
         return p
 
-    baseline=tuple(part for rule in ("ground=16","inventory=16","sight-percent=0","sight-early-percent=0",
+    baseline=tuple(part for rule in ("magic=0","ground=16","inventory=16","sight-percent=0","sight-early-percent=0",
         "natural-regen-interval=0","healing-min-quarters=1","healing-random-quarters=2",
         "phantom-strength=6","phantom-dexterity=4","phantom-health=12",
         "late-strength-percent=100","late-health-percent=100") for part in ("--intervention","balance:"+rule))

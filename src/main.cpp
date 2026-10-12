@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -30,12 +31,21 @@ extern "C" int main()
         // Sleep until an interrupt, then process button edges or a held repeat.
         avm_idle();
         uint8_t buttons = avm_buttons();
-        if(buttons != ui.previous_buttons ||
+        if((studying() && static_cast<int16_t>(avm_millis() - ui.next_repeat_ms) >= 0) || buttons != ui.previous_buttons ||
            (ui.held_direction && !ui.repeat_suppressed &&
             static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0)) {
             InputAction input = handle_input(buttons);
-            if(input == INPUT_USE_INVENTORY) use_inventory(ui.selection, ui.use_target);
+            if(input == INPUT_STUDY_TURN) { status_clear(); advance_study(); }
+            if(input >= INPUT_CAST_UP && input <= INPUT_CAST_IMMEDIATE) {
+                int8_t dx = input == INPUT_CAST_RIGHT ? 1 : input == INPUT_CAST_LEFT ? -1 : 0;
+                int8_t dy = input == INPUT_CAST_UP ? -1 : input == INPUT_CAST_DOWN ? 1 : 0;
+                cast_spell(ui.selection, dx, dy, ui.use_target);
+            }
+            if(input == INPUT_USE_INVENTORY) {
+                use_inventory(ui.selection, ui.use_target);
+                if(studying()) status_clear();
+            }
             Position pickup_position{NONE, NONE};
             if(session.pending_pickups) {
                 pickup_position = game.player;

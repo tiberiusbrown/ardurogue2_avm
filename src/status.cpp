@@ -1,3 +1,4 @@
+#include "spells.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -104,6 +105,7 @@ Pointer stream_status_word(Pointer word)
     char suffix = pending_suffix;
     while(*word == ' ') ++word;
     if(!*word) return nullptr;
+    if(study_status_output()) status_clear();
 
     uint16_t length;
     int16_t width = status_word_width(word, capitalize, suffix, length);
@@ -560,6 +562,11 @@ void emit_other_item(Item item, ItemTextStyle style, Output& text, char suffix)
             else if(style == STATUS_ITEM) text.word(F("some"));
             text.final_word(F("food"), suffix);
         }
+        break;
+    case SPELLBOOK:
+        if(style != INVENTORY_ITEM) text.word(F("a"));
+        text.word(F("spellbook of"));
+        text.final_word(spell_name(item.info), suffix);
         break;
     case YENDOR_AMULET:
         if(style != INVENTORY_ITEM) text.word(F("the"));
