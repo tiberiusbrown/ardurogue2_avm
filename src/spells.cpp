@@ -27,7 +27,7 @@ bool begin_study(uint8_t slot) {
     uint8_t spell = game.inventory[slot].info;
     if(!can_read()) { status(F("You cannot study now.")); return false; }
     if(game.known_spells & spell_bit(spell)) { status(F("You already know this spell.")); return false; }
-    if(game.hunger < study_food_required(spell)) { status(F("Eat before studying.")); return false; }
+    if(game.hunger < study_food_required(spell)) { status(F("You need to eat before studying.")); return false; }
     status(F("You begin studying."));
     session.study_slot = slot; session.study_spell = spell;
     session.study_progress = 0; session.study_floor = game.floor;
@@ -41,7 +41,7 @@ void cancel_study(bool announce) {
               session.study_message ? 1 : session.ended ? 2 : game.hunger < STUDY_HUNGRY ? 3 : 0);
     session.study_slot = session.study_spell = NONE;
     session.study_progress = 0;
-    if(announce) status(F("Study interrupted."));
+    if(announce) status(F("You lose your concentration."));
 }
 __attribute__((noinline)) bool advance_study() {
     if(!studying()) return false;

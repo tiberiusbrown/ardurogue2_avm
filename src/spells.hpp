@@ -4,12 +4,18 @@
 namespace rogue {
 inline const char PROGMEM* spell_name(uint8_t spell) {
     switch(spell) {
-    case MAGIC_DART: return F("Magic Dart"); case FROSTBIND: return F("Frostbind");
-    case REPULSION: return F("Repulsion"); case CONFOUND: return F("Confound");
-    case SENSE_TRAPS: return F("Sense Traps"); case BLINK: return F("Blink");
-    case SHOCKWAVE: return F("Shockwave"); case PIERCING_BOLT: return F("Piercing Bolt");
-    case BANISH: return F("Banish"); case EXCHANGE: return F("Exchange");
-    case CLEANSE: return F("Cleanse"); default: return F("Unknown");
+    case MAGIC_DART: return F("Magic Dart");
+    case FROSTBIND: return F("Frostbind");
+    case REPULSION: return F("Repulsion");
+    case CONFOUND: return F("Confound");
+    case SENSE_TRAPS: return F("Sense Traps");
+    case BLINK: return F("Blink");
+    case SHOCKWAVE: return F("Shockwave");
+    case PIERCING_BOLT: return F("Piercing Bolt");
+    case BANISH: return F("Banish");
+    case EXCHANGE: return F("Exchange");
+    case CLEANSE: return F("Cleanse");
+    default: return F("Unknown");
     }
 }
 inline bool studying() { return session.study_slot != NONE; }
