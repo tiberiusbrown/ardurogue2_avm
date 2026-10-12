@@ -39,7 +39,7 @@ constexpr uint8_t GROUND_ITEMS = 24;
 constexpr uint8_t GROUND_ITEMS = GROUND_ITEM_CAPACITY;
 #endif
 constexpr uint8_t INVENTORY = 20;
-constexpr uint8_t SEE_INVISIBLE_DURATION = 40;
+constexpr uint8_t SEE_INVISIBLE_DURATION = 20; // Minimum; doses roll another 0..10.
 constexpr uint8_t SEE_INVISIBLE_POTION_PERCENT = 6;
 constexpr uint8_t SEE_INVISIBLE_EARLY_PERCENT = 18;
 // Divides the saved eight-bit turn clock, so its wrap preserves the cadence.
@@ -54,7 +54,7 @@ constexpr uint8_t PHANTOM_HEALTH = 10;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 28;
+constexpr uint8_t SAVE_VERSION = 29;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -66,7 +66,9 @@ enum ItemType : uint8_t {
     POTION_INVISIBILITY,
     POTION_BLINDNESS,
     POTION_SEE_INVISIBLE,
-    POTION_LAST = POTION_SEE_INVISIBLE,
+    POTION_EXTRA_HEALING, POTION_RESTORE_VITALITY, POTION_HASTE,
+    POTION_LEVITATION, POTION_FIRE_RESISTANCE, POTION_FIRE,
+    POTION_LAST = POTION_FIRE,
     WEAPON_FIRST,
     LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
     STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN,
@@ -98,7 +100,9 @@ enum ItemType : uint8_t {
     SCROLL_IDENTIFY = SCROLL_FIRST, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE,
     SCROLL_TELEPORT, SCROLL_MAPPING, SCROLL_FEAR,
     SCROLL_TORMENT, SCROLL_MASS_CONFUSE, SCROLL_MASS_POISON,
-    SCROLL_LAST = SCROLL_MASS_POISON,
+    SCROLL_HOLD_MONSTER, SCROLL_DETECT_TRAPS, SCROLL_SUMMONING,
+    SCROLL_MASS_TELEPORT, SCROLL_FIRE, SCROLL_DETECT_OBJECTS,
+    SCROLL_LAST = SCROLL_DETECT_OBJECTS,
     WAND_FIRST,
     WAND_FORCE = WAND_FIRST, WAND_TELEPORT, WAND_DIGGING, WAND_FIRE,
     WAND_STRIKING, WAND_ICE, WAND_POLYMORPH,
@@ -241,7 +245,8 @@ constexpr uint8_t MON_AGGRO = 1;
 constexpr uint8_t MON_BLINDED = 0x10;
 static_assert((MON_BLINDED & (MON_AGGRO | 0x0e | 0xc0)) == 0, "blindness overlaps state");
 constexpr uint8_t MON_AFRAID = 0x40;
-constexpr uint8_t MON_TRAP_SUMMONED = 0x80;
+constexpr uint8_t MON_SUMMONED = 0x80; // Trap/scroll summons grant neither score nor XP.
+constexpr uint8_t MON_TRAP_SUMMONED = MON_SUMMONED; // Existing trap observers.
 enum MimicAppearance : uint8_t {
     MIMIC_SCROLL, MIMIC_POTION, MIMIC_AMULET, MIMIC_RING, MIMIC_WAND,
     MIMIC_APPEARANCE_COUNT
@@ -433,6 +438,7 @@ struct Game {
     MapFeature features[MAP_FEATURES];
     uint8_t offhand_slot, blindness;
     uint8_t see_invisible; // Remaining temporary sight turns; saved across floors/resume.
+    uint8_t haste, levitation, fire_resistance; // Zero means inactive; append saved timers.
 };
 
 enum RunResult : uint8_t {
@@ -450,13 +456,14 @@ struct Session {
     bool forced_entry = false;
     bool pending_pickups = false;
     uint8_t pickup_turns = 0;
+    bool object_detection = false; // One display request, never saved.
 };
 
 extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 812 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) + 1, "Game saved layout changed");
+static_assert(sizeof(Game) == 817 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -477,11 +484,15 @@ static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, magic_resistance) == 751 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
               offsetof(Game, identified_items) == 767 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16),
               "game save offsets changed");
-static_assert(offsetof(Game, features) == 774 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features must append to saved layout");
-static_assert(POTION_COUNT == 12 && SCROLL_COUNT == 9 &&
+static_assert(offsetof(Game, features) == 775 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features follow expanded knowledge");
+static_assert(offsetof(Game, haste) == offsetof(Game, see_invisible) + 1 &&
+              offsetof(Game, fire_resistance) == offsetof(Game, haste) + 2,
+              "new timers must append to saved layout");
+static_assert(POTION_COUNT == 18 && SCROLL_COUNT == 15 &&
               RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 7,
               "item table counts changed");
-static_assert(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 50 &&
+static_assert(sizeof(Game::identified_items) == 8 &&
+              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 62 &&
               POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
                   sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 

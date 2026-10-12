@@ -37,8 +37,9 @@ std::string observation_text(const ExplorerObservation& o) {
         <<':'<<int(o.incoming_attacks)<<':'<<int(o.anonymous_attacks)<<':'<<o.encounter_changed<<':'<<o.summoning_reported;
     for(auto b:o.equipped) s<<int(b)<<',';
     for(auto b:{o.weakened,o.confused,o.paralyzed,o.slowed,o.invisible,o.blindness}) s<<int(b)<<',';
+    for(auto b:{o.see_invisible,o.haste,o.levitation,o.fire_resistance,o.vitality_drained}) s<<int(b)<<',';
     for(auto& i:o.inventory) item_text(s,i);
-    for(int n=0;n<2048;++n) s<<int(o.terrain[n])<<':'<<int(o.features[n])<<':'<<o.visible[n]<<',';
+    for(int n=0;n<2048;++n) s<<int(o.terrain[n])<<':'<<int(o.features[n])<<':'<<o.visible[n]<<':'<<o.detected_objects[n]<<',';
     for(int g=0;g<o.ground_count;++g) { auto& a=o.ground[g]; s<<int(a.pos.x)<<':'<<int(a.pos.y)<<':'<<int(a.handle); item_text(s,a.item); }
     for(int m=0;m<o.monster_count;++m) { auto& a=o.monsters[m]; s<<int(a.pos.x)<<':'<<int(a.pos.y)<<':'<<int(a.type)<<':'<<int(a.strength)<<':'<<int(a.speed)<<':'<<int(a.armor)<<':'<<a.traits; }
     for(auto& group:o.identities) for(auto t:group) s<<int(t)<<',';
@@ -68,8 +69,10 @@ void noninterference() {
     b.ground[0].item=make_equipment(LONG_SWORD,5);
     identical(a,b,"monster-covered item sprite leaked its category");
     arena(); a=game; b=a;
-    a.confused=a.paralyzed=a.slowed=a.invisible=a.blindness=2; b=a;
+    a.confused=a.paralyzed=a.slowed=a.invisible=a.blindness=2;
+    a.see_invisible=a.haste=a.levitation=a.fire_resistance=2; b=a;
     b.confused=b.paralyzed=b.slowed=b.invisible=b.blindness=7;
+    b.see_invisible=b.haste=b.levitation=b.fire_resistance=7;
     identical(a,b,"hidden player status durations leaked");
     arena(); a=game; b=a;
     game=b; carve(40,20); b=game; identical(a,b,"hidden corridor leaked");
@@ -690,8 +693,43 @@ void potion_capacity_boundary() {
 }
 
 }
+void consumable_observations() {
+    arena(); game.ground[0]={{60,30},{POTION_FIRE,1}};
+    game.monsters[0]={{59,30},MIMIC,10,0,{0,0},0};
+    auto before=observe_explorer(0,0);
+    check(!before.detected_objects.any(),"detection before scroll leaked objects");
+    apply_scroll_effect(SCROLL_DETECT_OBJECTS);
+    auto detected=observe_explorer(1,1);
+    check(detected.detected_objects.count()==1 && detected.detected_objects[cell(60,30)] &&
+        detected.terrain[cell(60,30)]==Terrain::Unknown && !detected.features[cell(60,30)] && !detected.monster_count && !detected.ground_count,"detection leaked terrain/identity/mimic");
+    auto p=std::make_unique<ExplorerAgent>(); p->reset(); p->choose_action(detected);
+    check(p->memory(0).tiles[cell(60,30)].has_item && p->memory(0).tiles[cell(60,30)].terrain==Terrain::Unknown,"object positions not remembered independently of terrain");
+    arena(); game.haste=game.levitation=game.fire_resistance=1;
+    auto o=observe_explorer(0,0); game.haste=game.levitation=game.fire_resistance=200;
+    auto longer=observe_explorer(0,0);
+    check(o.haste && o.levitation && o.fire_resistance && longer.haste && longer.levitation && longer.fire_resistance,"public beneficial status flags absent");
+    arena(); game.hp=10; game.inventory[0]={POTION_EXTRA_HEALING,1}; identify_type(POTION_EXTRA_HEALING);
+    p->reset(); auto a=p->choose_action(observe_explorer(0,0));
+    check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer extra healing not used");
+    arena(); game.vamp_drain=30; game.inventory[0]={POTION_RESTORE_VITALITY,1}; identify_type(POTION_RESTORE_VITALITY);
+    p->reset(); a=p->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer vitality drain not restored");
+    arena(); game.inventory[0]={POTION_FIRE,1}; identify_type(POTION_FIRE);
+    p->reset(); a=p->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer deliberately drank fire");
+    arena(); game.inventory[0]={SCROLL_SUMMONING,1}; identify_type(SCROLL_SUMMONING);
+    p->reset(); a=p->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer deliberately read summoning");
+    arena(); for(uint8_t t=POTION_FIRST;t<=POTION_LAST;++t) identify_type(t);
+    o=observe_explorer(0,0); for(uint8_t t=POTION_FIRST;t<=POTION_LAST;++t) check(o.identities[0][item_appearance(t)]==t,"explorer appearance mapping truncated");
+    auto control=std::make_shared<RuleExperiment>();
+    control->rules={parse_rule("balance:new-consumables-percent=0")};
+    Options options; options.agent=ExplorerAgent::name(); options.experiment=control;
+    for(uint16_t seed : {uint16_t(3146),uint16_t(6725),uint16_t(378),uint16_t(7461)})
+        check(!run(seed,*p,options).stuck,"explorer frontier/blocked-probe regression reached action guard");
+    options.experiment.reset();
+    for(uint16_t seed : {uint16_t(6725),uint16_t(7523),uint16_t(6025)})
+        check(!run(seed,*p,options).stuck,"new-content explorer blind-probe/loot regression reached action guard");
+}
 int main() {
-    try { potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
+    try { consumable_observations(); potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }

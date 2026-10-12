@@ -49,10 +49,10 @@ static uint8_t expected_rating(uint8_t type)
 
 static void check_equipment_definitions_and_ranges()
 {
-    static_assert(LONG_SWORD == 15 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
+    static_assert(LONG_SWORD == POTION_LAST + 1 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
-                  POTION_COUNT == 12 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
-                  SCROLL_COUNT == 9 && WAND_COUNT == 7,
+                  POTION_COUNT == 18 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
+                  SCROLL_COUNT == 15 && WAND_COUNT == 7,
                   "item groups are no longer contiguous or changed size");
     for(const auto& weapon : weapons) {
         WeaponDefinition definition = weapon_definition(weapon.type);
@@ -549,17 +549,21 @@ static void check_generated_equipment()
             "speed is not rarer than its combat-healing comparator");
     for(uint8_t floor = 0; floor < FLOORS; ++floor) {
         unsigned potions = 0;
-        for(unsigned count : potion_counts[floor]) {
-            require(count != 0, "generation omitted a potion at a depth");
+        for(uint8_t type = POTION_FIRST; type <= POTION_LAST; ++type) {
+            unsigned count = potion_counts[floor][type - POTION_FIRST];
+            if(type == POTION_RESTORE_VITALITY && floor < 5) require(!count, "early vitality restriction");
+            else if(type == POTION_FIRE && floor > 0 && floor < 5) require(!count, "early fire restriction");
+            else require(count != 0, "generation omitted a potion at a depth");
             potions += count;
         }
         unsigned experience = potion_counts[floor][POTION_EXPERIENCE - POTION_HEALING];
         unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? POTION_SLOWING : POTION_HEALING) - POTION_HEALING];
         const double sight = (floor >= 2 && floor <= 4 ? SEE_INVISIBLE_EARLY_PERCENT : SEE_INVISIBLE_POTION_PERCENT) / 100.0;
-        const double retained = 1 - sight;
+        const double retained = (1 - sight) * .75;
         const bool replaced_by_slowing = floor == 0 || (floor >= 5 && floor < 10);
         const double expected_replacement = replaced_by_slowing ? 3.0 / 22 * retained :
-            (floor < 5 ? 5.0 : 3.0) / 22 * retained;
+            (floor < 5 ? 5.0 : 3.0) / 22 * retained +
+                (floor > 0 && floor < 5 ? (1-sight)*.25/7 : 0);
         auto close_to_probability = [&](unsigned count, double probability) {
             return std::abs(count - potions * probability) <
                 6 * std::sqrt(potions * probability * (1 - probability)) + potions * 0.005;

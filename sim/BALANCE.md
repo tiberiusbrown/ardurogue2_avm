@@ -6,14 +6,24 @@ agent-policy change is part of this framework. See [README.md](README.md) for
 simulator mechanics and [BALANCE_RESULTS.md](BALANCE_RESULTS.md) for the milestone
 demonstrations. Raw outputs belong in ignored `build/`.
 
-Exploration schema 5 appends `unseen_*` contact counters and `phantom_deaths`.
-The core streams use version 8: item identification, pack-full, temporary sight expiration and active-turn counters are appended. Hit/miss and probe feedback is public;
+Exploration schema 6 includes `unseen_*` contact counters and `phantom_deaths`.
+The core streams use version 9: new consumable names, scroll-summoned encounter
+generation, and expiration/active-turn counters for all four temporary beneficial
+potion effects extend version 8. Hit/miss and probe feedback is public;
 actual episode damage, kills, hidden summoning-hazard classifications and
 death attribution are privileged reporting only. The explorer never receives
 the collector. Precise definitions and denominators are in
 [EXPLORER_INVISIBLE_CONTACT.md](../docs/EXPLORER_INVISIBLE_CONTACT.md).
 Use `invisible_contact_experiments.py` for descriptive comparisons between
 policy hashes, with production gameplay and all unrelated preferences fixed.
+
+The consumables availability control is `balance:new-consumables-percent=0`
+(production default 25). It restores each displaced original potion/scroll at
+the same generation slot, retaining original category, placement and generation
+RNG draws. This covers ordinary loot and feature rewards. Both arms must use the
+same candidate executable and policy hash. Temporary sight still follows the
+new 20–30-turn mechanic in both arms; the pre-change executable is a separate
+descriptive compatibility check. See [the consumables report](../docs/CONSUMABLES.md).
 
 ## Build and dependencies
 

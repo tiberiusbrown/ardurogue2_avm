@@ -64,7 +64,12 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     // The interface announces effects, but does not disclose their remaining timers.
     o.weakened=game.weakened!=0; o.confused=game.confused!=0; o.paralyzed=game.paralyzed!=0;
     o.slowed=game.slowed!=0; o.invisible=game.invisible!=0; o.blindness=game.blindness!=0;
-    o.see_invisible=game.see_invisible!=0; o.inventory_capacity=inventory_capacity();
+    o.see_invisible=game.see_invisible!=0;
+    o.vitality_drained=game.vamp_drain!=0;
+    o.haste=game.haste!=0; o.levitation=game.levitation!=0; o.fire_resistance=game.fire_resistance!=0;
+    if(session.object_detection) for(const auto& g:game.ground)
+        if(g.item.type && g.pos.x<MAP_W && g.pos.y<MAP_H) o.detected_objects.set(cell(g.pos));
+    o.inventory_capacity=inventory_capacity();
     static_assert(INVENTORY <= 20 && GROUND_ITEMS + MONSTERS <= 36, "observation capacity");
     o.radius=player_light_radius(); o.yendor=game.has_amulet; o.pending_pickups=session.pending_pickups;
     o.equipped={game.weapon_slot,game.armor_slot,game.offhand_slot,game.amulet_slot,game.ring_slots[0],game.ring_slots[1]};
@@ -72,7 +77,7 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     // This translates only already identified public knowledge, including consumed objects.
     for(uint8_t t=POTION_FIRST;t<=WAND_LAST;++t) if(item_type_identified(t)) {
         auto c=category(t); int g=identity_group(c); auto a=item_appearance(t);
-        if(g<5 && a<16) o.identities[g][a]=t;
+        if(g<5 && a<EXPLORER_APPEARANCES) o.identities[g][a]=t;
     }
     uint16_t opaque[13]{}, sight[13]{};
     int left=int(game.player.x)-6, top=int(game.player.y)-6;

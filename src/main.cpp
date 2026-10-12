@@ -35,6 +35,7 @@ extern "C" int main()
             static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0)) {
             InputAction input = handle_input(buttons);
+            if(input == INPUT_USE_INVENTORY) use_inventory(ui.selection, ui.use_target);
             Position pickup_position{NONE, NONE};
             if(session.pending_pickups) {
                 pickup_position = game.player;
@@ -64,6 +65,11 @@ extern "C" int main()
                    input != INPUT_WAND_IMMEDIATE)
                     ui.mode = WAND_DIRECTION;
             }
+        }
+        if(session.object_detection) {
+            session.object_detection = false;
+            ui.mode = OBJECT_MAP;
+            ui.dirty = true;
         }
         if(session.ended) {
             save_finished_game();

@@ -6,6 +6,9 @@ pickup and return ascent. `omniscient-v2` remains the default balance oracle.
 The policy adds no firmware storage. The current engine awareness change,
 competence experiments and preserved historical reference are described in
 [the competence and rebalance report](EXPLORER_COMPETENCE_AND_REBALANCE.md).
+The new consumables extend this same `explorer-v1` policy in place; item tactics,
+observation protocol 5 and current paired validation are described in
+[the consumables report](CONSUMABLES.md).
 
 ## Observation boundary
 
@@ -27,6 +30,10 @@ It never scans full-map line of sight to choose a destination.
 The protocol supplies player position, health, base stats, known status
 flags, effective radius, equipment slots and displayed inventory details.
 Undisclosed effect timers are excluded.
+Haste, Levitation, Fire Resistance and See Invisible are active flags only.
+Restore Vitality receives a public drained-vitality flag. Detect Objects supplies
+a temporary set of ground-item positions, without item categories, identities,
+terrain, traps or mimics; the agent may remember positions after dismissal.
 Visible terrain and stairs are supplied; offscreen terrain remains unknown.
 Mapping/digging provide explicit terrain snapshots. Terrain known from a map
 is tracked separately from cells actually surveyed for entities. A mapped door's subsequent
@@ -51,7 +58,7 @@ rules. They supply position and public species definitions, without HP, live
 effects, stun, AI targets or aggression flags. Native status adapters also
 supply information actually printed to the player: an incoming attacker name,
 or confirmation that the agent's own attempted melee square made contact.
-An incoming attack supplies **no bearing**. Protocol version 3 retains the correction removing
+An incoming attack supplies **no bearing**. Protocol version 3 introduced the correction removing
 the historical native status leak: a creature printed as “something” supplies
 no species identity. Its own attempted melee square can still establish contact. Confused movement cannot establish
 an inferred contact square. Damage events and telemetry never feed this path.
@@ -69,13 +76,18 @@ It adds cautious route cost; it never supplies a live combat target.
 
 Production regenerates different layouts on ascent. Historical descent
 geometry remains recorded separately, but ascent routes require fresh observed
-terrain. The agent is about 526 KiB of host memory, with no firmware footprint.
+terrain. The agent is about 662 KiB of host memory, with no firmware footprint.
 
 Dijkstra routes traverse known passable cells only, with configurable costs
 for traps and remembered threats. Frontiers score nearby unknown area,
 distance, repeated visits and commitment to the current destination. A heap
 allocation is retained across decisions. Radius-zero movement is explicitly
 labelled as tactile probing rather than pretending an unknown route is known.
+Unsuccessful probes are retained until fresh terrain observations supersede
+them. Optional frontier/loot cycles have bounded attempts based on knowledge
+growth, and 16-bit visit counts preserve long-run history. Complete dark-floor
+return journeys can exceed 20,000 actions; current paired explorer validation
+uses the same 100,000-action guard in both arms.
 Loot seeking uses remembered item sprites and displayed pack value; inventory
 replacement protects equipped gear, the best melee weapon/bow and ammunition
 dependencies. Discovered descent stairs compete with observable frontier gain;
@@ -190,8 +202,8 @@ identity. Changing any preference changes policy identity. Same-policy gameplay
 interventions require matching hashes and parameters. Comparisons of distinct
 policies are descriptive, using identical seed sets with differing policy hashes.
 
-Core telemetry is version 7, appending `lord_killed` to runs. The additional
-`exploration.csv` has its own schema version (5) and records per-visit terrain/floor
+Core telemetry is version 9, including new consumable activity and expiration.
+The additional `exploration.csv` has its own schema version (6) and records per-visit terrain/floor
 coverage, actually surveyed floor cells, exploration turns, travel, repeated visits, frontier changes, failed
 routes, stale items, unseen damage, observed items, discovery-distance bins,
 stair discovery/reach times and displacement. Version 5 appends invisible-contact

@@ -121,14 +121,14 @@ bool artifacts_enabled() {
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
-        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE",
+        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE","EXTRA_HEALING","RESTORE_VITALITY","HASTE","LEVITATION","FIRE_RESISTANCE","FIRE",
         "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","STORMBRINGER","GLASS_SWORD","HAMMER_OF_RUIN","CHAIN_MAIL","LEATHER_ARMOR",
         "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","CANDLE","TORCH","LANTERN","GLOWING_ORB","BUCKLER","ROUND_SHIELD","TOWER_SHIELD","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
         "RING_SUSTENANCE","RING_INVISIBILITY","RING_REPRISAL","RING_HUNT","RING_ILLUMINATION","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
         "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT","AMULET_BRILLIANCE",
         "SCROLL_IDENTIFY","SCROLL_ENCHANT","SCROLL_REMOVE_CURSE","SCROLL_TELEPORT","SCROLL_MAPPING",
-        "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","WAND_FORCE",
+        "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","SCROLL_HOLD_MONSTER","SCROLL_DETECT_TRAPS","SCROLL_SUMMONING","SCROLL_MASS_TELEPORT","SCROLL_FIRE","SCROLL_DETECT_OBJECTS","WAND_FORCE",
         "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH"};
     static_assert(sizeof(names)/sizeof(*names) == rogue::WAND_POLYMORPH+1, "item names changed");
     return type <= rogue::WAND_POLYMORPH ? names[type] : "INVALID";
@@ -155,7 +155,7 @@ void Collector::prepare_action(const Action& a) {
     essential_action=a.goal=="essential progression through known summoning hazard";
     record_route(a);
     healing_action=a.kind==ActionKind::Use && a.slot<rogue::INVENTORY &&
-        (rogue::game.inventory[a.slot].type==rogue::POTION_HEALING || rogue::game.inventory[a.slot].type==rogue::POTION_EXPERIENCE);
+        (rogue::game.inventory[a.slot].type==rogue::POTION_HEALING || rogue::game.inventory[a.slot].type==rogue::POTION_EXTRA_HEALING || rogue::game.inventory[a.slot].type==rogue::POTION_EXPERIENCE);
     if(!data.floors.empty()) {
         auto& e=data.floors.back().exploration;
         e.last_one=decision_risk.one; e.last_two=decision_risk.two; e.safe_retreat=decision_risk.retreat;
@@ -279,7 +279,7 @@ void Collector::enter_floor() {
     if(g.armor_slot<rogue::INVENTORY) f.entry_armor_type=g.inventory[g.armor_slot].type;
     for(auto i:g.inventory) {
         if(i.type==rogue::FOOD) f.entry_food_units+=rogue::item_value(i);
-        if(i.type==rogue::POTION_HEALING) f.entry_healing_units+=rogue::item_value(i);
+        if((i.type==rogue::POTION_HEALING || i.type==rogue::POTION_EXTRA_HEALING)) f.entry_healing_units+=rogue::item_value(i);
         if(i.type==rogue::POTION_CONFUSION || i.type==rogue::POTION_PARALYSIS || i.type==rogue::POTION_SLOWING ||
            i.type==rogue::POTION_STRENGTH || i.type==rogue::POTION_INVISIBILITY || i.type==rogue::SCROLL_FEAR ||
            i.type==rogue::SCROLL_TELEPORT || i.type==rogue::SCROLL_MASS_CONFUSE)
@@ -361,7 +361,7 @@ void Collector::close_floor(bool exited) {
     e.remaining_food=e.remaining_healing=e.remaining_escape=e.remaining_control=e.unknown_potions=0;
     for(auto i:rogue::game.inventory) {
         if(i.type==rogue::FOOD) e.remaining_food+=units(i);
-        if(i.type==rogue::POTION_HEALING && rogue::item_type_identified(i.type)) e.remaining_healing+=units(i);
+        if((i.type==rogue::POTION_HEALING || i.type==rogue::POTION_EXTRA_HEALING) && rogue::item_type_identified(i.type)) e.remaining_healing+=units(i);
         if((i.type==rogue::SCROLL_TELEPORT || i.type==rogue::POTION_INVISIBILITY) && rogue::item_type_identified(i.type)) e.remaining_escape+=units(i);
         if((i.type==rogue::SCROLL_FEAR || i.type==rogue::POTION_PARALYSIS || i.type==rogue::POTION_CONFUSION || i.type==rogue::POTION_BLINDNESS) && rogue::item_type_identified(i.type)) e.remaining_control+=units(i);
         if(rogue::is_potion(i.type) && !rogue::item_type_identified(i.type)) e.unknown_potions+=units(i);
@@ -446,7 +446,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(invisible_engagement) {
             if(k==EventKind::Turn) ++invisible_duration;
             if(k==EventKind::PlayerDamage) { e.damage+=amount; invisible_damage+=amount; }
-            if(k==EventKind::Consumed && (type==rogue::POTION_HEALING || type==rogue::POTION_EXPERIENCE)) e.healing+=amount;
+            if(k==EventKind::Consumed && (type==rogue::POTION_HEALING || type==rogue::POTION_EXTRA_HEALING || type==rogue::POTION_EXPERIENCE)) e.healing+=amount;
             if(k==EventKind::MonsterKilled && index<rogue::MONSTERS && initially_unseen[index]) {
                 ++e.kills; ++invisible_kills; initially_unseen[index]=false;
             }
@@ -456,7 +456,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(k==EventKind::Finished && type==rogue::DEATH && data.death_cause=="starvation" && contact_streak>1) ++e.stationary_starvation;
         }
         if(k==EventKind::Finished && type==rogue::DEATH && data.death_cause=="PHANTOM") ++e.phantom_deaths;
-        if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn)
+        if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn || k==EventKind::MonsterSummoned)
             if(index<rogue::MONSTERS) initially_unseen[index]=false;
     }
     if(k==EventKind::MonsterKilled && type==rogue::LORD) data.lord_killed=true;
@@ -472,7 +472,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
         if(k==EventKind::MonsterAttack && e.first_contact<0)
             e.first_contact=int64_t(data.turns-exploration_entry_turn);
-        if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn) aware[index]=false;
+        if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn || k==EventKind::MonsterSummoned) aware[index]=false;
     }
     if(trace) trace_event(*trace,k,index,type,amount);
     if(k == EventKind::FloorEntered) { enter_floor(); return; }
@@ -490,9 +490,13 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(rogue::is_light(rogue::game.inventory[offhand].type)) ++data.offhand_light_turns;
         }
         ++data.turns;
-        if(enabled && rogue::game.see_invisible) {
-            ++data.items[rogue::POTION_SEE_INVISIBLE].active_turns;
-            if(!data.floors.empty()) ++data.floors.back().items[rogue::POTION_SEE_INVISIBLE].active_turns;
+        if(enabled) for(uint8_t type : {uint8_t(rogue::POTION_SEE_INVISIBLE),uint8_t(rogue::POTION_HASTE),uint8_t(rogue::POTION_LEVITATION),uint8_t(rogue::POTION_FIRE_RESISTANCE)}) {
+            bool active=type==rogue::POTION_SEE_INVISIBLE ? rogue::game.see_invisible!=0 :
+                type==rogue::POTION_HASTE ? rogue::game.haste!=0 :
+                type==rogue::POTION_LEVITATION ? rogue::game.levitation!=0 : rogue::game.fire_resistance!=0;
+            if(!active) continue;
+            ++data.items[type].active_turns;
+            if(!data.floors.empty()) ++data.floors.back().items[type].active_turns;
         }
         if(enabled) {
             uint8_t weapon = rogue::game.weapon_slot < rogue::INVENTORY ?
@@ -561,6 +565,8 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::SeeInvisibleExpired:
         ++data.items[rogue::POTION_SEE_INVISIBLE].expired;
         if(f) ++f->items[rogue::POTION_SEE_INVISIBLE].expired; break;
+    case EventKind::PlayerEffectExpired:
+        ++data.items[type].expired; if(f) ++f->items[type].expired; break;
     case EventKind::MonsterTrapActivated: feature_metric(type, &FeatureMetrics::monster_activated, 1); break;
     case EventKind::MonsterTrapTeleport: feature_metric(type, &FeatureMetrics::monster_teleported, amount); break;
     case EventKind::MonsterTrapStatus: feature_metric(type, &FeatureMetrics::monster_status, amount); break;
@@ -577,6 +583,10 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::FeatureDisplacement: feature_metric(type,&FeatureMetrics::displacement,amount); break;
     case EventKind::FeatureDeclined: feature_metric(type, &FeatureMetrics::declined, 1); break;
     case EventKind::HolyDamage: feature_metric(type, &FeatureMetrics::holy_damage, amount); break;
+    case EventKind::MonsterSummoned:
+        ++data.monsters[type].generated;
+        if(index < rogue::MONSTERS) encountered[index] = engaged[index] = visibly_observed[index] = aware[index] = false;
+        break;
     case EventKind::FeatureSpawn:
         feature_metric(cause_type, cause == Cause::MonsterTrap ? &FeatureMetrics::monster_spawned : &FeatureMetrics::spawned, 1);
         ++data.monsters[type].generated;

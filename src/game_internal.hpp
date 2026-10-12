@@ -56,7 +56,12 @@ int8_t player_armor_enchant();
 void player_take_magic_damage(uint8_t damage, uint8_t power);
 void player_take_fire_damage(uint8_t damage, uint8_t power);
 void fire_burst_damage(Position center, bool player_attack,
-                       uint8_t radius = 1);
+                       uint8_t radius = 1, uint8_t minimum = 8,
+                       uint8_t spread = 8);
+uint8_t extra_healing_amount(uint8_t maximum);
+void apply_scroll_effect(uint8_t type, uint8_t target_slot = NONE);
+bool summon_monster(uint8_t slot, Position pos, bool no_rewards, bool undead = false);
+bool summon_adjacent_monster();
 void animate_arrow(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_fire_burst(Position center);

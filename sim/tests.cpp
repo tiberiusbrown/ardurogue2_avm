@@ -59,9 +59,9 @@ void balance_controls() {
         arena(); auto exp=std::make_shared<RuleExperiment>();
         exp->rules={parse_rule("balance:sight-duration="+std::to_string(duration))};
         Collector c; c.experiment=exp; CollectScope scope(c); game.inventory[0]={POTION_SEE_INVISIBLE,2};
-        check(use_inventory(0) && game.see_invisible==duration-1,"duration control was not honored");
-        game.see_invisible=2; check(use_inventory(0) && game.see_invisible==duration-1,"controlled dose did not refresh");
-        for(unsigned n=1;n<duration;++n) end_turn();
+        check(use_inventory(0) && game.see_invisible>=duration-1 && game.see_invisible<=duration+9,"duration control was not honored");
+        game.see_invisible=2; check(use_inventory(0) && game.see_invisible>=duration-1 && game.see_invisible<=duration+9,"controlled dose did not refresh");
+        unsigned remaining=game.see_invisible; for(unsigned n=0;n<remaining;++n) end_turn();
         check(!game.see_invisible && c.data.items[POTION_SEE_INVISIBLE].expired==1,"controlled duration expiry telemetry");
     }
 }
@@ -210,6 +210,67 @@ void wand_identity() {
     game.inventory[0]={}; game.ground[0]={game.player,{WAND_TELEPORT,1}};
     c.enter_floor(); perform(take); perform(activate);
     check(t.wands_picked_up==2 && t.wands_activated==2,"slot reuse conflated a fresh wand");
+}
+void consumable_policy_and_telemetry() {
+    auto chosen = [] { OmniscientAgent agent; return agent.choose_action({game,0,0}); };
+    for(uint8_t type : {uint8_t(POTION_EXTRA_HEALING), uint8_t(POTION_RESTORE_VITALITY)}) {
+        arena(); game.inventory[0]={type,1}; game.hp=10;
+        if(type==POTION_RESTORE_VITALITY) game.vamp_drain=20;
+        Game before=game; auto action=chosen();
+        check(action.kind==ActionKind::Use && action.slot==0 &&
+              !std::memcmp(&before,&game,sizeof game),"oracle did not value restorative potion or mutated gameplay");
+    }
+    for(uint8_t type : {uint8_t(POTION_HASTE), uint8_t(POTION_FIRE_RESISTANCE)}) {
+        arena(); game.inventory[0]={type,1};
+        game.monsters[0]={{5,4},DRAGON,48,0,{0,0},MON_AGGRO};
+        auto action=chosen();
+        check(action.kind==ActionKind::Use && action.slot==0,"oracle did not prepare temporary combat protection");
+    }
+    arena(); game.inventory[0]={POTION_LEVITATION,1};
+    game.features[0]={{5,4},FEATURE_SPIKE_TRAP};
+    auto action=chosen();
+    check(action.kind==ActionKind::Use && action.slot==0,"oracle did not levitate over known trap");
+    for(uint8_t type : {uint8_t(SCROLL_HOLD_MONSTER), uint8_t(SCROLL_MASS_TELEPORT)}) {
+        arena(); game.hp=1; game.inventory[0]={type,1};
+        game.monsters[0]={{5,4},ORC,20,0,{0,0},MON_AGGRO};
+        action=chosen(); check(action.kind==ActionKind::Use && action.slot==0,"oracle did not use visible emergency control");
+    }
+    for(uint8_t type : {uint8_t(POTION_FIRE), uint8_t(SCROLL_FIRE), uint8_t(SCROLL_SUMMONING)}) {
+        arena(); game.inventory[0]={type,1}; action=chosen();
+        check(action.kind!=ActionKind::Use || action.slot!=0,"oracle deliberately used harmful consumable without justification");
+    }
+    arena(); game.inventory[0]={POTION_FIRE,1};
+    game.inventory[1]={GLOWING_ORB,0}; game.offhand_slot=1;
+    game.monsters[0]={{7,4},ORC,20,0,{0,0},MON_AGGRO};
+    action=chosen(); check(action.kind==ActionKind::Throw && action.slot==0,"oracle did not throw offensive fire potion");
+    for(uint8_t type : {uint8_t(SCROLL_FIRE), uint8_t(POTION_FIRE)}) {
+        arena(); game.hp=1; game.inventory[0]={type,1};
+        Collector c; CollectScope sink(c); c.enter_floor();
+        check(use_inventory(0) && session.ended &&
+              c.data.death_cause==std::string("item:")+item_name(type) &&
+              c.data.items[type].used==1 && c.data.items[type].consumed==1 &&
+              c.data.floors[0].damage_taken==1,"self fire lost item attribution/actual damage/consumption");
+    }
+    arena(); game.inventory[0]={POTION_FIRE,1};
+    game.monsters[0]={{6,4},SNAKE,1,15,{0,0},MON_AGGRO};
+    game.monsters[1]={{6,5},BAT,1,15,{0,0},MON_AGGRO};
+    Collector c; CollectScope sink(c); c.enter_floor();
+    check(throw_potion(0,1,0) && c.data.items[POTION_FIRE].thrown==1 &&
+          c.data.items[POTION_FIRE].consumed==1 && c.data.monsters[SNAKE].killed==1 &&
+          c.data.monsters[BAT].killed==1 && c.data.floors[0].damage_dealt==2 &&
+          game.score>0 && game.xp>0,"thrown fire lost splash kills, XP or actual damage telemetry");
+    arena(); c=Collector{}; c.enter_floor(); game.inventory[0]={SCROLL_SUMMONING,1};
+    check(use_inventory(0),"summon telemetry fixture rejected");
+    uint8_t type=game.monsters[0].type; unsigned score=game.score, xp=game.xp;
+    c.observe(); damage_monster(0,255,true);
+    check(c.data.monsters[type].generated==1 && c.data.monsters[type].killed==1 &&
+          game.score==score && game.xp==xp,"scroll summon identity/reward telemetry");
+    arena(); c=Collector{}; c.enter_floor();
+    game.haste=game.levitation=game.fire_resistance=2;
+    for(unsigned i=0;i<4;++i) end_turn();
+    for(uint8_t buff : {uint8_t(POTION_HASTE), uint8_t(POTION_LEVITATION), uint8_t(POTION_FIRE_RESISTANCE)})
+        check(c.data.items[buff].expired==1 && c.data.items[buff].active_turns>0,
+              "temporary status activity/expiration telemetry");
 }
 class InvalidAgent final:public Agent {
 public:
@@ -438,8 +499,8 @@ void experiments() {
 }
 int main() {
     try {
-        static_assert(offsetof(Game,see_invisible)==812 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==28,"native saved layout changed");
-        monster_trap_slot_reuse(); monster_trap_forced_holy_reuse(); monster_trap_telemetry(); check_v2_policy(); balance_controls(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
+        static_assert(offsetof(Game,see_invisible)==813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==29,"native saved layout changed");
+        monster_trap_slot_reuse(); monster_trap_forced_holy_reuse(); monster_trap_telemetry(); check_v2_policy(); balance_controls(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); consumable_policy_and_telemetry(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

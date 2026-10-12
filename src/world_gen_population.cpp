@@ -108,10 +108,36 @@ static uint8_t floor_potion_type(uint16_t& seed)
     if(game.floor >= 2 && game.floor <= 4)
         sight_percent = BALANCE_VALUE("sight-early-percent", SEE_INVISIBLE_EARLY_PERCENT);
     if(sight_roll < sight_percent) return POTION_SEE_INVISIBLE;
+    // A slot-local availability draw leaves ordinary generation streams intact.
+    // Existing types retain their original relative selection and early redirects.
+    uint16_t extra_seed = static_cast<uint16_t>(seed ^ 0x791bu);
+    if(floor_roll(extra_seed, 100) < BALANCE_VALUE("new-consumables-percent", 25)) {
+        static const uint8_t PROGMEM additions[] = {
+            POTION_EXTRA_HEALING, POTION_EXTRA_HEALING, POTION_RESTORE_VITALITY,
+            POTION_HASTE, POTION_LEVITATION, POTION_FIRE_RESISTANCE, POTION_FIRE
+        };
+        uint8_t type = additions[floor_roll(extra_seed, sizeof additions)];
+        if(type == POTION_RESTORE_VITALITY && game.floor < 5) return POTION_EXTRA_HEALING;
+        if(type == POTION_FIRE && game.floor > 0 && game.floor < 5) return POTION_HEALING;
+        return type;
+    }
     if(game.floor > 0 && game.floor < 5 && (chance == 11 + POTION_HARMING - POTION_FIRST || chance == 11 + POTION_POISON - POTION_FIRST)) return POTION_HEALING;
     if(chance == 11 + POTION_EXPERIENCE - POTION_FIRST)
         return game.floor == 0 || (game.floor >= 5 && game.floor < 10) ? POTION_SLOWING : POTION_HEALING;
     return static_cast<uint8_t>(POTION_FIRST + chance % 11);
+}
+
+static uint8_t floor_scroll_type(uint16_t& seed)
+{
+    uint8_t original = floor_roll(seed, 9);
+    uint16_t extra_seed = static_cast<uint16_t>(seed ^ 0x39adu);
+    if(floor_roll(extra_seed, 100) >= BALANCE_VALUE("new-consumables-percent", 25))
+        return static_cast<uint8_t>(SCROLL_FIRST + original);
+    static const uint8_t PROGMEM additions[] = {
+        SCROLL_HOLD_MONSTER, SCROLL_HOLD_MONSTER, SCROLL_DETECT_TRAPS, SCROLL_DETECT_TRAPS,
+        SCROLL_SUMMONING, SCROLL_MASS_TELEPORT, SCROLL_FIRE, SCROLL_DETECT_OBJECTS, SCROLL_DETECT_OBJECTS
+    };
+    return additions[floor_roll(extra_seed, sizeof additions)];
 }
 
 constexpr uint8_t NORMAL_WAND_WEIGHT = 60;
@@ -220,7 +246,7 @@ Item useful_item(uint16_t& seed)
     case 0: return {FOOD, 1};
     case 1: return {floor_potion_type(seed), 1};
     case 2: return make_equipment(floor_weapon_type(seed), 0);
-    default: return {static_cast<uint8_t>(SCROLL_FIRST + floor_roll(seed, SCROLL_COUNT)), 1};
+    default: return {floor_scroll_type(seed), 1};
     }
 }
 
@@ -312,8 +338,7 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
         uint8_t chance = floor_roll(seed, 87);
         uint8_t type = chance < FOOD_WEIGHT ? FOOD : chance < 20 ? ARROWS : chance < 40
             ? floor_potion_type(seed) :
-              chance < 48 ? static_cast<uint8_t>(SCROLL_FIRST +
-                                                floor_roll(seed, SCROLL_COUNT)) :
+              chance < 48 ? floor_scroll_type(seed) :
               chance < 56 ? floor_weapon_type(equipment_seed) :
               chance < 64 ? floor_armor_type(equipment_seed) :
               chance < 68 ? static_cast<uint8_t>(WAND_FIRST +

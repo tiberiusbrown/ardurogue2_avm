@@ -38,7 +38,8 @@ Rule parse_rule(const std::string& text) {
         Rule r; r.balance_parameter=text.substr(8,equal-8); int value=integer(text.substr(equal+1));
         int min=0,max=100;
         auto& n=r.balance_parameter;
-        if(n=="ground") { min=16; max=24; }
+        if(n=="new-consumables-percent") max=100;
+        else if(n=="ground") { min=16; max=24; }
         else if(n=="inventory") { min=16; max=20; }
         else if(n=="monsters" || n=="phantom-count") { min=1; max=12; }
         else if(n=="sight-duration") { min=1; max=254; }

@@ -85,7 +85,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  offsetof(Game, see_invisible) == 812 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
+                  offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -173,8 +173,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x6a4036a3u, 0x091ec48cu}, {0xd1d0a1a2u, 0xc3c40c3bu},
-        {0x400519a8u, 0x5fe53bf0u}, {0x0655fcf3u, 0x41e15138u}
+        {0x38c26cafu, 0x091ec48cu}, {0xa0d1c903u, 0xc3c40c3bu},
+        {0x2715b297u, 0x5fe53bf0u}, {0x073aeba8u, 0x41e15138u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -1452,7 +1452,7 @@ void check_effect_messages()
     player_effect(POTION_PARALYSIS, &Game::paralyzed,
                   "You are paralyzed!", "You can move again.");
     player_effect(POTION_SLOWING, &Game::slowed,
-                  "You feel sluggish.", "You move normally again.");
+                  "You feel sluggish.", "You are no longer slowed.");
     player_effect(POTION_INVISIBILITY, &Game::invisible,
                   "You turn invisible.", "You become visible again.");
 
@@ -2659,6 +2659,7 @@ bool generation_command(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
+    if(argc==2 && std::string(argv[1])=="--consumables") { extern void check_new_consumables(); check_new_consumables(); return 0; }
     if(argc==2 && std::string(argv[1])=="--recovery") { extern void check_recovery(); check_recovery(); return 0; }
     if(argc==2 && std::string(argv[1])=="--sight") { extern void check_temporary_sight(); check_temporary_sight(); return 0; }
     if(argc == 2 && std::strcmp(argv[1], "--map-features") == 0) {
@@ -2684,6 +2685,7 @@ int main(int argc, char** argv)
     check_lighting_offhand();
     extern void check_temporary_sight(); check_temporary_sight();
     extern void check_recovery(); check_recovery();
+    extern void check_new_consumables(); check_new_consumables();
     check_benchmark_scenarios();
     check_combat_rules();
     check_weapon_and_equipment_rules();

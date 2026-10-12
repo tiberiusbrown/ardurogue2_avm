@@ -181,11 +181,13 @@ void status_entity(const Monster& monster, char punctuation = 0)
 static const char PROGMEM* const PROGMEM potion_effect_names[] = {
     F("healing"), F("confusion"), F("poison"), F("harming"),
     F("strength"), F("dexterity"), F("paralysis"), F("slowing"),
-    F("experience"), F("invisibility"), F("blindness"), F("see invisible")
+    F("experience"), F("invisibility"), F("blindness"), F("see invisible"),
+    F("extra healing"), F("restore vitality"), F("haste"), F("levitation"), F("fire resistance"), F("fire")
 };
 static const char PROGMEM* const PROGMEM potion_color_names[] = {
     F("red"), F("clear"), F("orange"), F("green"), F("blue"),
-    F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown"), F("silver")
+    F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown"), F("silver"),
+    F("amber"), F("cyan"), F("golden"), F("crimson"), F("indigo"), F("turquoise")
 };
 static const char PROGMEM* const PROGMEM ring_names[] = {
     F("see invisible"), F("strength"), F("dexterity"), F("protection"),
@@ -200,12 +202,13 @@ static const char PROGMEM* const PROGMEM amulet_names[] = {
 static const char PROGMEM* const PROGMEM scroll_names[] = {
     F("identify"), F("enchanting"), F("remove curse"),
     F("teleportation"), F("magic mapping"), F("fear"),
-    F("torment"), F("mass confusion"), F("mass poison")
+    F("torment"), F("mass confusion"), F("mass poison"), F("hold monster"),
+    F("detect traps"), F("summoning"), F("mass teleportation"), F("fire"), F("detect objects")
 };
 static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
     F("faded"), F("yellowed"), F("tattered"), F("glowing"),
     F("shimmering"), F("humming"), F("dark"), F("bright"),
-    F("brilliant")
+    F("brilliant"), F("smoky"), F("crisp"), F("creased"), F("speckled"), F("silky"), F("rune-covered")
 };
 static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
     F("diamond"), F("ruby"), F("emerald"), F("topaz"),

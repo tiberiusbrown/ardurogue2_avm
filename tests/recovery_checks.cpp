@@ -29,8 +29,8 @@ void check_recovery() {
             "natural healing cadence or clock wrap");
         require(game.random_state == rng, "natural healing advanced random state");
     }
-    require(feature_status_text().find("recover a little health") != std::string::npos,
-        "natural healing feedback");
+    require(feature_status_text().empty(),
+        "natural recovery should remain quiet");
     arena(); game.hp = game.max_hp; game.turns = 127; end_turn();
     require(game.hp == game.max_hp && feature_status_text().empty(), "full HP banked recovery");
     game.hp -= 2; end_turn(); require(game.hp == 98, "full HP recovery tick was banked");

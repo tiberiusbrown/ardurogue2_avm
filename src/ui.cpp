@@ -237,7 +237,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         }
         return INPUT_NONE;
     }
-    if(ui.mode == FULL_MAP) {
+    if(ui.mode == FULL_MAP || ui.mode == OBJECT_MAP) {
         if(edges & (AVM_BUTTON_A | AVM_BUTTON_B)) {
             ui.mode = PLAY;
             status_clear();
@@ -314,7 +314,11 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                         // Pagination restores the background if needed; the
                         // main loop otherwise draws only the completed turn.
                         defer_play_render();
-                        use_inventory(slot, target);
+                        if((type == SCROLL_IDENTIFY || type == SCROLL_ENCHANT ||
+                            type == SCROLL_REMOVE_CURSE) && target == NONE) break;
+                        ui.selection = slot;
+                        ui.use_target = target;
+                        pending = INPUT_USE_INVENTORY;
                     }
                 } else status_clear();
                 break;

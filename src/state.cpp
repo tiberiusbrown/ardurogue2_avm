@@ -145,6 +145,12 @@ void heal_player(uint8_t amount)
     game.hp = hp > maximum ? maximum : static_cast<uint8_t>(hp);
 }
 
+uint8_t extra_healing_amount(uint8_t maximum)
+{
+    uint8_t minimum = static_cast<uint8_t>((static_cast<uint16_t>(maximum) * 3 + 3) / 4);
+    return static_cast<uint8_t>(minimum + roll(maximum - minimum + 1));
+}
+
 uint8_t roll(uint8_t limit)
 {
     return static_cast<uint8_t>(next_random(game.random_state) % limit);

@@ -219,7 +219,7 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=8;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=9;
 inline constexpr size_t CSV_STREAM_COUNT=11;
 inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=2;
 void write_encounters_header(std::ostream&);

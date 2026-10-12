@@ -7,7 +7,8 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 4;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 5;
+inline constexpr int EXPLORER_APPEARANCES = 18;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
     uint8_t x=255, y=255;
@@ -34,6 +35,9 @@ struct ExplorerObservation {
     uint8_t floor=0, hp=0, max_hp=0, level=0, xp=0, strength=0, dexterity=0, speed=0, hunger=0;
     uint8_t weakened=0, confused=0, paralyzed=0, slowed=0, invisible=0, blindness=0; // Known flags, not hidden timers.
     uint8_t radius=0, inventory_capacity=20;
+    bool vitality_drained=false;
+    bool haste=false, levitation=false, fire_resistance=false;
+    std::bitset<EXPLORER_CELLS> detected_objects; // Positions only, one public map snapshot.
     bool see_invisible=false; // Public start/expiration feedback, never a remaining timer.
     bool yendor=false, pending_pickups=false;
     uint64_t actions=0, turns=0;
@@ -45,7 +49,7 @@ struct ExplorerObservation {
     std::array<SeenGround,36> ground{}; // Includes indistinguishable mimic sprites.
     std::array<SeenMonster,12> monsters{};
     uint8_t ground_count=0, monster_count=0;
-    std::array<std::array<uint8_t,16>,6> identities{}; // Only identified appearance mappings.
+    std::array<std::array<uint8_t,EXPLORER_APPEARANCES>,6> identities{}; // Only identified appearance mappings.
     bool attacked=false, last_rejected=false; // Public feedback, never raw attacker coordinates.
     bool incoming_attack=false;
     uint8_t hp_loss=0; // Difference between consecutive displayed HP values, not damage telemetry.
@@ -76,7 +80,8 @@ struct ExplorerStats {
 struct SeenFeatureChoice { bool accept=false; uint8_t slot=255; };
 struct RememberedTile {
     Terrain terrain=Terrain::Unknown, historical=Terrain::Unknown;
-    uint8_t feature=0, visits=0, failures=0;
+    uint8_t feature=0, failures=0;
+    uint16_t visits=0; // Host history must not saturate during a long blind patrol.
     SeenItem item;
     bool has_item=false,surveyed=false;
     uint8_t hazard_entries=0, hazard_loss=0, survey_attempts=0;
@@ -111,7 +116,7 @@ SurvivalRisk estimate_risk(const ExplorerObservation&,const ExplorerFloor&,const
 int expected_information(const ExplorerFloor&,SeenPosition,int radius,bool obstruction=true);
 class ExplorerAgent final {
     std::array<ExplorerFloor,16> floors{};
-    std::array<std::array<uint8_t,16>,6> identities{};
+    std::array<std::array<uint8_t,EXPLORER_APPEARANCES>,6> identities{};
     uint8_t active_floor=255;
     uint64_t last_actions=UINT64_MAX, last_turns=UINT64_MAX, last_experiment=0,last_mass_scroll=0;
     SeenPosition last_position, frontier, last_retreat;
@@ -134,7 +139,7 @@ class ExplorerAgent final {
     SeenPosition objective, deferred_objective, prior_position, recent_hazard;
     std::array<SeenPosition,8> recent_positions{};
     uint64_t deferred_until=0, hazard_until=0;
-    unsigned navigation_moves=0, objective_failures=0;
+    unsigned navigation_moves=0, objective_failures=0, frontier_stale=0;
     void remember_contact(const ExplorerObservation&);
     std::array<int32_t,EXPLORER_CELLS> costs{};
     std::array<int16_t,EXPLORER_CELLS> steps{};

@@ -367,7 +367,7 @@ __attribute__((noinline)) static bool legal_teleport_position(Position pos,
 
 bool teleport_player();
 
-static void scroll_effect(uint8_t type, uint8_t target_slot)
+__attribute__((noinline)) void apply_scroll_effect(uint8_t type, uint8_t target_slot)
 {
     if(type == SCROLL_IDENTIFY || type == SCROLL_ENCHANT ||
        type == SCROLL_REMOVE_CURSE) {
@@ -422,15 +422,61 @@ static void scroll_effect(uint8_t type, uint8_t target_slot)
         status(F("You become aware of your surroundings."));
         return;
     }
+    if(type == SCROLL_DETECT_OBJECTS) {
+        status(F("Ground objects shine on your map."));
+        session.object_detection = true;
+        return;
+    }
+    if(type == SCROLL_FIRE) {
+        animate_fire_burst(game.player);
+        fire_burst_damage(game.player, true);
+        return;
+    }
+    if(type == SCROLL_SUMMONING) {
+        status(summon_adjacent_monster() ? F("A hostile creature answers the call!") :
+            F("No creature answers the call."));
+        return;
+    }
+    if(type == SCROLL_DETECT_TRAPS) {
+        bool found = false;
+        for(uint8_t i = 0; i < MAP_FEATURES; ++i) {
+            const MapFeature& f = game.features[i];
+            if(!feature_is_trap(f.id) || !feature_is_hidden(f.id)) continue;
+            reveal_feature(i);
+            explore(f.pos);
+            found = true;
+        }
+        status(found ? F("Hidden traps appear on your map.") : F("No hidden traps remain."));
+        return;
+    }
+    if(type == SCROLL_MASS_TELEPORT) {
+        uint16_t eligible = 0;
+        for(uint8_t i = 0; i < MONSTERS; ++i)
+            if(game.monsters[i].type && player_can_see_monster(i) && can_see(game.monsters[i].pos))
+                eligible |= static_cast<uint16_t>(1u << i);
+        if(!eligible) status(F("Nothing happens."));
+        for(uint8_t i = 0; i < MONSTERS; ++i) if(eligible & (1u << i)) {
+            SIM_EVENT(sim::EventKind::PlayerAttack, i, game.monsters[i].type);
+            teleport_monster(i);
+        }
+        return;
+    }
     bool found = false;
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         Monster& target = game.monsters[i];
         if(!target.type || !player_can_see_monster(i) ||
            !can_see(target.pos)) continue;
+        if(type == SCROLL_HOLD_MONSTER && !square_contains(game.player, target.pos, 3)) continue;
         found = true;
         target.state |= MON_AGGRO;
         SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
         switch(type) {
+        case SCROLL_HOLD_MONSTER: {
+            uint8_t duration = static_cast<uint8_t>(3 + roll(3));
+            if(target.stun < duration) target.stun = duration;
+            monster_status(target, F("is held still!"));
+            break;
+        }
         case SCROLL_FEAR:
             target.state |= MON_AFRAID;
             monster_status(target, F("flees!"));
@@ -493,8 +539,7 @@ bool teleport_player()
 }
 
 // Release item-effect temporaries before running enemy turns and animations.
-__attribute__((noinline)) static bool apply_inventory(
-    uint8_t slot, uint8_t target_slot)
+__attribute__((noinline)) static bool apply_inventory(uint8_t slot)
 {
     if(slot >= INVENTORY || game.paralyzed)
         return false;
@@ -535,7 +580,9 @@ __attribute__((noinline)) static bool apply_inventory(
     switch(item.type) {
     case SCROLL_IDENTIFY: case SCROLL_ENCHANT: case SCROLL_REMOVE_CURSE:
     case SCROLL_TELEPORT: case SCROLL_MAPPING: case SCROLL_FEAR:
-    case SCROLL_TORMENT: case SCROLL_MASS_CONFUSE: case SCROLL_MASS_POISON: {
+    case SCROLL_TORMENT: case SCROLL_MASS_CONFUSE: case SCROLL_MASS_POISON:
+    case SCROLL_HOLD_MONSTER: case SCROLL_DETECT_TRAPS: case SCROLL_SUMMONING:
+    case SCROLL_MASS_TELEPORT: case SCROLL_FIRE: case SCROLL_DETECT_OBJECTS: {
         uint8_t type = item.type;
         bool known = item_type_identified(type);
         status(F("You read"));
@@ -549,7 +596,7 @@ __attribute__((noinline)) static bool apply_inventory(
         SIM_EVENT(sim::EventKind::Consumed, NONE, type);
         if(count > 1) set_item_value(item, count - 1);
         else item.type = NO_ITEM;
-        scroll_effect(type, target_slot);
+        // Resolve after this consumption/status frame has unwound.
         break;
     }
     case FOOD:
@@ -563,7 +610,8 @@ __attribute__((noinline)) static bool apply_inventory(
     case POTION_HEALING: case POTION_CONFUSION: case POTION_POISON: case POTION_HARMING:
     case POTION_STRENGTH: case POTION_DEXTERITY: case POTION_PARALYSIS: case POTION_SLOWING:
     case POTION_EXPERIENCE: case POTION_INVISIBILITY: case POTION_BLINDNESS:
-    case POTION_SEE_INVISIBLE: {
+    case POTION_SEE_INVISIBLE: case POTION_EXTRA_HEALING: case POTION_RESTORE_VITALITY:
+    case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: case POTION_FIRE: {
         uint8_t type = item.type;
         bool known = potion_identified(type);
         status(F("You drink"));
@@ -577,6 +625,27 @@ __attribute__((noinline)) static bool apply_inventory(
             status(Item{type, 1}, '.');
         }
         switch(type) {
+        case POTION_EXTRA_HEALING:
+            heal_player(extra_healing_amount(player_max_hp()));
+            game.confused = game.slowed = 0;
+            status(F("You feel restored and clearheaded."));
+            break;
+        case POTION_RESTORE_VITALITY:
+            game.vamp_drain = game.weakened = 0;
+            status(F("Your vitality returns."));
+            break;
+        case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: {
+            uint8_t& timer = type == POTION_HASTE ? game.haste :
+                type == POTION_LEVITATION ? game.levitation : game.fire_resistance;
+            uint8_t duration = static_cast<uint8_t>((type == POTION_FIRE_RESISTANCE ? 20 : 15) + roll(11));
+            if(timer < duration) timer = duration;
+            status(type == POTION_HASTE ? F("You move with haste.") :
+                type == POTION_LEVITATION ? F("You float above the floor.") : F("You resist the flames."));
+            break;
+        }
+        case POTION_FIRE:
+            player_take_fire_damage(static_cast<uint8_t>(3 + roll(4)), 6);
+            break;
         case POTION_HEALING: {
             uint8_t maximum = player_max_hp();
             uint8_t minimum = BALANCE_VALUE("healing-min-quarters", HEALING_MIN_QUARTERS);
@@ -606,10 +675,13 @@ __attribute__((noinline)) static bool apply_inventory(
         case POTION_EXPERIENCE:
             gain_xp(50);
             break;
-        case POTION_SEE_INVISIBLE:
-            game.see_invisible = BALANCE_VALUE("sight-duration", SEE_INVISIBLE_DURATION);
+        case POTION_SEE_INVISIBLE: {
+            uint16_t rolled = static_cast<uint16_t>(BALANCE_VALUE("sight-duration", SEE_INVISIBLE_DURATION)) + roll(11);
+            uint8_t duration = static_cast<uint8_t>(rolled > 255 ? 255 : rolled);
+            if(game.see_invisible < duration) game.see_invisible = duration;
             status(F("You can see invisible creatures for a while."));
             break;
+        }
         case POTION_INVISIBILITY:
             if(ring_bonus(RING_INVISIBILITY) < 0) {
                 status(F("The cursed ring keeps you visible."));
@@ -675,13 +747,17 @@ __attribute__((noinline)) static bool apply_inventory(
     return true;
 }
 
-bool use_inventory(uint8_t slot, uint8_t target_slot)
+__attribute__((noinline)) bool use_inventory(uint8_t slot, uint8_t target_slot)
 {
-#if defined(ARDUROGUE2_SIM)
     uint8_t used_type = slot < INVENTORY ? game.inventory[slot].type : NO_ITEM;
-#endif
-    if(!apply_inventory(slot, target_slot))
+    if(!apply_inventory(slot))
         return false;
+    if(is_scroll(used_type)) {
+#if defined(ARDUROGUE2_SIM)
+        sim::DamageScope damage_source(sim::Cause::Item, used_type);
+#endif
+        apply_scroll_effect(used_type, target_slot);
+    }
     SIM_EVENT(sim::EventKind::ItemUsed, slot, used_type);
 #if defined(ARDUROGUE2_SIM)
     if(item_is_equipped(slot)) {
@@ -704,6 +780,9 @@ __attribute__((noinline)) static bool apply_thrown_potion(uint8_t slot, int8_t d
         return false;
     Item& item = game.inventory[slot];
     uint8_t type = item.type;
+#if defined(ARDUROGUE2_SIM)
+    sim::DamageScope damage_source(sim::Cause::Item, type);
+#endif
     status(F("You throw"));
     SIM_EVENT(sim::EventKind::PotionThrown, slot, type);
     SIM_EVENT(sim::EventKind::Consumed, NONE, type);
@@ -711,7 +790,17 @@ __attribute__((noinline)) static bool apply_thrown_potion(uint8_t slot, int8_t d
     set_item_value(item, static_cast<uint8_t>(item_value(item) - 1));
     if(!item_value(item)) item.type = NO_ITEM;
 
-    uint8_t hit = scan_ray(game.player, dx, dy, 8).monster;
+    RayResult ray = scan_ray(game.player, dx, dy, 8);
+    if(type == POTION_FIRE) {
+        bool known = potion_identified(type);
+        identify_type(type);
+        if(!known) { status(F("It was")); status(Item{type, 1}, '.'); }
+        animate_ray(game.player, dx, dy, ray.steps);
+        animate_fire_burst(ray.end);
+        fire_burst_damage(ray.end, true, 1, 4, 5);
+        return true;
+    }
+    uint8_t hit = ray.monster;
     if(hit != NONE) {
         status(F("It hits"));
         status(game.monsters[hit], '.');

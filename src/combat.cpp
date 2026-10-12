@@ -275,6 +275,7 @@ void player_take_magic_damage(uint8_t damage, uint8_t power)
 // Positive immunity wins even when another equipped item is vulnerable.
 int8_t player_fire_effect()
 {
+    if(game.fire_resistance) return 1;
     bool vulnerable = false;
     if(game.armor_slot < INVENTORY && game.inventory[game.armor_slot].type == DRAGONHIDE) {
         if(!item_is_cursed(game.inventory[game.armor_slot])) return 1;
@@ -329,7 +330,8 @@ void damage_monster(uint8_t index, uint8_t damage, bool player_attack)
         target.hp = static_cast<uint8_t>(target.hp - damage);
 }
 
-void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
+__attribute__((noinline)) static void fire_burst_monsters(Position center, bool player_attack,
+                       uint8_t radius, uint8_t minimum, uint8_t spread)
 {
     for(uint8_t i = 0; i < MONSTERS; ++i) {
         Monster& target = game.monsters[i];
@@ -340,14 +342,19 @@ void fire_burst_damage(Position center, bool player_attack, uint8_t radius)
 #if defined(ARDUROGUE2_SIM)
         if(player_attack) SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
 #endif
-        uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+        uint8_t damage = static_cast<uint8_t>(minimum + (spread ? roll(spread) : 0));
         damage_monster(i, damage, player_attack);
     }
+}
+
+// Monster iteration unwinds before potentially lethal player damage/status paging.
+void fire_burst_damage(Position center, bool player_attack, uint8_t radius,
+                       uint8_t minimum, uint8_t spread)
+{
+    fire_burst_monsters(center, player_attack, radius, minimum, spread);
     if(player_attack && square_contains(center, game.player, radius)) {
-#if defined(ARDUROGUE2_SIM)
-        sim::DamageScope damage_source(sim::Cause::Fire);
-#endif
-        uint8_t damage = static_cast<uint8_t>(8 + roll(8));
+        // Preserve the surrounding item scope for player-caused explosions.
+        uint8_t damage = static_cast<uint8_t>(minimum + (spread ? roll(spread) : 0));
         uint8_t old_hp = game.hp;
         player_take_fire_damage(damage, 8);
         if(game.hp < old_hp)
@@ -739,11 +746,25 @@ uint8_t player_speed_cost()
     if(game.armor_slot < INVENTORY && game.inventory[game.armor_slot].type == TITAN_PLATE)
         cost += item_is_cursed(game.inventory[game.armor_slot]) ? 4 : 0;
     if(game.slowed) cost *= 2;
+    // Equipment first, slowing doubles that cost, then Haste subtracts one.
+    if(game.haste) --cost;
     return static_cast<uint8_t>(cost < 1 ? 1 : cost > 255 ? 255 : cost);
 }
 
 __attribute__((noinline)) static void age_player_effects()
 {
+    if(game.haste && !--game.haste) {
+        SIM_EVENT(sim::EventKind::PlayerEffectExpired, NONE, POTION_HASTE);
+        status(F("You are no longer hasted."));
+    }
+    if(game.levitation && !--game.levitation) {
+        SIM_EVENT(sim::EventKind::PlayerEffectExpired, NONE, POTION_LEVITATION);
+        status(F("You settle back to the floor."));
+    }
+    if(game.fire_resistance && !--game.fire_resistance) {
+        SIM_EVENT(sim::EventKind::PlayerEffectExpired, NONE, POTION_FIRE_RESISTANCE);
+        status(F("Your fire resistance fades."));
+    }
     if(game.see_invisible && !--game.see_invisible) {
         SIM_EVENT(sim::EventKind::SeeInvisibleExpired);
         status(F("Your potion sight fades."));
@@ -810,7 +831,7 @@ void defeat_monster(uint8_t index)
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::MonsterKilled, index, target.type);
     leave_yendor(target);
-    bool summoned = (target.state & MON_TRAP_SUMMONED) != 0;
+    bool summoned = (target.state & MON_SUMMONED) != 0;
     uint8_t xp = summoned ? 0 : monster_xp(target.type);
     if(!summoned) game.score += static_cast<uint16_t>(5 + xp * 3);
     status(F("You defeat"));
@@ -976,13 +997,31 @@ void move_player(int8_t dx, int8_t dy)
 
 void apply_monster_potion(uint8_t type, uint8_t index)
 {
+    if(index >= MONSTERS || !game.monsters[index].type) return;
     // Sight is solely a player effect: even aggression/attack telemetry is unchanged.
-    if(type == POTION_SEE_INVISIBLE) { status(F("It has no effect.")); return; }
+    if(type == POTION_SEE_INVISIBLE || type == POTION_LEVITATION ||
+       type == POTION_FIRE_RESISTANCE) { status(F("It has no effect.")); return; }
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
     uint8_t maximum = monster_health(target.type);
     switch(type) {
+    case POTION_EXTRA_HEALING: {
+        uint16_t hp = static_cast<uint16_t>(target.hp) + extra_healing_amount(maximum);
+        target.hp = hp > maximum ? maximum : static_cast<uint8_t>(hp);
+        set_monster_effect(target, MON_CONFUSED, 0);
+        set_monster_effect(target, MON_SLOWED, 0);
+        monster_status(target, F("looks healthier."));
+        break;
+    }
+    case POTION_RESTORE_VITALITY:
+        set_monster_effect(target, MON_WEAKENED, 0);
+        monster_status(target, F("regains its strength."));
+        break;
+    case POTION_HASTE:
+        set_monster_effect(target, MON_SLOWED, 0);
+        monster_status(target, F("is no longer slowed."));
+        break;
     case POTION_HEALING: {
         uint8_t old_hp = target.hp;
         bool was_weakened = monster_effect(target, MON_WEAKENED) != 0;

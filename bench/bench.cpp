@@ -101,7 +101,22 @@ using namespace rogue;
     X(sight_expire_dense, "Sight expires during a dense turn", wait, A, dense, NO_ITEM, 0, 0) \
     X(sight_cursed_trap, "Potion sight overrides cursed ring during trap entry", wait, A, room, NO_ITEM, 0, 0) \
     X(natural_recovery, "Natural recovery at turn clock wrap", wait, A, room, NO_ITEM, 0, 0) \
-    X(recovery_dense, "Natural recovery during a dense turn", wait, A, dense, NO_ITEM, 0, 0)
+    X(recovery_dense, "Natural recovery during a dense turn", wait, A, dense, NO_ITEM, 0, 0) \
+    X(scroll_hold, "Hold twelve nearby monsters", use, A, room, SCROLL_HOLD_MONSTER, 2, 0) \
+    X(scroll_traps, "Discover ten hidden traps", use, A, room, SCROLL_DETECT_TRAPS, 0, 0) \
+    X(scroll_summon, "Summon an adjacent hostile mimic", use, A, room, SCROLL_SUMMONING, 0, 0) \
+    X(scroll_mass_teleport, "Teleport twelve visible monsters", use, A, room, SCROLL_MASS_TELEPORT, 2, 0) \
+    X(scroll_fire, "Fire burst with eight targets and reader damage", use, A, room, SCROLL_FIRE, 0, 0) \
+    X(scroll_objects, "Detect ground objects on a full map", use, A, dense, SCROLL_DETECT_OBJECTS, 0, 0) \
+    X(drink_extra_healing, "Extra healing cures slowing and confusion", use, A, room, POTION_EXTRA_HEALING, 0, 0) \
+    X(drink_vitality, "Restore vampire drain and weakness", use, A, room, POTION_RESTORE_VITALITY, 0, 0) \
+    X(drink_haste, "Start Haste", use, A, room, POTION_HASTE, 0, 0) \
+    X(drink_levitation, "Start Levitation", use, A, room, POTION_LEVITATION, 0, 0) \
+    X(drink_fire_resistance, "Start fire resistance", use, A, room, POTION_FIRE_RESISTANCE, 0, 0) \
+    X(drink_fire, "Drink minor fire damage", use, A, room, POTION_FIRE, 0, 0) \
+    X(throw_fire, "Thrown fire hits a group", projectile, RIGHT, room, POTION_FIRE, 0, 0) \
+    X(throw_fire_wall, "Immediate wall fire burst consumes Phoenix Heart", projectile, RIGHT, room, POTION_FIRE, 0, 0) \
+    X(effects_expire, "Four beneficial effects expire together", wait, A, dense, NO_ITEM, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -250,6 +265,38 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         game.features[0] = {{33,16}, static_cast<uint8_t>(FEATURE_SPIKE_TRAP + 2 *
             (static_cast<uint8_t>(scenario) - static_cast<uint8_t>(Case::trap_spike)) + MAP_FEATURE_HIDDEN)};
     switch(scenario) {
+    case Case::scroll_hold: case Case::scroll_mass_teleport:
+        game.inventory[15]={GLOWING_ORB,0}; game.offhand_slot=15;
+        game.inventory[14]={AMULET_BRILLIANCE,uint8_t(1|ITEM_IDENTIFIED)}; game.amulet_slot=14;
+        for(uint8_t i=0;i<MONSTERS;++i) {
+            add_monster(i,{uint8_t(30+i%4),uint8_t(i<4 ? 14 : 16+i/4)},ORC);
+            game.monsters[i].stun=15;
+        }
+        if(scenario==Case::scroll_hold) for(auto& m:game.monsters) m.stun=0;
+        break;
+    case Case::scroll_traps:
+        for(uint8_t i=0;i<10;++i) game.features[i]={{uint8_t(28+i%4),uint8_t(12+i/4)},uint8_t(3+2*i)};
+        break;
+    case Case::scroll_summon: game.floor=9; break;
+    case Case::scroll_fire: {
+        uint8_t i=0;
+        for(int8_t y=-1;y<=1;++y) for(int8_t x=-1;x<=1;++x) {
+            if(!x && !y) continue;
+            add_monster(i,{uint8_t(32+x),uint8_t(16+y)},ORC); game.monsters[i++].stun=15;
+        }
+        break;
+    }
+    case Case::drink_extra_healing: game.hp=10; game.confused=game.slowed=8; break;
+    case Case::drink_vitality: game.vamp_drain=40; game.weakened=3; game.hp=40; break;
+    case Case::throw_fire:
+        add_monster(0,{35,16}); add_monster(1,{35,15}); add_monster(2,{35,17});
+        for(uint8_t i=0;i<3;++i) game.monsters[i].stun=15;
+        break;
+    case Case::throw_fire_wall:
+        game.hp=1; game.inventory[1]={AMULET_PHOENIX_HEART,1}; game.amulet_slot=1;
+        { uint16_t n=16*MAP_W+33; game.walls[n>>3]|=uint8_t(1u<<(n&7)); }
+        break;
+    case Case::effects_expire: game.haste=game.levitation=game.fire_resistance=game.see_invisible=1; break;
     case Case::light_full_dense: break;
     case Case::light_blind_dense: game.blindness = 4; break;
     case Case::blind_recovery: game.blindness = 1; break;

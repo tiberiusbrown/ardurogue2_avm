@@ -4,9 +4,12 @@ For manifests, adjusted visit factors, paired A/B experiments and controlled
 content interventions, see [BALANCE.md](BALANCE.md). Demonstration results are in
 [BALANCE_RESULTS.md](BALANCE_RESULTS.md).
 
-The current explorer invisible-contact state machine, observation protocol 3,
+The explorer invisible-contact state machine, historical observation protocol 3,
 schema-5 diagnostics and descriptive policy comparisons are documented in
 [EXPLORER_INVISIBLE_CONTACT.md](../docs/EXPLORER_INVISIBLE_CONTACT.md).
+Current consumables support keeps the same `explorer-v1` name, uses observation
+protocol 5, core telemetry 9 and exploration telemetry 6; see
+[CONSUMABLES.md](../docs/CONSUMABLES.md).
 `sim/invisible_contact_experiments.py` snapshots the executable and complete
 parameters, runs legacy/disabled/contact variants on identical seeds, seals
 raw CSVs, rejects simulator failures and retains paired traces under ignored
@@ -105,8 +108,8 @@ Existing files changed: root `README.md` links these instructions; root
 `CMakeLists.txt` adds the host-only subdirectory
 and the production hook-header build dependency; `src/state.cpp`,
 `src/combat.cpp`, `src/items.cpp`, `src/world_gen.cpp` gain gated hooks.
-Instrumentation adds no saved fields. The map-feature gameplay addition appends
-36 bytes to `Game` and uses save version 26; see the feature report below.
+Instrumentation adds no saved fields. The current consumables gameplay uses
+save version 29 and an 841-byte AVM `Game`; see [the consumables guide](../docs/CONSUMABLES.md).
 
 The simulator library compiles and links `state.cpp`, `combat.cpp`,
 `combat_math.cpp`, `items.cpp`, `world.cpp`, `world_gen.cpp` and

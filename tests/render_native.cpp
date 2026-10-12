@@ -619,6 +619,30 @@ static bool check_full_map_pixels()
     return true;
 }
 
+static bool check_object_map()
+{
+    using namespace rogue;
+    game={}; session={NONE,DEATH,false}; ui={}; ui.mode=OBJECT_MAP;
+    game.player={10,10}; game.weapon_slot=game.armor_slot=game.offhand_slot=game.amulet_slot=NONE;
+    game.ring_slots[0]=game.ring_slots[1]=NONE;
+    game.ground[0]={{0,0},{POTION_FIRE,1}};
+    game.ground[GROUND_ITEMS-1]={{63,31},{SCROLL_SUMMONING,1}};
+    game.monsters[0]={{20,20},MIMIC,10,0,{0,0},0};
+    game.features[0]={{30,20},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    game.features[1]={{31,20},FEATURE_FOUNTAIN};
+    Game before=game;
+    render();
+    auto pixel=[](unsigned x,unsigned y) { return (__avm_framebuffer[(y>>3)*128+x]>>(y&7))&1; };
+    if(!pixel(1,0) || !pixel(0,1) || pixel(0,0) || pixel(1,1)) return false;
+    if(!pixel(127,62) || !pixel(126,63) || pixel(126,62) || pixel(127,63)) return false;
+    if(!pixel(20,20) || !pixel(21,21) || pixel(21,20) || pixel(20,21)) return false;
+    if(pixel(40,40) || pixel(60,40) || pixel(62,40) || pixel(2,2)) return false;
+    if(std::memcmp(&game,&before,sizeof game)) return false;
+    game.ground[0].item.type=POTION_HEALING; // Identity cannot affect map pixels.
+    uint8_t frame[1024]; std::memcpy(frame,__avm_framebuffer,sizeof frame); render();
+    return !std::memcmp(frame,__avm_framebuffer,sizeof frame);
+}
+
 static bool check_direction_prompt()
 {
     using namespace rogue;
@@ -737,7 +761,7 @@ int main()
         std::fprintf(stderr, "Shared item/mimic icons or independent appearance flags failed\n");
         return 1;
     }
-    if(!check_terrain_rows() || !check_deferred_pages() || !check_full_map_pixels()) {
+    if(!check_terrain_rows() || !check_deferred_pages() || !check_full_map_pixels() || !check_object_map()) {
         std::fprintf(stderr, "Terrain rows or deferred page/prompt restoration failed\n");
         return 1;
     }

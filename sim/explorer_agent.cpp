@@ -183,6 +183,13 @@ int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const See
     }
     switch(i.type) {
     case FOOD:return !retention && quantity(o,FOOD)>=prefs.food_stock_target ? 0 : std::max(retention ? 70+20*i.quantity : 70,o.hunger<60 ? 180 : 70);
+    case POTION_EXTRA_HEALING:return 260;
+    case POTION_RESTORE_VITALITY:return o.weakened ? 160 : 80;
+    case POTION_HASTE:case POTION_LEVITATION:case POTION_FIRE_RESISTANCE:return 100;
+    case POTION_FIRE:return 85;
+    case SCROLL_HOLD_MONSTER:return 160; case SCROLL_MASS_TELEPORT:return 180;
+    case SCROLL_DETECT_TRAPS:case SCROLL_DETECT_OBJECTS:return 120;
+    case SCROLL_FIRE:return 45; case SCROLL_SUMMONING:return 0;
     case POTION_HEALING:return 240; case POTION_EXPERIENCE:return 220;
     case POTION_STRENGTH:return o.strength<12||o.weakened ? 160 : 40;
     case POTION_DEXTERITY:return o.dexterity<12 ? 150 : 40;
@@ -240,6 +247,7 @@ bool sees_monster(const ExplorerObservation& o,SeenPosition p) {
     return false;
 }
 bool fire_safe(const ExplorerObservation& o,const SeenItem& wand,SeenPosition target) {
+    if(o.fire_resistance) return true;
     if(wand.modifier==WAND_SPREADING || wand.modifier==WAND_OVERPOWERED) return false;
     int r=wand.modifier==WAND_POWERFUL ? 2 : 1;
     for(int k=1;k<6;++k) if(o.equipped[k]<o.inventory_capacity) {
@@ -256,7 +264,7 @@ int expected_information(const ExplorerFloor& f,SeenPosition origin,int radius,b
         int x=int(origin.x)+dx,y=int(origin.y)+dy;
         if(dx*dx+dy*dy>radius*radius || !inside(x,y)) continue;
         auto& target=f.tiles[y*EXPLORER_W+x];
-        if(target.terrain!=Terrain::Unknown && (!passable(target.terrain)||target.surveyed)) continue;
+        if(target.failures>=2 || (target.terrain!=Terrain::Unknown && (!passable(target.terrain)||target.surveyed))) continue;
         bool blocked=false;
         if(obstruction) {
             // Integer ray through memory only. Unknown cells are optimistic;
@@ -268,8 +276,8 @@ int expected_information(const ExplorerFloor& f,SeenPosition origin,int radius,b
                 if(twice>-ay) { error-=ay; atx+=sx; }
                 if(twice<ax) { error+=ax; aty+=sy; }
                 if(atx==x && aty==y) break;
-                auto t=f.tiles[aty*EXPLORER_W+atx].terrain;
-                if(t==Terrain::Wall || t==Terrain::ClosedDoor) { blocked=true; break; }
+                auto& tile=f.tiles[aty*EXPLORER_W+atx];
+                if(tile.failures>=2 || tile.terrain==Terrain::Wall || tile.terrain==Terrain::ClosedDoor) { blocked=true; break; }
             }
         }
         if(!blocked) gain+=obstruction && target.terrain==Terrain::Unknown ? 2 : 1;
@@ -279,7 +287,7 @@ int expected_information(const ExplorerFloor& f,SeenPosition origin,int radius,b
 SurvivalRisk estimate_risk(const ExplorerObservation& o,const ExplorerFloor& f,const ExplorerParameters& prefs) {
     SurvivalRisk r;
     int armor=0,enchant=0,speed=std::max(1,int(o.speed));
-    bool fire=false,clarity=false,iron=false,invisible=o.invisible!=0;
+    bool fire=o.fire_resistance,clarity=false,iron=false,invisible=o.invisible!=0;
     for(int k=1;k<6;++k) if(o.equipped[k]<o.inventory_capacity) {
         auto i=o.inventory[o.equipped[k]];
         if(k==1) { armor+=armor_definition(i.type).rating; enchant+=i.enchant; }
@@ -294,7 +302,7 @@ SurvivalRisk estimate_risk(const ExplorerObservation& o,const ExplorerFloor& f,c
             if(i.type==AMULET_PHOENIX_HEART || i.type==AMULET_HEART_OF_GIANT) speed-=2;
         }
     }
-    speed=std::max(1,speed)*(o.slowed ? 2 : 1);
+    speed=std::max(1,speed*(o.slowed ? 2 : 1)-(o.haste ? 1 : 0));
     int absorption=std::max(0,armor*3/4+std::clamp(enchant,-5,5)/2);
     auto add=[&](const SeenMonster& m,int d,bool uncertain) {
         if(!m.type || d>6) return;
@@ -368,7 +376,7 @@ void ExplorerAgent::reset() {
     blocked_origin={}; invisible_contact={}; previous_healing=false;
     previous_hp=0; unseen_turns=contact_damage=0; last_offhand_switch=last_control=0; controlled_position={}; risk={};
     objective=deferred_objective=prior_position=recent_hazard={}; recent_positions.fill({});
-    deferred_until=hazard_until=0; navigation_moves=objective_failures=0;
+    deferred_until=hazard_until=0; navigation_moves=objective_failures=frontier_stale=0;
 }
 void ExplorerAgent::remember_contact(const ExplorerObservation& o) {
     auto& c=invisible_contact;
@@ -443,15 +451,14 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
     const auto& prefs=parameters;
     auto& f=floors[o.floor];
     uint64_t revealed_before=stats.revealed;
-    bool terrain_changed=false;
-    for(int g=0;g<6;++g) for(int a=0;a<16;++a) if(o.identities[g][a]) identities[g][a]=o.identities[g][a];
+    for(int g=0;g<6;++g) for(int a=0;a<EXPLORER_APPEARANCES;++a) if(o.identities[g][a]) identities[g][a]=o.identities[g][a];
     if(active_floor!=o.floor) {
         active_floor=o.floor; frontier=shadow={}; last_position={}; last_retreat={}; retreat_budget=quiet_turns=stalled=0;
         blocked_contact={}; blocked_contact_until=0;
         blocked_origin={}; invisible_contact={}; previous_healing=false;
         unseen_turns=contact_damage=0; previous_hp=o.hp; controlled_position={}; last_offhand_switch=0;
         objective=deferred_objective=prior_position=recent_hazard={}; recent_positions.fill({});
-        deferred_until=hazard_until=0; navigation_moves=objective_failures=0;
+        deferred_until=hazard_until=0; navigation_moves=objective_failures=frontier_stale=0;
         // Production regenerates a DIFFERENT layout after Yendor; preserve history,
         // but never route through it as current known terrain.
         if(f.visited && f.ascent_layout!=o.yendor) {
@@ -481,11 +488,15 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
         if(o.contact_reported && o.contact.x<64 && o.contact.y<32) { shadow=o.contact; shadow_turn=o.turns; }
         else if(o.turns>shadow_turn+3 || (previous.goal=="repeat reported melee contact" && !o.contact_reported)) shadow={};
     }
-    if(changed && last_position.x!=255 && previous.kind==ExplorerActionKind::Move && last_position==o.player && o.last_rejected) {
+    if(changed && last_position.x!=255 && previous.kind==ExplorerActionKind::Move && last_position==o.player &&
+       (o.last_rejected || (!o.contact_reported && !o.incoming_attack && !o.confused && !o.paralyzed))) {
         int x=int(last_position.x)+previous.dx,y=int(last_position.y)+previous.dy;
         if(inside(x,y)) {
-            auto& t=f.tiles[y*EXPLORER_W+x]; t.failures=uint8_t(std::min(255,int(t.failures)+1));
-            ++stats.unreachable;
+            auto& t=f.tiles[y*EXPLORER_W+x];
+            if(o.last_rejected || t.terrain==Terrain::Unknown) {
+                t.failures=uint8_t(std::min(255,int(t.failures)+1));
+                ++stats.unreachable;
+            }
         }
     }
     if(changed && last_position!=o.player) {
@@ -514,7 +525,7 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
             }
         }
         auto& t=f.tiles[cell(o.player)]; if(t.visits) ++stats.repeats;
-        t.visits=uint8_t(std::min(255,int(t.visits)+1)); stalled=0;
+        t.visits=uint16_t(std::min(65535,int(t.visits)+1)); stalled=0;
     } else if(changed) ++stalled;
     if(prefs.hazard_routing && changed && recent_hazard.x!=255 && o.turns<hazard_until && o.hp_loss) {
         auto& t=f.tiles[cell(recent_hazard)];
@@ -526,10 +537,16 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
     for(int n=0;n<EXPLORER_CELLS;++n) {
         auto& t=f.tiles[n];
         if(o.terrain[n]!=Terrain::Unknown) {
-            if(t.terrain!=Terrain::Unknown && t.terrain!=o.terrain[n]) terrain_changed=true;
+            if(t.terrain!=Terrain::Unknown && t.terrain!=o.terrain[n]) {
+                t.survey_attempts=0;
+                for(int d=0;d<4;++d) {
+                    int x=n%EXPLORER_W+dxs[d], y=n/EXPLORER_W+dys[d];
+                    if(inside(x,y)) f.tiles[y*EXPLORER_W+x].survey_attempts=0;
+                }
+            }
             if(t.terrain==Terrain::Unknown) ++stats.revealed;
+            if(passable(o.terrain[n]) && t.terrain!=o.terrain[n]) t.failures=0;
             t.terrain=o.terrain[n]; t.feature=o.features[n];
-            if(passable(t.terrain)) t.failures=0;
             if(t.terrain==Terrain::Up) f.up=position(n);
             if(t.terrain==Terrain::Down) f.down=position(n);
         }
@@ -543,7 +560,18 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
         }
     }
     if(prefs.hazard_routing && changed) {
-        if(terrain_changed) for(auto& t:f.tiles) t.survey_attempts=0;
+        if(stats.revealed>revealed_before) frontier_stale=0;
+        else if(previous.navigation && (previous.goal=="explore known frontier" ||
+                previous.goal=="seek remembered item sprite") && ++frontier_stale>=32) {
+            // Longer cycles can evade the four-step reversal detector. Bound
+            // attempts using only our own knowledge growth and action history.
+            if(previous.destination.x!=255) {
+                auto& target=f.tiles[cell(previous.destination)];
+                target.survey_attempts=uint8_t(std::min(3,int(target.survey_attempts)+1));
+                deferred_objective=previous.destination; deferred_until=o.turns+16;
+            }
+            objective={}; frontier_stale=0; ++stats.cycles; ++stats.goal_failures;
+        }
         auto& current=f.tiles[cell(o.player)];
         if(stats.revealed>revealed_before) current.survey_attempts=0;
         else if(previous.goal=="explore known frontier" && previous.destination==o.player)
@@ -555,11 +583,12 @@ void ExplorerAgent::remember(const ExplorerObservation& o) {
         if(!t.has_item || t.item.category!=g.item.category || g.item.appearance!=255 || g.item.type) t.item=g.item;
         t.has_item=true;
     }
+    for(int n=0;n<EXPLORER_CELLS;++n) if(o.detected_objects[n]) f.tiles[n].has_item=true;
     // Once revealed, a mimic's disguise is no longer a remembered loot goal.
     for(int m=0;m<o.monster_count;++m) if(o.monsters[m].type==MIMIC) {
         auto& t=f.tiles[cell(o.monsters[m].pos)]; t.has_item=false; t.item={};
     }
-    for(auto& t:f.tiles) if(t.has_item && !t.item.type && t.item.appearance<16)
+    for(auto& t:f.tiles) if(t.has_item && !t.item.type && t.item.appearance<EXPLORER_APPEARANCES)
         t.item.type=identities[identity_group(t.item.category)][t.item.appearance];
     bool reassess=prefs.invisible_response && unseen_turns>=4 && (contact_damage>=std::max(3,int(o.max_hp)/5) || o.hunger<40 || o.hp*2<o.max_hp);
     if(!prefs.contact_aware && changed && (stalled>=unsigned(prefs.stationary_contact_turns) || reassess) && o.contact_reported && distance(o.player,o.contact)==1) {
@@ -606,11 +635,11 @@ void ExplorerAgent::paths(const ExplorerObservation& o,bool hazards) {
             if(!inside(x,y)) continue;
             int n=y*EXPLORER_W+x; auto& t=f.tiles[n];
             if(!passable(t.terrain) || t.failures>=2) continue;
-            bool trap=t.feature==FEATURE_SUMMONING_TRAP;
+            bool trap=!o.levitation && t.feature==FEATURE_SUMMONING_TRAP;
             if(prefs.hazard_routing && trap && !hazards) continue;
             if(o.turns<blocked_contact_until && position(n)==blocked_contact) continue;
             if(prefs.contact_aware && o.turns<blocked_contact_until && position(n)==blocked_origin) continue;
-            int penalty=trap_penalty(prefs,t.feature)+(t.terrain==Terrain::ClosedDoor ? 1 : 0);
+            int penalty=(o.levitation ? 0 : trap_penalty(prefs,t.feature))+(t.terrain==Terrain::ClosedDoor ? 1 : 0);
             if(prefs.hazard_routing && hazards && trap)
                 penalty+=20*std::min(10,int(t.hazard_entries))+2*int(t.hazard_loss);
             if(!prefs.hazard_routing && prefs.contact_aware && trap && t.visits)
@@ -776,16 +805,30 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         if(sight>=0 && !o.see_invisible && !o.blindness && !ring_sight &&
            (risk.unseen || o.reported_attacker==PHANTOM || (o.floor==4 && threats)))
             return use(sight,"temporary sight against invisible contact");
+        if((o.weakened || o.vitality_drained) && find(o,POTION_RESTORE_VITALITY)>=0) return use(find(o,POTION_RESTORE_VITALITY),"restore vitality");
+        if(threats && !o.haste && find(o,POTION_HASTE)>=0) return use(find(o,POTION_HASTE),"haste in observed combat");
+        if(!o.fire_resistance && find(o,POTION_FIRE_RESISTANCE)>=0) for(int m=0;m<o.monster_count;++m)
+            if(o.monsters[m].traits&MON_FIRE_BREATH) return use(find(o,POTION_FIRE_RESISTANCE),"resist observed fire threat");
+        if((o.confused || o.slowed) && find(o,POTION_EXTRA_HEALING)>=0) return use(find(o,POTION_EXTRA_HEALING),"clear harmful statuses with extra healing");
+        if(adjacent>=0 && find(o,SCROLL_FIRE)>=0 && fire_safe(o,SeenItem{},o.player) && o.monsters[adjacent].type!=DRAGON) return use(find(o,SCROLL_FIRE),"fire burst with immunity");
         int healing=find(o,POTION_HEALING);
+        if(healing<0 || o.confused || o.slowed) { int extra=find(o,POTION_EXTRA_HEALING); if(extra>=0) healing=extra; }
         int xp=find(o,POTION_EXPERIENCE);
         int xp_gain=o.equipped[3]<o.inventory_capacity && o.inventory[o.equipped[3]].type==AMULET_WISDOM && o.inventory[o.equipped[3]].cursed ? 25 : 50;
         bool xp_recovers=xp>=0 && o.level<50 && o.xp+xp_gain>=4+o.level*3;
-        int minimum_heal=o.max_hp/4;
+        int minimum_heal=healing>=0 && o.inventory[healing].type==POTION_EXTRA_HEALING ? (o.max_hp*3+3)/4 : o.max_hp/4;
         bool heal_survives=o.hp+minimum_heal>risk.one;
         // Escape/control precedes a heal that cannot survive the following turn.
         // Directional tools require a currently visible cardinal target and a
         // known, unobstructed ray; remembered/unseen coordinates never aim them.
         auto control=[&]() -> ExplorerAction {
+            if(o.monster_count && o.turns>=last_control+prefs.control_retry_turns) {
+                int mass=find(o,SCROLL_MASS_TELEPORT);
+                if(mass>=0) { last_control=o.turns; return use(mass,"displace observed threats"); }
+                int hold=find(o,SCROLL_HOLD_MONSTER);
+                if(hold>=0) for(int m=0;m<o.monster_count;++m)
+                    if(std::abs(int(o.monsters[m].pos.x)-o.player.x)<=3 && std::abs(int(o.monsters[m].pos.y)-o.player.y)<=3) { last_control=o.turns; return use(hold,"hold observed nearby threats"); }
+            }
             int teleport=find(o,SCROLL_TELEPORT);
             if(teleport>=0 && (lethal || risk.unseen || risk.attackers>1 || o.confused)) return use(teleport,"escape lethal observed pressure");
             if(o.monster_count && o.turns>=last_control+prefs.control_retry_turns) {
@@ -951,19 +994,19 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                     a.dx=dxs[d]; a.dy=dys[d]; a.goal="test unexamined wand against observed distant enemy"; a.destination=monster.pos; return a;
                 }
             }
-            for(int t:{POTION_PARALYSIS,POTION_CONFUSION,POTION_BLINDNESS,POTION_SLOWING,POTION_POISON,WAND_ICE,WAND_STRIKING,WAND_FIRE,POTION_HARMING,WAND_TELEPORT,WAND_FORCE,WAND_POLYMORPH}) {
+            for(int t:{POTION_PARALYSIS,POTION_CONFUSION,POTION_BLINDNESS,POTION_SLOWING,POTION_POISON,WAND_ICE,WAND_STRIKING,WAND_FIRE,POTION_HARMING,POTION_FIRE,WAND_TELEPORT,WAND_FORCE,WAND_POLYMORPH}) {
                 int s=find(o,t); if(s<0 || !danger) continue;
                 auto i=o.inventory[s];
                 if(is_wand(t) && (!i.individual || !i.quantity || i.modifier==WAND_CURSED || i.modifier==WAND_UNRELIABLE)) continue;
-                if(t==WAND_FIRE && (monster.type==DRAGON || !fire_safe(o,i,monster.pos))) continue;
+                if((t==WAND_FIRE || t==POTION_FIRE) && (monster.type==DRAGON || !fire_safe(o,i,monster.pos))) continue;
                 if((t==WAND_TELEPORT || t==WAND_FORCE || t==WAND_POLYMORPH) && !emergency) continue;
                 if(t==WAND_POLYMORPH && (monster.type==LORD || monster.type<INCUBUS)) continue;
-                if(is_potion(t) && t!=POTION_HARMING && !emergency && monster.type<INCUBUS) continue;
-                if(prefs.context_healing && is_potion(t) && t!=POTION_HARMING && o.turns<last_control+prefs.control_retry_turns && monster.pos==controlled_position) continue;
+                if(is_potion(t) && t!=POTION_HARMING && t!=POTION_FIRE && !emergency && monster.type<INCUBUS) continue;
+                if(prefs.context_healing && is_potion(t) && t!=POTION_HARMING && t!=POTION_FIRE && o.turns<last_control+prefs.control_retry_turns && monster.pos==controlled_position) continue;
                 ExplorerAction a; a.kind=is_wand(t) ? ExplorerActionKind::Wand : ExplorerActionKind::Throw;
                 a.slot=uint8_t(s); a.dx=dxs[d]; a.dy=dys[d]; a.goal="target visible monster"; a.destination=monster.pos;
                 if(is_wand(t) && (i.modifier==WAND_SPREADING || i.modifier==WAND_OVERPOWERED)) a.dx=a.dy=0;
-                if(is_potion(t) && t!=POTION_HARMING) { last_control=o.turns; controlled_position=monster.pos; }
+                if(is_potion(t) && t!=POTION_HARMING && t!=POTION_FIRE) { last_control=o.turns; controlled_position=monster.pos; }
                 return a;
             }
             int bow=best_weapon(prefs,o,true);
@@ -1033,6 +1076,12 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         }
         auto picked=pickup(o); if(picked.kind==ExplorerActionKind::Take) return picked;
         if(!threats) {
+            if(find(o,SCROLL_DETECT_TRAPS)>=0) return use(find(o,SCROLL_DETECT_TRAPS),"discover traps before exploration");
+            if(find(o,SCROLL_DETECT_OBJECTS)>=0) return use(find(o,SCROLL_DETECT_OBJECTS),"inspect object positions");
+            if(!o.levitation && find(o,POTION_LEVITATION)>=0) for(int d=0;d<4;++d) {
+                int x=int(o.player.x)+dxs[d], y=int(o.player.y)+dys[d];
+                if(inside(x,y) && feature_is_trap(f.tiles[y*64+x].feature)) return use(find(o,POTION_LEVITATION),"float over observed traps");
+            }
             for(int t:{POTION_STRENGTH,POTION_DEXTERITY}) { int s=find(o,t); if(s>=0 && (t==POTION_STRENGTH ? o.strength : o.dexterity)<12) return use(s,"permanent stats"); }
             int unknown=-1,unknown_priority=-1;
             for(int s=0;s<o.inventory_capacity;++s) if(o.inventory[s].category!=ItemCategory::None && (!o.inventory[s].type || (!o.inventory[s].individual && o.inventory[s].category==ItemCategory::Wand))) {
@@ -1105,19 +1154,27 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         }
         int loot=-1,loot_score=0;
         if(!o.yendor) for(int n=0;n<EXPLORER_CELLS;++n) {
-            auto& t=f.tiles[n]; if(!t.has_item || steps[n]<=0 || steps[n]>prefs.loot_max_distance || t.visits>=prefs.loot_max_visits) continue;
+            auto& t=f.tiles[n]; if(!t.has_item || steps[n]<=0 || steps[n]>prefs.loot_max_distance || t.visits>=prefs.loot_max_visits || t.survey_attempts>=3) continue;
             if(prefs.hazard_routing && position(n)==deferred_objective && o.turns<deferred_until) continue;
             if(prefs.resource_planning && stairs.x!=255 && steps[n]>24) continue;
             if(prefs.resource_planning && stairs.x!=255 && steps[n]>12 &&
                 (o.hp*2<o.max_hp || o.hunger<80) && t.item.category!=ItemCategory::Food && t.item.type!=POTION_HEALING) continue;
             if(!fits(o,t.item) && replacement(prefs,o,t.item)<0) continue;
-            int score=value(prefs,o,t.item)*100/(costs[n]+prefs.loot_distance_offset)-int(t.visits)*prefs.loot_visit_cost;
+            int score=(t.item.category==ItemCategory::None ? 40 : value(prefs,o,t.item))*100/(costs[n]+prefs.loot_distance_offset)-int(t.visits)*prefs.loot_visit_cost;
             if(prefs.hazard_routing && position(n)==objective && score>0) score+=std::max(1,score/5);
             if(score>loot_score) { loot=n; loot_score=score; }
         }
         if(loot>=0 && (stairs.x==255 || o.hunger>=60 || steps[loot]<=4)) return navigate(position(loot),"seek remembered item sprite");
         // Compare discovered stairs with observable frontier gain. Runtime weights
         // can favor gathering resources before descent, without unseen loot targets.
+        if(!o.radius) for(int d=0;d<4;++d) {
+            int x=int(o.player.x)+dxs[d], y=int(o.player.y)+dys[d];
+            if(inside(x,y) && f.tiles[y*EXPLORER_W+x].terrain==Terrain::Unknown &&
+               f.tiles[y*EXPLORER_W+x].failures<2) {
+                ++stats.exploring_actions;
+                return move(d,"explicit tactile probe at radius zero");
+            }
+        }
         int best=-1,best_score=-100000;
         int radius=std::max(1,int(o.radius));
         for(int n=0;n<EXPLORER_CELLS;++n) {
@@ -1125,7 +1182,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             if(prefs.hazard_routing && t.survey_attempts>=3) continue;
             if(prefs.hazard_routing && position(n)==deferred_objective && o.turns<deferred_until) continue;
             int x=n%EXPLORER_W,y=n/EXPLORER_W,adjacent_unknown=0,gain=0;
-            auto needs_survey=[&](int at) { auto& tile=f.tiles[at]; return tile.terrain==Terrain::Unknown || (passable(tile.terrain) && !tile.surveyed); };
+            auto needs_survey=[&](int at) { auto& tile=f.tiles[at]; return tile.failures<2 && (tile.terrain==Terrain::Unknown || (passable(tile.terrain) && !tile.surveyed)); };
             for(int d=0;d<4;++d) if(inside(x+dxs[d],y+dys[d]) && needs_survey((y+dys[d])*EXPLORER_W+x+dxs[d])) ++adjacent_unknown;
             if(!t.surveyed) ++adjacent_unknown;
             if(!adjacent_unknown) continue;

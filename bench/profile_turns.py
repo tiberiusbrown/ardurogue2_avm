@@ -28,8 +28,8 @@ INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("RING_SEE_INVISIBLE", "RING_ILLUMINATION", "RINGS"),
                     ("AMULET_SPEED", "AMULET_BRILLIANCE", "AMULETS"),
                     ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
-                    ("POTION_HEALING", "POTION_SEE_INVISIBLE", "POTIONS"),
-                    ("SCROLL_IDENTIFY", "SCROLL_MASS_POISON", "SCROLLS"))
+                    ("POTION_HEALING", "POTION_FIRE", "POTIONS"),
+                    ("SCROLL_IDENTIFY", "SCROLL_DETECT_OBJECTS", "SCROLLS"))
 
 
 @dataclass(frozen=True)
@@ -102,12 +102,19 @@ def state_fields(case):
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
-    if case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
+    if case.index >= 87 or case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
         fields["monster_x"] = "rogue::game.monsters[0].pos.x"
         fields["monster_y"] = "rogue::game.monsters[0].pos.y"
         for i in range(1, 4):
             fields[f"other_type_{i}"] = f"rogue::game.monsters[{i}].type"
             fields[f"other_hp_{i}"] = f"rogue::game.monsters[{i}].hp"
+    if case.index >= 87:
+        for name in ("haste", "levitation", "fire_resistance", "vamp_drain", "weakened", "confused", "slowed"):
+            fields[name] = "rogue::game." + name
+        fields["monster_stun"] = "rogue::game.monsters[0].stun"
+        fields["object_map"] = "rogue::ui.mode == rogue::Mode::OBJECT_MAP"
+    if case.name == "scroll_traps":
+        fields["feature_id"] = "rogue::game.features[0].id"
     if case.name.startswith("visibility_trap_"):
         fields["monster_x"] = "rogue::game.monsters[0].pos.x"
         fields["monster_y"] = "rogue::game.monsters[0].pos.y"
@@ -120,7 +127,7 @@ def state_fields(case):
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(POTION_SEE_INVISIBLE - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_FIRE - POTION_HEALING + 1 + SCROLL_DETECT_OBJECTS - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
@@ -293,7 +300,7 @@ def validate_outcome(case, before, after, explored):
         require(after["hp"] == 100 and not after["item_type"] and after["amulet"] == 255, "Phoenix Heart failed")
     if case.name in ("equip_light", "equip_shield"):
         require(after["offhand"] == 0 and after["expected_item"], "offhand was not equipped")
-    if case.name == "drink_sight": require(after["sight"] == 39, "temporary sight duration missing")
+    if case.name == "drink_sight": require(19 <= after["sight"] <= 29, "temporary sight duration missing")
     if case.name == "sight_expire_dense": require(after["sight"] == 0, "temporary sight did not expire")
     if case.name == "throw_sight":
         require(after["monster_hp"] == before["monster_hp"] and after["sight"] == 0, "thrown sight had an effect")
@@ -304,6 +311,25 @@ def validate_outcome(case, before, after, explored):
     if case.name == "blind_recovery": require(after["blindness"] == 0, "blindness failed to expire")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
+    if case.index >= 87 and case.item != "NO_ITEM":
+        require(after["item_type"] == 0, "new consumable was not consumed")
+    if case.name == "drink_extra_healing":
+        require(after["hp"] >= 85 and not after["confused"] and not after["slowed"], "extra healing failed")
+    if case.name == "drink_vitality":
+        require(not after["vamp_drain"] and not after["weakened"] and after["hp"] == before["hp"], "vitality restoration failed")
+    for name, minimum in (("haste", 14), ("levitation", 14), ("fire_resistance", 19)):
+        if case.name == "drink_" + name:
+            require(minimum <= after[name] <= minimum + 10, "temporary effect duration missing")
+    if case.name == "effects_expire":
+        require(all(not after[name] for name in ("haste", "levitation", "fire_resistance", "sight")), "temporary effects did not expire")
+    if case.name == "scroll_hold": require(after["monster_stun"] > 0, "hold did not stun")
+    if case.name == "scroll_traps": require(after["feature_id"] == 2, "trap discovery failed")
+    if case.name == "scroll_summon": require(after["monster_type"] != 0, "adjacent summoning failed")
+    if case.name == "scroll_mass_teleport": require((after["monster_x"],after["monster_y"]) != (before["monster_x"],before["monster_y"]), "mass teleport failed")
+    if case.name in ("scroll_fire", "drink_fire"): require(after["hp"] < before["hp"], "self fire damage missing")
+    if case.name == "throw_fire": require(after["monster_hp"] < before["monster_hp"], "fire splash damage missing")
+    if case.name == "throw_fire_wall": require(after["hp"] == 100 and after["amulet"] == 255, "fire splash resurrection failed")
+    if case.name == "scroll_objects": require(after["object_map"], "object map not displayed")
     if case.name == "natural_recovery":
         require(before["turns"] == 255 and after["hp"] == before["hp"] + 1,
                 "natural recovery did not heal at clock wrap")
@@ -445,7 +471,7 @@ def validate_sample(case, contract, folder, output, more_pcs=(), completed_after
     renderer = "_ZN5rogue16render_inventoryE" if case.setup in ("browse", "projectile_browse") else "_ZN5rogue6renderEv"
     require(end["pc"] in more_pcs or any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
             "the measured turn did not execute the final render")
-    require(not any(("rogue::animate_" in row["function"] and case.setup not in ("projectile", "wand")) or
+    require(not any(("rogue::animate_" in row["function"] and case.setup not in ("projectile", "wand") and case.name != "scroll_fire") or
                     row["linkage"] == "_ZN5rogue10make_floorEv" or
                     row["function"].lstrip(":").startswith("bench_") or
                     Path(row.get("file", "").replace("\\", "/")).name == "bench.cpp"
@@ -609,7 +635,7 @@ def main(argv=None):
         if args.emit_only:
             continue
         try:
-            if case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
+            if case.index >= 87 or case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
                 measurement = run_paginated(case, contract, case_dir, Path(lldb).resolve(), args.elf.resolve(),
                                             args.native, args.deadline_ms, args.timeout)
             else:

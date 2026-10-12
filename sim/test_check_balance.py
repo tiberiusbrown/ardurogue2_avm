@@ -44,6 +44,8 @@ def main():
         assert summary["runs"]==8 and len(saved["floors"])==31
         opening=floors[(floors.direction=="descent") & (floors.floor==0)]
         assert summary["simulator_failures"]==0
+        assert abs(summary["healing_drunk_per_run"]-summary["ordinary_healing_drunk_per_run"]-
+                   summary["extra_healing_drunk_per_run"])<1e-12
         assert saved["floors"][0]["mortality_pct"]==100*int((opening.exited==0).sum())/8
         assert all(r["band_status"] in ("REVIEW","NO DATA") for r in saved["floors"] if r["direction"]=="ascent")
         assert len(saved["provenance"]["output_csv_sha256"])==10

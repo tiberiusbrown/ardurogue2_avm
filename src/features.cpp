@@ -135,6 +135,38 @@ static void improve_equipped() {
     if(slot == NONE) blessing();
     else set_equipment_enchant(game.inventory[slot], equipment_enchant(game.inventory[slot]) + 1);
 }
+bool summon_monster(uint8_t slot, Position pos, bool no_rewards, bool undead) {
+    if(slot >= MONSTERS || game.monsters[slot].type || blocked(pos.x, pos.y) ||
+       pos == game.player || monster_at(pos) != NONE) return false;
+    uint8_t type = undead ? (game.floor >= 4 ? PHANTOM : ZOMBIE) :
+        generation::encounter_type(game.floor, game.random_state);
+    Monster& monster = game.monsters[slot];
+    monster = {pos, type, monster_health(type), 0, {0, 0},
+        static_cast<uint8_t>(MON_AGGRO | (no_rewards ? MON_SUMMONED : 0))};
+    if(type == MIMIC) set_mimic_appearance(monster,
+        static_cast<MimicAppearance>(roll(MIMIC_APPEARANCE_COUNT)));
+    return true;
+}
+
+bool summon_adjacent_monster() {
+    uint8_t slot = NONE;
+    for(uint8_t i = 0; i < MONSTERS; ++i) if(!game.monsters[i].type) { slot = i; break; }
+    if(slot == NONE) return false;
+    Position chosen{NONE, NONE};
+    uint8_t count = 0;
+    // Reservoir selection visits each cardinal neighbor exactly once.
+    for(uint8_t d = 0; d < 4; ++d) {
+        int16_t x = game.player.x + (d == 1 ? 1 : d == 3 ? -1 : 0);
+        int16_t y = game.player.y + (d == 2 ? 1 : d == 0 ? -1 : 0);
+        if(blocked(x, y)) continue;
+        Position pos{static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
+        if(monster_at(pos) == NONE && !roll(++count)) chosen = pos;
+    }
+    if(chosen.x == NONE || !summon_monster(slot, chosen, true)) return false;
+    SIM_EVENT(sim::EventKind::MonsterSummoned, slot, game.monsters[slot].type);
+    return true;
+}
+
 // Only bounded local work during activation, never a map-sized gameplay scan.
 static bool summon(Position origin, bool trap, bool undead = false, bool visible = true) {
     uint8_t slot = NONE;
@@ -148,13 +180,8 @@ static bool summon(Position origin, bool trap, bool undead = false, bool visible
         Position pos{static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
         if(blocked(x, y) || pos == game.player || monster_at(pos) != NONE ||
            (visible && !can_see(pos))) continue;
-        uint8_t type = undead ? (game.floor >= 4 ? PHANTOM : ZOMBIE) :
-            generation::encounter_type(game.floor, game.random_state);
-        Monster monster{pos, type, monster_health(type), 0, {0, 0},
-            static_cast<uint8_t>(MON_AGGRO | (trap ? MON_TRAP_SUMMONED : 0))};
-        if(type == MIMIC) set_mimic_appearance(monster, static_cast<MimicAppearance>(roll(MIMIC_APPEARANCE_COUNT)));
-        game.monsters[slot] = monster;
-        SIM_EVENT(sim::EventKind::FeatureSpawn, slot, type);
+        summon_monster(slot, pos, trap, undead);
+        SIM_EVENT(sim::EventKind::FeatureSpawn, slot, game.monsters[slot].type);
         return true;
     }
     return false;
@@ -266,6 +293,8 @@ __attribute__((noinline)) void activate_entry_feature(uint8_t index, bool forced
     if(index >= MAP_FEATURES || session.ended) return;
     uint8_t type = feature_type(game.features[index].id);
     if(feature_is_trap(type)) {
+        // All entry paths share this gate, before discovery, rolls or effects.
+        if(game.levitation) return;
         reveal_feature(index);
         SIM_EVENT(sim::EventKind::FeatureActivated, index, type);
 #if defined(ARDUROGUE2_SIM)

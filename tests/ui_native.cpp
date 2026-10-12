@@ -75,6 +75,8 @@ static rogue::InputAction dispatch_input(uint8_t buttons)
 {
     using namespace rogue;
     InputAction input = handle_input(buttons);
+    if(input == INPUT_USE_INVENTORY) use_inventory(ui.selection, ui.use_target);
+    if(session.object_detection) { session.object_detection=false; ui.mode=OBJECT_MAP; }
     if(input >= INPUT_PROJECTILE_UP && input <= INPUT_PROJECTILE_LEFT) {
         int8_t dx=input==INPUT_PROJECTILE_RIGHT ? 1 : input==INPUT_PROJECTILE_LEFT ? -1 : 0;
         int8_t dy=input==INPUT_PROJECTILE_UP ? -1 : input==INPUT_PROJECTILE_DOWN ? 1 : 0;
@@ -94,6 +96,50 @@ static rogue::InputAction dispatch_input(uint8_t buttons)
 int main()
 {
     using namespace rogue;
+    // Inventory modals return a command; consumption and effects run afterwards.
+    for(uint8_t type : {uint8_t(SCROLL_DETECT_OBJECTS), uint8_t(POTION_HASTE)}) {
+        start_new(0x4312);
+        std::memset(game.monsters, 0, sizeof game.monsters);
+        std::memset(game.inventory, 0, sizeof game.inventory);
+        game.inventory[0] = {type, 2};
+        ui = {}; ui.mode = MENU; ui.selection = 1;
+        avm_test_buttons[0] = 0; avm_test_buttons[1] = AVM_BUTTON_A;
+        avm_test_button_count = 2; avm_test_button_index = 0;
+        uint8_t turns = game.turns;
+        require(handle_input(AVM_BUTTON_A) == INPUT_USE_INVENTORY &&
+                game.turns == turns && item_value(game.inventory[0]) == 2 &&
+                !session.object_detection && !game.haste,
+                "inventory modal resolved effect before its frame unwound");
+        require(use_inventory(ui.selection, ui.use_target) &&
+                game.turns == uint8_t(turns + 1) && item_value(game.inventory[0]) == 1,
+                "deferred consumable failed turn or stack consumption");
+        if(type == SCROLL_DETECT_OBJECTS) {
+            require(session.object_detection, "object scroll did not request display");
+            session.object_detection = false; ui.mode = OBJECT_MAP;
+            Game snapshot = game;
+            ui.previous_buttons = 0;
+            require(handle_input(AVM_BUTTON_U) == INPUT_NONE && ui.mode == OBJECT_MAP &&
+                    !std::memcmp(&game, &snapshot, sizeof game),
+                    "object map inspection spent a turn or changed state");
+            for(uint8_t dismiss : {uint8_t(AVM_BUTTON_A), uint8_t(AVM_BUTTON_B)}) {
+                ui.mode = OBJECT_MAP; ui.previous_buttons = 0;
+                require(handle_input(dismiss) == INPUT_NONE && ui.mode == PLAY &&
+                        !std::memcmp(&game, &snapshot, sizeof game),
+                        "object map dismissal spent a turn");
+            }
+        }
+    }
+    for(uint8_t type : {uint8_t(SCROLL_IDENTIFY), uint8_t(SCROLL_ENCHANT), uint8_t(SCROLL_REMOVE_CURSE)}) {
+        start_new(0x4312); std::memset(game.inventory, 0, sizeof game.inventory);
+        game.inventory[0] = {type, 1}; ui = {}; ui.mode = MENU; ui.selection = 1;
+        const uint8_t cancel_target[] = {0, AVM_BUTTON_A, 0, AVM_BUTTON_B};
+        std::memcpy(avm_test_buttons, cancel_target, sizeof cancel_target);
+        avm_test_button_count = sizeof cancel_target; avm_test_button_index = 0;
+        Game snapshot = game;
+        require(handle_input(AVM_BUTTON_A) == INPUT_NONE && ui.mode == PLAY &&
+                !std::memcmp(&game, &snapshot, sizeof game),
+                "canceling scroll target spent an item or turn");
+    }
     start_new(0x4312);
     std::memset(game.walls,0,sizeof game.walls); std::memset(game.monsters,0,sizeof game.monsters);
     game.door_count=0; game.player={10,10}; game.inventory[0]={ARROWS,255};

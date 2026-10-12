@@ -153,12 +153,14 @@ static void draw_effect_tile(int16_t x, int16_t y)
     }
 }
 
+#if !defined(ARDUROGUE2_BENCH)
 static void animation_tile(int16_t x, int16_t y)
 {
     draw_effect_tile(x, y);
     avm_display(false);
     animation_wait();
 }
+#endif
 
 __attribute__((noinline)) void animate_ray(Position origin, int8_t dx,
                                            int8_t dy, uint8_t steps)
@@ -213,6 +215,10 @@ __attribute__((noinline)) void animate_arrow(Position origin, int8_t dx, int8_t 
 
 __attribute__((noinline)) void animate_fire_burst(Position center)
 {
+#if defined(ARDUROGUE2_BENCH)
+    // Turn benchmarks exclude the explosion's deliberate animation delays.
+    (void)center;
+#else
     static const int8_t PROGMEM offsets[] = {
         0, 0, -1, -1, 0, -1, 1, -1, 1, 0,
         1, 1, 0, 1, -1, 1, -1, 0
@@ -223,6 +229,7 @@ __attribute__((noinline)) void animate_fire_burst(Position center)
                        static_cast<int16_t>(center.y) + offsets[i + 1]);
     render_play();
     avm_display(false);
+#endif
 }
 
 #if !defined(ARDUROGUE2_BENCH)
@@ -720,23 +727,97 @@ __attribute__((noinline)) static void render_direction_prompt()
     avm_draw_text_P(66, 63, F("B: Back"));
 }
 
+static uint16_t full_map_wall_word(uint16_t index)
+{
+    return static_cast<uint16_t>(game.walls[index] | (uint16_t(game.walls[index + 1]) << 8));
+}
+
+static uint16_t full_map_solid_word(uint16_t index, uint8_t y)
+{
+    uint16_t solid = full_map_wall_word(index);
+    if(y) solid &= full_map_wall_word(index - MAP_W / 8);
+    if(y + 1 < MAP_H) solid &= full_map_wall_word(index + MAP_W / 8);
+    return solid;
+}
+
+__attribute__((noinline)) static void draw_full_map_walls()
+{
+    for(uint8_t y = 0; y < MAP_H; ++y) {
+        uint16_t row = static_cast<uint16_t>(y) * (MAP_W / 8);
+        uint16_t left = 0xffff, solid = full_map_solid_word(row, y);
+        uint8_t mask = static_cast<uint8_t>(3u << ((y & 3) * 2));
+        uint8_t* pixels = __avm_framebuffer + static_cast<uint16_t>(y >> 2) * 128;
+        for(uint8_t byte = 0; byte < MAP_W / 8; byte += 2) {
+            uint16_t right = byte + 2 < MAP_W / 8 ? full_map_solid_word(row + byte + 2, y) : 0xffff;
+            // Match wall_exposed's 3x3 neighborhood, sixteen cells at a time.
+            uint16_t interior = solid & static_cast<uint16_t>((solid << 1) | (left >> 15)) &
+                static_cast<uint16_t>((solid >> 1) | (right << 15));
+            uint16_t known = game.explored[row + byte] | (uint16_t(game.explored[row + byte + 1]) << 8);
+            uint16_t exposed = full_map_wall_word(row + byte) & static_cast<uint16_t>(~interior) & known;
+            static const uint8_t PROGMEM first_bit[] = {0,0,1,0,2,0,1,0,3,0,1,0,2,0,1,0};
+            uint16_t remaining = exposed;
+            while(remaining) {
+                uint16_t part = remaining;
+                uint8_t bit = 0;
+                if(!(part & 255)) { part >>= 8; bit = 8; }
+                if(!(part & 15)) { part >>= 4; bit += 4; }
+                bit += first_bit[part & 15];
+                pixels[bit * 2] |= mask; pixels[bit * 2 + 1] |= mask;
+                remaining &= static_cast<uint16_t>(remaining - 1);
+            }
+            pixels += 32;
+            left = solid; solid = right;
+        }
+    }
+}
+
+__attribute__((noinline)) static void draw_full_map_floor()
+{
+    uint8_t radius = player_light_radius();
+    if(radius <= 1) {
+        for(int16_t y = int16_t(game.player.y) - radius; y <= game.player.y + radius; ++y)
+            for(int16_t x = int16_t(game.player.x) - radius; x <= game.player.x + radius; ++x) {
+                if(x < 0 || x >= MAP_W || y < 0 || y >= MAP_H) continue;
+                Position pos{static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
+                if(explored(pos) && !wall_exposed(pos.x,pos.y) && can_see(pos))
+                    __avm_framebuffer[(y >> 2) * 128 + x * 2] |= static_cast<uint8_t>(1u << ((y & 3) * 2));
+            }
+        return;
+    }
+    DungeonView view;
+    view.left = static_cast<int16_t>(game.player.x) - 6;
+    view.top = static_cast<int16_t>(game.player.y) - 6;
+    view.first_sx = view.left < 0 ? static_cast<uint8_t>(-view.left) : 0;
+    view.end_sx = view.left + 13 > MAP_W ? static_cast<uint8_t>(MAP_W - view.left) : 13;
+    view.first_sy = view.top < 0 ? static_cast<uint8_t>(-view.top) : 0;
+    view.end_sy = view.top + 13 > MAP_H ? static_cast<uint8_t>(MAP_H - view.top) : 13;
+    uint16_t walls[13], sight[13];
+    build_view_walls(view, walls);
+    ray_sight(walls, sight);
+    reveal_view_floor(view, sight, radius);
+    for(uint8_t sy = view.first_sy; sy < view.end_sy; ++sy)
+        for(uint8_t sx = view.first_sx; sx < view.end_sx; ++sx) {
+            if(!(sight[sy] & (1u << sx))) continue;
+            Position pos{static_cast<uint8_t>(view.left + sx), static_cast<uint8_t>(view.top + sy)};
+            if(explored(pos) && !wall_exposed(pos.x,pos.y))
+                __avm_framebuffer[(pos.y >> 2) * 128 + pos.x * 2] |= static_cast<uint8_t>(1u << ((pos.y & 3) * 2));
+        }
+}
+
 __attribute__((noinline)) static void render_full_map()
 {
-    for(uint8_t y = 0; y < MAP_H; ++y)
-        for(uint8_t x = 0; x < MAP_W; ++x) {
-            if(!explored({x, y}))
-                continue;
-            if(wall_exposed(x, y)) {
-                avm_draw_filled_rect_white(x * 2, y * 2, 2, 2);
-            } else if(x + 6 >= game.player.x && x <= game.player.x + 6 &&
-                      y + 6 >= game.player.y && y <= game.player.y + 6 &&
-                      can_see({x, y})) {
-                avm_draw_filled_rect_white(x * 2, y * 2, 1, 1);
-            }
-        }
-    for(const MapFeature& feature : game.features)
+    draw_full_map_walls();
+    draw_full_map_floor();
+    if(ui.mode != OBJECT_MAP) for(const MapFeature& feature : game.features)
         if(feature.id && !feature_is_hidden(feature.id) && explored(feature.pos))
             avm_draw_filled_rect_white(feature.pos.x * 2, feature.pos.y * 2, 2, 2);
+    if(ui.mode == OBJECT_MAP) for(const GroundItem& ground : game.ground) {
+        if(!ground.item.type || ground.pos.x >= MAP_W || ground.pos.y >= MAP_H) continue;
+        // Two off-diagonal pixels distinguish objects from the player's diagonal.
+        avm_draw_filled_rect_black(ground.pos.x * 2, ground.pos.y * 2, 2, 2);
+        avm_draw_filled_rect_white(ground.pos.x * 2 + 1, ground.pos.y * 2, 1, 1);
+        avm_draw_filled_rect_white(ground.pos.x * 2, ground.pos.y * 2 + 1, 1, 1);
+    }
     avm_draw_filled_rect_white(game.player.x * 2, game.player.y * 2, 1, 1);
     avm_draw_filled_rect_white(game.player.x * 2 + 1, game.player.y * 2 + 1, 1, 1);
 }
@@ -762,6 +843,7 @@ __attribute__((noinline)) void render()
     case PROJECTILE_DIRECTION: render_direction_prompt(); break;
     case WAND_DIRECTION: render_direction_prompt(); break;
     case FULL_MAP: render_full_map(); break;
+    case OBJECT_MAP: render_full_map(); break;
     case END: render_end(); break;
     }
     avm_display(false);

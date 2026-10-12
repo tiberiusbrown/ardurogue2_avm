@@ -48,32 +48,39 @@ Arrows use all eight info bits as unsigned quantity
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 27 stores one active floor in an 812-byte AVM `Game`. Generation
+Save version 29 stores one active floor in an 841-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 26 and older saves are incompatible; no migration is attempted.
+Version 28 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
 subtypes with independent enchantment and curse rolls. The former attack and
 cached defense fields store strength and magic resistance.
-It derives potion, scroll, ring, amulet, and wand appearances from the run seed instead of storing 42 mapping bytes. Seven bytes store their
-discoveries. It stores monster potion effects,
+It derives potion, scroll, ring, amulet, and wand appearances from the run seed
+instead of storing mapping arrays. Eight bytes track discoveries across 62
+identifiable types. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
 
-The eleven potions are healing, strength, dexterity, experience,
-invisibility, harming, poison, confusion, paralysis, slowing, and blindness. Every new
-run assigns each type a different color. Potions of the same type keep that
+The eighteen potions include healing, strength, dexterity, experience,
+invisibility, harming, poison, confusion, paralysis, slowing, blindness,
+See Invisible, Extra Healing, Restore Vitality, Haste, Levitation, Fire Resistance,
+and Fire. Every new run assigns each type a different color. Potions of the same type keep that
 color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
 can increase strength. Strength potions cap permanent base STR at 12; strength
 rings and weakness adjust effective STR separately. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
 
-The nine scrolls from ArduRogue identify or enchant an item, remove a curse,
+The fifteen scrolls include the original nine that identify or enchant an item, remove a curse,
 teleport the player, map the floor, or affect visible monsters with fear,
 torment, confusion, or poison. Reading a scroll reveals its type. Each run
 randomly assigns unknown scroll descriptions, and scrolls of the same type
 stack in inventory.
+
+The six additional scrolls hold nearby visible monsters, discover traps, summon
+a hostile creature, teleport visible monsters, explode in fire, or display ground
+objects. See [the consumables guide](docs/CONSUMABLES.md) for all effects, thrown
+behavior, duration ordering, generation weights, and validation results.
 
 Rings and amulets are separate item types, with eleven variants of each including artifacts. Rings
 can be worn two at a time, and one amulet can be worn. Their effects include
@@ -337,12 +344,14 @@ about 1.6 HP per landed hit.
 | Action menu | Up/Down, A | Choose Wait/Search, use item, drop item, Throw/Shoot, full map, save and exit, or abandon |
 | Item selection | Up/Down, A | Select an item for the chosen action |
 | Item selection | B | Cancel selection |
+| Identify/Enchant/Uncurse target selection | B | Cancel without consuming the scroll or a turn |
 | Throw/Shoot selection | Up/Down, A | Choose arrows or a potion; Ammo appears first |
 | Wand direction | Direction pad | Fire the selected wand |
 | Wand direction | B | Cancel without spending a charge or turn |
 | Projectile direction | Direction pad | Shoot/throw cardinally; B cancels without a turn |
 | Confirmation | A/B | Confirm or cancel abandoning the game |
 | Projectile direction, full map | B | Return to the dungeon |
+| Detect Objects map | A/B | Return to the dungeon without spending a turn |
 
 Saving exits to the title screen. Continuing consumes the save so a death
 cannot be undone by reloading it. A completed or abandoned run updates the
@@ -435,9 +444,9 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
-The AVM build uses an 812-byte saved layout and two-byte items, eight-byte
-monsters, and four-byte ground items. The final lighting build has a complete
-250-byte maximum stack bound and zero analysis gaps within the 256-byte VM
+The AVM build uses an 841-byte saved layout and two-byte items, eight-byte
+monsters, and four-byte ground items. The consumables build has a complete
+250-byte production maximum stack bound (252 bytes for benchmarks) and zero analysis gaps within the 256-byte VM
 stack. Future changes must continue checking the linker report. Rendering
 reuses transient row scratch outside the saved layout and preserves explored
 terrain separately from current sight. See the lighting implementation report

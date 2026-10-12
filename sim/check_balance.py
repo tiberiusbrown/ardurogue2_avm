@@ -194,7 +194,9 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
                    zero_progression_deaths=int((deaths.deepest_floor.eq(0) & deaths.level.eq(1) & deaths.score.eq(0)).sum()),
                    starvation_deaths=int(deaths.death_cause.eq("starvation").sum()),simulator_failures=0,
                    consumables_per_run=float(floors.consumables_used.sum()/n),
-                   healing_drunk_per_run=float(items.loc["HEALING","potions_drunk"]/n),
+                   healing_drunk_per_run=float(items.reindex(["HEALING","EXTRA_HEALING"],fill_value=0).potions_drunk.sum()/n),
+                   ordinary_healing_drunk_per_run=float(items.loc["HEALING","potions_drunk"]/n),
+                   extra_healing_drunk_per_run=float(items.reindex(["EXTRA_HEALING"],fill_value=0).potions_drunk.sum()/n),
                    control_used_per_run=float(items.loc[["CONFUSION","PARALYSIS","SLOWING","STRENGTH",
                        "INVISIBILITY","SCROLL_FEAR","SCROLL_TELEPORT","SCROLL_MASS_CONFUSE"],"used"].sum()/n),
                    wand_charges_used_per_run=float(items.charges_used.sum()/n),
@@ -281,7 +283,8 @@ def make_report(directory, executable=None, expected_runs=10000, baseline=None):
              "Mortality = failed visits / entered visits; reach uses all starting runs. "
              "Simulator failures invalidate the report and are never counted as deaths. "
              "Post-Yendor survival uses acquisitions as its denominator.", "",
-             "Control reserves count Confusion, Paralysis, Slowing, Strength and Invisibility potions, "
+             "Healing units and doses include Healing and Extra Healing, without weighting their different potency. "
+             "The legacy control-reserve counter counts Confusion, Paralysis, Slowing, Strength and Invisibility potions, "
              "plus Fear, Teleport and Mass Confuse scrolls. Usable wand charges exclude cursed/unreliable "
              "wands and Digging; offensive = Fire/Striking/Ice, emergency = Force/Teleport/Polymorph. "
              "Heavy weapon occupancy means Two-handed sword; top armor means Plate mail. "

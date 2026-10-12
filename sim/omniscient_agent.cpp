@@ -164,6 +164,12 @@ int value(Item i) {
     }
     switch(i.type) {
     case FOOD: return quantity(FOOD) >= 8 ? 0 : (game.hunger < 60 ? 180 : 70);
+    case POTION_EXTRA_HEALING: return 220;
+    case POTION_RESTORE_VITALITY: return game.vamp_drain || game.weakened ? 160 : 70;
+    case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: return 100;
+    case POTION_FIRE: return 85;
+    case SCROLL_HOLD_MONSTER: return 160; case SCROLL_MASS_TELEPORT: return 180;
+    case SCROLL_DETECT_TRAPS: return 100; case SCROLL_FIRE: return 45;
     case POTION_HEALING: return 180;
     case POTION_EXPERIENCE: return 220;
     case POTION_STRENGTH: return game.strength < 12 || game.weakened ? 160 : 0;
@@ -641,7 +647,14 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         for(const Monster& m:game.monsters) if(m.type && distance(m.pos,game.player)<=2 &&
             ((monster_flags(m.type)&MON_NATURAL_INVIS) || monster_effect(m,MON_INVISIBLE)))
             return use(sight,"temporary sight against invisible contact");
+    int restoration = find(POTION_RESTORE_VITALITY);
+    if(restoration >= 0 && (game.vamp_drain || game.weakened)) return use(restoration,"restore drained vitality");
+    if((game.confused || game.slowed) && find(POTION_EXTRA_HEALING)>=0) return use(find(POTION_EXTRA_HEALING),"clear harmful statuses with extra healing");
     int healing = find(POTION_HEALING);
+    if(healing < 0 || game.confused || game.slowed) {
+        int extra = find(POTION_EXTRA_HEALING);
+        if(extra >= 0) healing = extra;
+    }
     Danger risk = danger();
     if(retreat_floor != game.floor) { retreat_floor = game.floor; retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
     // Track current hostile identities, not a distance/visibility threshold.
@@ -653,6 +666,14 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
     if(healing >= 0 && (game.hp*100 <= player_max_hp()*(adjacent >= 0 ? 65 : 45) ||
                       (game.weakened && game.hp < player_max_hp())))
         return use(healing,"heal and restore strength");
+    if(threats && !game.haste && find(POTION_HASTE)>=0) return use(find(POTION_HASTE),"haste in combat");
+    if(!game.fire_resistance && find(POTION_FIRE_RESISTANCE)>=0)
+        for(const auto& m:game.monsters) if(m.type==DRAGON && can_see(m.pos)) return use(find(POTION_FIRE_RESISTANCE),"resist dragon fire");
+    if(adjacent>=0 && player_can_see_monster(uint8_t(adjacent)) && can_see(game.monsters[adjacent].pos)) {
+        if(find(SCROLL_HOLD_MONSTER)>=0 && !game.monsters[adjacent].stun && (risk.emergency || threats>1)) return use(find(SCROLL_HOLD_MONSTER),"hold nearby threats");
+        if(find(SCROLL_MASS_TELEPORT)>=0 && risk.emergency) return use(find(SCROLL_MASS_TELEPORT),"displace visible threats");
+        if(find(SCROLL_FIRE)>=0 && player_fire_effect()>0 && game.monsters[adjacent].type!=DRAGON) return use(find(SCROLL_FIRE),"fire burst with immunity");
+    }
     if(risk.emergency) {
         int experience = find(POTION_EXPERIENCE);
         if(experience >= 0 && game.level <= 12) return use(experience,"emergency experience recovery");
@@ -710,11 +731,12 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
                 a.dx = dxs[d]; a.dy = dys[d]; a.goal = "control dangerous monster"; a.destination = m.pos; return a;
             }
         }
-        for(uint8_t type : {uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(POTION_HARMING)}) {
+        for(uint8_t type : {uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(POTION_HARMING),uint8_t(POTION_FIRE)}) {
             int s = find(type); if(s < 0) continue;
             Item i = game.inventory[s];
             if(is_wand(type) && (wand_afflicted(i) || !wand_charges(i))) continue;
             if(type == WAND_FIRE && (m.type == DRAGON || !fire_safe(i,d))) continue;
+            if(type == POTION_FIRE && (m.type == DRAGON || (player_fire_effect()<=0 && square_contains(ray.end,game.player,1)))) continue;
             Action a; a.kind = is_wand(type) ? ActionKind::Wand : ActionKind::Throw;
             a.slot = static_cast<uint8_t>(s); a.dx = dxs[d]; a.dy = dys[d];
             if(is_wand(type) && !wand_needs_direction(i)) a.dx = a.dy = 0;
@@ -754,6 +776,9 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         int s = find(type);
         if(s >= 0 && (type == POTION_STRENGTH ? game.strength : game.dexterity) < 12) return use(s,"permanent stat improvement");
     }
+    if(!threats && find(SCROLL_DETECT_TRAPS)>=0) return use(find(SCROLL_DETECT_TRAPS),"discover traps before travel");
+    if(!game.levitation && find(POTION_LEVITATION)>=0) for(const auto& f:game.features)
+        if(feature_is_trap(f.id) && !feature_is_hidden(f.id) && square_contains(game.player,f.pos,1)) return use(find(POTION_LEVITATION),"float over known traps");
     int enchant = find(SCROLL_ENCHANT);
     if(enchant >= 0) {
         int target = -1;

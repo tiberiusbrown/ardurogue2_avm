@@ -94,6 +94,7 @@ RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
         if(a.kind==ActionKind::Move) message_action.kind=ExplorerActionKind::Move;
         message_action.dx=a.dx; message_action.dy=a.dy;
         messages.prepare(message_action,{before.player.x,before.player.y},before.confused!=0);
+        session.object_detection=false; // The preceding observation consumed the public map snapshot.
         bool accepted = dispatch_policy(a,agent);
         last_rejected=!accepted;
         if(options.trace && !accepted) *options.trace << "  action rejected\n";

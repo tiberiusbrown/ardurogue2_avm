@@ -22,7 +22,7 @@ void arena() {
 void check_temporary_sight() {
     arena(); game.inventory[INVENTORY-1]={POTION_SEE_INVISIBLE,2};
     require(!item_type_identified(POTION_SEE_INVISIBLE),"sight starts unidentified");
-    require(use_inventory(INVENTORY-1) && game.see_invisible==SEE_INVISIBLE_DURATION-1 &&
+    require(use_inventory(INVENTORY-1) && game.see_invisible>=19 && game.see_invisible<=29 &&
         item_value(game.inventory[INVENTORY-1])==1 && item_type_identified(POTION_SEE_INVISIBLE),"drink sight/identify/high slot");
     require(player_light_radius()==1,"sight extended light");
     Monster phantom={{21,15},PHANTOM,12,0,{0,0},0}; game.monsters[0]=phantom;
@@ -40,8 +40,9 @@ void check_temporary_sight() {
     game.inventory[1].info=1; require(player_can_see_monster(0),"ordinary sight ring changed");
     game.ring_slots[0]=NONE; game.monsters[0]={}; game.monsters[1]={};
     game.see_invisible=3;
-    require(use_inventory(INVENTORY-1) && game.see_invisible==SEE_INVISIBLE_DURATION-1,"repeat dose did not refresh timer");
-    for(unsigned n=1;n<SEE_INVISIBLE_DURATION;++n) { end_turn(); require(game.see_invisible==SEE_INVISIBLE_DURATION-1-n,"sight duration tick"); }
+    require(use_inventory(INVENTORY-1) && game.see_invisible>=19 && game.see_invisible<=29,"repeat dose did not refresh timer");
+    unsigned remaining=game.see_invisible;
+    for(unsigned n=1;n<=remaining;++n) { end_turn(); require(game.see_invisible==remaining-n,"sight duration tick"); }
     require(feature_status_text().find("potion sight fades")!=std::string::npos,"sight expiration feedback missing");
     game.see_invisible=7; game.inventory[1]={RING_SEE_INVISIBLE,1}; game.ring_slots[0]=1;
     for(unsigned n=0;n<7;++n) end_turn(); game.monsters[0]=phantom;

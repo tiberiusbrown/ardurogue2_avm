@@ -5,11 +5,11 @@
 #include <stdint.h>
 namespace sim {
 enum class EventKind {
-    ItemIdentified, InventoryFull, SeeInvisibleExpired, FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
+    ItemIdentified, InventoryFull, SeeInvisibleExpired, PlayerEffectExpired, FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,
     ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget,
-    FeatureDiscovered, FeatureActivated, FeatureDisplacement, FeatureDeclined, FeatureSpawn, HolyDamage, MonsterTrapActivated, MonsterTrapTeleport, MonsterTrapStatus, MonsterAware
+    FeatureDiscovered, FeatureActivated, FeatureDisplacement, FeatureDeclined, FeatureSpawn, HolyDamage, MonsterTrapActivated, MonsterTrapTeleport, MonsterTrapStatus, MonsterAware, MonsterSummoned
 };
 enum class Cause : uint8_t { Other, Monster, Starvation, Item, Fire, Trap, Feature, MonsterTrap };
 enum class Special : uint8_t { Poison, Confusion, Paralysis, Fire };
