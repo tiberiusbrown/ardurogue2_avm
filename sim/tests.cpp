@@ -21,11 +21,61 @@ void arena() {
     game.hunger=220; game.player={4,4}; game.up={1,1}; game.down={8,8};
     game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
 }
+void balance_controls() {
+    for(const char* text:{"balance:ground=15","balance:ground=25","balance:inventory=21",
+            "balance:sight-duration=0","balance:sight-duration=255","balance:sight-percent=101",
+            "balance:phantom-count=13","balance:unknown=1"}) {
+        bool rejected=false;
+        try { parse_rule(text); } catch(const std::runtime_error&) { rejected=true; }
+        check(rejected,"invalid balance intervention accepted");
+    }
+    for(unsigned ground:{16u,20u,24u}) for(unsigned inventory:{16u,20u}) {
+        auto exp=std::make_shared<RuleExperiment>();
+        exp->rules={parse_rule("balance:ground="+std::to_string(ground)),
+            parse_rule("balance:inventory="+std::to_string(inventory)),parse_rule("balance:phantom-count=10")};
+        Collector c; c.experiment=exp; CollectScope scope(c);
+        arena();
+        check(ground_item_capacity()==ground && inventory_capacity()==inventory &&
+            yendor_ground_slot()==ground-1,"logical balance capacities");
+        for(unsigned n=0;n<inventory;++n) game.inventory[n]=make_equipment(DAGGER,0);
+        game.ground[ground-1]={game.player,{POTION_SEE_INVISIBLE,1}};
+        check(take_item(uint8_t(ground-1))==PICKUP_NEEDS_SWAP,"inactive inventory slots used for pickup");
+        game.inventory[inventory-1]={};
+        check(take_item(uint8_t(ground-1))==PICKUP_TAKEN &&
+            game.inventory[inventory-1].type==POTION_SEE_INVISIBLE,"logical last slot inaccessible");
+        for(unsigned seed=1;seed<=8;++seed) {
+            arena(); game.run_seed=uint16_t(seed); game.floor=4; make_floor(); unsigned count=0;
+            for(auto& m:game.monsters) if(m.type) { ++count; check(m.type==PHANTOM,"balance mixed phantom floor"); }
+            check(count==10,"phantom density intervention did not apply");
+            for(unsigned n=ground;n<GROUND_ITEMS;++n) check(!game.ground[n].item.type,"inactive ground slot generated");
+            game.floor=FLOORS-1; make_floor();
+            check(!game.ground[ground-1].item.type,"logical Yendor slot was occupied");
+            game.inventory[0]={POTION_HEALING,1};
+            for(unsigned n=0;n<ground-1;++n) game.ground[n]={{1,1},{FOOD,1}};
+            check(!drop_inventory(0) && !game.ground[ground-1].item.type,"drop stole Yendor reservation");
+        }
+    }
+    for(unsigned duration:{20u,40u,80u}) {
+        arena(); auto exp=std::make_shared<RuleExperiment>();
+        exp->rules={parse_rule("balance:sight-duration="+std::to_string(duration))};
+        Collector c; c.experiment=exp; CollectScope scope(c); game.inventory[0]={POTION_SEE_INVISIBLE,2};
+        check(use_inventory(0) && game.see_invisible==duration-1,"duration control was not honored");
+        game.see_invisible=2; check(use_inventory(0) && game.see_invisible==duration-1,"controlled dose did not refresh");
+        for(unsigned n=1;n<duration;++n) end_turn();
+        check(!game.see_invisible && c.data.items[POTION_SEE_INVISIBLE].expired==1,"controlled duration expiry telemetry");
+    }
+}
 void determinism() {
     OmniscientAgent a;
     std::ostringstream first,second,without;
     constexpr uint16_t escape_seed = 24;
-    Options o; o.trace=&first; auto r1=run(escape_seed,a,o); Game final=game;
+    Options o;
+    auto baseline=std::make_shared<RuleExperiment>();
+    for(const char* rule:{"balance:ground=16","balance:inventory=16","balance:sight-percent=0",
+            "balance:sight-early-percent=0","balance:healing-percent=0",
+            "balance:phantom-strength=6","balance:phantom-dexterity=4","balance:phantom-health=12",
+            "balance:late-strength-percent=100","balance:late-health-percent=100"}) baseline->rules.push_back(parse_rule(rule));
+    o.experiment=baseline; o.trace=&first; auto r1=run(escape_seed,a,o); Game final=game;
     o.trace=&second; auto r2=run(escape_seed,a,o);
     check(all_metrics(r1)==all_metrics(r2) && first.str()==second.str(),"same seed changed metrics/trace");
     check(std::memcmp(&final,&game,sizeof game)==0,"same seed changed final state");
@@ -125,10 +175,10 @@ void hooks() {
         "damage telemetry includes overkill or misses a kill");
     check(c.data.floors[0].damage_dealt==3,"floor damage mismatch");
     game.monsters[1]={{5,4},LORD,1,0,{0,0},0}; damage_monster(1,1,true);
-    check(c.data.items[YENDOR_AMULET].generated==1 && game.ground[15].item.type==YENDOR_AMULET,
+    check(c.data.items[YENDOR_AMULET].generated==1 && game.ground[yendor_ground_slot()].item.type==YENDOR_AMULET,
         "Lord drop generation hook missing");
-    game.player=game.ground[15].pos; c.observe();
-    Action take; take.kind=ActionKind::Take; take.target=15; check(dispatch(take),"Yendor pickup failed");
+    game.player=game.ground[yendor_ground_slot()].pos; c.observe();
+    Action take; take.kind=ActionKind::Take; take.target=yendor_ground_slot(); check(dispatch(take),"Yendor pickup failed");
     check(game.has_amulet && c.data.items[YENDOR_AMULET].picked_up==1 &&
         c.data.items[YENDOR_AMULET].reached==1,"Yendor pickup/reach telemetry missing");
     game.inventory[0]={FOOD,2}; Action eat; eat.kind=ActionKind::Use; eat.slot=0; check(dispatch(eat),"food failed");
@@ -297,7 +347,7 @@ void monster_trap_telemetry() {
     Collector c; CollectScope scope(c); c.enter_floor(); activate_monster_trap(0);
     check(c.data.features[FEATURE_MAGIC_DRAIN_TRAP/2].monster_killed==1 && c.data.features[FEATURE_MAGIC_DRAIN_TRAP/2].monster_damage==1 &&
         c.data.monsters[LORD].killed==1 && c.data.monsters[LORD].damage_taken==1 && !c.data.monsters[LORD].player_attacks && !game.score && !game.xp &&
-        c.data.items[YENDOR_AMULET].generated==1 && game.ground[15].item.type==YENDOR_AMULET,"trap lethal attribution/Yendor telemetry");
+        c.data.items[YENDOR_AMULET].generated==1 && game.ground[yendor_ground_slot()].item.type==YENDOR_AMULET,"trap lethal attribution/Yendor telemetry");
     arena(); game.monsters[0]={{5,4},GOBLIN,100,0,{0,0},0}; game.features[0]={{5,4},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
     auto control=std::make_shared<RuleExperiment>(); control->rules={parse_rule("no-monster-traps")}; c.experiment=control;
     Game before=game; activate_monster_trap(0); after_floor_generation();
@@ -387,8 +437,8 @@ void experiments() {
 }
 int main() {
     try {
-        static_assert(sizeof(Game)==812 && SAVE_VERSION==27,"native saved layout changed");
-        monster_trap_slot_reuse(); monster_trap_forced_holy_reuse(); monster_trap_telemetry(); check_v2_policy(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
+        static_assert(offsetof(Game,see_invisible)==812 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==28,"native saved layout changed");
+        monster_trap_slot_reuse(); monster_trap_forced_holy_reuse(); monster_trap_telemetry(); check_v2_policy(); balance_controls(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

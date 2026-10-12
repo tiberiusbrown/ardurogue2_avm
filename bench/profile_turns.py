@@ -28,7 +28,7 @@ INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("RING_SEE_INVISIBLE", "RING_ILLUMINATION", "RINGS"),
                     ("AMULET_SPEED", "AMULET_BRILLIANCE", "AMULETS"),
                     ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
-                    ("POTION_HEALING", "POTION_BLINDNESS", "POTIONS"),
+                    ("POTION_HEALING", "POTION_SEE_INVISIBLE", "POTIONS"),
                     ("SCROLL_IDENTIFY", "SCROLL_MASS_POISON", "SCROLLS"))
 
 
@@ -92,7 +92,7 @@ def state_fields(case):
         "door_open": "(game.doors[0].pos.y & 0x80) != 0",
         "item_type": "game.inventory[0].type", "item_info": "game.inventory[0].info",
         "weapon": "game.weapon_slot", "armor": "game.armor_slot",
-        "offhand": "game.offhand_slot", "blindness": "game.blindness",
+        "offhand": "game.offhand_slot", "blindness": "game.blindness", "sight": "game.see_invisible",
         "amulet": "game.amulet_slot", "ring0": "game.ring_slots[0]", "ring1": "game.ring_slots[1]",
         "ground_type": "game.ground[0].item.type",
         "digging_wall": "(game.walls[(16 * MAP_W + 35) >> 3] & (1u << (35 & 7))) != 0",
@@ -102,7 +102,7 @@ def state_fields(case):
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
-    if case.name.startswith("monster_trap_"):
+    if case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
         fields["monster_x"] = "rogue::game.monsters[0].pos.x"
         fields["monster_y"] = "rogue::game.monsters[0].pos.y"
         for i in range(1, 4):
@@ -120,7 +120,7 @@ def state_fields(case):
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(POTION_BLINDNESS - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_SEE_INVISIBLE - POTION_HEALING + 1 + SCROLL_MASS_POISON - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
@@ -141,7 +141,7 @@ def state_fields(case):
         fields["food_type"] = "rogue::ItemType::FOOD"
         fields["food_group"] = "rogue::InventoryGroup::FOODS"
         fields["quest_group"] = "rogue::InventoryGroup::QUEST_ITEMS"
-        for slot in range(16):
+        for slot in range(int(re.search(r"constexpr uint8_t INVENTORY = (\d+);", Path(__file__).parents[1].joinpath("src/model.hpp").read_text())[1])):
             item = f"rogue::game.inventory[{slot}]"
             fields[f"pack_type_{slot}"] = item + ".type"
             fields[f"pack_info_{slot}"] = item + ".info"
@@ -293,6 +293,11 @@ def validate_outcome(case, before, after, explored):
         require(after["hp"] == 100 and not after["item_type"] and after["amulet"] == 255, "Phoenix Heart failed")
     if case.name in ("equip_light", "equip_shield"):
         require(after["offhand"] == 0 and after["expected_item"], "offhand was not equipped")
+    if case.name == "drink_sight": require(after["sight"] == 39, "temporary sight duration missing")
+    if case.name == "sight_expire_dense": require(after["sight"] == 0, "temporary sight did not expire")
+    if case.name == "throw_sight":
+        require(after["monster_hp"] == before["monster_hp"] and after["sight"] == 0, "thrown sight had an effect")
+    if case.name == "sight_cursed_trap": require(after["sight"] == 39 and after["ring0"] == 1, "cursed ring sight dose changed")
     if case.name == "fuel_out":
         require(after["offhand"] == 255 and after["item_type"] == 0, "exhausted torch remained equipped/carried")
     if case.name == "drink_blindness": require(7 <= after["blindness"] <= 14, "blindness duration missing")
@@ -601,7 +606,7 @@ def main(argv=None):
         if args.emit_only:
             continue
         try:
-            if case.name.startswith("monster_trap_"):
+            if case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
                 measurement = run_paginated(case, contract, case_dir, Path(lldb).resolve(), args.elf.resolve(),
                                             args.native, args.deadline_ms, args.timeout)
             else:

@@ -49,9 +49,9 @@ static uint8_t expected_rating(uint8_t type)
 
 static void check_equipment_definitions_and_ranges()
 {
-    static_assert(LONG_SWORD == 14 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
+    static_assert(LONG_SWORD == 15 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
-                  POTION_COUNT == 11 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
+                  POTION_COUNT == 12 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
                   SCROLL_COUNT == 9 && WAND_COUNT == 7,
                   "item groups are no longer contiguous or changed size");
     for(const auto& weapon : weapons) {
@@ -555,11 +555,20 @@ static void check_generated_equipment()
         }
         unsigned experience = potion_counts[floor][POTION_EXPERIENCE - POTION_HEALING];
         unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? POTION_SLOWING : POTION_HEALING) - POTION_HEALING];
-        bool early_recovery = floor > 0 && floor < 5;
-        require(experience * 100 > potions * 3 && experience * 100 < potions * 7 &&
-                replacement * 100 > potions * (early_recovery ? 19 : 11) &&
-                replacement * 100 < potions * (early_recovery ? 29 : 17),
-                "experience rarity or tactical/recovery supply pacing regressed");
+        const double sight = (floor >= 2 && floor <= 4 ? SEE_INVISIBLE_EARLY_PERCENT : SEE_INVISIBLE_POTION_PERCENT) / 100.0;
+        const double healing = HEALING_REPLACEMENT_PERCENT / 100.0;
+        const double retained = (1 - sight) * (1 - healing);
+        const bool replaced_by_slowing = floor == 0 || (floor >= 5 && floor < 10);
+        const double expected_replacement = replaced_by_slowing ? 3.0 / 22 * retained :
+            (floor < 5 ? 5.0 : 3.0) / 22 * retained + healing * (1 - sight);
+        auto close_to_probability = [&](unsigned count, double probability) {
+            return std::abs(count - potions * probability) <
+                6 * std::sqrt(potions * probability * (1 - probability)) + potions * 0.005;
+        };
+        require(close_to_probability(experience, retained / 22) &&
+                close_to_probability(replacement, expected_replacement) &&
+                close_to_probability(potion_counts[floor][POTION_SEE_INVISIBLE - POTION_HEALING], sight),
+                "selected potion rarity or healing distribution regressed");
     }
 }
 

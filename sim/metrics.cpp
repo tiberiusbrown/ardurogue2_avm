@@ -31,7 +31,9 @@ const Field<ItemMetrics> item_fields[] = {
     {"carried",&ItemMetrics::carried},{"charges_used",&ItemMetrics::charges_used},
     {"potions_drunk",&ItemMetrics::drunk},{"potions_thrown",&ItemMetrics::thrown},
     {"scrolls_read",&ItemMetrics::scrolls_read},{"turns_equipped",&ItemMetrics::turns_equipped},
-    {"wands_picked_up",&ItemMetrics::wands_picked_up},{"wands_activated",&ItemMetrics::wands_activated}};
+    {"wands_picked_up",&ItemMetrics::wands_picked_up},{"wands_activated",&ItemMetrics::wands_activated},
+    {"identified",&ItemMetrics::identified},{"expired",&ItemMetrics::expired},
+    {"active_turns",&ItemMetrics::active_turns},{"pack_full",&ItemMetrics::pack_full}};
 const Field<MonsterMetrics> monster_fields[] = {
     {"generated",&MonsterMetrics::generated},{"encountered",&MonsterMetrics::encountered},
     {"engaged",&MonsterMetrics::engaged},{"killed",&MonsterMetrics::killed},
@@ -107,6 +109,9 @@ bool features_enabled() {
 bool original_features(FeatureVariant variant) {
     return collector && collector->experiment && collector->experiment->original_features(variant);
 }
+uint8_t balance_value(const char* name, uint8_t fallback) {
+    return collector && collector->experiment ? collector->experiment->balance_value(name,fallback) : fallback;
+}
 bool full_light() {
     return collector && collector->experiment && collector->experiment->full_light();
 }
@@ -116,7 +121,7 @@ bool artifacts_enabled() {
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
-        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS",
+        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE",
         "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","STORMBRINGER","GLASS_SWORD","HAMMER_OF_RUIN","CHAIN_MAIL","LEATHER_ARMOR",
         "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","CANDLE","TORCH","LANTERN","GLOWING_ORB","BUCKLER","ROUND_SHIELD","TOWER_SHIELD","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
@@ -485,6 +490,10 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(rogue::is_light(rogue::game.inventory[offhand].type)) ++data.offhand_light_turns;
         }
         ++data.turns;
+        if(enabled && rogue::game.see_invisible) {
+            ++data.items[rogue::POTION_SEE_INVISIBLE].active_turns;
+            if(!data.floors.empty()) ++data.floors.back().items[rogue::POTION_SEE_INVISIBLE].active_turns;
+        }
         if(enabled) {
             uint8_t weapon = rogue::game.weapon_slot < rogue::INVENTORY ?
                 rogue::game.inventory[rogue::game.weapon_slot].type : uint8_t(rogue::NO_ITEM);
@@ -545,6 +554,13 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
     };
     switch(k) {
+    case EventKind::ItemIdentified:
+        ++data.items[type].identified; if(f) ++f->items[type].identified; break;
+    case EventKind::InventoryFull:
+        ++data.items[type].pack_full; if(f) ++f->items[type].pack_full; break;
+    case EventKind::SeeInvisibleExpired:
+        ++data.items[rogue::POTION_SEE_INVISIBLE].expired;
+        if(f) ++f->items[rogue::POTION_SEE_INVISIBLE].expired; break;
     case EventKind::MonsterTrapActivated: feature_metric(type, &FeatureMetrics::monster_activated, 1); break;
     case EventKind::MonsterTrapTeleport: feature_metric(type, &FeatureMetrics::monster_teleported, amount); break;
     case EventKind::MonsterTrapStatus: feature_metric(type, &FeatureMetrics::monster_status, amount); break;

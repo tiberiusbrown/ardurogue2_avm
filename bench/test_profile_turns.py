@@ -26,8 +26,9 @@ class TurnBenchmarks(unittest.TestCase):
         cases = turns.read_benchmarks(Path(__file__).with_name("bench.cpp"))
         self.assertEqual(cases, turns.BENCHMARKS)
         self.assertEqual([case.index for case in cases], list(range(len(cases))))
-        self.assertEqual(len(cases), 81)
-        self.assertEqual({c.name for c in cases[78:]}, {'visibility_trap_hidden','visibility_trap_cursed','visibility_trap_blind'})
+        self.assertEqual(len(cases), 85)
+        self.assertEqual({c.name for c in cases[78:81]}, {'visibility_trap_hidden','visibility_trap_cursed','visibility_trap_blind'})
+        self.assertEqual({c.name for c in cases[81:]}, {'drink_sight','throw_sight','sight_expire_dense','sight_cursed_trap'})
         names = {case.name for case in cases}
         self.assertIn("equip_cursed_amulet", names)
         self.assertTrue(names.isdisjoint({"descend", "throw_harming", "wand_force", "wand_fire"}))
@@ -45,7 +46,7 @@ class TurnBenchmarks(unittest.TestCase):
             self.assertFalse((project / "src/model.hpp").exists())
 
     def test_trap_visibility_outcomes(self):
-        for case in turns.BENCHMARKS[78:]:
+        for case in turns.BENCHMARKS[78:81]:
             before=dict(valid=1,hp=100,turns=0,x=32,y=16,monster_x=34,monster_y=16,monster_hp=100,feature_id=3)
             after=dict(before,turns=1,monster_x=33,monster_hp=97,feature_id=3 if case.name.endswith('_blind') else 2)
             turns.validate_outcome(case,before,after,b'')
@@ -163,13 +164,13 @@ class TurnBenchmarks(unittest.TestCase):
             return bytes(pixels)
         if case.button == "A":
             return bytes(128 * 64), frame(0, 1)
-        return frame(9, 6), frame(10, 6)
+        return frame(13, 6), frame(14, 6)
 
     def browse_sample(self, name="inventory_down_wands"):
         case, _, _, profile, records = self.sample()
         case = next(case for case in turns.BENCHMARKS if case.name == name)
         before = {field: 0 for field in turns.state_fields(case)}
-        before.update(valid=1, hp=100, x=32, y=16, pack_size=16, visible_rows=7, group_count=9)
+        before.update(valid=1, hp=100, x=32, y=16, pack_size=20, visible_rows=7, group_count=9)
         for group in range(7):
             before[f"group_first_{group}"] = group + 1
             before[f"group_last_{group}"] = group + 1
@@ -177,10 +178,10 @@ class TurnBenchmarks(unittest.TestCase):
         before.update(food_type=8, food_group=7, quest_group=8)
         if case.button == "A":
             for group in range(9):
-                slot = 15 - group
+                slot = 19 - group
                 before[f"pack_type_{slot}"] = group + 1
         else:
-            for slot in range(16):
+            for slot in range(20):
                 before[f"pack_type_{slot}"] = 50
                 before[f"pack_info_{slot}"] = 0xdf
             before.update(group_first_4=50, group_last_4=50)

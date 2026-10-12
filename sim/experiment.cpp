@@ -32,6 +32,23 @@ int group(uint8_t t) {
 }
 }
 Rule parse_rule(const std::string& text) {
+    if(text.rfind("balance:",0)==0) {
+        auto equal=text.find('=');
+        if(equal==std::string::npos) throw std::runtime_error("balance requires name=value");
+        Rule r; r.balance_parameter=text.substr(8,equal-8); int value=integer(text.substr(equal+1));
+        int min=0,max=100;
+        auto& n=r.balance_parameter;
+        if(n=="ground") { min=16; max=24; }
+        else if(n=="inventory") { min=16; max=20; }
+        else if(n=="monsters" || n=="phantom-count") { min=1; max=12; }
+        else if(n=="sight-duration") { min=1; max=254; }
+        else if(n=="phantom-strength" || n=="phantom-dexterity" || n=="phantom-speed" || n=="phantom-health") { min=1; max=255; }
+        else if(n=="phantom-armor") max=20;
+        else if(n!="sight-percent" && n!="sight-early-percent" && n!="healing-percent" && n!="early-equipment-percent" && n!="late-strength-percent" && n!="late-dexterity-percent" && n!="late-health-percent" && n!="ascent-strength-percent")
+            throw std::runtime_error("unknown balance parameter: "+n);
+        if(value<min || value>max) throw std::runtime_error("balance value out of range: "+n);
+        r.balance_setting=uint8_t(value); return r;
+    }
     static const char* original_rules[]={"original-teleport-placement","original-early-traps","original-holy-generation","original-early-density","original-early-damage","original-early-roster"};
     for(int i=0;i<6;++i) if(text==original_rules[i]) { Rule r; r.original=i; return r; }
     for(int i=0;i<4;++i) if(text==(i==0 ? "no-teleport-traps" : i==1 ? "no-early-damaging-traps" : i==2 ? "interactive-features-only" : "traps-only")) {
@@ -85,7 +102,7 @@ Rule parse_rule(const std::string& text) {
 void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vector<Intervention>& ledger) const {
     using namespace rogue;
     for(const auto& r:rules) {
-        if(r.full_light || r.light_awareness || r.legacy_awareness || r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
+        if(!r.balance_parameter.empty() || r.full_light || r.light_awareness || r.legacy_awareness || r.ordinary_items || r.no_features || r.no_monster_traps || r.original>=0) continue;
         if(r.feature || r.feature_mode>=0) {
             unsigned removed=0;
             for(auto& f:g.features) {
@@ -125,6 +142,10 @@ void RuleExperiment::apply(rogue::Game& g, ExperimentContext context, std::vecto
             r.monster ? monster_name(r.from) : item_name(r.from),
             r.remove ? "NONE" : r.monster ? monster_name(r.to) : item_name(r.to),count});
     }
+}
+uint8_t RuleExperiment::balance_value(const char* name, uint8_t fallback) const {
+    for(const auto& r:rules) if(r.balance_parameter==name) return r.balance_setting;
+    return fallback;
 }
 bool RuleExperiment::original_features(FeatureVariant variant) const {
     for(const auto& r:rules) if(r.original==int(variant)) return true;

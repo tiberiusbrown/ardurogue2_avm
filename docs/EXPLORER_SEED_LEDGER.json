@@ -28,7 +28,37 @@
     "offhand-v3r/no-switch: seed 169 reverse-swap failure; fixed, rerun",
     "awareness-development/omniscient-v2-equipment-light-awareness: seed 1461 reverse-swap failure; fixed, rerun",
     "frozen-stages-ab and final-stages-ab: superseded prototype batches; interrupted, never counted as deaths",
-    "tune-v3: pre-boundary-correction search; not promoted"
+    "tune-v3: pre-boundary-correction search; not promoted",
+    "game-balance/screen and initial combined prototypes: logical-capacity artifact/gift placement defect; superseded by audited screens",
+    "game-balance/audited-screen: phantom-strength-3, phantom-armor-0 and capacity-24-20 had simulator failures; no escape estimates",
+    "game-balance/later-screen: incomplete 20000-action outcomes; rejected or superseded by 100000-action reruns",
+    "game-balance/refine-screen/duration-80: no-route seed 1958; batch invalid",
+    "game-balance/promising-10000: moderate and selected arms had simulator failures; rerun under repaired policy through complete final census",
+    "game-balance/final/explorer-census and earlier contact/replacement attempts: interrupted after user authorized defect repairs; preserved, excluded"
   ],
-  "final_reference": "EXPLORER_COMPETENCE_RESULTS.json"
+  "final_reference": "EXPLORER_COMPETENCE_RESULTS.json",
+  "game_balance_pass": {
+    "selection_date_local": "2026-10-11",
+    "validation_date_utc": "2026-10-12",
+    "isolated_development": "1:2000; 32 original-reference and isolated arms, repeated after logical-capacity audit",
+    "combined_development": "1:2000; species-stat, supply, duration and rarity combinations",
+    "promising_comparisons": "1:10000; two pre-repair arms invalidated by simulator failures; no accepted rates",
+    "defect_repairs": "User authorized repairs and fresh paired baseline; summoning-trap frontier and unexamined emergency wand only; no weight search",
+    "persistent_regression_seeds": [
+      2478,
+      41822
+    ],
+    "repaired_reference": "1:2000; original and selected gameplay, same frozen repaired explorer policy",
+    "secondary_contact_reference": "1:2000; hazard_routing=0 in both original and selected arms",
+    "same_location_sight_replacement": "1:2000; selected sight vs healing replacement, explorer and oracle separately",
+    "equal_start_arenas": "1:512; 3 gear states x 2 phantom counts x 5 sight/payment arms",
+    "final_explorer_census": "1:65535; original and selected gameplay, every seed resolved, no subsequent tuning",
+    "final_oracle_census": "1:65535; original and selected gameplay, every seed resolved; explorer-only defect repairs do not affect oracle policy",
+    "repaired_census_first_10000": "Descriptive prefix of the frozen final census, not a separate holdout or new selection sample",
+    "independent_holdout": false,
+    "explorer_policy_hash": "9dbe6a920da76691ba0fc222d80bf7352192070590da59393583a46f21c45f91",
+    "raw_root": "build/game-balance",
+    "report": "GAME_BALANCE_2_TO_5_PERCENT.md",
+    "results": "GAME_BALANCE_RESULTS.json"
+  }
 }

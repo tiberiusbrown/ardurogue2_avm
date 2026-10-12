@@ -27,7 +27,7 @@ bool equipped(const ExplorerObservation& o,int s) {
     return std::find(o.equipped.begin(),o.equipped.end(),s)!=o.equipped.end();
 }
 int find(const ExplorerObservation& o,int type) {
-    for(int s=0;s<16;++s) if(o.inventory[s].type==type) return s;
+    for(int s=0;s<o.inventory_capacity;++s) if(o.inventory[s].type==type) return s;
     return -1;
 }
 int quantity(const ExplorerObservation& o,int type) {
@@ -35,13 +35,13 @@ int quantity(const ExplorerObservation& o,int type) {
 }
 int ambient(const ExplorerObservation& o) {
     int bonus=0;
-    for(int k=3;k<6;++k) if(o.equipped[k]<16) {
+    for(int k=3;k<6;++k) if(o.equipped[k]<o.inventory_capacity) {
         auto i=o.inventory[o.equipped[k]];
         if(i.type==RING_ILLUMINATION) bonus+=i.cursed ? -1 : 2;
         if(i.type==AMULET_BRILLIANCE) bonus+=i.cursed ? -1 : 3;
     }
     // Effective sight also recognizes the full-light experiment without a hidden flag.
-    int off=o.equipped[2]<16 ? light_bonus(o.inventory[o.equipped[2]].type) : 0;
+    int off=o.equipped[2]<o.inventory_capacity ? light_bonus(o.inventory[o.equipped[2]].type) : 0;
     if(!o.blindness && o.radius>std::clamp(1+bonus+off,0,6)) return o.radius;
     return std::clamp(1+bonus,0,6);
 }
@@ -65,7 +65,7 @@ int equipment_score(const ExplorerParameters& prefs,const ExplorerObservation& o
         int sight=o.blindness ? 0 : std::clamp(ambient(o)+light_bonus(i.type),0,6);
         if(prefs.offhand_mode==3) return is_light(i.type) ? 1000+40*sight+(i.type==GLOWING_ORB ? 10 : 0) : 0;
         if(prefs.offhand_mode==4) return is_shield(i.type) ? 1000+40*shield_rating(i.type)+prefs.enchant_weight*i.enchant : 40*sight;
-        if(prefs.offhand_mode==5 && o.equipped[2]<16 && o.inventory[o.equipped[2]].category!=ItemCategory::None &&
+        if(prefs.offhand_mode==5 && o.equipped[2]<o.inventory_capacity && o.inventory[o.equipped[2]].category!=ItemCategory::None &&
             i.category!=o.inventory[o.equipped[2]].category) return 0;
         // Evaluate resulting sight for the whole worn configuration. Diminishing
         // returns let permanent jewelry make a shield useful during exploration.
@@ -94,13 +94,13 @@ int equipment_score(const ExplorerParameters& prefs,const ExplorerObservation& o
     switch(i.type) {
     case RING_ILLUMINATION: {
         int without=ambient(o);
-        for(int k=4;k<6;++k) if(o.equipped[k]<16 && o.inventory[o.equipped[k]].type==RING_ILLUMINATION)
+        for(int k=4;k<6;++k) if(o.equipped[k]<o.inventory_capacity && o.inventory[o.equipped[k]].type==RING_ILLUMINATION)
             without-=o.inventory[o.equipped[k]].cursed ? -1 : 2;
         return prefs.illumination_ring_score+(without<3 ? prefs.illumination_dark_bonus : 0);
     }
     case AMULET_BRILLIANCE: {
         int without=ambient(o);
-        if(o.equipped[3]<16 && o.inventory[o.equipped[3]].type==AMULET_BRILLIANCE)
+        if(o.equipped[3]<o.inventory_capacity && o.inventory[o.equipped[3]].type==AMULET_BRILLIANCE)
             without-=o.inventory[o.equipped[3]].cursed ? -1 : 3;
         return prefs.brilliance_score+(without<3 ? prefs.brilliance_dark_bonus : 0);
     }
@@ -118,10 +118,10 @@ int equipment_score(const ExplorerParameters& prefs,const ExplorerObservation& o
     default:return 0;
     }
 }
-int score_slot(const ExplorerParameters& prefs,const ExplorerObservation& o,int s) { return s<16 ? equipment_score(prefs,o,o.inventory[s]) : 0; }
+int score_slot(const ExplorerParameters& prefs,const ExplorerObservation& o,int s) { return s<o.inventory_capacity ? equipment_score(prefs,o,o.inventory[s]) : 0; }
 int best_weapon(const ExplorerParameters& prefs,const ExplorerObservation& o,bool bow) {
     int best=255;
-    for(int s=0;s<16;++s) if(is_weapon(o.inventory[s].type) && is_bow(o.inventory[s].type)==bow &&
+    for(int s=0;s<o.inventory_capacity;++s) if(is_weapon(o.inventory[s].type) && is_bow(o.inventory[s].type)==bow &&
         score_slot(prefs,o,s)>score_slot(prefs,o,best)) best=s;
     return best;
 }
@@ -139,9 +139,9 @@ int equipment_target(const ExplorerParameters& prefs,const ExplorerObservation& 
 }
 bool upgrade(const ExplorerParameters& prefs,const ExplorerObservation& o,const SeenItem& i) {
     int s=equipment_target(prefs,o,i);
-    if(s<16 && o.inventory[s].cursed) return false;
+    if(s<o.inventory_capacity && o.inventory[s].cursed) return false;
     if(is_bow(i.type)) return score_slot(prefs,o,best_weapon(prefs,o,true))<equipment_score(prefs,o,i);
-    if(is_weapon(i.type) && o.equipped[0]<16 && is_bow(o.inventory[o.equipped[0]].type)) s=best_weapon(prefs,o,false);
+    if(is_weapon(i.type) && o.equipped[0]<o.inventory_capacity && is_bow(o.inventory[o.equipped[0]].type)) s=best_weapon(prefs,o,false);
     return equipment_score(prefs,o,i)>score_slot(prefs,o,s);
 }
 int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const SeenItem& i,bool retention=false) {
@@ -158,11 +158,11 @@ int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const See
             return prefs.resource_planning && reserve>=1000 ? 25 : 150;
         }
         case ItemCategory::Shield:
-            return prefs.resource_planning && o.equipped[2]<16 && shield_rating(o.inventory[o.equipped[2]].type)==3 ? 15 : 65;
+            return prefs.resource_planning && o.equipped[2]<o.inventory_capacity && shield_rating(o.inventory[o.equipped[2]].type)==3 ? 15 : 65;
         case ItemCategory::Weapon:
             return prefs.resource_planning && score_slot(prefs,o,best_weapon(prefs,o,false))>=40 ? 45 : prefs.unknown_gear_value;
         case ItemCategory::Armor:
-            return prefs.resource_planning && o.equipped[1]<16 && armor_definition(o.inventory[o.equipped[1]].type).rating>=5 ? 45 : prefs.unknown_gear_value;
+            return prefs.resource_planning && o.equipped[1]<o.inventory_capacity && armor_definition(o.inventory[o.equipped[1]].type).rating>=5 ? 45 : prefs.unknown_gear_value;
         case ItemCategory::Ammo:return 50; default:return 0;
         }
     }
@@ -176,7 +176,7 @@ int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const See
     }
     if(is_weapon(i.type)||is_armor(i.type)||is_shield(i.type)||is_ring(i.type)||is_amulet(i.type))
         return retention || upgrade(prefs,o,i) ? 100+equipment_score(prefs,o,i) : 0;
-    if(is_ammo(i.type)) return retention ? 170+std::min(24,int(i.quantity))*4 : quantity(o,ARROWS)>=24 ? 0 : best_weapon(prefs,o,true)<16 ? 170 : 45;
+    if(is_ammo(i.type)) return retention ? 170+std::min(24,int(i.quantity))*4 : quantity(o,ARROWS)>=24 ? 0 : best_weapon(prefs,o,true)<o.inventory_capacity ? 170 : 45;
     if(is_wand(i.type)) {
         if(i.individual && (i.modifier==WAND_CURSED || i.modifier==WAND_UNRELIABLE || !i.quantity)) return 0;
         return i.type==WAND_DIGGING ? 60 : 65+5*i.quantity;
@@ -186,6 +186,7 @@ int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const See
     case POTION_HEALING:return 240; case POTION_EXPERIENCE:return 220;
     case POTION_STRENGTH:return o.strength<12||o.weakened ? 160 : 40;
     case POTION_DEXTERITY:return o.dexterity<12 ? 150 : 40;
+    case POTION_SEE_INVISIBLE:return (o.floor>=2 && o.floor<=4) ? 150 : 90;
     case POTION_PARALYSIS:return 100; case POTION_CONFUSION:case POTION_BLINDNESS:return 65;
     case POTION_SLOWING:case POTION_POISON:return 60; case POTION_HARMING:return 55; case POTION_INVISIBILITY:return 70;
     case SCROLL_IDENTIFY:return 170; case SCROLL_ENCHANT:return 190;
@@ -206,7 +207,8 @@ int identity_group(ItemCategory c) {
     default:return 5; }
 }
 bool fits(const ExplorerObservation& o,const SeenItem& incoming) {
-    for(auto& i:o.inventory) {
+    for(int s=0;s<o.inventory_capacity;++s) {
+        const auto& i=o.inventory[s];
         if(i.category==ItemCategory::None) return true;
         bool stack=incoming.category==ItemCategory::Food||incoming.category==ItemCategory::Ammo||incoming.category==ItemCategory::Potion||incoming.category==ItemCategory::Scroll;
         if(stack && same_item(i,incoming) && int(i.quantity)+incoming.quantity<=(incoming.category==ItemCategory::Ammo ? 255 : 63)) return true;
@@ -216,7 +218,7 @@ bool fits(const ExplorerObservation& o,const SeenItem& incoming) {
 int replacement(const ExplorerParameters& prefs,const ExplorerObservation& o,const SeenItem& incoming) {
     int worst=value(prefs,o,incoming)-10,slot=-1;
     int bow=best_weapon(prefs,o,true), melee=best_weapon(prefs,o,false);
-    for(int s=0;s<16;++s) {
+    for(int s=0;s<o.inventory_capacity;++s) {
         auto i=o.inventory[s];
         if(equipped(o,s)||i.cursed || s==melee || s==bow) continue;
         if(prefs.resource_planning && (i.type==FOOD || i.type==POTION_HEALING || i.type==SCROLL_TELEPORT || i.type==SCROLL_FEAR) &&
@@ -240,7 +242,7 @@ bool sees_monster(const ExplorerObservation& o,SeenPosition p) {
 bool fire_safe(const ExplorerObservation& o,const SeenItem& wand,SeenPosition target) {
     if(wand.modifier==WAND_SPREADING || wand.modifier==WAND_OVERPOWERED) return false;
     int r=wand.modifier==WAND_POWERFUL ? 2 : 1;
-    for(int k=1;k<6;++k) if(o.equipped[k]<16) {
+    for(int k=1;k<6;++k) if(o.equipped[k]<o.inventory_capacity) {
         auto i=o.inventory[o.equipped[k]];
         if((i.type==RING_FIRE_IMMUNITY || i.type==DRAGONHIDE) && !i.cursed) return true;
     }
@@ -278,7 +280,7 @@ SurvivalRisk estimate_risk(const ExplorerObservation& o,const ExplorerFloor& f,c
     SurvivalRisk r;
     int armor=0,enchant=0,speed=std::max(1,int(o.speed));
     bool fire=false,clarity=false,iron=false,invisible=o.invisible!=0;
-    for(int k=1;k<6;++k) if(o.equipped[k]<16) {
+    for(int k=1;k<6;++k) if(o.equipped[k]<o.inventory_capacity) {
         auto i=o.inventory[o.equipped[k]];
         if(k==1) { armor+=armor_definition(i.type).rating; enchant+=i.enchant; }
         if(k==2) { armor+=shield_rating(i.type); enchant+=i.enchant; }
@@ -649,7 +651,9 @@ ExplorerAction ExplorerAgent::hazardous_progress(const ExplorerObservation& o,Se
        objective.x!=255 && steps[cell(objective)]>0) target=cell(objective);
     // If stairs remain unknown, crossing toward a new survey is progression.
     if(target<0) for(int n=0;n<EXPLORER_CELLS;++n) {
-        if(steps[n]<=0 || f.tiles[n].feature==FEATURE_SUMMONING_TRAP) continue;
+        // The only remaining frontier may itself be a summoning trap. Excluding
+        // that endpoint loses an otherwise legal route to unexplored terrain.
+        if(steps[n]<=0) continue;
         bool frontier_needed=!f.tiles[n].surveyed;
         for(int d=0;d<4;++d) {
             int x=n%64+dxs[d],y=n/64+dys[d];
@@ -691,7 +695,7 @@ ExplorerAction ExplorerAgent::pickup(const ExplorerObservation& o) {
     for(int i=0;i<o.ground_count;++i) {
         auto& g=o.ground[i]; int v=value(prefs,o,g.item);
         bool survival=g.item.type==FOOD || g.item.type==POTION_HEALING || is_light(g.item.type);
-        if(g.pos!=o.player || g.handle>=16 || (o.yendor && g.item.type!=YENDOR_AMULET && !survival)) continue;
+        if(g.pos!=o.player || g.handle>=24 || (o.yendor && g.item.type!=YENDOR_AMULET && !survival)) continue;
         if(v>worth && (g.item.type==YENDOR_AMULET || fits(o,g.item)||replacement(prefs,o,g.item)>=0)) { best=i; worth=v; }
     }
     if(best<0) return {};
@@ -763,9 +767,18 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                 frontier={}; disengaging=true;
             }
         }
+        int sight=find(o,POTION_SEE_INVISIBLE);
+        bool ring_sight=false;
+        for(int k=4;k<6;++k) if(o.equipped[k]<o.inventory_capacity) {
+            const auto& i=o.inventory[o.equipped[k]];
+            if(i.type==RING_SEE_INVISIBLE && !i.cursed) ring_sight=true;
+        }
+        if(sight>=0 && !o.see_invisible && !o.blindness && !ring_sight &&
+           (risk.unseen || o.reported_attacker==PHANTOM || (o.floor==4 && threats)))
+            return use(sight,"temporary sight against invisible contact");
         int healing=find(o,POTION_HEALING);
         int xp=find(o,POTION_EXPERIENCE);
-        int xp_gain=o.equipped[3]<16 && o.inventory[o.equipped[3]].type==AMULET_WISDOM && o.inventory[o.equipped[3]].cursed ? 25 : 50;
+        int xp_gain=o.equipped[3]<o.inventory_capacity && o.inventory[o.equipped[3]].type==AMULET_WISDOM && o.inventory[o.equipped[3]].cursed ? 25 : 50;
         bool xp_recovers=xp>=0 && o.level<50 && o.xp+xp_gain>=4+o.level*3;
         int minimum_heal=o.max_hp/4;
         bool heal_survives=o.hp+minimum_heal>risk.one;
@@ -796,7 +809,11 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                     for(int t:{POTION_PARALYSIS,POTION_CONFUSION,POTION_BLINDNESS,WAND_TELEPORT,WAND_FORCE,WAND_ICE,POTION_SLOWING}) {
                         int s=find(o,t); if(s<0) continue;
                         auto i=o.inventory[s];
-                        if(is_wand(t) && i.individual && (!i.quantity || i.modifier==WAND_CURSED || i.modifier==WAND_UNRELIABLE)) continue;
+                        // Match ordinary ranged validation. A known wand type
+                        // can still have unexamined, depleted instances; these
+                        // belong to the bounded experiment path, not emergency
+                        // retries that alternate targets without advancing time.
+                        if(is_wand(t) && (!i.individual || !i.quantity || i.modifier==WAND_CURSED || i.modifier==WAND_UNRELIABLE)) continue;
                         ExplorerAction a; a.kind=is_wand(t) ? ExplorerActionKind::Wand : ExplorerActionKind::Throw;
                         a.slot=uint8_t(s); a.dx=dxs[d]; a.dy=dys[d]; a.destination=target.pos; a.goal="disable visible survival threat";
                         if(is_wand(t) && i.individual && (i.modifier==WAND_SPREADING || i.modifier==WAND_OVERPOWERED)) a.dx=a.dy=0;
@@ -860,7 +877,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             // contact rather than waiting to die while an avoidance timer runs.
             if(!prefs.contact_aware) { ExplorerAction a; a.goal="wait for observed contact detour"; return a; }
         }
-        if(pending_ring<16) {
+        if(pending_ring<o.inventory_capacity) {
             auto i=o.inventory[pending_ring];
             if(i.category!=ItemCategory::Ring || i.cursed || equipped(o,pending_ring)) pending_ring=255;
             else if(i.type || (!threats && quiet_turns>=prefs.jewelry_quiet_turns)) {
@@ -872,7 +889,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         }
         // Safe equipment upgrades use displayed identity/enchantment only.
         int upgrade_slot=-1,upgrade_gain=-1;
-        for(int s=0;s<16;++s) {
+        for(int s=0;s<o.inventory_capacity;++s) {
             auto i=o.inventory[s];
             int old=equipment_target(prefs,o,i);
             bool experiment=!i.type && (i.category==ItemCategory::Ring || i.category==ItemCategory::Amulet) && !threats &&
@@ -883,7 +900,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             if(!equipment) continue;
             bool offhand=i.category==ItemCategory::Light || i.category==ItemCategory::Shield;
             bool urgent_shield=offhand && is_shield(i.type) && (risk.unseen || risk.danger>=Danger::Serious);
-            if(offhand && !urgent_shield && prefs.offhand_mode && old<16 && score_slot(prefs,o,old)>0 && o.inventory[old].category!=ItemCategory::None &&
+            if(offhand && !urgent_shield && prefs.offhand_mode && old<o.inventory_capacity && score_slot(prefs,o,old)>0 && o.inventory[old].category!=ItemCategory::None &&
                 (o.turns<last_offhand_switch+prefs.offhand_switch_turns || equipment_score(prefs,o,i)-score_slot(prefs,o,old)<prefs.offhand_switch_margin)) continue;
             // A switch costs a real enemy turn. Only a useful defensive upgrade
             // is considered in active combat; marginal jewelry waits for safety.
@@ -898,14 +915,14 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         if(upgrade_slot>=0) {
             int s=upgrade_slot; auto i=o.inventory[s]; int old=equipment_target(prefs,o,i);
             if(i.category==ItemCategory::Light || i.category==ItemCategory::Shield) last_offhand_switch=o.turns;
-            if(i.category==ItemCategory::Ring && o.equipped[4]<16 && o.equipped[5]<16) {
+            if(i.category==ItemCategory::Ring && o.equipped[4]<o.inventory_capacity && o.equipped[5]<o.inventory_capacity) {
                 if(!o.inventory[old].cursed) { pending_ring=uint8_t(s); return use(old,"remove weaker known ring"); }
             }
             return use(s,i.type ? "equip observed upgrade" : "try unknown jewelry");
         }
         int melee=best_weapon(prefs,o,false);
         if((adjacent>=0 || (shadow.x!=255 && distance(shadow,o.player)==1)) &&
-            o.equipped[0]<16 && is_bow(o.inventory[o.equipped[0]].type) && melee<16 && !o.inventory[o.equipped[0]].cursed) {
+            o.equipped[0]<o.inventory_capacity && is_bow(o.inventory[o.equipped[0]].type) && melee<o.inventory_capacity && !o.inventory[o.equipped[0]].cursed) {
             bow_cooldown=4; return use(melee,"restore melee weapon for close contact");
         }
         // Ranged decisions use only visible species and known ray cells. No scan_ray.
@@ -923,7 +940,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             auto& monster=o.monsters[target]; int range=distance(monster.pos,o.player);
             bool danger=monster.type>=ORC || emergency;
             if(o.turns>=last_experiment+prefs.wand_experiment_interval) {
-                for(int s=0;s<16;++s) if(o.inventory[s].category==ItemCategory::Wand && !o.inventory[s].individual) {
+                for(int s=0;s<o.inventory_capacity;++s) if(o.inventory[s].category==ItemCategory::Wand && !o.inventory[s].individual) {
                     auto i=o.inventory[s];
                     bool known=i.type!=0;
                     if(range<(known ? prefs.known_wand_experiment_range : prefs.unknown_wand_experiment_range)) continue;
@@ -950,16 +967,16 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                 return a;
             }
             int bow=best_weapon(prefs,o,true);
-            if(bow<16 && quantity(o,ARROWS) && !bow_cooldown && adjacent<0 && (range>=3 || o.equipped[0]==bow) && range<=ranged_weapon_definition(o.inventory[bow].type).range) {
+            if(bow<o.inventory_capacity && quantity(o,ARROWS) && !bow_cooldown && adjacent<0 && (range>=3 || o.equipped[0]==bow) && range<=ranged_weapon_definition(o.inventory[bow].type).range) {
                 if(o.equipped[0]!=bow) {
-                    if(o.equipped[0]<16 && o.inventory[o.equipped[0]].cursed) continue;
+                    if(o.equipped[0]<o.inventory_capacity && o.inventory[o.equipped[0]].cursed) continue;
                     return use(bow,"prepare visible ranged shot");
                 }
                 ExplorerAction a; a.kind=ExplorerActionKind::Throw; a.slot=uint8_t(find(o,ARROWS));
                 a.dx=dxs[d]; a.dy=dys[d]; a.goal="shoot visible monster"; a.destination=monster.pos; return a;
             }
         }
-        if(o.equipped[0]<16 && is_bow(o.inventory[o.equipped[0]].type) && melee<16 && !o.inventory[o.equipped[0]].cursed) {
+        if(o.equipped[0]<o.inventory_capacity && is_bow(o.inventory[o.equipped[0]].type) && melee<o.inventory_capacity && !o.inventory[o.equipped[0]].cursed) {
             bow_cooldown=4; return use(melee,"restore melee weapon");
         }
         if(adjacent>=0 || (prefs.tactical_risk && emergency && nearest<=3) || (prefs.invisible_response && risk.unseen && unseen_turns>=4)) {
@@ -1018,7 +1035,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         if(!threats) {
             for(int t:{POTION_STRENGTH,POTION_DEXTERITY}) { int s=find(o,t); if(s>=0 && (t==POTION_STRENGTH ? o.strength : o.dexterity)<12) return use(s,"permanent stats"); }
             int unknown=-1,unknown_priority=-1;
-            for(int s=0;s<16;++s) if(o.inventory[s].category!=ItemCategory::None && (!o.inventory[s].type || (!o.inventory[s].individual && o.inventory[s].category==ItemCategory::Wand))) {
+            for(int s=0;s<o.inventory_capacity;++s) if(o.inventory[s].category!=ItemCategory::None && (!o.inventory[s].type || (!o.inventory[s].individual && o.inventory[s].category==ItemCategory::Wand))) {
                 auto category=o.inventory[s].category;
                 int priority=category==ItemCategory::Amulet ? 3 : category==ItemCategory::Ring ? 2 : category==ItemCategory::Wand ? 1 : 0;
                 if(priority>unknown_priority) { unknown=s; unknown_priority=priority; }
@@ -1026,24 +1043,24 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
             int identify=find(o,SCROLL_IDENTIFY);
             if(unknown>=0 && identify>=0) return use(identify,"identify before experimenting",unknown);
             int uncurse=find(o,SCROLL_REMOVE_CURSE);
-            for(int s=0;s<16;++s) if(o.inventory[s].cursed && uncurse>=0) return use(uncurse,"remove known curse",s);
+            for(int s=0;s<o.inventory_capacity;++s) if(o.inventory[s].cursed && uncurse>=0) return use(uncurse,"remove known curse",s);
             int enchant=find(o,SCROLL_ENCHANT);
             if(enchant>=0) {
-                for(int k:{1,0,3,4,5}) if(o.equipped[k]<16 && !o.inventory[o.equipped[k]].cursed) return use(enchant,"enchant equipped item",o.equipped[k]);
+                for(int k:{1,0,3,4,5}) if(o.equipped[k]<o.inventory_capacity && !o.inventory[o.equipped[k]].cursed) return use(enchant,"enchant equipped item",o.equipped[k]);
             }
             int mapping=find(o,SCROLL_MAPPING);
             if(mapping>=0 && (o.yendor ? f.up.x==255 : f.down.x==255)) return use(mapping,"legitimate magic mapping");
             if(!o.yendor && quiet_turns>=prefs.scroll_quiet_turns && o.hp>=prefs.scroll_min_hp && !o.blindness && !o.confused && o.turns>=last_experiment+prefs.scroll_interval) {
-                for(int s=0;s<16;++s) if(!o.inventory[s].type && o.inventory[s].category==ItemCategory::Scroll) {
+                for(int s=0;s<o.inventory_capacity;++s) if(!o.inventory[s].type && o.inventory[s].category==ItemCategory::Scroll) {
                     last_experiment=o.turns;
-                    int target=unknown>=0 && unknown!=s ? unknown : o.equipped[1]<16 ? o.equipped[1] : o.equipped[0];
+                    int target=unknown>=0 && unknown!=s ? unknown : o.equipped[1]<o.inventory_capacity ? o.equipped[1] : o.equipped[0];
                     return use(s,"safe unknown scroll experiment",target);
                 }
             }
             if(!o.yendor && quiet_turns>=prefs.experiment_quiet_turns && o.hp>=prefs.potion_min_hp && o.hp*100>=o.max_hp*prefs.potion_health_percent && !o.blindness && !o.confused && !o.slowed && o.turns>=last_experiment+prefs.experiment_interval) {
-                for(int s=0;s<16;++s) if(!o.inventory[s].type && o.inventory[s].category==ItemCategory::Potion) {
+                for(int s=0;s<o.inventory_capacity;++s) if(!o.inventory[s].type && o.inventory[s].category==ItemCategory::Potion) {
                     last_experiment=o.turns;
-                    int target=unknown>=0 && unknown!=s ? unknown : o.equipped[1]<16 ? o.equipped[1] : o.equipped[0];
+                    int target=unknown>=0 && unknown!=s ? unknown : o.equipped[1]<o.inventory_capacity ? o.equipped[1] : o.equipped[0];
                     return use(s,"bounded safe consumable experiment",target);
                 }
             }
@@ -1168,7 +1185,7 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         a.no_path=true; a.goal="exploration exhausted: no known stairs or reachable frontier"; return a;
     };
     auto a=decide();
-    previous_healing=a.kind==ExplorerActionKind::Use && a.slot<16 &&
+    previous_healing=a.kind==ExplorerActionKind::Use && a.slot<o.inventory_capacity &&
         (o.inventory[a.slot].type==POTION_HEALING || o.inventory[a.slot].type==POTION_EXPERIENCE);
     previous=a; return a;
 }
@@ -1185,7 +1202,7 @@ SeenFeatureChoice ExplorerAgent::choose_feature(const ExplorerObservation& o) co
     else choice.accept=!pressure && o.hp>=10;
     if(type==FEATURE_ENCHANTED_FORGE || type==FEATURE_ALCHEMICAL_POOL) {
         int best=-1;
-        for(int s=0;s<16;++s) {
+        for(int s=0;s<o.inventory_capacity;++s) {
             auto i=o.inventory[s];
             bool eligible=type==FEATURE_ENCHANTED_FORGE ? is_weapon(i.type)||is_armor(i.type)||is_shield(i.type) : i.category==ItemCategory::Wand;
             if(!eligible || i.cursed || (type==FEATURE_ENCHANTED_FORGE && i.enchant>=MAX_EQUIPMENT_ENCHANT)) continue;

@@ -96,6 +96,11 @@ uint8_t player_light_radius()
     return radius < 0 ? 0 : radius > MAX_LIGHT_RADIUS ? MAX_LIGHT_RADIUS : static_cast<uint8_t>(radius);
 }
 
+uint8_t ground_item_capacity() { return BALANCE_VALUE("ground", GROUND_ITEM_CAPACITY); }
+uint8_t yendor_ground_slot() { return ground_item_capacity() - 1; }
+
+uint8_t inventory_capacity() { return BALANCE_VALUE("inventory", INVENTORY); }
+
 bool player_is_invisible()
 {
     int8_t bonus = ring_bonus(RING_INVISIBILITY);
@@ -106,12 +111,13 @@ static bool can_detect_monster(const Monster& monster, uint8_t index)
 {
     if(!monster.type || game.blindness)
         return false;
-    if(ring_bonus(RING_SEE_INVISIBLE) < 0 &&
+    // A dose supplies reliable sight even while a cursed ring flickers.
+    if(!game.see_invisible && ring_bonus(RING_SEE_INVISIBLE) < 0 &&
        ((game.turns + index) & 1))
         return false;
     return (!(monster_flags(monster.type) & MON_NATURAL_INVIS) &&
             !monster_effect(monster, MON_INVISIBLE)) ||
-           ring_bonus(RING_SEE_INVISIBLE) > 0;
+           ring_bonus(RING_SEE_INVISIBLE) > 0 || game.see_invisible != 0;
 }
 
 bool player_can_see_monster(uint8_t index)
@@ -243,6 +249,7 @@ void identify_type(uint8_t type)
 {
     uint8_t index = knowledge_index(type);
     if(index == NONE) return;
+    if(!item_type_identified(type)) SIM_EVENT(sim::EventKind::ItemIdentified, NONE, type);
     game.identified_items[index >> 3] |= static_cast<uint8_t>(1u << (index & 7));
     if(!is_potion(type) && !is_scroll(type)) return;
     for(Item& item : game.inventory)

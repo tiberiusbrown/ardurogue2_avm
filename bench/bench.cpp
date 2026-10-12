@@ -55,11 +55,11 @@ using namespace rogue;
     X(projectile_picker, "Open Ammo before Potions in Throw/Shoot", projectile_browse, A, room, ARROWS, 0, 0) \
     X(pickup_food, "Confirm pickup after stepping onto food", pickup, A, room, NO_ITEM, 0, 0) \
     X(inventory_open_full, "Open a full pack spanning all eleven groups", browse, A, room, NO_ITEM, 0, 0) \
-    X(inventory_down_full, "Scroll down across the last group in a full mixed pack", browse, DOWN, room, NO_ITEM, 14, 0) \
-    X(inventory_up_full, "Scroll up near the bottom of a full mixed pack", browse, UP, room, NO_ITEM, 15, 5) \
+    X(inventory_down_full, "Scroll down across the last group in a full mixed pack", browse, DOWN, room, NO_ITEM, 18, 0) \
+    X(inventory_up_full, "Scroll up near the bottom of a full mixed pack", browse, UP, room, NO_ITEM, 19, 5) \
     X(inventory_open_wands, "Open a full pack of identified wands with long names", browse, A, room, NO_ITEM, 0, 0) \
-    X(inventory_down_wands, "Scroll down to the last of 16 identified wands", browse, DOWN, room, NO_ITEM, 14, 0) \
-    X(inventory_up_wands, "Scroll up through seven visible long wand names", browse, UP, room, NO_ITEM, 15, 6) \
+    X(inventory_down_wands, "Scroll down to the last identified wand in a full pack", browse, DOWN, room, NO_ITEM, 18, 0) \
+    X(inventory_up_wands, "Scroll up through seven visible long wand names", browse, UP, room, NO_ITEM, 19, 6) \
     X(inventory_open_singletons, "Open all eleven groups with one item each in late pack slots", browse, A, room, NO_ITEM, 0, 0) \
     X(inventory_down_singletons, "Scroll down across the last of eleven singleton groups", browse, DOWN, room, NO_ITEM, 7, 0) \
     X(inventory_up_singletons, "Scroll up across singleton group headers near the bottom", browse, UP, room, NO_ITEM, 8, 3) \
@@ -95,7 +95,11 @@ using namespace rogue;
     X(monster_trap_spread, "Spreading force lands four monsters on traps", use, A, room, WAND_FORCE, 2, 0) \
     X(visibility_trap_hidden, "Invisible monster triggers an observable trap", wait, A, room, NO_ITEM, 0, 0) \
     X(visibility_trap_cursed, "Cursed sight flickers during monster trap entry", wait, A, room, NO_ITEM, 0, 0) \
-    X(visibility_trap_blind, "Blind player hears no unseen monster trap message", wait, A, room, NO_ITEM, 0, 0)
+    X(visibility_trap_blind, "Blind player hears no unseen monster trap message", wait, A, room, NO_ITEM, 0, 0) \
+    X(drink_sight, "Drink temporary see invisible", use, A, room, POTION_SEE_INVISIBLE, 0, 0) \
+    X(throw_sight, "Throw sight with no monster effect", projectile, RIGHT, room, POTION_SEE_INVISIBLE, 0, 0) \
+    X(sight_expire_dense, "Sight expires during a dense turn", wait, A, dense, NO_ITEM, 0, 0) \
+    X(sight_cursed_trap, "Potion sight overrides cursed ring during trap entry", wait, A, room, NO_ITEM, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -148,22 +152,24 @@ void prepare_full_inventory()
     add_inventory(13, SPLINT_MAIL);
     add_inventory(14, LANTERN);
     add_inventory(15, ARROWS);
+    for(uint8_t slot=16;slot<INVENTORY;++slot)
+        add_inventory(slot, slot==16 ? POTION_SEE_INVISIBLE : slot==17 ? AMULET_SPEED : slot==18 ? WAND_FORCE : FOOD);
 }
 
 void prepare_singleton_inventory()
 {
-    // Ten is the maximum group count. Empty leading slots increase scanning.
-    add_inventory(5, LANTERN);
-    add_inventory(6, ARROWS);
-    add_inventory(7, YENDOR_AMULET);
-    add_inventory(8, FOOD);
-    add_inventory(9, SCROLL_MASS_CONFUSE);
-    add_inventory(10, POTION_INVISIBILITY);
-    add_inventory(11, WAND_POLYMORPH);
-    add_inventory(12, AMULET_REGENERATION);
-    add_inventory(13, RING_SEE_INVISIBLE);
-    add_inventory(14, PLATE_MAIL);
-    add_inventory(15, TWO_HANDED_SWORD);
+    // Eleven is the maximum group count. Empty leading slots increase scanning.
+    add_inventory(INVENTORY - 11, LANTERN);
+    add_inventory(INVENTORY - 10, ARROWS);
+    add_inventory(INVENTORY - 9, YENDOR_AMULET);
+    add_inventory(INVENTORY - 8, FOOD);
+    add_inventory(INVENTORY - 7, SCROLL_MASS_CONFUSE);
+    add_inventory(INVENTORY - 6, POTION_INVISIBILITY);
+    add_inventory(INVENTORY - 5, WAND_POLYMORPH);
+    add_inventory(INVENTORY - 4, AMULET_REGENERATION);
+    add_inventory(INVENTORY - 3, RING_SEE_INVISIBLE);
+    add_inventory(INVENTORY - 2, PLATE_MAIL);
+    add_inventory(INVENTORY - 1, TWO_HANDED_SWORD);
 }
 
 // Preparation runs once, before the initial render and any measured input.
@@ -252,6 +258,13 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
             if(next_random(state) % 2 == 0) { game.random_state = seed; break; }
         }
         break;
+    case Case::sight_expire_dense: game.see_invisible=1; break;
+    case Case::throw_sight:
+        add_monster(0,{33,16},PHANTOM); game.monsters[0].stun=15; break;
+    case Case::sight_cursed_trap:
+        game.see_invisible=40;
+        add_inventory(1,RING_SEE_INVISIBLE); game.inventory[1].info|=ITEM_CURSED; game.ring_slots[0]=1;
+        add_monster(0,{34,16},PHANTOM); game.features[0]={{33,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN}; break;
     case Case::throw_blindness:
         add_monster(0, {33,16}, ORC); game.monsters[0].stun = 15;
         break;

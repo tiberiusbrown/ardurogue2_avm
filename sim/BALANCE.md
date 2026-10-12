@@ -7,7 +7,7 @@ simulator mechanics and [BALANCE_RESULTS.md](BALANCE_RESULTS.md) for the milesto
 demonstrations. Raw outputs belong in ignored `build/`.
 
 Exploration schema 5 appends `unseen_*` contact counters and `phantom_deaths`.
-The nine core streams retain version 7. Hit/miss and probe feedback is public;
+The core streams use version 8: item identification, pack-full, temporary sight expiration and active-turn counters are appended. Hit/miss and probe feedback is public;
 actual episode damage, kills, hidden summoning-hazard classifications and
 death attribution are privileged reporting only. The explorer never receives
 the collector. Precise definitions and denominators are in
@@ -551,7 +551,7 @@ manifests retain the complete resolved preferences, parameter hash, code hash
 and combined policy hash. Changing preferences is a policy comparison, not a
 content comparison; the paired framework rejects unequal combined hashes.
 
-Current core schemas are version 7 (runs appends Lord kills). An independent version-4
+Current core schemas are version 8 (runs retains Lord kills; items appends identification, pack pressure and temporary sight counters). An independent version-4
 `exploration.csv` sidecar adds visibility, retained exploration, stair discovery,
 first-seen monster distances and route diagnostics. Sealed manifests include
 this sidecar when present. Historical nine-stream directories remain readable.
@@ -631,3 +631,27 @@ The AVM optimization is a separate equivalence experiment: the fixed oracle and
 compatibility explorer reproduce all core CSVs, while the hardware comparison
 checks full saved Game bytes (including RNG), captured fields and every status
 page framebuffer. See [the full report](../docs/EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md).
+
+## Gameplay balance controls (2026-10-11)
+
+`game_balance_experiments.py` freezes one executable and one complete agent
+configuration while screening `balance:NAME=VALUE` generation/stat controls.
+The baseline dictionary explicitly restores original capacities, phantom stats,
+potion availability and later stats. All lighting remains equipment-dependent.
+Controls compile out of firmware; production uses selected constants and a
+precomputed monster table. Ground storage is 24 only in the simulator, with a
+logical generated capacity of 16–24 and a logical Yendor reservation.
+
+Observation interface 4 exposes twenty inventory slots, up to 36 ground/mimic
+objects, logical inventory capacity and only the public temporary-sight flag.
+Survival schema 2 appends potion-at-first-contact and phantom attack-event
+coverage. Attack events include player and monster attempts, including misses;
+they are not unique turns. Timer activity does not override blindness or LOS.
+
+The driver refuses escape summaries for simulator failures, retains invalid
+rows explicitly, and defaults to 100,000 actions to distinguish long legal
+runs from the former 20,000-action cutoff. Do not reinterpret no-route failures
+as deaths or silently omit them. Use the ordinary paired framework for valid
+same-policy batches; keep exploratory families FDR-adjusted. See
+[the balance report](../docs/GAME_BALANCE_2_TO_5_PERCENT.md) for selection,
+limitations and exact reproduction specifications.

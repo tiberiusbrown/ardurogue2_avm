@@ -17,8 +17,11 @@ def main():
         assert (p.returncode == 0) == valid, (args, p.stderr)
         return p
 
-    quiet = invoke("--seed", "24")
-    traced = invoke("--seed", "0x18", "--trace")
+    baseline=tuple(part for rule in ("ground=16","inventory=16","sight-percent=0","sight-early-percent=0",
+        "healing-percent=0","phantom-strength=6","phantom-dexterity=4","phantom-health=12",
+        "late-strength-percent=100","late-health-percent=100") for part in ("--intervention","balance:"+rule))
+    quiet = invoke("--seed", "24",*baseline)
+    traced = invoke("--seed", "0x18", "--trace",*baseline)
     assert quiet.stdout == traced.stdout
     assert "killed LORD" in traced.stderr and "picked up YENDOR_AMULET" in traced.stderr
     assert "result=escaped" in traced.stderr
@@ -39,7 +42,7 @@ def main():
     serial=invoke("--seeds","0:8")
     parallel=invoke("--seeds","0:8","--jobs","3")
     assert (serial.stdout,serial.stderr)==(parallel.stdout,parallel.stderr)
-    assert invoke("--seed","24","--jobs","8","--trace").stdout==quiet.stdout
+    assert invoke("--seed","24","--jobs","8","--trace",*baseline).stdout==quiet.stdout
     limited=invoke("--seeds","1:5","--max-actions","1","--no-telemetry")
     assert limited.stdout==invoke("--seeds","1:5","--jobs","3","--max-actions","1","--no-telemetry").stdout
     with tempfile.TemporaryDirectory(prefix="ardurogue2-sim-cli-") as scratch:
@@ -86,7 +89,7 @@ def main():
                 for k in counters:
                     assert totals[(row["effective_seed"], row[type_key])][k] == int(row[k]), (category, k, row)
         manifest = json.loads((first / "manifest.json").read_text())
-        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 7 and len(manifest["agent_policy_hash"]) == 64
+        assert manifest["agent"] == "omniscient-v2" and manifest["telemetry_schema_version"] == 8 and len(manifest["agent_policy_hash"]) == 64
         assert manifest["effective_seed_count"] == 8 and manifest["variant"] == "control"
         for row in rows["floors"]:
             assert int(row["entry_max_hp"]) >= int(row["entry_hp"]) and int(row["floor_tiles"]) > 0

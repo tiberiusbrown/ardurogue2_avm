@@ -1,0 +1,42 @@
+{
+  "baseline": {
+    "ground": 16,
+    "inventory": 16,
+    "monsters": 12,
+    "phantom-count": 12,
+    "phantom-strength": 6,
+    "phantom-dexterity": 4,
+    "phantom-speed": 4,
+    "phantom-armor": 1,
+    "phantom-health": 12,
+    "sight-duration": 40,
+    "sight-percent": 0,
+    "sight-early-percent": 0,
+    "healing-percent": 0,
+    "early-equipment-percent": 0,
+    "late-strength-percent": 100,
+    "ascent-strength-percent": 100,
+    "late-dexterity-percent": 100,
+    "late-health-percent": 100
+  },
+  "selected": {
+    "ground": 20,
+    "inventory": 20,
+    "monsters": 12,
+    "phantom-count": 12,
+    "phantom-strength": 4,
+    "phantom-dexterity": 3,
+    "phantom-speed": 4,
+    "phantom-armor": 1,
+    "phantom-health": 10,
+    "sight-duration": 40,
+    "sight-percent": 6,
+    "sight-early-percent": 18,
+    "healing-percent": 40,
+    "early-equipment-percent": 0,
+    "late-strength-percent": 75,
+    "ascent-strength-percent": 100,
+    "late-dexterity-percent": 100,
+    "late-health-percent": 75
+  }
+}

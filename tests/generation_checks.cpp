@@ -157,7 +157,7 @@ void validate(Metrics& m)
         for(uint8_t j = 0; j < i; ++j)
             if(game.ground[j].item.type) require(item.pos != game.ground[j].pos, "generated items accidentally stack");
     }
-    require(items == (game.has_amulet ? 0u : game.floor == FLOORS - 1 ? 15u : 16u), "wrong ascent/final-floor supply behavior");
+    require(items == (game.has_amulet ? 0u : game.floor == FLOORS - 1 ? GROUND_ITEMS - 1u : GROUND_ITEMS), "wrong ascent/final-floor supply behavior");
     ++m.floors; m.tiles += tiles; m.doors += game.door_count;
     m.rooms += diagnostics.major_features; m.loops += diagnostics.loops;
     m.dead += dead; m.junctions += junctions; m.attempts += diagnostics.attempts;

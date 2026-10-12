@@ -64,6 +64,8 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     // The interface announces effects, but does not disclose their remaining timers.
     o.weakened=game.weakened!=0; o.confused=game.confused!=0; o.paralyzed=game.paralyzed!=0;
     o.slowed=game.slowed!=0; o.invisible=game.invisible!=0; o.blindness=game.blindness!=0;
+    o.see_invisible=game.see_invisible!=0; o.inventory_capacity=inventory_capacity();
+    static_assert(INVENTORY <= 20 && GROUND_ITEMS + MONSTERS <= 36, "observation capacity");
     o.radius=player_light_radius(); o.yendor=game.has_amulet; o.pending_pickups=session.pending_pickups;
     o.equipped={game.weapon_slot,game.armor_slot,game.offhand_slot,game.amulet_slot,game.ring_slots[0],game.ring_slots[1]};
     for(int s=0;s<INVENTORY;++s) o.inventory[s]=describe(game.inventory[s],true);

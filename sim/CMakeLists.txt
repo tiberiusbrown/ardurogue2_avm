@@ -94,6 +94,8 @@ if(Python3_Interpreter_FOUND)
         "${CMAKE_CURRENT_SOURCE_DIR}/test_cli.py" "$<TARGET_FILE:ardurogue2_sim>")
     add_test(NAME explorer_cli COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_explorer_cli.py" "$<TARGET_FILE:ardurogue2_sim>")
     add_test(NAME explorer_tuning COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_explorer_tune.py" "$<TARGET_FILE:ardurogue2_explorer_tune>" "$<TARGET_FILE:ardurogue2_sim>")
+    add_test(NAME game_balance_stream_validation COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_game_balance_validate.py" "$<TARGET_FILE:ardurogue2_sim>")
     if(CMAKE_NM AND NOT MSVC)
         add_test(NAME explorer_policy_boundary COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_explorer_boundary.py"
             "${CMAKE_CURRENT_BINARY_DIR}/explorer_public_rules.hpp" "${CMAKE_NM}" "$<TARGET_OBJECTS:explorer_policy>")
@@ -114,3 +116,6 @@ endif()
 
 add_executable(feature_generation_audit feature_generation_audit.cpp)
 target_link_libraries(feature_generation_audit PRIVATE ardurogue2_sim_core)
+
+add_executable(game_balance_arenas game_balance_arenas.cpp)
+target_link_libraries(game_balance_arenas PRIVATE ardurogue2_sim_core)

@@ -181,11 +181,11 @@ void status_entity(const Monster& monster, char punctuation = 0)
 static const char PROGMEM* const PROGMEM potion_effect_names[] = {
     F("healing"), F("confusion"), F("poison"), F("harming"),
     F("strength"), F("dexterity"), F("paralysis"), F("slowing"),
-    F("experience"), F("invisibility"), F("blindness")
+    F("experience"), F("invisibility"), F("blindness"), F("see invisible")
 };
 static const char PROGMEM* const PROGMEM potion_color_names[] = {
     F("red"), F("clear"), F("orange"), F("green"), F("blue"),
-    F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown")
+    F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown"), F("silver")
 };
 static const char PROGMEM* const PROGMEM ring_names[] = {
     F("see invisible"), F("strength"), F("dexterity"), F("protection"),
@@ -224,6 +224,10 @@ static const char PROGMEM* const PROGMEM wand_descriptors[] = {
     F("long"), F("short"), F("slender"), F("thick"),
     F("twisted"), F("curved"), F("glossy")
 };
+
+static_assert(sizeof(potion_effect_names) / sizeof(*potion_effect_names) == POTION_COUNT &&
+              sizeof(potion_color_names) / sizeof(*potion_color_names) == POTION_COUNT,
+              "potion naming tables changed");
 
 static_assert(sizeof(ring_names) / sizeof(*ring_names) == RING_COUNT &&
               sizeof(amulet_names) / sizeof(*amulet_names) == AMULET_COUNT &&

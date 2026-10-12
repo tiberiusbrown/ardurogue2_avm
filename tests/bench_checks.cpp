@@ -34,7 +34,7 @@ void check_benchmark_scenarios()
                 (game.armor_slot == NONE || is_artifact(game.inventory[game.armor_slot].type)) &&
                 (game.amulet_slot == NONE || is_amulet(game.inventory[game.amulet_slot].type)) &&
                 (game.ring_slots[0] == NONE || is_artifact(game.inventory[game.ring_slots[0]].type) ||
-                 std::memcmp(&game, &sight_fixture, sizeof game) == 0) &&
+                 std::memcmp(&game, &sight_fixture, sizeof game) == 0 || game.see_invisible) &&
                 game.ring_slots[1] == NONE, "benchmark equipment must start unequipped");
         Game first = game;
         bench_setup();
@@ -86,8 +86,8 @@ void check_benchmark_scenarios()
     }
     for(uint8_t count : groups) require(count == 1, "singleton inventory must contain every group once");
     InventoryView singletons(game, nullptr);
-    require(singletons.count() == 2 * INVENTORY_GROUPS && singletons.first_slot() == 15 &&
-            singletons.entry_at(singletons.count() - 1) == 7,
+    require(singletons.count() == 2 * INVENTORY_GROUPS && singletons.first_slot() == INVENTORY - 1 &&
+            singletons.entry_at(singletons.count() - 1) == INVENTORY - 9,
             "singleton inventory benchmark lost its interleaved groups");
 
     bench_attack_hit();

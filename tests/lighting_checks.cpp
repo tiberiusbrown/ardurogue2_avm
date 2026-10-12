@@ -28,7 +28,8 @@ void arena() {
 }
 void check_lighting_offhand() {
     static_assert(sizeof(Item) == 2 && sizeof(Monster) == 8, "item/monster RAM grew");
-    static_assert(offsetof(Game, offhand_slot) == 810 && offsetof(Game, blindness) == 811,
+    static_assert(offsetof(Game, offhand_slot) == offsetof(Game, features) + sizeof(Game::features) &&
+                  offsetof(Game, blindness) == offsetof(Game, offhand_slot) + 1,
                   "saved append changed");
     arena(); check(player_light_radius() == 1, "innate radius");
     for(uint8_t type = CANDLE; type <= GLOWING_ORB; ++type) {
@@ -182,7 +183,7 @@ void check_lighting_offhand() {
         const unsigned weights[3][4] = {{30,60,10,0},{15,45,35,5},{5,25,60,10}};
         unsigned band = depth == 0 ? 0 : depth == 5 ? 1 : 2;
         unsigned total = light[0]+light[1]+light[2]+light[3], shield_total = shields[0]+shields[1]+shields[2];
-        check(total > 6500 && total < 8500 && shield_total > 3200 && shield_total < 4300, "ordinary category weights");
+        check(total > 6500 * GROUND_ITEMS / 16 && total < 8500 * GROUND_ITEMS / 16 && shield_total > 3200 * GROUND_ITEMS / 16 && shield_total < 4300 * GROUND_ITEMS / 16, "ordinary category weights");
         for(unsigned i=0;i<4;++i) {
             double share = 100.0*light[i]/total;
             check(weights[band][i] ? share > weights[band][i]-2 && share < weights[band][i]+2 : light[i]==0,
@@ -212,6 +213,6 @@ void check_lighting_offhand() {
         if(is_potion(type) || is_ring(type) || is_amulet(type) || is_scroll(type) || is_wand(type)) {
             identify_type(type); check(item_type_identified(type), "identification bit indexing");
         }
-    check((game.identified_items[6] & 0xfe) == 0, "knowledge overrun");
+    check((game.identified_items[6] & 0xfc) == 0, "knowledge overrun");
     check(!is_artifact(RING_ILLUMINATION) && !is_artifact(AMULET_BRILLIANCE), "new jewelry became artifact");
 }

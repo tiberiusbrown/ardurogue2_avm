@@ -7,7 +7,7 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 3;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 4;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
     uint8_t x=255, y=255;
@@ -33,15 +33,16 @@ struct ExplorerObservation {
     SeenPosition player;
     uint8_t floor=0, hp=0, max_hp=0, level=0, xp=0, strength=0, dexterity=0, speed=0, hunger=0;
     uint8_t weakened=0, confused=0, paralyzed=0, slowed=0, invisible=0, blindness=0; // Known flags, not hidden timers.
-    uint8_t radius=0;
+    uint8_t radius=0, inventory_capacity=20;
+    bool see_invisible=false; // Public start/expiration feedback, never a remaining timer.
     bool yendor=false, pending_pickups=false;
     uint64_t actions=0, turns=0;
     std::array<uint8_t,6> equipped{{255,255,255,255,255,255}}; // weapon, armor, offhand, amulet, rings
-    std::array<SeenItem,16> inventory{};
+    std::array<SeenItem,20> inventory{};
     std::array<Terrain,EXPLORER_CELLS> terrain{}; // Only current sight or explicit mechanical reveals.
     std::bitset<EXPLORER_CELLS> visible;
     std::array<uint8_t,EXPLORER_CELLS> features{};
-    std::array<SeenGround,28> ground{}; // Includes indistinguishable mimic sprites.
+    std::array<SeenGround,36> ground{}; // Includes indistinguishable mimic sprites.
     std::array<SeenMonster,12> monsters{};
     uint8_t ground_count=0, monster_count=0;
     std::array<std::array<uint8_t,16>,6> identities{}; // Only identified appearance mappings.

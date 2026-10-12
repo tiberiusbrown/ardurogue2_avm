@@ -5,7 +5,7 @@
 #include <stdint.h>
 namespace sim {
 enum class EventKind {
-    FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
+    ItemIdentified, InventoryFull, SeeInvisibleExpired, FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,
     ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget,
@@ -16,6 +16,7 @@ enum class Special : uint8_t { Poison, Confusion, Paralysis, Fire };
 void event(EventKind, uint8_t index = 255, uint8_t type = 0,
            uint16_t amount = 1, uint8_t detail = 0);
 void after_floor_generation();
+uint8_t balance_value(const char*, uint8_t);
 bool artifacts_enabled();
 bool full_light();
 bool light_awareness();
@@ -33,6 +34,8 @@ public:
 };
 }
 #define SIM_EVENT(...) ::sim::event(__VA_ARGS__)
+#define BALANCE_VALUE(name, fallback) ::sim::balance_value(name, fallback)
 #else
 #define SIM_EVENT(...) ((void)0)
+#define BALANCE_VALUE(name, fallback) (fallback)
 #endif

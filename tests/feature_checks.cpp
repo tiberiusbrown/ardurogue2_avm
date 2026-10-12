@@ -118,20 +118,20 @@ void summons_and_holy() {
         arena(FEATURE_TELEPORT_TRAP); game.floor=15; game.features[0].id=FEATURE_TELEPORT_TRAP | (hidden ? MAP_FEATURE_HIDDEN : 0);
         game.monsters[0]={game.player,LORD,1,0,{0,0},0};
         defeat_monster(0);
-        require(game.ground[15].item.type==YENDOR_AMULET && game.ground[15].pos==game.player &&
+        require(game.ground[GROUND_ITEMS - 1].item.type==YENDOR_AMULET && game.ground[GROUND_ITEMS - 1].pos==game.player &&
             game.features[0].id==(FEATURE_TELEPORT_TRAP | (hidden ? MAP_FEATURE_HIDDEN : 0)),"Lord drop or trap changed");
         game.player={9,10};
         begin_player_move(1,0);
         require(session.pending_pickups && !game.has_amulet && game.player==Position{10,10} && !game.turns,
             "teleport fired before pickup offer");
-        require(take_item(15)==PICKUP_TAKEN && game.has_amulet && !game.turns,
+        require(take_item(GROUND_ITEMS - 1)==PICKUP_TAKEN && game.has_amulet && !game.turns,
             "Yendor pickup ran enemies before feature");
         complete_ground_pickups(); complete_player_move();
         require(!session.pending_move && !session.pending_pickups && game.turns==2 &&
             game.features[0].id==FEATURE_TELEPORT_TRAP,"pickup/teleport turn completion");
         arena(); game.floor=15; game.monsters[0]={{12,10},LORD,1,0,{0,0},0};
         damage_monster(0,1,false);
-        require(game.ground[15].pos==Position{12,10},"ordinary Lord drop moved");
+        require(game.ground[GROUND_ITEMS - 1].pos==Position{12,10},"ordinary Lord drop moved");
     }
     arena(FEATURE_SUMMONING_TRAP); activate_entry_feature(0);
     unsigned count = 0;
@@ -368,10 +368,10 @@ void monster_traps() {
         uint8_t(FEATURE_FROST_TRAP),uint8_t(FEATURE_MAGIC_DRAIN_TRAP),uint8_t(FEATURE_RUST_TRAP)}) {
         for(uint8_t hp: {uint8_t(0),uint8_t(1)}) {
             setup(trap,LORD); game.monsters[0].hp=hp; activate_monster_trap(0);
-            require(!game.monsters[0].type && !game.score && !game.xp && game.ground[15].item.type==YENDOR_AMULET &&
-                game.ground[15].pos==Position{12,10},"environmental Lord death/Yendor/underflow");
-            auto ground=game.ground[15]; activate_monster_trap(0);
-            require(!std::memcmp(&ground,&game.ground[15],sizeof ground),"duplicate Yendor");
+            require(!game.monsters[0].type && !game.score && !game.xp && game.ground[GROUND_ITEMS - 1].item.type==YENDOR_AMULET &&
+                game.ground[GROUND_ITEMS - 1].pos==Position{12,10},"environmental Lord death/Yendor/underflow");
+            auto ground=game.ground[GROUND_ITEMS - 1]; activate_monster_trap(0);
+            require(!std::memcmp(&ground,&game.ground[GROUND_ITEMS - 1],sizeof ground),"duplicate Yendor");
         }
     }
     setup(FEATURE_SPIKE_TRAP); game.monsters[0].hp=1; game.monsters[0].state=MON_TRAP_SUMMONED; activate_monster_trap(0);
@@ -579,7 +579,7 @@ void generation_checks() {
 }
 }
 void check_map_features() {
-    static_assert(sizeof(MapFeature) == 3 && sizeof(Game) == 812 && offsetof(Game, features) == 774, "map feature saved layout");
+    static_assert(sizeof(MapFeature) == 3 && offsetof(Game, see_invisible) == 812 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && offsetof(Game, features) == 774 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16), "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
     monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
 }

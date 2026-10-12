@@ -89,6 +89,7 @@ void Collector::encounter_event(EventKind k,uint8_t index,uint8_t type,uint16_t 
         encounter_species[index]=type;
         if(type==rogue::PHANTOM && !e.phantom) {
             e.phantom=true; e.phantom_contact=data.turns; e.phantom_hp=rogue::game.hp; e.phantom_max_hp=rogue::player_max_hp();
+            e.potion_sight=rogue::game.see_invisible!=0;
             e.first_phantom=!first_phantom_seen; first_phantom_seen=true;
             e.phantom_visible=rogue::can_see(rogue::game.monsters[index].pos) && rogue::player_can_see_monster(index);
             auto& g=rogue::game; auto s=supplies();
@@ -96,6 +97,10 @@ void Collector::encounter_event(EventKind k,uint8_t index,uint8_t type,uint16_t 
             e.phantom_level=g.level; e.phantom_armor=rogue::player_armor_rating(); e.phantom_armor_enchant=rogue::player_armor_enchant();
             e.phantom_healing_reserve=s.healing; e.phantom_escape_reserve=s.escape; e.phantom_food=s.food;
             e.phantom_damage_before=e.damage; e.phantom_healing_before=e.healing; e.phantom_escape_before=e.escape;
+        }
+        if(type==rogue::PHANTOM) {
+            ++e.phantom_attack_turns;
+            e.phantom_sight_attack_turns+=rogue::game.see_invisible!=0;
         }
         if(type==rogue::LORD) milestone("lord_encountered");
     }
@@ -173,7 +178,7 @@ void Collector::record_route(const Action& a) {
        known_features[y*64+x]!=rogue::FEATURE_SUMMONING_TRAP) ++e.safe_detours;
 }
 void write_encounters_header(std::ostream& o) {
-    o<<"seed,effective_seed,agent,encounter,visit,floor,direction,start_turn,end_turn,actions,start_hp,max_hp,exit_hp,level,armor,weapon,weapon_enchant,offhand,light,food,healing_reserve,escape_reserve,visible_first,intentional,participants,mixed,phantom,first_phantom,phantom_contact_turn,phantom_start_hp,phantom_max_hp,known_trap,summoning,damage,healing_consumed,escape_consumed,food_consumed,combat_turns,movement_turns,kills,phantom_kills,outcome,survived,survived_25,survived_50,survived_100,next_floor,phantom_visible_first,armor_enchant,phantom_weapon,phantom_offhand,phantom_light,phantom_level,phantom_armor,phantom_armor_enchant,phantom_healing_reserve,phantom_escape_reserve,phantom_food,phantom_damage,phantom_healing_consumed,phantom_escape_consumed,species_mask,player_kills,phantom_player_kills\n";
+    o<<"seed,effective_seed,agent,encounter,visit,floor,direction,start_turn,end_turn,actions,start_hp,max_hp,exit_hp,level,armor,weapon,weapon_enchant,offhand,light,food,healing_reserve,escape_reserve,visible_first,intentional,participants,mixed,phantom,first_phantom,phantom_contact_turn,phantom_start_hp,phantom_max_hp,known_trap,summoning,damage,healing_consumed,escape_consumed,food_consumed,combat_turns,movement_turns,kills,phantom_kills,outcome,survived,survived_25,survived_50,survived_100,next_floor,phantom_visible_first,armor_enchant,phantom_weapon,phantom_offhand,phantom_light,phantom_level,phantom_armor,phantom_armor_enchant,phantom_healing_reserve,phantom_escape_reserve,phantom_food,phantom_damage,phantom_healing_consumed,phantom_escape_consumed,species_mask,player_kills,phantom_player_kills,potion_sight_first,phantom_attack_events,phantom_sight_attack_events\n";
 }
 void write_encounters(std::ostream& o,const RunMetrics& r) {
     for(const auto& e:r.encounters) {
@@ -189,7 +194,8 @@ void write_encounters(std::ostream& o,const RunMetrics& r) {
           <<','<<e.phantom_light<<','<<e.phantom_level<<','<<e.phantom_armor<<','<<e.phantom_armor_enchant
           <<','<<e.phantom_healing_reserve<<','<<e.phantom_escape_reserve<<','<<e.phantom_food
           <<','<<(e.damage-e.phantom_damage_before)<<','<<(e.healing-e.phantom_healing_before)<<','<<(e.escape-e.phantom_escape_before)
-          <<','<<e.species_mask<<','<<e.player_kills<<','<<e.phantom_player_kills<<'\n';
+          <<','<<e.species_mask<<','<<e.player_kills<<','<<e.phantom_player_kills
+          <<','<<e.potion_sight<<','<<e.phantom_attack_turns<<','<<e.phantom_sight_attack_turns<<'\n';
     }
 }
 void write_milestones_header(std::ostream& o) {

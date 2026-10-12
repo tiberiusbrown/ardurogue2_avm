@@ -31,12 +31,27 @@ constexpr bool in_light_radius(int16_t dx, int16_t dy, uint8_t radius)
 constexpr uint8_t FLOORS = 16;
 constexpr uint8_t DOORS = 11;
 constexpr uint8_t MONSTERS = 12;
-constexpr uint8_t GROUND_ITEMS = 16;
-constexpr uint8_t INVENTORY = 16;
+constexpr uint8_t GROUND_ITEM_CAPACITY = 20;
+// The simulator reserves the largest screening layout; firmware uses the selected capacity.
+#if defined(ARDUROGUE2_SIM)
+constexpr uint8_t GROUND_ITEMS = 24;
+#else
+constexpr uint8_t GROUND_ITEMS = GROUND_ITEM_CAPACITY;
+#endif
+constexpr uint8_t INVENTORY = 20;
+constexpr uint8_t SEE_INVISIBLE_DURATION = 40;
+constexpr uint8_t SEE_INVISIBLE_POTION_PERCENT = 6;
+constexpr uint8_t SEE_INVISIBLE_EARLY_PERCENT = 18;
+constexpr uint8_t HEALING_REPLACEMENT_PERCENT = 40;
+constexpr uint8_t LATE_STRENGTH_PERCENT = 75;
+constexpr uint8_t LATE_HEALTH_PERCENT = 75;
+constexpr uint8_t PHANTOM_STRENGTH = 4;
+constexpr uint8_t PHANTOM_DEXTERITY = 3;
+constexpr uint8_t PHANTOM_HEALTH = 10;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 27;
+constexpr uint8_t SAVE_VERSION = 28;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -47,7 +62,8 @@ enum ItemType : uint8_t {
     POTION_STRENGTH, POTION_DEXTERITY, POTION_PARALYSIS, POTION_SLOWING, POTION_EXPERIENCE,
     POTION_INVISIBILITY,
     POTION_BLINDNESS,
-    POTION_LAST = POTION_BLINDNESS,
+    POTION_SEE_INVISIBLE,
+    POTION_LAST = POTION_SEE_INVISIBLE,
     WEAPON_FIRST,
     LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
     STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN,
@@ -410,9 +426,10 @@ struct Game {
     uint8_t weakened, confused, paralyzed, slowed, invisible, vamp_drain;
     uint8_t has_amulet, door_count, weapon_slot, armor_slot;
     uint8_t amulet_slot, ring_slots[2];
-    uint8_t identified_items[7];
+    uint8_t identified_items[(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT + 7) / 8];
     MapFeature features[MAP_FEATURES];
     uint8_t offhand_slot, blindness;
+    uint8_t see_invisible; // Remaining temporary sight turns; saved across floors/resume.
 };
 
 enum RunResult : uint8_t {
@@ -436,7 +453,7 @@ extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 812, "Game saved layout changed");
+static_assert(sizeof(Game) == 812 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) + 1, "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -449,19 +466,19 @@ static_assert(offsetof(GroundItem, pos) == 0 &&
 static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, monsters) == 534 &&
               offsetof(Game, ground) == 630 &&
-              offsetof(Game, inventory) == 694 &&
-              offsetof(Game, player) == 738 &&
-              offsetof(Game, up) == 740 && offsetof(Game, down) == 742 &&
-              offsetof(Game, hp) == 744 &&
-              offsetof(Game, strength) == 748 &&
-              offsetof(Game, magic_resistance) == 751 &&
-              offsetof(Game, identified_items) == 767,
+              offsetof(Game, inventory) == 694 + 4 * (GROUND_ITEMS - 16) &&
+              offsetof(Game, player) == 738 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, up) == 740 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) && offsetof(Game, down) == 742 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, hp) == 744 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, strength) == 748 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, magic_resistance) == 751 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, identified_items) == 767 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16),
               "game save offsets changed");
-static_assert(offsetof(Game, features) == 774, "features must append to saved layout");
-static_assert(POTION_COUNT == 11 && SCROLL_COUNT == 9 &&
+static_assert(offsetof(Game, features) == 774 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features must append to saved layout");
+static_assert(POTION_COUNT == 12 && SCROLL_COUNT == 9 &&
               RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 7,
               "item table counts changed");
-static_assert(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 49 &&
+static_assert(POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 50 &&
               POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
                   sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 

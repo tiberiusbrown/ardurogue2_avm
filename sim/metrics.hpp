@@ -13,7 +13,7 @@ struct ItemMetrics {
     uint64_t generated=0, reached=0, picked_up=0, used=0, consumed=0,
         equipped=0, dropped=0, discarded=0, carried=0,
         charges_used=0, drunk=0, thrown=0, scrolls_read=0, turns_equipped=0,
-        wands_picked_up=0, wands_activated=0;
+        wands_picked_up=0, wands_activated=0, identified=0, expired=0, active_turns=0, pack_full=0;
 };
 struct MonsterMetrics {
     uint64_t generated=0, encountered=0, engaged=0, killed=0,
@@ -111,6 +111,8 @@ struct RunMetrics {
         int armor_enchant=0,phantom_weapon=0,phantom_offhand=0,phantom_light=0,phantom_level=0,
             phantom_armor=0,phantom_armor_enchant=0,phantom_healing_reserve=0,phantom_escape_reserve=0,phantom_food=0;
         uint64_t phantom_damage_before=0,phantom_healing_before=0,phantom_escape_before=0;
+        bool potion_sight=false;
+        uint64_t phantom_attack_turns=0,phantom_sight_attack_turns=0;
         bool ascent=false,visible=false,phantom_visible=false,intentional=false,mixed=false,phantom=false,first_phantom=false,
             known_trap=false,summoning=false,survived=false,next_floor=false;
         // -1 denotes follow-up censored by a simulator failure/unfinished horizon.
@@ -217,9 +219,9 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=7;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=8;
 inline constexpr size_t CSV_STREAM_COUNT=11;
-inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=1;
+inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=2;
 void write_encounters_header(std::ostream&);
 void write_encounters(std::ostream&,const RunMetrics&);
 void write_milestones_header(std::ostream&);

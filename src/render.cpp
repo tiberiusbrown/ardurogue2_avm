@@ -565,7 +565,7 @@ __attribute__((noinline)) static void render_stats()
 {
     avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
     avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
-    avm_draw_textf_P(67, 22, F("LIGHT %u"), player_light_radius());
+    avm_draw_textf_P(67, 22, game.see_invisible ? F("LIGHT %u S") : F("LIGHT %u"), player_light_radius());
 }
 
 __attribute__((noinline)) void render_play()

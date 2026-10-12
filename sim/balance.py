@@ -22,7 +22,7 @@ from scipy import linalg, special, stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-SCHEMA = 7
+SCHEMA = 8
 STREAMS = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions", "ranged", "features")
 NOTICE = ("Adjusted observational association is not proof of causation. "
           "Controlled A/B interventions are preferred for causal balance conclusions.")
@@ -58,7 +58,7 @@ def read_manifest(directory):
                 "seed_selection", "experiment", "variant", "options")
     if any(k not in m for k in required) or m["schema_version"] != 1:
         raise ValueError(f"unsupported/incomplete manifest: {path}")
-    if m["telemetry_schema_version"] not in (6, SCHEMA):
+    if m["telemetry_schema_version"] not in (6, 7, SCHEMA):
         raise ValueError(f"incompatible telemetry schema: {path}")
     for name, digest in m.get("output_csv_sha256", {}).items():
         if name not in {s + ".csv" for s in (*STREAMS, "exploration")} or sha256(Path(directory) / name) != digest:

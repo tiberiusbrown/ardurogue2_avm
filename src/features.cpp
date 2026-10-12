@@ -161,7 +161,8 @@ static bool summon(Position origin, bool trap, bool undead = false, bool visible
 }
 static void gift_item() {
     uint8_t slot = NONE;
-    for(uint8_t i = 0; i < GROUND_ITEMS; ++i) if(!game.ground[i].item.type) { slot = i; break; }
+    for(uint8_t i = 0; i < ground_item_capacity(); ++i) if(!game.ground[i].item.type &&
+        !(game.floor==FLOORS-1 && !game.has_amulet && i==yendor_ground_slot())) { slot = i; break; }
     if(slot == NONE || item_at(game.player) != NONE) { blessing(); return; }
     Item item = generation::useful_item(game.random_state);
     game.ground[slot] = {game.player, item};

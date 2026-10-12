@@ -18,6 +18,7 @@ class Experiment {
 public:
     virtual ~Experiment() = default;
     virtual void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const = 0;
+    virtual uint8_t balance_value(const char*, uint8_t fallback) const { return fallback; }
     virtual bool full_light() const { return false; }
     virtual bool light_awareness() const { return true; }
     virtual bool artifacts_enabled() const { return true; }
@@ -32,6 +33,8 @@ struct Rule {
     bool legacy_awareness=false;
     int feature_mode=-1; // 0 teleport, 1 early damage, 2 interactive only, 3 traps only
     int original=-1; // FeatureVariant, host only
+    std::string balance_parameter;
+    uint8_t balance_setting=0;
     uint8_t from=0, to=0;
     int floor=-1, direction=-1, maximum=65535, info=-1; // -1 default, -2 preserve
 };
@@ -39,6 +42,7 @@ class RuleExperiment final : public Experiment {
 public:
     std::vector<Rule> rules;
     void apply(rogue::Game&, ExperimentContext, std::vector<Intervention>&) const override;
+    uint8_t balance_value(const char*, uint8_t) const override;
     bool full_light() const override;
     bool light_awareness() const override;
     bool artifacts_enabled() const override;

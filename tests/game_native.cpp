@@ -85,7 +85,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  sizeof(Game) == 812 && sizeof(Item) == 2,
+                  offsetof(Game, see_invisible) == 812 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -173,8 +173,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x0e1477e1u, 0xe8bf145du}, {0x1786dbcdu, 0x6c365cb5u},
-        {0xbe6cb374u, 0xfb40913eu}, {0xffa4400du, 0x8e2b6476u}
+        {0x56ca9dfbu, 0xea2e4b1cu}, {0x83b53170u, 0x8026b425u},
+        {0xada19b8cu, 0x8ad1c03bu}, {0x51bfed6fu, 0xac630beeu}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -675,11 +675,11 @@ void check_rogue_progression()
             "Yendor spawn slot was reused before the Lord died");
     defeat_monster(MONSTERS - 1);
     require(game.monsters[MONSTERS - 1].type == NO_MONSTER &&
-            game.ground[15].item.type == YENDOR_AMULET,
+            game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET,
             "Lord death did not leave Yendor");
     std::memset(game.monsters, 0, sizeof(game.monsters));
-    require(take_item(15) == PICKUP_TAKEN && game.has_amulet &&
-            game.ground[15].item.type == NO_ITEM,
+    require(take_item(GROUND_ITEMS - 1) == PICKUP_TAKEN && game.has_amulet &&
+            game.ground[GROUND_ITEMS - 1].item.type == NO_ITEM,
             "Yendor pickup did not begin ascent");
     while(game.floor) {
         game.player = game.up;
@@ -710,7 +710,7 @@ void check_indirect_lord_death()
     for(int i = 0; i < 30 && game.monsters[1].type; ++i)
         end_turn();
     require(game.monsters[1].type == NO_MONSTER &&
-            game.ground[15].item.type == YENDOR_AMULET,
+            game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET,
             "dragon fire did not leave Yendor when it killed the Lord");
 }
 
@@ -1062,9 +1062,9 @@ void check_ground_item_exchange()
 
     reset_item_fixture();
     fill_item_inventory();
-    game.ground[15] = {{3, 4}, {YENDOR_AMULET, 1}};
-    require(take_item(15) == PICKUP_TAKEN && game.has_amulet &&
-            game.ground[15].item.type == NO_ITEM,
+    game.ground[GROUND_ITEMS - 1] = {{3, 4}, {YENDOR_AMULET, 1}};
+    require(take_item(GROUND_ITEMS - 1) == PICKUP_TAKEN && game.has_amulet &&
+            game.ground[GROUND_ITEMS - 1].item.type == NO_ITEM,
             "Yendor pickup required inventory space");
 
     reset_item_fixture();
@@ -1533,20 +1533,20 @@ void check_enemy_roster()
         {MON_MEAN | MON_OPENER, 3, 2, 2, 0, 6, 5},
         {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6},
         {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
-            6, 4, 4, 1, 12, 7},
-        {MON_MEAN | MON_OPENER, 7, 4, 4, 3, 16, 8},
-        {MON_MEAN | MON_PARALYZE_HIT, 5, 4, 4, 0, 12, 9},
-        {MON_MEAN | MON_OPENER, 8, 4, 4, 2, 20, 11},
-        {MON_MEAN | MON_NOMOVE, 7, 4, 4, 3, 20, 11},
+            4, 3, 4, 1, 10, 7},
+        {MON_MEAN | MON_OPENER, 6, 4, 4, 3, 12, 8},
+        {MON_MEAN | MON_PARALYZE_HIT, 4, 4, 4, 0, 9, 9},
+        {MON_MEAN | MON_OPENER, 6, 4, 4, 2, 15, 11},
+        {MON_MEAN | MON_NOMOVE, 6, 4, 4, 3, 15, 11},
         {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
-            9, 4, 4, 3, 24, 14},
-        {MON_MEAN | MON_REGENS | MON_OPENER, 9, 3, 3, 5, 32, 18},
-        {MON_MEAN, 7, 6, 6, 1, 24, 18},
-        {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 7, 48, 25},
+            7, 4, 4, 3, 18, 14},
+        {MON_MEAN | MON_REGENS | MON_OPENER, 7, 3, 3, 5, 24, 18},
+        {MON_MEAN, 6, 6, 6, 1, 18, 18},
+        {MON_MEAN | MON_FIRE_BREATH, 9, 4, 4, 7, 36, 25},
         {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
-             MON_OPENER | MON_SEE_INVIS, 10, 6, 6, 3, 24, 35},
+             MON_OPENER | MON_SEE_INVIS, 8, 6, 6, 3, 18, 35},
         {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
-             MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 7, 112, 90}
+             MON_PARALYZE_HIT | MON_SEE_INVIS, 12, 6, 8, 7, 84, 90}
     };
     for(uint8_t type = BAT; type <= LORD; ++type) {
         MonsterInfo info = monster_info(type);
@@ -2236,8 +2236,8 @@ void check_wand_fire_and_lord()
         game.monsters[0] = {{12, 10}, LORD, 1, 0, {0, 0}, 0};
         session.ended = true;
         require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
-                game.ground[15].item.type == YENDOR_AMULET &&
-                game.ground[15].pos == Position{12, 10},
+                game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET &&
+                game.ground[GROUND_ITEMS - 1].pos == Position{12, 10},
                 "wand Lord kill did not leave Yendor");
     }
 }
@@ -2373,7 +2373,7 @@ void check_powerful_wands()
     game.monsters[0] = {{12, 10}, LORD, 1, 0, {0, 0}, 0};
     session.ended = true;
     require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
-            game.ground[15].item.type == YENDOR_AMULET,
+            game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET,
             "powerful striking Lord kill lost Yendor");
     wand_arena(WAND_ICE);
     wand_modifier_at(WAND_POWERFUL);
@@ -2433,7 +2433,7 @@ void check_powerful_wands()
     game.monsters[0] = {{12, 10}, LORD, 1, 0, {0, 0}, 0};
     session.ended = true;
     require(use_wand(0, 1, 0) && game.monsters[0].type == NO_MONSTER &&
-            game.ground[15].item.type == YENDOR_AMULET,
+            game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET,
             "powerful fire Lord kill lost Yendor");
 }
 
@@ -2659,6 +2659,7 @@ bool generation_command(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
+    if(argc==2 && std::string(argv[1])=="--sight") { extern void check_temporary_sight(); check_temporary_sight(); return 0; }
     if(argc == 2 && std::strcmp(argv[1], "--map-features") == 0) {
         check_map_features(); return 0;
     }
@@ -2680,6 +2681,7 @@ int main(int argc, char** argv)
     }
     extern void check_lighting_offhand();
     check_lighting_offhand();
+    extern void check_temporary_sight(); check_temporary_sight();
     check_benchmark_scenarios();
     check_combat_rules();
     check_weapon_and_equipment_rules();

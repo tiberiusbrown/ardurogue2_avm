@@ -101,11 +101,17 @@ static uint8_t floor_shield_type(uint16_t& seed)
 
 static uint8_t floor_potion_type(uint16_t& seed)
 {
-    uint8_t chance = floor_roll(seed, 2 * POTION_COUNT);
-    if(game.floor > 0 && game.floor < 5 && (chance == POTION_COUNT + POTION_HARMING - POTION_FIRST || chance == POTION_COUNT + POTION_POISON - POTION_FIRST)) return POTION_HEALING;
-    if(chance == POTION_COUNT + POTION_EXPERIENCE - POTION_FIRST)
+    uint16_t sight_seed = static_cast<uint16_t>(seed ^ 0x53e9u);
+    uint8_t sight_roll = floor_roll(sight_seed, 100);
+    uint8_t chance = floor_roll(seed, 22);
+    uint8_t sight_percent = BALANCE_VALUE("sight-percent", SEE_INVISIBLE_POTION_PERCENT);
+    if(game.floor >= 2 && game.floor <= 4)
+        sight_percent = BALANCE_VALUE("sight-early-percent", SEE_INVISIBLE_EARLY_PERCENT);
+    if(sight_roll < sight_percent) return POTION_SEE_INVISIBLE;
+    if(game.floor > 0 && game.floor < 5 && (chance == 11 + POTION_HARMING - POTION_FIRST || chance == 11 + POTION_POISON - POTION_FIRST)) return POTION_HEALING;
+    if(chance == 11 + POTION_EXPERIENCE - POTION_FIRST)
         return game.floor == 0 || (game.floor >= 5 && game.floor < 10) ? POTION_SLOWING : POTION_HEALING;
-    return static_cast<uint8_t>(POTION_FIRST + chance % POTION_COUNT);
+    return static_cast<uint8_t>(POTION_FIRST + chance % 11);
 }
 
 constexpr uint8_t NORMAL_WAND_WEIGHT = 60;
@@ -176,9 +182,11 @@ static Position select_tile(uint16_t seed, uint8_t preference, bool monster)
 __attribute__((noinline)) void populate_monsters(uint16_t seed)
 {
     uint16_t placement_seed = seed;
-    for(uint8_t i = 0; i < MONSTERS; ++i) {
+    uint8_t count = BALANCE_VALUE("monsters", MONSTERS);
+    if(game.floor == 4) count = BALANCE_VALUE("phantom-count", count);
+    for(uint8_t i = 0; i < count; ++i) {
         uint8_t type = 0;
-        if(!game.has_amulet && game.floor == FLOORS - 1 && i == MONSTERS - 1)
+        if(!game.has_amulet && game.floor == FLOORS - 1 && i == count - 1)
             type = LORD;
         else {
             // Encounter table retries retain the original depth distribution.
@@ -275,20 +283,20 @@ __attribute__((noinline)) static void place_artifacts()
     for(uint8_t a = 0; a < ARTIFACT_COUNT; ++a) {
         uint8_t type = artifact_type(a);
         if(artifact_floor(game.run_seed, type) != game.floor) continue;
-        uint8_t start = floor_roll(seed, GROUND_ITEMS);
+        uint8_t start = floor_roll(seed, ground_item_capacity());
         uint8_t selected = NONE;
         for(uint8_t pass = 0; pass < 2 && selected == NONE; ++pass) {
-            for(uint8_t n = 0; n < GROUND_ITEMS; ++n) {
-                uint8_t slot = static_cast<uint8_t>((start + n) % GROUND_ITEMS);
+            for(uint8_t n = 0; n < ground_item_capacity(); ++n) {
+                uint8_t slot = static_cast<uint8_t>((start + n) % ground_item_capacity());
                 uint8_t old = game.ground[slot].item.type;
                 if(!old || old == YENDOR_AMULET || is_artifact(old) ||
-                   (slot == GROUND_ITEMS - 1 && game.floor == FLOORS - 1)) continue;
+                   (slot == yendor_ground_slot() && game.floor == FLOORS - 1)) continue;
                 if(!pass && (old == FOOD || old == ARROWS)) continue;
                 selected = slot;
                 break;
             }
         }
-        // All eligible production floors have sixteen accessible occupied slots,
+        // Eligible production floors have accessible occupied ordinary slots,
         // and there are only ten artifacts. Previously placed types are skipped.
         if(selected != NONE) game.ground[selected].item = artifact_item(type);
     }
@@ -296,11 +304,11 @@ __attribute__((noinline)) static void place_artifacts()
 
 __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t equipment_seed)
 {
-    // Fresh ascent threats, but no replenishing ordinary supplies. Slot 15 on
+    // Fresh ascent threats, but no replenishing ordinary supplies. The last slot on
     // the final descent remains reserved for the defeated Lord's Yendor drop.
     if(game.has_amulet) return;
     uint16_t placement_seed = seed;
-    for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
+    for(uint8_t i = 0; i < ground_item_capacity(); ++i) {
         uint8_t chance = floor_roll(seed, 87);
         uint8_t type = chance < FOOD_WEIGHT ? FOOD : chance < 20 ? ARROWS : chance < 40
             ? floor_potion_type(seed) :
@@ -314,6 +322,13 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
                 ? floor_ring_type(seed)
                 : chance < 72 ? floor_amulet_type(seed) :
                   chance < 82 ? floor_light_type(seed) : floor_shield_type(equipment_seed);
+        uint8_t healing = BALANCE_VALUE("healing-percent", HEALING_REPLACEMENT_PERCENT);
+        uint8_t equipment = BALANCE_VALUE("early-equipment-percent", 0);
+        uint16_t bonus_seed = static_cast<uint16_t>(placement_seed ^ ((i + 1u) * 0x713bu));
+        uint8_t bonus = floor_roll(bonus_seed, 100);
+        if(is_potion(type) && type != POTION_SEE_INVISIBLE && bonus < healing) type = POTION_HEALING;
+        if(game.floor < 4 && is_armor(type) && bonus < equipment) type = CHAIN_MAIL;
+        if(game.floor < 4 && is_weapon(type) && !is_bow(type) && bonus < equipment) type = LONG_SWORD;
         uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) : 1;
         if(is_light(type)) info = light_initial_fuel(type);
         if(is_ammo(type)) {
@@ -336,7 +351,7 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
             if(floor_equipment_roll(equipment_seed, 8) == 0) equipment.info |= ITEM_CURSED;
             info = equipment.info;
         }
-        if(game.floor == FLOORS - 1 && i == 15)
+        if(game.floor == FLOORS - 1 && i == yendor_ground_slot())
             continue;
         uint16_t placement = static_cast<uint16_t>(placement_seed ^ ((i + 1u) * 0x9e37u));
         uint8_t preference = (is_equipment(type) || is_wand(type)) && (i % 3 == 0)

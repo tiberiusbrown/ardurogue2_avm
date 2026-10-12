@@ -7,6 +7,22 @@
 
 namespace rogue {
 
+constexpr uint8_t screening_base(uint8_t selected, uint8_t original) {
+#if defined(ARDUROGUE2_SIM)
+    (void)selected; return original;
+#else
+    (void)original; return selected;
+#endif
+}
+// Firmware precomputes selected later stats in flash. Native screening retains
+// the original table and applies explicit same-executable controls at access.
+constexpr uint8_t later_stat(uint8_t value, uint8_t percent) {
+#if defined(ARDUROGUE2_SIM)
+    (void)percent; return value;
+#else
+    return static_cast<uint8_t>((uint16_t(value) * percent + 99) / 100);
+#endif
+}
 static const MonsterInfo PROGMEM monster_table[] = {
     {0, 0, 0, 0, 0, 0, 0},
     {0, 1, 6, 8, 0, 1, 1},                         // bat
@@ -15,20 +31,21 @@ static const MonsterInfo PROGMEM monster_table[] = {
     {MON_MEAN | MON_OPENER, 3, 2, 2, 0, 6, 5}, // zombie
     {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6}, // goblin
     {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
-        6, 4, 4, 1, 12, 7},                     // phantom
-    {MON_MEAN | MON_OPENER, 7, 4, 4, 3, 16, 8}, // orc
-    {MON_MEAN | MON_PARALYZE_HIT, 5, 4, 4, 0, 12, 9}, // tarantula
-    {MON_MEAN | MON_OPENER, 8, 4, 4, 2, 20, 11}, // hobgoblin
-    {MON_MEAN | MON_NOMOVE, 7, 4, 4, 3, 20, 11}, // mimic
+        screening_base(PHANTOM_STRENGTH, 6), screening_base(PHANTOM_DEXTERITY, 4),
+        4, 1, screening_base(PHANTOM_HEALTH, 12), 7}, // phantom
+    {MON_MEAN | MON_OPENER, later_stat(7, LATE_STRENGTH_PERCENT), 4, 4, 3, later_stat(16, LATE_HEALTH_PERCENT), 8}, // orc
+    {MON_MEAN | MON_PARALYZE_HIT, later_stat(5, LATE_STRENGTH_PERCENT), 4, 4, 0, later_stat(12, LATE_HEALTH_PERCENT), 9}, // tarantula
+    {MON_MEAN | MON_OPENER, later_stat(8, LATE_STRENGTH_PERCENT), 4, 4, 2, later_stat(20, LATE_HEALTH_PERCENT), 11}, // hobgoblin
+    {MON_MEAN | MON_NOMOVE, later_stat(7, LATE_STRENGTH_PERCENT), 4, 4, 3, later_stat(20, LATE_HEALTH_PERCENT), 11}, // mimic
     {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
-        9, 4, 4, 3, 24, 14},                    // incubus
-    {MON_MEAN | MON_REGENS | MON_OPENER, 9, 3, 3, 5, 32, 18}, // troll
-    {MON_MEAN, 7, 6, 6, 1, 24, 18},            // griffin
-    {MON_MEAN | MON_FIRE_BREATH, 12, 4, 4, 7, 48, 25}, // dragon
+        later_stat(9, LATE_STRENGTH_PERCENT), 4, 4, 3, later_stat(24, LATE_HEALTH_PERCENT), 14},                    // incubus
+    {MON_MEAN | MON_REGENS | MON_OPENER, later_stat(9, LATE_STRENGTH_PERCENT), 3, 3, 5, later_stat(32, LATE_HEALTH_PERCENT), 18}, // troll
+    {MON_MEAN, later_stat(7, LATE_STRENGTH_PERCENT), 6, 6, 1, later_stat(24, LATE_HEALTH_PERCENT), 18},            // griffin
+    {MON_MEAN | MON_FIRE_BREATH, later_stat(12, LATE_STRENGTH_PERCENT), 4, 4, 7, later_stat(48, LATE_HEALTH_PERCENT), 25}, // dragon
     {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
-         MON_OPENER | MON_SEE_INVIS, 10, 6, 6, 3, 24, 35}, // angel
+         MON_OPENER | MON_SEE_INVIS, later_stat(10, LATE_STRENGTH_PERCENT), 6, 6, 3, later_stat(24, LATE_HEALTH_PERCENT), 35}, // angel
     {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
-         MON_PARALYZE_HIT | MON_SEE_INVIS, 16, 6, 8, 7, 112, 90} // Lord
+         MON_PARALYZE_HIT | MON_SEE_INVIS, later_stat(16, LATE_STRENGTH_PERCENT), 6, 8, 7, later_stat(112, LATE_HEALTH_PERCENT), 90} // Lord
 };
 
 MonsterInfo monster_info(uint8_t type)
@@ -36,6 +53,10 @@ MonsterInfo monster_info(uint8_t type)
     MonsterInfo info = {};
     if(type <= LORD)
         memcpy_P(&info, &monster_table[type], sizeof(info));
+#if defined(ARDUROGUE2_SIM)
+    info.strength = monster_strength(type); info.dexterity = monster_dexterity(type);
+    info.speed = monster_speed(type); info.armor = monster_armor(type); info.health = monster_health(type);
+#endif
     return info;
 }
 
@@ -46,27 +67,47 @@ uint16_t monster_flags(uint8_t type)
 
 uint8_t monster_strength(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].strength : 0;
+    uint8_t value = type <= LORD ? monster_table[type].strength : 0;
+    if(type == PHANTOM) return BALANCE_VALUE("phantom-strength", PHANTOM_STRENGTH);
+#if defined(ARDUROGUE2_SIM)
+    if(type >= ORC) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-strength-percent", LATE_STRENGTH_PERCENT) + 99) / 100);
+    if(game.has_amulet) value = static_cast<uint8_t>((value * BALANCE_VALUE("ascent-strength-percent", 100) + 99) / 100);
+#endif
+    return value;
 }
 
 uint8_t monster_dexterity(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].dexterity : 0;
+    uint8_t value = type <= LORD ? monster_table[type].dexterity : 0;
+    if(type == PHANTOM) return BALANCE_VALUE("phantom-dexterity", PHANTOM_DEXTERITY);
+#if defined(ARDUROGUE2_SIM)
+    if(type >= ORC) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-dexterity-percent", 100) + 99) / 100);
+#endif
+    return value;
 }
 
 uint8_t monster_speed(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].speed : 0;
+    uint8_t value = type <= LORD ? monster_table[type].speed : 0;
+    if(type == PHANTOM) return BALANCE_VALUE("phantom-speed", value);
+    return value;
 }
 
 uint8_t monster_armor(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].armor : 0;
+    uint8_t value = type <= LORD ? monster_table[type].armor : 0;
+    if(type == PHANTOM) return BALANCE_VALUE("phantom-armor", value);
+    return value;
 }
 
 uint8_t monster_health(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].health : 0;
+    uint8_t value = type <= LORD ? monster_table[type].health : 0;
+    if(type == PHANTOM) return BALANCE_VALUE("phantom-health", PHANTOM_HEALTH);
+#if defined(ARDUROGUE2_SIM)
+    if(type >= ORC) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-health-percent", LATE_HEALTH_PERCENT) + 99) / 100);
+#endif
+    return value;
 }
 
 uint8_t monster_xp(uint8_t type)
@@ -263,8 +304,8 @@ void player_take_fire_damage(uint8_t damage, uint8_t power)
 static void leave_yendor(const Monster& monster)
 {
     if(monster.type == LORD) {
-        game.ground[15] = {monster.pos, {YENDOR_AMULET, 1}};
-        SIM_EVENT(sim::EventKind::GeneratedItem, 15, YENDOR_AMULET);
+        game.ground[yendor_ground_slot()] = {monster.pos, {YENDOR_AMULET, 1}};
+        SIM_EVENT(sim::EventKind::GeneratedItem, yendor_ground_slot(), YENDOR_AMULET);
     }
 }
 
@@ -703,6 +744,10 @@ uint8_t player_speed_cost()
 
 __attribute__((noinline)) static void age_player_effects()
 {
+    if(game.see_invisible && !--game.see_invisible) {
+        SIM_EVENT(sim::EventKind::SeeInvisibleExpired);
+        status(F("Your potion sight fades."));
+    }
     if(game.blindness && !--game.blindness) status(F("You can see again."));
     if(game.confused && !--game.confused)
         status(F("You are no longer confused."));
@@ -924,6 +969,8 @@ void move_player(int8_t dx, int8_t dy)
 
 void apply_monster_potion(uint8_t type, uint8_t index)
 {
+    // Sight is solely a player effect: even aggression/attack telemetry is unchanged.
+    if(type == POTION_SEE_INVISIBLE) { status(F("It has no effect.")); return; }
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;

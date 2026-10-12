@@ -19,7 +19,7 @@ Action use(int s, const char* goal, int target = NONE) {
     a.target = static_cast<uint8_t>(target); a.goal = goal; return a;
 }
 int find(uint8_t type) {
-    for(int s = 0; s < INVENTORY; ++s) if(game.inventory[s].type == type) return s;
+    for(int s = 0; s < inventory_capacity(); ++s) if(game.inventory[s].type == type) return s;
     return -1;
 }
 int quantity(uint8_t type) {
@@ -82,18 +82,18 @@ int equipment_score(Item i) {
     default: return 0;
     }
 }
-int slot_score(int s) { return s < INVENTORY ? equipment_score(game.inventory[s]) : 0; }
+int slot_score(int s) { return s < inventory_capacity() ? equipment_score(game.inventory[s]) : 0; }
 int best_melee() {
     if(game.weapon_slot < INVENTORY && is_bow(game.inventory[game.weapon_slot].type) && item_is_cursed(game.inventory[game.weapon_slot])) return NONE;
     int best = NONE;
-    for(int s=0;s<INVENTORY;++s) if(is_weapon(game.inventory[s].type) && !is_bow(game.inventory[s].type) &&
+    for(int s=0;s<inventory_capacity();++s) if(is_weapon(game.inventory[s].type) && !is_bow(game.inventory[s].type) &&
         equipment_score(game.inventory[s]) > slot_score(best)) best=s;
     return best;
 }
 int glass_fallback() {
     if(find(GLASS_SWORD)<0) return NONE;
     int best=NONE;
-    for(int s=0;s<INVENTORY;++s) {
+    for(int s=0;s<inventory_capacity();++s) {
         auto i=game.inventory[s];
         if(is_weapon(i.type) && !is_bow(i.type) && i.type!=GLASS_SWORD &&
            equipment_score(i)>slot_score(best)) best=s;
@@ -107,7 +107,7 @@ int bow_score(Item i) {
 }
 int best_bow() {
     int best=NONE;
-    for(int s=0;s<INVENTORY;++s) if(bow_score(game.inventory[s]) > (best==NONE ? 0 : bow_score(game.inventory[best]))) best=s;
+    for(int s=0;s<inventory_capacity();++s) if(bow_score(game.inventory[s]) > (best==NONE ? 0 : bow_score(game.inventory[best]))) best=s;
     return best;
 }
 bool bow_equipped() { return game.weapon_slot < INVENTORY && is_bow(game.inventory[game.weapon_slot].type); }
@@ -174,6 +174,7 @@ int value(Item i) {
     case POTION_POISON: return 60;
     case POTION_HARMING: return 55;
     case POTION_INVISIBILITY: return 70;
+    case POTION_SEE_INVISIBLE: return 90;
     case SCROLL_ENCHANT: return 190;
     case SCROLL_TORMENT: return 95;
     case SCROLL_MASS_CONFUSE: return 100;
@@ -203,7 +204,8 @@ int discard_value(int s) {
 bool fits(Item incoming) {
     int capacity = 0;
     bool stack = is_stackable(incoming.type);
-    for(Item i : game.inventory) {
+    for(uint8_t s=0;s<inventory_capacity();++s) {
+        Item i=game.inventory[s];
         if(!i.type) return true;
         if(stack && i.type == incoming.type) capacity += maximum_stack(i.type)-item_value(i);
     }
@@ -211,7 +213,7 @@ bool fits(Item incoming) {
 }
 int replacement(Item i) {
     int best = -1, worst = value(i);
-    for(int s = 0; s < INVENTORY; ++s) {
+    for(int s = 0; s < inventory_capacity(); ++s) {
         // Reserve acquisition can exceed a depleted candle's retention value.
         // Replacing a light with one that improves neither capability nor fuel
         // cannot help and otherwise permits a full-pack reverse-swap cycle.
@@ -368,7 +370,7 @@ Action wand_action(int s, int d, const char* goal, Position target) {
 }
 bool emergency_wand(uint8_t type, Action& choice) {
     int best_score = 0;
-    for(int s = 0; s < INVENTORY; ++s) {
+    for(int s = 0; s < inventory_capacity(); ++s) {
         Item wand = game.inventory[s];
         if(wand.type != type || wand_afflicted(wand) || !wand_charges(wand)) continue;
         for(int d = 0; d < (wand_spreads(wand) ? 1 : 4); ++d) {
@@ -634,6 +636,11 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
             a.goal = "holy pulse against unholy threats"; a.destination = f.pos; return a;
         }
     }
+    int sight = find(POTION_SEE_INVISIBLE);
+    if(sight>=0 && !game.see_invisible && !game.blindness && ring_bonus(RING_SEE_INVISIBLE)<=0)
+        for(const Monster& m:game.monsters) if(m.type && distance(m.pos,game.player)<=2 &&
+            ((monster_flags(m.type)&MON_NATURAL_INVIS) || monster_effect(m,MON_INVISIBLE)))
+            return use(sight,"temporary sight against invisible contact");
     int healing = find(POTION_HEALING);
     Danger risk = danger();
     if(retreat_floor != game.floor) { retreat_floor = game.floor; retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
@@ -659,13 +666,13 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         }
     }
     int uncurse = find(SCROLL_REMOVE_CURSE);
-    if(uncurse >= 0) for(uint8_t s = 0; s < INVENTORY; ++s)
+    if(uncurse >= 0) for(uint8_t s = 0; s < inventory_capacity(); ++s)
         if(equipped(s) && item_is_cursed(game.inventory[s])) return use(uncurse, "free cursed equipment", s);
     int food = find(FOOD);
     if(food >= 0 && game.hunger < (adjacent >= 0 ? 15 : 100)) return use(food,"eat before starvation");
     // Equipping even in danger is worthwhile for an obvious weapon/armor gain.
     int upgrade_slot = -1, upgrade_score = 0;
-    for(int s = 0; s < INVENTORY; ++s) {
+    for(int s = 0; s < inventory_capacity(); ++s) {
         Item i = game.inventory[s];
         if(bow_equipped() && is_weapon(i.type)) continue;
         if(!equipped(s) && upgrade(i) && equipment_score(i) > upgrade_score) {
@@ -752,7 +759,7 @@ Action OmniscientAgent::choose_action(const DecisionContext&) {
         int target = -1;
         if(game.amulet_slot < INVENTORY && game.inventory[game.amulet_slot].type == AMULET_SPEED &&
            item_value(game.inventory[game.amulet_slot]) < 3) target = game.amulet_slot;
-        for(uint8_t s : game.ring_slots) if(target < 0 && s < INVENTORY &&
+        for(uint8_t s : game.ring_slots) if(target < 0 && s < inventory_capacity() &&
             game.inventory[s].type == RING_PROTECTION && item_value(game.inventory[s]) < 6) target = s;
         if(target < 0 && game.armor_slot < INVENTORY && equipment_enchant(game.inventory[game.armor_slot]) < 5)
             target = game.armor_slot;
@@ -828,7 +835,7 @@ rogue::FeatureChoice choose_feature_choice(uint8_t type) {
     else choice.accept = !pressure && game.hp >= 10;
     if(type == FEATURE_ENCHANTED_FORGE || type == FEATURE_ALCHEMICAL_POOL) {
         int best = -1;
-        for(uint8_t s = 0; s < INVENTORY; ++s) if(feature_accepts_item(type, s)) {
+        for(uint8_t s = 0; s < inventory_capacity(); ++s) if(feature_accepts_item(type, s)) {
             const Item& i = game.inventory[s];
             if(type == FEATURE_ENCHANTED_FORGE && equipment_enchant(i) == MAX_EQUIPMENT_ENCHANT) continue;
             int score = is_equipment(i.type) ? equipment_score(i) + (equipped(s) ? 100 : 0) :
@@ -838,7 +845,7 @@ rogue::FeatureChoice choose_feature_choice(uint8_t type) {
         choice.accept = choice.accept && choice.slot != NONE;
     } else if(type == FEATURE_SACRIFICIAL_ALTAR) {
         int least = 10000;
-        for(uint8_t s = 0; s < INVENTORY; ++s) if(feature_accepts_item(type, s) && !equipped(s)) {
+        for(uint8_t s = 0; s < inventory_capacity(); ++s) if(feature_accepts_item(type, s) && !equipped(s)) {
             Item i = game.inventory[s];
             if(i.type == FOOD || i.type == POTION_HEALING || is_artifact(i.type)) continue;
             int score = value(i);

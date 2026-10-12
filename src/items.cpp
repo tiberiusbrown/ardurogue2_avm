@@ -10,7 +10,7 @@ namespace rogue {
 
 uint8_t item_at(Position pos)
 {
-    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+    for(uint8_t i = 0; i < ground_item_capacity(); ++i)
         if(game.ground[i].item.type && game.ground[i].pos == pos)
             return i;
     return NONE;
@@ -18,7 +18,7 @@ uint8_t item_at(Position pos)
 
 uint8_t ground_item_before(Position pos, uint8_t before)
 {
-    if(before > GROUND_ITEMS) before = GROUND_ITEMS;
+    if(before > ground_item_capacity()) before = ground_item_capacity();
     while(before) {
         --before;
         if(game.ground[before].item.type && game.ground[before].pos == pos)
@@ -65,10 +65,9 @@ static void merge_stack(Item& target, Item incoming, uint8_t amount)
 static uint8_t reusable_ground_slot()
 {
     // The last slot must remain available for the Lord's Yendor drop.
-    for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
+    for(uint8_t i = 0; i < ground_item_capacity(); ++i)
         if(game.ground[i].item.type == NO_ITEM &&
-           !(i == 15 && game.floor == FLOORS - 1 && !game.has_amulet &&
-             game.monsters[MONSTERS - 1].type == LORD))
+           !(i == yendor_ground_slot() && game.floor == FLOORS - 1 && !game.has_amulet))
             return i;
     return NONE;
 }
@@ -103,7 +102,7 @@ static bool add_inventory(Item incoming)
     // Decide whether the complete pickup fits before touching any stack.
     uint16_t capacity = 0;
     uint8_t empty = NONE;
-    for(uint8_t i = 0; i < INVENTORY; ++i) {
+    for(uint8_t i = 0; i < inventory_capacity(); ++i) {
         const Item& item = game.inventory[i];
         if(item.type == NO_ITEM && empty == NONE) empty = i;
         if(compatible(item, incoming)) capacity += stack_space(item);
@@ -146,6 +145,7 @@ __attribute__((noinline)) static PickupResult apply_pickup(uint8_t index)
         status(F("You picked up"));
         status(item, '.');
     } else {
+        SIM_EVENT(sim::EventKind::InventoryFull, NONE, item.type);
         status(F("Your pack is full."));
         return PICKUP_NEEDS_SWAP;
     }
@@ -230,7 +230,7 @@ bool inventory_item_removable(uint8_t slot)
 
 __attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t slot)
 {
-    if(index >= GROUND_ITEMS || slot >= INVENTORY ||
+    if(index >= GROUND_ITEMS || slot >= inventory_capacity() ||
        game.ground[index].item.type == NO_ITEM ||
        game.ground[index].item.type == YENDOR_AMULET ||
        !inventory_item_removable(slot)) return false;
@@ -562,7 +562,8 @@ __attribute__((noinline)) static bool apply_inventory(
         break;
     case POTION_HEALING: case POTION_CONFUSION: case POTION_POISON: case POTION_HARMING:
     case POTION_STRENGTH: case POTION_DEXTERITY: case POTION_PARALYSIS: case POTION_SLOWING:
-    case POTION_EXPERIENCE: case POTION_INVISIBILITY: case POTION_BLINDNESS: {
+    case POTION_EXPERIENCE: case POTION_INVISIBILITY: case POTION_BLINDNESS:
+    case POTION_SEE_INVISIBLE: {
         uint8_t type = item.type;
         bool known = potion_identified(type);
         status(F("You drink"));
@@ -602,6 +603,10 @@ __attribute__((noinline)) static bool apply_inventory(
             break;
         case POTION_EXPERIENCE:
             gain_xp(50);
+            break;
+        case POTION_SEE_INVISIBLE:
+            game.see_invisible = BALANCE_VALUE("sight-duration", SEE_INVISIBLE_DURATION);
+            status(F("You can see invisible creatures for a while."));
             break;
         case POTION_INVISIBILITY:
             if(ring_bonus(RING_INVISIBILITY) < 0) {

@@ -9,7 +9,7 @@ void trace_explorer(std::ostream& out,const ExplorerObservation& o,const Surviva
     out<<" contact="<<o.contact_reported<<':'<<int(o.melee_feedback)<<'@'<<int(o.contact.x)<<':'<<int(o.contact.y)
         <<" contact_origin="<<int(o.contact_origin.x)<<':'<<int(o.contact_origin.y)
         <<" attacks="<<int(o.incoming_attacks)<<':'<<int(o.anonymous_attacks)
-        <<" changed="<<o.encounter_changed<<" summoning="<<o.summoning_reported<<" visible=";
+        <<" temporary_sight="<<o.see_invisible<<" changed="<<o.encounter_changed<<" summoning="<<o.summoning_reported<<" visible=";
     for(int m=0;m<o.monster_count;++m) out<<int(o.monsters[m].type)<<'@'<<int(o.monsters[m].pos.x)<<':'<<int(o.monsters[m].pos.y)<<';';
     out<<" pack=";
     for(size_t s=0;s<o.inventory.size();++s) {

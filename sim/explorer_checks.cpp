@@ -491,6 +491,18 @@ void hazard_navigation() {
     o.ground_count=1; o.ground[0].pos={14,10}; o.ground[0].item.category=ItemCategory::Ammo;
     a=p->choose_action(o); check(a.no_path && !a.essential_hazard,"optional loot licensed dangerous crossing");
     check(p->stats.hazard_abandoned==1,"hazard abandonment was not diagnosed");
+    // A trap can be the last observed frontier, rather than an intermediate
+    // square on a route to known stairs. It still permits essential progression.
+    p->reset(); o=corridor(); o.features.fill(0); o.ground_count=0;
+    o.terrain[cell(13,10)]=o.terrain[cell(14,10)]=Terrain::Unknown;
+    o.visible.reset(cell(13,10)); o.visible.reset(cell(14,10));
+    o.features[cell(12,10)]=FEATURE_SUMMONING_TRAP;
+    a=p->choose_action(o);
+    check(a.kind==ExplorerActionKind::Move && a.dx==1 && a.essential_hazard &&
+          a.destination==SeenPosition{12,10},"summoning trap frontier incorrectly exhausted exploration");
+    o.player={11,10}; ++o.actions; ++o.turns; a=p->choose_action(o);
+    check(a.kind==ExplorerActionKind::Move && a.dx==1 && a.essential_hazard,
+          "essential trap frontier lost its destination before entry");
     // Authoritative hidden traps cannot affect an equal sanitized input.
     arena(); game.features[0]={{11,10},uint8_t(FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN)};
     p->reset(); o=corridor(); o.features.fill(0); a=p->choose_action(o);
@@ -538,6 +550,12 @@ void replay() {
     o.trace=nullptr; o.telemetry=false; auto c=run(42,*p,o);
     check(a.action_hash==c.action_hash && !std::memcmp(&final,&game,sizeof game),"telemetry changed explorer gameplay");
     for(uint16_t seed=1;seed<=32;++seed) { auto r=run(seed,*p); check(!r.stuck,"constructed competence seeds stuck"); }
+    Options regression; regression.max_actions=100000;
+    for(uint16_t seed:{uint16_t(2478),uint16_t(41822)}) {
+        auto r=run(seed,*p,regression);
+        check(!r.stuck && (r.result=="death" || r.result=="escaped"),
+              "recorded summoning-frontier/empty-wand failure regressed");
+    }
 }
 void parameters_and_messages() {
     check(fitness_better({1,0,0,10},{0,0,0,1000000}),"escapes do not outrank total score");
@@ -600,6 +618,13 @@ void competence() {
     game.inventory[1]={}; game.inventory[2]={POTION_PARALYSIS,1}; identify_type(POTION_PARALYSIS); p->reset();
     a=p->choose_action(observe_explorer(10,10));
     check(a.kind==ExplorerActionKind::Throw && a.slot==2 && a.dx==1,"lethal encounter did not prefer disabling to inadequate heal");
+    arena(); game.hp=1; game.inventory[0]={WAND_FORCE,0};
+    identify_type(WAND_FORCE); game.monsters[0]={{11,10},ANGEL,24,0,{0,0},MON_AGGRO};
+    game.monsters[1]={{10,11},ANGEL,24,0,{0,0},MON_AGGRO}; p->reset();
+    o=observe_explorer(100,100); a=p->choose_action(o);
+    check(a.goal!="disable visible survival threat","unexamined depleted wand entered emergency control loop");
+    o.last_rejected=true; ++o.actions; a=p->choose_action(o);
+    check(a.kind!=ExplorerActionKind::Wand,"rejected unexamined wand retried without advancing turns");
     arena(); game.hp=30; game.inventory[0]={POTION_HEALING,1}; identify_type(POTION_HEALING); p->reset();
     check(p->choose_action(observe_explorer(10,10)).slot==0,"safe low HP did not heal");
     arena(); game.hp=20; game.confused=4; game.inventory[0]={SCROLL_TELEPORT,1}; identify_type(SCROLL_TELEPORT);
@@ -645,9 +670,28 @@ void competence() {
     messages.prepare(attempted,{10,10},false); status(game.monsters[0]); status("hits you!");
     check(observe_explorer(1,1).reported_attacker==PHANTOM,"see-invisible did not reveal legitimately printed identity");
 }
+void potion_capacity_boundary() {
+    arena(); game.monsters[0]={{11,10},PHANTOM,12,0,{0,0},MON_AGGRO};
+    game.see_invisible=3; auto a=observe_explorer(1,1);
+    game.see_invisible=80; auto b=observe_explorer(1,1);
+    check(a.see_invisible && b.see_invisible && observation_text(a)==observation_text(b),"remaining sight duration disclosed");
+    game.blindness=1; check(observe_explorer(1,1).monster_count==0,"dose leaked blind monster positions");
+    arena(); game.inventory[19]={POTION_SEE_INVISIBLE,uint8_t(ITEM_IDENTIFIED|1)}; identify_type(POTION_SEE_INVISIBLE);
+    auto o=observe_explorer(0,0); o.incoming_attack=true; o.anonymous_attacks=1; o.hp_loss=1;
+    auto p=std::make_unique<ExplorerAgent>(); p->reset(); auto action=p->choose_action(o);
+    check(action.kind==ExplorerActionKind::Use && action.slot==19,"identified high-slot sight not used for invisible contact");
+    std::memset(game.identified_items,0,sizeof game.identified_items); o=observe_explorer(0,0); o.incoming_attack=true; o.anonymous_attacks=1;
+    p->reset(); action=p->choose_action(o);
+    check(o.inventory[19].type==0 && action.goal!="temporary sight against invisible contact","hidden potion identity informed sight choice");
+    arena(); for(unsigned n=0;n<GROUND_ITEMS;++n) game.ground[n]={{10,10},{FOOD,1}};
+    for(unsigned n=0;n<MONSTERS;++n) { game.monsters[n]={{10,10},MIMIC,20,0,{0,0},0}; set_mimic_appearance(game.monsters[n],MIMIC_SCROLL); }
+    o=observe_explorer(0,0); check(o.ground_count==GROUND_ITEMS+MONSTERS,"expanded ground/mimic observation truncated");
+    for(unsigned n=0;n<GROUND_ITEMS;++n) check(o.ground[n].handle==n,"expanded ground handle changed");
+}
+
 }
 int main() {
-    try { noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
+    try { potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }
