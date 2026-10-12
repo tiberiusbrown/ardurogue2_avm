@@ -99,7 +99,9 @@ using namespace rogue;
     X(drink_sight, "Drink temporary see invisible", use, A, room, POTION_SEE_INVISIBLE, 0, 0) \
     X(throw_sight, "Throw sight with no monster effect", projectile, RIGHT, room, POTION_SEE_INVISIBLE, 0, 0) \
     X(sight_expire_dense, "Sight expires during a dense turn", wait, A, dense, NO_ITEM, 0, 0) \
-    X(sight_cursed_trap, "Potion sight overrides cursed ring during trap entry", wait, A, room, NO_ITEM, 0, 0)
+    X(sight_cursed_trap, "Potion sight overrides cursed ring during trap entry", wait, A, room, NO_ITEM, 0, 0) \
+    X(natural_recovery, "Natural recovery at turn clock wrap", wait, A, room, NO_ITEM, 0, 0) \
+    X(recovery_dense, "Natural recovery during a dense turn", wait, A, dense, NO_ITEM, 0, 0)
 
 namespace {
 enum class Terrain : uint8_t { room, corridor, edge, dense };
@@ -430,6 +432,8 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         game.door_count = 1;
         break;
     case Case::drink_healing: game.hp = 50; break;
+    case Case::natural_recovery:
+    case Case::recovery_dense: game.hp = 50; game.turns = 255; break;
     case Case::equip_cursed_amulet: {
         game.inventory[0].info = ITEM_CURSED | 1;
         constexpr uint8_t index = POTION_COUNT + SCROLL_COUNT + RING_COUNT;

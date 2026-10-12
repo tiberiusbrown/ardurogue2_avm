@@ -322,13 +322,13 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
                 ? floor_ring_type(seed)
                 : chance < 72 ? floor_amulet_type(seed) :
                   chance < 82 ? floor_light_type(seed) : floor_shield_type(equipment_seed);
-        uint8_t healing = BALANCE_VALUE("healing-percent", HEALING_REPLACEMENT_PERCENT);
         uint8_t equipment = BALANCE_VALUE("early-equipment-percent", 0);
-        uint16_t bonus_seed = static_cast<uint16_t>(placement_seed ^ ((i + 1u) * 0x713bu));
-        uint8_t bonus = floor_roll(bonus_seed, 100);
-        if(is_potion(type) && type != POTION_SEE_INVISIBLE && bonus < healing) type = POTION_HEALING;
-        if(game.floor < 4 && is_armor(type) && bonus < equipment) type = CHAIN_MAIL;
-        if(game.floor < 4 && is_weapon(type) && !is_bow(type) && bonus < equipment) type = LONG_SWORD;
+        if(equipment && game.floor < 4) {
+            uint16_t bonus_seed = static_cast<uint16_t>(placement_seed ^ ((i + 1u) * 0x713bu));
+            uint8_t bonus = floor_roll(bonus_seed, 100);
+            if(is_armor(type) && bonus < equipment) type = CHAIN_MAIL;
+            if(is_weapon(type) && !is_bow(type) && bonus < equipment) type = LONG_SWORD;
+        }
         uint8_t info = is_wand(type) ? static_cast<uint8_t>(3 + floor_roll(seed, 8)) : 1;
         if(is_light(type)) info = light_initial_fuel(type);
         if(is_ammo(type)) {

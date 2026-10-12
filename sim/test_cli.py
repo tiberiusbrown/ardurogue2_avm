@@ -18,7 +18,8 @@ def main():
         return p
 
     baseline=tuple(part for rule in ("ground=16","inventory=16","sight-percent=0","sight-early-percent=0",
-        "healing-percent=0","phantom-strength=6","phantom-dexterity=4","phantom-health=12",
+        "natural-regen-interval=0","healing-min-quarters=1","healing-random-quarters=2",
+        "phantom-strength=6","phantom-dexterity=4","phantom-health=12",
         "late-strength-percent=100","late-health-percent=100") for part in ("--intervention","balance:"+rule))
     quiet = invoke("--seed", "24",*baseline)
     traced = invoke("--seed", "0x18", "--trace",*baseline)
@@ -33,6 +34,9 @@ def main():
     invoke("--entry-state",valid=False)
     for args in (("--all-seeds", "--seed", "4"), ("--seeds", "0:65535"),
                  ("--intervention", "replace-item:DAGGER:FOOD:info=preserve"),
+                 ("--intervention", "balance:natural-regen-interval=20"),
+                 ("--intervention", "balance:healing-min-quarters=0"),
+                 ("--intervention", "balance:healing-random-quarters=3"),
                  ("--intervention", "replace-monster:BAT:INVALID")):
         invoke(*args, valid=False)
     stuck = list(csv.DictReader(io.StringIO(invoke("--seed", "4", "--max-actions", "1").stdout)))[0]

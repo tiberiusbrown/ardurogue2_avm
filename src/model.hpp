@@ -42,9 +42,12 @@ constexpr uint8_t INVENTORY = 20;
 constexpr uint8_t SEE_INVISIBLE_DURATION = 40;
 constexpr uint8_t SEE_INVISIBLE_POTION_PERCENT = 6;
 constexpr uint8_t SEE_INVISIBLE_EARLY_PERCENT = 18;
-constexpr uint8_t HEALING_REPLACEMENT_PERCENT = 40;
+// Divides the saved eight-bit turn clock, so its wrap preserves the cadence.
+constexpr uint8_t NATURAL_REGENERATION_INTERVAL = 128;
+constexpr uint8_t HEALING_MIN_QUARTERS = 2;
+constexpr uint8_t HEALING_RANDOM_QUARTERS = 2;
 constexpr uint8_t LATE_STRENGTH_PERCENT = 75;
-constexpr uint8_t LATE_HEALTH_PERCENT = 75;
+constexpr uint8_t LATE_HEALTH_PERCENT = 65;
 constexpr uint8_t PHANTOM_STRENGTH = 4;
 constexpr uint8_t PHANTOM_DEXTERITY = 3;
 constexpr uint8_t PHANTOM_HEALTH = 10;

@@ -19,7 +19,8 @@ BASELINE = {
     "ground": 16, "inventory": 16, "monsters": 12, "phantom-count": 12,
     "phantom-strength": 6, "phantom-dexterity": 4, "phantom-speed": 4,
     "phantom-armor": 1, "phantom-health": 12, "sight-duration": 40,
-    "sight-percent": 0, "sight-early-percent": 0, "healing-percent": 0,
+    "sight-percent": 0, "sight-early-percent": 0, "natural-regen-interval": 0,
+    "healing-min-quarters": 1, "healing-random-quarters": 2,
     "early-equipment-percent": 0, "late-strength-percent": 100,
     "ascent-strength-percent": 100, "late-dexterity-percent": 100, "late-health-percent": 100,
 }
@@ -43,8 +44,11 @@ def screening():
     variants["sight-early-24"] = {"sight-percent": 6, "sight-early-percent": 24}
     for ground, inventory in ((20, 16), (16, 20), (20, 20), (24, 20)):
         variants[f"capacity-{ground}-{inventory}"] = {"ground": ground, "inventory": inventory}
-    for value in (25, 50):
-        variants[f"healing-{value}"] = {"healing-percent": value}
+    for value in (64, 128):
+        variants[f"natural-regeneration-{value}"] = {"natural-regen-interval": value}
+    for minimum, spread in ((2, 2), (3, 1), (4, 0)):
+        variants[f"healing-potion-{minimum}-{spread}"] = {
+            "healing-min-quarters": minimum, "healing-random-quarters": spread}
     variants["early-equipment-50"] = {"early-equipment-percent": 50}
     for value in (75, 85):
         variants[f"late-strength-{value}"] = {"late-strength-percent": value}

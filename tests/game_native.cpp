@@ -173,8 +173,8 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        {0x56ca9dfbu, 0xea2e4b1cu}, {0x83b53170u, 0x8026b425u},
-        {0xada19b8cu, 0x8ad1c03bu}, {0x51bfed6fu, 0xac630beeu}
+        {0x6a4036a3u, 0x091ec48cu}, {0xd1d0a1a2u, 0xc3c40c3bu},
+        {0x400519a8u, 0x5fe53bf0u}, {0x0655fcf3u, 0x41e15138u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -1534,19 +1534,19 @@ void check_enemy_roster()
         {MON_MEAN | MON_OPENER, 5, 4, 4, 1, 10, 6},
         {MON_MEAN | MON_NATURAL_INVIS | MON_OPENER | MON_SEE_INVIS,
             4, 3, 4, 1, 10, 7},
-        {MON_MEAN | MON_OPENER, 6, 4, 4, 3, 12, 8},
-        {MON_MEAN | MON_PARALYZE_HIT, 4, 4, 4, 0, 9, 9},
-        {MON_MEAN | MON_OPENER, 6, 4, 4, 2, 15, 11},
-        {MON_MEAN | MON_NOMOVE, 6, 4, 4, 3, 15, 11},
+        {MON_MEAN | MON_OPENER, 6, 4, 4, 3, 11, 8},
+        {MON_MEAN | MON_PARALYZE_HIT, 4, 4, 4, 0, 8, 9},
+        {MON_MEAN | MON_OPENER, 6, 4, 4, 2, 13, 11},
+        {MON_MEAN | MON_NOMOVE, 6, 4, 4, 3, 13, 11},
         {MON_MEAN | MON_CONFUSE_HIT | MON_OPENER | MON_SEE_INVIS,
-            7, 4, 4, 3, 18, 14},
-        {MON_MEAN | MON_REGENS | MON_OPENER, 7, 3, 3, 5, 24, 18},
-        {MON_MEAN, 6, 6, 6, 1, 18, 18},
-        {MON_MEAN | MON_FIRE_BREATH, 9, 4, 4, 7, 36, 25},
+            7, 4, 4, 3, 16, 14},
+        {MON_MEAN | MON_REGENS | MON_OPENER, 7, 3, 3, 5, 21, 18},
+        {MON_MEAN, 6, 6, 6, 1, 16, 18},
+        {MON_MEAN | MON_FIRE_BREATH, 9, 4, 4, 7, 32, 25},
         {MON_MEAN | MON_CONFUSE_HIT | MON_PARALYZE_HIT |
-             MON_OPENER | MON_SEE_INVIS, 8, 6, 6, 3, 18, 35},
+             MON_OPENER | MON_SEE_INVIS, 8, 6, 6, 3, 16, 35},
         {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
-             MON_PARALYZE_HIT | MON_SEE_INVIS, 12, 6, 8, 7, 84, 90}
+             MON_PARALYZE_HIT | MON_SEE_INVIS, 12, 6, 8, 7, 73, 90}
     };
     for(uint8_t type = BAT; type <= LORD; ++type) {
         MonsterInfo info = monster_info(type);
@@ -2659,6 +2659,7 @@ bool generation_command(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
+    if(argc==2 && std::string(argv[1])=="--recovery") { extern void check_recovery(); check_recovery(); return 0; }
     if(argc==2 && std::string(argv[1])=="--sight") { extern void check_temporary_sight(); check_temporary_sight(); return 0; }
     if(argc == 2 && std::strcmp(argv[1], "--map-features") == 0) {
         check_map_features(); return 0;
@@ -2682,6 +2683,7 @@ int main(int argc, char** argv)
     extern void check_lighting_offhand();
     check_lighting_offhand();
     extern void check_temporary_sight(); check_temporary_sight();
+    extern void check_recovery(); check_recovery();
     check_benchmark_scenarios();
     check_combat_rules();
     check_weapon_and_equipment_rules();

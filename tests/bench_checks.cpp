@@ -18,9 +18,16 @@ extern "C" void bench_inventory_open_full();
 extern "C" void bench_inventory_open_wands();
 extern "C" void bench_inventory_open_singletons();
 extern "C" void bench_visibility_trap_cursed();
+extern "C" void bench_natural_recovery();
+extern "C" void bench_recovery_dense();
 
 void check_benchmark_scenarios()
 {
+    bench_natural_recovery(); end_turn();
+    require(game.turns == 0 && game.hp == 51, "natural recovery benchmark did not heal");
+    bench_recovery_dense(); end_turn();
+    require(game.turns == 0 && !session.ended && game.hp > 0,
+            "dense recovery benchmark did not complete");
     bench_visibility_trap_cursed();
     const Game sight_fixture = game;
     require(game.inventory[game.ring_slots[0]].type == RING_SEE_INVISIBLE &&

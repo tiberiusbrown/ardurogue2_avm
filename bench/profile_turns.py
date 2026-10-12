@@ -304,6 +304,9 @@ def validate_outcome(case, before, after, explored):
     if case.name == "blind_recovery": require(after["blindness"] == 0, "blindness failed to expire")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
+    if case.name == "natural_recovery":
+        require(before["turns"] == 255 and after["hp"] == before["hp"] + 1,
+                "natural recovery did not heal at clock wrap")
     for name, slot in (("equip_weapon", "weapon"), ("equip_bow", "weapon"), ("equip_armor", "armor")):
         if case.name == name:
             require(after[slot] == 0 and after["expected_item"], "item was not equipped")

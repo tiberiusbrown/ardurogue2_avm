@@ -754,13 +754,20 @@ __attribute__((noinline)) static void age_player_effects()
     if(game.paralyzed && !--game.paralyzed)
         status(F("You can move again."));
     if(game.slowed && !--game.slowed)
-        status(F("You move normally again."));
+        status(F("You are no longer slowed."));
     if(game.invisible && !--game.invisible && !player_is_invisible())
         status(F("You become visible again."));
     if(amulet_bonus(AMULET_REGENERATION) > 0 &&
        game.hp < player_max_hp() && roll(20) == 0) {
         heal_player(1);
         status(F("Your amulet restores a little health."));
+    }
+    // The clock persists across stairs and save/resume. Full health and
+    // starvation forfeit this tick; recovery consumes no random draw.
+    uint8_t regeneration = BALANCE_VALUE("natural-regen-interval", NATURAL_REGENERATION_INTERVAL);
+    if(regeneration && game.turns % regeneration == 0 && game.hunger &&
+       !session.ended && game.hp && game.hp < player_max_hp()) {
+        heal_player(1);
     }
     if(!game.confused && amulet_bonus(AMULET_CLARITY) < 0 && roll(64) == 0) {
         game.confused = static_cast<uint8_t>(4 + roll(4));

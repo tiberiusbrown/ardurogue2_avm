@@ -219,7 +219,7 @@ presses before profiling begins. Final measurements are recorded in
 
 ## Hazard-routing performance pass
 
-The suite now has 81 cases: all 78 prior fixtures are retained, followed by
+That visibility change expanded the suite to 81 cases: all 78 prior fixtures are retained, followed by
 hidden-monster, cursed-sight-ring and blind-player monster trap entries. They
 exercise the visibility proof reused by trap status formatting. Profiling also
 captures `game.random_state` and the entire `sizeof(game)` via DWARF to `game.bin`
@@ -234,3 +234,9 @@ saved state/RNG, endpoints, final display, or pagination framebuffers and export
 absolute and percentage timing differences. The final suite improves the worst
 case from 99.299 to 92.773 ms with 81/81 equivalent cases and a complete
 239/256-byte stack bound. See the [full timing table and hotspot report](../docs/EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md).
+
+## Current gameplay-balance fixtures
+
+The current suite has 87 cases: the earlier 81, four temporary-sight cases, and `natural_recovery` plus `recovery_dense`. The recovery fixtures start at turn 255 with injured HP, exercise the saved clock wrapping to zero, and run through ordinary input, enemy actions, recovery feedback, and rendering. Native checks verify the quiet fixture restores exactly one HP; the profiler verifies that completed outcome as well.
+
+The natural-regeneration revision passes all 87 cases, with a 92.9854375 ms worst turn, complete 241-byte production and 245-byte benchmark stack bounds, and no new saved bytes. See [the current balance report](../docs/GAME_BALANCE_2_TO_5_PERCENT.md) for selected gameplay, profiles, package measurements and census results.

@@ -8,6 +8,7 @@ add_executable(game_native
     game_native.cpp
     lighting_checks.cpp
     sight_checks.cpp
+    recovery_checks.cpp
     awareness_checks.cpp
     combat_checks.cpp
     weapon_checks.cpp
@@ -32,6 +33,7 @@ target_include_directories(game_native PRIVATE ../src)
 
 add_test(NAME game_native COMMAND game_native)
 add_test(NAME temporary_sight COMMAND game_native --sight)
+add_test(NAME player_recovery COMMAND game_native --recovery)
 add_test(NAME lighting_offhand COMMAND game_native --lighting)
 add_test(NAME artifacts COMMAND game_native --artifacts)
 add_test(NAME map_features COMMAND game_native --map-features)

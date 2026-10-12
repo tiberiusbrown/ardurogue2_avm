@@ -556,11 +556,10 @@ static void check_generated_equipment()
         unsigned experience = potion_counts[floor][POTION_EXPERIENCE - POTION_HEALING];
         unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? POTION_SLOWING : POTION_HEALING) - POTION_HEALING];
         const double sight = (floor >= 2 && floor <= 4 ? SEE_INVISIBLE_EARLY_PERCENT : SEE_INVISIBLE_POTION_PERCENT) / 100.0;
-        const double healing = HEALING_REPLACEMENT_PERCENT / 100.0;
-        const double retained = (1 - sight) * (1 - healing);
+        const double retained = 1 - sight;
         const bool replaced_by_slowing = floor == 0 || (floor >= 5 && floor < 10);
         const double expected_replacement = replaced_by_slowing ? 3.0 / 22 * retained :
-            (floor < 5 ? 5.0 : 3.0) / 22 * retained + healing * (1 - sight);
+            (floor < 5 ? 5.0 : 3.0) / 22 * retained;
         auto close_to_probability = [&](unsigned count, double probability) {
             return std::abs(count - potions * probability) <
                 6 * std::sqrt(potions * probability * (1 - probability)) + potions * 0.005;

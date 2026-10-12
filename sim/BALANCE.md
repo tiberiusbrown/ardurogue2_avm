@@ -655,3 +655,9 @@ as deaths or silently omit them. Use the ordinary paired framework for valid
 same-policy batches; keep exploratory families FDR-adjusted. See
 [the balance report](../docs/GAME_BALANCE_2_TO_5_PERCENT.md) for selection,
 limitations and exact reproduction specifications.
+
+## Natural recovery revision
+
+The ordinary healing conversion and its simulator control have been removed. `sim/game_balance_configurations.json` supplies explicit original and selected arms. The current selected controls use `natural-regen-interval=128`, `healing-min-quarters=2`, `healing-random-quarters=2`, and `late-health-percent=65`; the original arm disables recovery and uses potion quarters 1/2 and original monster statistics. Valid recovery intervals are 0 (ablation), 64, and 128, which divide the saved eight-bit clock; potion minimum quarters range from 1 to 4 and random quarters from 0 to 2.
+
+Freeze policy and compare the same executable in both arms. Recovery adds no telemetry or observation fields; existing HP, damage, item use, hunger, lighting and progression counters remain schema 8. The revision repeats the complete primary and oracle populations and streams counter reconciliation. Exact selection evidence, limitations, and reproduction commands are in [the current report](../docs/GAME_BALANCE_2_TO_5_PERCENT.md); [the preceding report](../docs/GAME_BALANCE_PRE_REGENERATION.md) is explicitly historical.

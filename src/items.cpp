@@ -579,9 +579,11 @@ __attribute__((noinline)) static bool apply_inventory(
         switch(type) {
         case POTION_HEALING: {
             uint8_t maximum = player_max_hp();
-            uint8_t healed = static_cast<uint8_t>(maximum / 4 +
-                roll(static_cast<uint8_t>(maximum / 2 + 1)));
-            heal_player(healed);
+            uint8_t minimum = BALANCE_VALUE("healing-min-quarters", HEALING_MIN_QUARTERS);
+            uint8_t spread = BALANCE_VALUE("healing-random-quarters", HEALING_RANDOM_QUARTERS);
+            uint16_t healed = maximum * minimum / 4 +
+                roll(static_cast<uint8_t>(maximum * spread / 4 + 1));
+            heal_player(static_cast<uint8_t>(healed > maximum ? maximum : healed));
             if(game.weakened)
                 status(F("Your strength returns."));
             game.weakened = 0;

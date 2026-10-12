@@ -12,12 +12,14 @@
     "sight-duration": 40,
     "sight-percent": 0,
     "sight-early-percent": 0,
-    "healing-percent": 0,
     "early-equipment-percent": 0,
     "late-strength-percent": 100,
     "ascent-strength-percent": 100,
     "late-dexterity-percent": 100,
-    "late-health-percent": 100
+    "late-health-percent": 100,
+    "natural-regen-interval": 0,
+    "healing-min-quarters": 1,
+    "healing-random-quarters": 2
   },
   "selected": {
     "ground": 20,
@@ -32,11 +34,13 @@
     "sight-duration": 40,
     "sight-percent": 6,
     "sight-early-percent": 18,
-    "healing-percent": 40,
     "early-equipment-percent": 0,
     "late-strength-percent": 75,
     "ascent-strength-percent": 100,
     "late-dexterity-percent": 100,
-    "late-health-percent": 75
+    "late-health-percent": 65,
+    "natural-regen-interval": 128,
+    "healing-min-quarters": 2,
+    "healing-random-quarters": 2
   }
 }

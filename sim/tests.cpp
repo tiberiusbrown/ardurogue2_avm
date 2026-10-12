@@ -72,7 +72,8 @@ void determinism() {
     Options o;
     auto baseline=std::make_shared<RuleExperiment>();
     for(const char* rule:{"balance:ground=16","balance:inventory=16","balance:sight-percent=0",
-            "balance:sight-early-percent=0","balance:healing-percent=0",
+            "balance:sight-early-percent=0","balance:natural-regen-interval=0",
+            "balance:healing-min-quarters=1","balance:healing-random-quarters=2",
             "balance:phantom-strength=6","balance:phantom-dexterity=4","balance:phantom-health=12",
             "balance:late-strength-percent=100","balance:late-health-percent=100"}) baseline->rules.push_back(parse_rule(rule));
     o.experiment=baseline; o.trace=&first; auto r1=run(escape_seed,a,o); Game final=game;

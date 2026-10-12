@@ -26,9 +26,10 @@ class TurnBenchmarks(unittest.TestCase):
         cases = turns.read_benchmarks(Path(__file__).with_name("bench.cpp"))
         self.assertEqual(cases, turns.BENCHMARKS)
         self.assertEqual([case.index for case in cases], list(range(len(cases))))
-        self.assertEqual(len(cases), 85)
+        self.assertEqual(len(cases), 87)
         self.assertEqual({c.name for c in cases[78:81]}, {'visibility_trap_hidden','visibility_trap_cursed','visibility_trap_blind'})
-        self.assertEqual({c.name for c in cases[81:]}, {'drink_sight','throw_sight','sight_expire_dense','sight_cursed_trap'})
+        self.assertEqual({c.name for c in cases[81:85]}, {'drink_sight','throw_sight','sight_expire_dense','sight_cursed_trap'})
+        self.assertEqual({c.name for c in cases[85:]}, {'natural_recovery','recovery_dense'})
         names = {case.name for case in cases}
         self.assertIn("equip_cursed_amulet", names)
         self.assertTrue(names.isdisjoint({"descend", "throw_harming", "wand_force", "wand_fire"}))

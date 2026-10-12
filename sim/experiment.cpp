@@ -42,11 +42,16 @@ Rule parse_rule(const std::string& text) {
         else if(n=="inventory") { min=16; max=20; }
         else if(n=="monsters" || n=="phantom-count") { min=1; max=12; }
         else if(n=="sight-duration") { min=1; max=254; }
+        else if(n=="natural-regen-interval") max=128;
+        else if(n=="healing-min-quarters") { min=1; max=4; }
+        else if(n=="healing-random-quarters") max=2;
         else if(n=="phantom-strength" || n=="phantom-dexterity" || n=="phantom-speed" || n=="phantom-health") { min=1; max=255; }
         else if(n=="phantom-armor") max=20;
-        else if(n!="sight-percent" && n!="sight-early-percent" && n!="healing-percent" && n!="early-equipment-percent" && n!="late-strength-percent" && n!="late-dexterity-percent" && n!="late-health-percent" && n!="ascent-strength-percent")
+        else if(n!="sight-percent" && n!="sight-early-percent" && n!="early-equipment-percent" && n!="late-strength-percent" && n!="late-dexterity-percent" && n!="late-health-percent" && n!="ascent-strength-percent")
             throw std::runtime_error("unknown balance parameter: "+n);
         if(value<min || value>max) throw std::runtime_error("balance value out of range: "+n);
+        if(n=="natural-regen-interval" && value!=0 && value!=64 && value!=128)
+            throw std::runtime_error("natural regeneration interval must be 0, 64 or 128");
         r.balance_setting=uint8_t(value); return r;
     }
     static const char* original_rules[]={"original-teleport-placement","original-early-traps","original-holy-generation","original-early-density","original-early-damage","original-early-roster"};
