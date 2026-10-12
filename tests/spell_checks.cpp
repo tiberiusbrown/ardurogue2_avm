@@ -60,7 +60,7 @@ void learning() {
     game.hunger=STUDY_HUNGRY-1; advance_study();
     require(!studying() && game.inventory[2].type==SPELLBOOK,"hungry study continued");
     arena(); book(FROSTBIND); begin_study(2); game.see_invisible=1; advance_study();
-    require(!studying() && feature_status_text().find("potion sight fades")!=std::string::npos && feature_status_text().find("Study interrupted")!=std::string::npos,"expiration interruption suppressed gameplay message");
+    require(!studying() && feature_status_text().find("potion sight fades")!=std::string::npos && feature_status_text().find("lose your concentration")!=std::string::npos,"expiration interruption suppressed gameplay message");
     arena(); book(FROSTBIND); begin_study(2);
     for(uint8_t i=0;i<39;++i) advance_study();
     game.haste=1; advance_study();
@@ -173,6 +173,7 @@ void books_and_generation() {
     require(sizeof(Item)==2 && !is_stackable(SPELLBOOK) && item_is_identified(named) &&
             !item_is_cursed(named) && item_value(named)==EXCHANGE,
             "spellbook instance flags or stacking");
+    unsigned generated_spells[SPELL_COUNT]={};
     unsigned eligible=0,books=0,early_books=0,early_advanced=0,late_advanced=0,late_books=0;
     for(unsigned seed=1;seed<=1024;++seed) for(uint8_t floor=0;floor<FLOORS;++floor) {
         arena(); game.run_seed=uint16_t(seed); game.floor=floor;
@@ -189,7 +190,7 @@ void books_and_generation() {
             if(floor==4) { require(item.item.type==LONG_SWORD,"all-phantom floor gained books"); continue; }
             ++eligible;
             if(item.item.type!=SPELLBOOK) continue;
-            ++books; require(item.item.info>MAGIC_DART && item.item.info<SPELL_COUNT,"generated invalid/starting spellbook");
+            ++books; ++generated_spells[item.item.info]; require(item.item.info>MAGIC_DART && item.item.info<SPELL_COUNT,"generated invalid/starting spellbook");
             if(floor==0) { ++early_books; early_advanced+=item.item.info>=BLINK; }
             if(floor==15) { ++late_books; late_advanced+=item.item.info>=BLINK; }
         }
@@ -198,12 +199,15 @@ void books_and_generation() {
             require(!std::memcmp(&game,&ascending,sizeof game),"ascent generated fresh spellbooks");
         }
     }
+    for(uint8_t s=1;s<SPELL_COUNT;++s) require(generated_spells[s]>0,"spell missing from weighted book pools");
     require(books*100>eligible*5 && books*100<eligible*7 &&
             early_advanced*100>early_books*15 && early_advanced*100<early_books*25 &&
             late_advanced==late_books,"spellbook replacement rate or depth weighting");
 }
 }
+extern void check_magic_expansion();
 void check_spells() {
+    check_magic_expansion();
     start_new(123); require(game.mana==6 && game.known_spells==1 && player_max_mana()==6,"starting magic");
     arena();
     for(uint8_t level=1;level<=50;++level) { game.level=level; require(player_max_mana()==(6+level/3>16 ? 16 : 6+level/3),"max mana level cap"); }

@@ -73,7 +73,7 @@ each run and derived deterministically from the run seed. Names and descriptor
 tables remain in flash. Item and Monster representations remain two and eight
 bytes respectively.
 
-## Implementation
+## Implementation of the earlier consumable expansion
 
 The checked-out baseline already included Blindness, See Invisible, Illumination
 and Brilliance, exceeding the counts in the request. Preserving them yields
@@ -82,6 +82,10 @@ The existing seven-byte identification bitmap becomes eight bytes. Three new
 timer bytes follow the already present See Invisible timer. Save version 29
 rejects version 28 and earlier, including shifted raw item IDs. There is no
 unsafe save migration.
+
+The subsequent magic expansion adds the eighth wand, bringing identification
+to 63 types in the same eight-byte bitmap. Its current save version is 31.
+See the Lightning section below and [the expansion report](MAGIC-EXPANSION-RESULTS.md).
 
 Detect Objects uses a transient Session request and UI mode. The renderer
 iterates the existing 24 ground slots directly on the existing Full Map path;
@@ -276,3 +280,29 @@ python sim/balance.py summarize build/consumables-control-all --simulator build/
 python sim/balance.py summarize build/consumables-candidate-all --simulator build/sim-native/sim/ardurogue2_sim
 python sim/balance.py compare build/consumables-control-all build/consumables-candidate-all --output build/consumables-comparison-all
 ```
+
+
+## Wand of Lightning (save version 31)
+
+There are now eight wands and 63 identifiable types in the existing eight-byte
+bitmap. The new unknown descriptor is **forked**, shuffled bijectively with the
+other seven appearances. Item size, four-bit charges and three-bit modifiers
+remain unchanged. Lightning replaces 12% of ordinary wand slots using a local
+derived draw; the original seven retain their relative weights and supply RNG.
+
+| Modifier | Effect |
+| --- | --- |
+| Normal | Range 6; 6–10 primary magic damage, one 4–7 arc. |
+| Cursed | Player-only 8–12 magic damage, power 8, ordinary MR save. |
+| Unreliable | Random cardinal direction with normal damage/chaining. |
+| Spreading | N/E/S/W rays with normal chaining and a shared already-hit mask. |
+| Powerful | 10–14 primary, 7–10 second, 4–7 third. Each arc starts at the previous hit. |
+| Overpowered | Spreading plus Powerful. No monster is hit twice in the activation. |
+
+Every arc requires actual player visibility, Chebyshev distance at most 2 and a
+clear geometric supercover path, including diagonal corner obstructions. Nearest
+distance wins, then monster slot. Primary death retains its former origin.
+Dragons have no lightning immunity. Each activation spends one charge and one
+ordinary action, even on a miss. Identification, recharge, curse removal and
+depletion use the ordinary wand lifecycle. Flash-resident profiles and a bounded
+nonrecursive routine also serve Chain Lightning.

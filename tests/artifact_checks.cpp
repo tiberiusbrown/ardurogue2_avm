@@ -424,7 +424,7 @@ void hearts()
 void artifact_generation()
 {
     using namespace rogue::generation;
-    static_assert(sizeof(Item) == 2 && offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION == 30 &&
+    static_assert(sizeof(Item) == 2 && offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION == 31 &&
                   WEAPON_LAST + 1 == ARMOR_FIRST && ARMOR_LAST + 1 == OFFHAND_FIRST && OFFHAND_LAST + 1 == YENDOR_AMULET &&
                   RING_LAST + 1 == AMULET_FIRST && AMULET_LAST + 1 == SCROLL_FIRST,
                   "artifact groups or saved layout changed");
@@ -536,7 +536,7 @@ void artifact_generation()
             }
         }
         for(uint8_t type = WAND_FIRST; type <= WAND_LAST; ++type) identify_type(type);
-        require((game.identified_items[7] & 0xc0) == 0, "identification exceeded 62 bits");
+        require((game.identified_items[7] & 0x80) == 0, "identification exceeded 63 bits");
     }
 }
 }

@@ -13,12 +13,14 @@ struct ItemMetrics {
     uint64_t generated=0, reached=0, picked_up=0, used=0, consumed=0,
         equipped=0, dropped=0, discarded=0, carried=0,
         charges_used=0, drunk=0, thrown=0, scrolls_read=0, turns_equipped=0,
+        damage=0, kills=0, direct_damage=0, chained_damage=0,
         wands_picked_up=0, wands_activated=0, identified=0, expired=0, active_turns=0, pack_full=0;
 };
 struct SpellMetrics {
     uint64_t generated=0, collected=0, studied=0, study_turns=0, learned=0, interrupted=0,
         message_interruptions=0, hunger_interruptions=0, canceled=0, casts=0, mana_spent=0, damage=0, kills=0,
-        displaced=0, displacement_tiles=0, multi_tile_pushes=0;
+        displaced=0, displacement_tiles=0, multi_tile_pushes=0,
+        direct_damage=0, chained_damage=0, disabled=0, stun_turns=0, hp_paid=0, self_deaths=0;
 };
 struct MonsterMetrics {
     uint64_t generated=0, encountered=0, engaged=0, killed=0,
@@ -226,7 +228,7 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=9;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=10;
 inline constexpr size_t CSV_STREAM_COUNT=12;
 inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=2;
 void write_encounters_header(std::ostream&);

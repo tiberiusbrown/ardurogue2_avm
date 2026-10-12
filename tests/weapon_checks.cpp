@@ -52,7 +52,7 @@ static void check_equipment_definitions_and_ranges()
     static_assert(LONG_SWORD == POTION_LAST + 1 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
                   POTION_COUNT == 18 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
-                  SCROLL_COUNT == 15 && WAND_COUNT == 7,
+                  SCROLL_COUNT == 15 && WAND_COUNT == 8,
                   "item groups are no longer contiguous or changed size");
     for(const auto& weapon : weapons) {
         WeaponDefinition definition = weapon_definition(weapon.type);

@@ -72,6 +72,10 @@ void trace_event(std::ostream& out, EventKind kind, uint8_t, uint8_t type, uint1
     case EventKind::ItemUsed: out << "  used " << item_name(type) << '\n'; break;
     case EventKind::PotionThrown: out << "  threw " << item_name(type) << '\n'; break;
     case EventKind::ChargeUsed: out << "  wand " << item_name(type) << '\n'; break;
+    case EventKind::LightningDamage: out<<"  lightning damage="<<amount<<'\n'; break;
+    case EventKind::HealthSacrificed: out<<"  HP paid="<<amount<<'\n'; break;
+    case EventKind::SpellDisabled: out<<"  Slumber stun="<<amount<<'\n'; break;
+    case EventKind::BloodDeath: out<<"  lethal health sacrifice\n"; break;
     case EventKind::SpellCast: out<<"  spell="<<int(type)<<" MP spent="<<amount<<'\n'; break;
     case EventKind::StudyStarted: out<<"  study started="<<int(type)<<'\n'; break;
     case EventKind::StudyInterrupted: out<<"  study interrupted="<<int(type)<<'\n'; break;

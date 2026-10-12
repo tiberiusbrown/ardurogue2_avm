@@ -7,10 +7,11 @@ import pandas as pd
 from balance import load_directory, floor_survival, write_json
 
 SPELLS = ("Magic Dart", "Frostbind", "Repulsion", "Confound", "Sense Traps", "Blink",
-          "Shockwave", "Piercing Bolt", "Banish", "Exchange", "Cleanse")
+          "Shockwave", "Piercing Bolt", "Banish", "Exchange", "Cleanse", "Fireburst", "Phase Step", "Chain Lightning", "Slumber", "Blood Bolt")
 COUNTERS = ("generated", "collected", "studied", "study_turns", "learned", "interrupted",
             "message_interruptions", "hunger_interruptions", "canceled", "casts", "mana_spent",
-            "damage", "kills", "displaced", "displacement_tiles", "multi_tile_pushes", "mana_regenerated")
+            "damage", "kills", "displaced", "displacement_tiles", "multi_tile_pushes", "mana_regenerated",
+            "direct_damage", "chained_damage", "disabled", "stun_turns", "hp_paid", "self_deaths")
 
 
 def report(directory, output):
@@ -59,6 +60,12 @@ def report(directory, output):
     totals = spells.groupby("spell")[list(COUNTERS)].sum()
     totals.insert(0, "name", SPELLS)
     raw_items = tables["items"]
+    lightning = raw_items[raw_items.item == "WAND_LIGHTNING"]
+    lightning_diagnostics = {name: int(lightning[name].sum()) for name in
+                             ("generated", "picked_up", "wands_activated", "charges_used",
+                              "damage", "direct_damage", "chained_damage", "kills")}
+    phase_users = spells[(spells.spell == 12) & (spells.casts > 0)].effective_seed
+    phase_runs = runs[runs.effective_seed.isin(phase_users)]
     items = raw_items.groupby("item").sum(numeric_only=True)
     resource = {}
     for group, prefix in (("potions", "POTION_"), ("scrolls", "SCROLL_"), ("wands", "WAND_")):
@@ -79,6 +86,10 @@ def report(directory, output):
                    spellbooks_destroyed=int(destroyed.sum()),
                    totals={k: int(totals[k].sum()) for k in COUNTERS},
                    resources=resource, total_monster_kills=int(tables["monsters"].killed.sum()),
+                   lightning_wand=lightning_diagnostics,
+                   phase_step_users=dict(runs=len(phase_runs), escapes=int(phase_runs.result.eq("escaped").sum()),
+                                         deaths=int(phase_runs.result.eq("death").sum()),
+                                         note="Descriptive survival-selected cohort; not a causal spell benefit."),
                    direct_spell_kills=int(totals.kills.sum()),
                    arrows_fired=int(tables["ranged"].fired.sum()),
                    bow_turns=int(tables["ranged"].bow_turns.sum()),
@@ -99,7 +110,15 @@ def report(directory, output):
               "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for row in totals.itertuples():
         lines.append(f"| {row.name} | {row.generated} | {row.collected} | {row.studied} | {row.learned} | {row.interrupted} | {row.casts} | {row.damage} | {row.kills} | {row.multi_tile_pushes} |")
-    lines += ["", "Damage/kills count direct spell damage only; trap damage retains environmental attribution.",
+    lines += ["", "| Spell | Initial lightning damage | Chained damage | Disabled | Rolled stun actions | HP paid | Sacrifice deaths |",
+              "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for row in totals.itertuples():
+        if row.Index < 11:
+            continue
+        lines.append(f"| {row.name} | {row.direct_damage} | {row.chained_damage} | {row.disabled} | {row.stun_turns} | {row.hp_paid} | {row.self_deaths} |")
+    lines += ["", "Lightning wand: " + ", ".join(f"{k}={v}" for k, v in lightning_diagnostics.items()) + ".",
+              f"Phase Step users: {len(phase_runs)} runs, {int(phase_runs.result.eq('escaped').sum())} escaped. This cohort is selected by learning, use and survival, and does not estimate causal benefit."]
+    lines += ["", "Spell damage/kills include its primary and chained hits; trap damage retains environmental attribution. The initial/chained split is specific to lightning effects.",
               "Displacement counts forced tiles before the enemy response, not proven counterfactual survival.",
               "Message interruptions include attack misses and condition/fuel expiration. Canceled also includes lifecycle/death cancellation.",
               "Mana regenerated is counted once per run in Magic Dart's row. Resource totals and floor survival accompany this report."]

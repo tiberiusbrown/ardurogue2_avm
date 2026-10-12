@@ -216,6 +216,40 @@ __attribute__((noinline)) void animate_arrow(Position origin, int8_t dx, int8_t 
 #endif
 }
 
+#if !defined(ARDUROGUE2_BENCH)
+__attribute__((noinline)) static void lightning_segment(int16_t x, int16_t y, int16_t tx, int16_t ty) {
+    int16_t dx=tx>x ? tx-x : x-tx, dy=ty>y ? ty-y : y-ty;
+    int8_t sx=x<tx ? 1 : -1, sy=y<ty ? 1 : -1;
+    int16_t error=dx-dy;
+    for(;;) {
+        avm_draw_filled_rect_white(x,y,1,1);
+        if(x==tx && y==ty) break;
+        int16_t twice=error*2;
+        if(twice>-dy) { error-=dy; x+=sx; }
+        if(twice<dx) { error+=dx; y+=sy; }
+    }
+}
+#endif
+__attribute__((noinline)) void animate_lightning(Position from, Position to)
+{
+#if defined(ARDUROGUE2_BENCH)
+    (void)from; (void)to;
+#else
+    render_play();
+    // A single short zigzag flash, including the initial ray. No saved animation state.
+    uint8_t x1,y1,x2,y2;
+    if(screen_tile(from,x1,y1) && screen_tile(to,x2,y2)) {
+        int16_t ax=x1*5+2, ay=y1*5+2, bx=x2*5+2, by=y2*5+2;
+        int16_t mx=(ax+bx)/2, my=(ay+by)/2;
+        lightning_segment(ax,ay,mx+1,my-1);
+        lightning_segment(mx+1,my-1,bx,by);
+        avm_display(false);
+        animation_wait();
+    }
+    render_play(); avm_display(false);
+#endif
+}
+
 __attribute__((noinline)) void animate_fire_burst(Position center)
 {
 #if defined(ARDUROGUE2_BENCH)
@@ -746,6 +780,8 @@ __attribute__((noinline)) static void render_direction_prompt()
     status_clear();
     avm_draw_text_P(66, 30, ui.mode == WAND_DIRECTION
         ? F("Use wand?") : ui.mode == SPELL_DIRECTION ? F("Cast spell?") : F("Throw/Shoot?"));
+    if(ui.mode == SPELL_DIRECTION && spell_hp_cost(ui.selection))
+        avm_draw_text_P(66, 35, F("Costs 3 HP!"));
     avm_draw_text_P(66, 42, F("D-pad:"));
     avm_draw_text_P(66, 49, F("Direction"));
     avm_draw_text_P(66, 63, F("B: Back"));

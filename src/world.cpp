@@ -121,6 +121,24 @@ RayResult scan_ray(Position origin, int8_t dx, int8_t dy, uint8_t range)
     return result;
 }
 
+__attribute__((noinline)) bool line_of_effect(Position from, Position to)
+{
+    int16_t x=from.x, y=from.y;
+    int16_t dx=to.x>x ? to.x-x : x-to.x, dy=to.y>y ? to.y-y : y-to.y;
+    int8_t sx=x<to.x ? 1 : -1, sy=y<to.y ? 1 : -1;
+    int16_t ix=0, iy=0;
+    while(ix<dx || iy<dy) {
+        int16_t a=(1+2*ix)*dy, b=(1+2*iy)*dx;
+        if(a==b) {
+            if(blocked(x+sx,y) || blocked(x,y+sy)) return false;
+            x+=sx; y+=sy; ++ix; ++iy;
+        } else if(a<b) { x+=sx; ++ix; }
+        else { y+=sy; ++iy; }
+        if(blocked(x,y)) return false;
+    }
+    return true;
+}
+
 bool can_see(Position pos)
 {
     uint8_t tx = pos.x, ty = pos.y;

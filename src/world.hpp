@@ -30,6 +30,8 @@ constexpr bool square_contains(Position center, Position pos, uint8_t radius)
 constexpr uint8_t wand_fire_radius(bool powerful) { return powerful ? 2 : 1; }
 void make_floor();
 bool can_see(Position pos);
+// Supercover geometry, independent of room visibility and monster occupancy.
+bool line_of_effect(Position from, Position to);
 // Clamps radius to MAX_LIGHT_RADIUS; invalid viewport rows are empty.
 uint16_t light_mask(uint8_t radius, uint8_t sy);
 bool ray_visible(uint8_t sx, uint8_t sy, const uint16_t opaque[13]);

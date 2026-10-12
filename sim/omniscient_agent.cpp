@@ -23,6 +23,35 @@ Action cast(uint8_t spell,int direction=-1,uint8_t target=NONE) {
     Action a; a.kind=ActionKind::Cast; a.slot=spell; a.target=target; a.goal="cast learned spell";
     if(direction>=0) { a.dx=dxs[direction]; a.dy=dys[direction]; } return a;
 }
+Action planned_lightning() {
+    Action best; int best_value=0;
+    for(uint8_t s=0;s<inventory_capacity();++s) {
+        Item wand=game.inventory[s];
+        if(wand.type!=WAND_LIGHTNING || wand_afflicted(wand) || !wand_charges(wand)) continue;
+        const auto* profile=wand_powerful(wand) ? &LIGHTNING_POWERFUL : &LIGHTNING_WAND;
+        for(int d=0;d<(wand_spreads(wand) ? 1 : 4);++d) {
+            uint16_t mask=0; int value=0,hits=0;
+            for(int ray=0;ray<(wand_spreads(wand) ? 4 : 1);++ray) {
+                int direction=wand_spreads(wand) ? ray : d;
+                auto first=scan_ray(game.player,dxs[direction],dys[direction],profile->range);
+                uint8_t hit=first.monster;
+                if(hit==NONE || (mask&(1u<<hit))) continue;
+                for(int n=0;n<profile->targets && hit!=NONE;++n) {
+                    mask|=uint16_t(1u<<hit); ++hits;
+                    const auto& m=game.monsters[hit];
+                    value+=std::min<int>(m.hp,profile->minimum[n]+(profile->spread[n]-1)/2);
+                    if(square_contains(game.player,m.pos,1) && m.hp<=profile->minimum[n]) value+=10;
+                    hit=lightning_target(m.pos,mask);
+                }
+            }
+            if(hits<2 || value<=best_value) continue;
+            best_value=value; best.kind=ActionKind::Wand; best.slot=s;
+            best.dx=wand_needs_direction(wand) ? dxs[d] : 0; best.dy=wand_needs_direction(wand) ? dys[d] : 0;
+            best.goal="efficient lightning chain";
+        }
+    }
+    return best;
+}
 Action plan_magic() {
     auto available=[](uint8_t s) { return (game.known_spells & spell_bit(s)) && game.mana>=spell_cost(s); };
     int nearby=0,adjacent=0,escapes=0;
@@ -45,7 +74,23 @@ Action plan_magic() {
         int enemies=0; for(uint8_t n=0;n<MONSTERS;++n) if(n!=i && game.monsters[n].type && square_contains(p,game.monsters[n].pos,1)) ++enemies;
         if(enemies<adjacent) return cast(EXCHANGE,-1,i);
     }
+    if((urgent || (adjacent && game.hp*2<player_max_hp())) && available(PHASE_STEP)) {
+        auto threats=[](Position p) { int n=0; for(const auto& m:game.monsters) if(m.type && square_contains(p,m.pos,2)) ++n; return n; };
+        int current=threats(game.player),walk=current;
+        for(int d=0;d<4;++d) { Position p{uint8_t(game.player.x+dxs[d]),uint8_t(game.player.y+dys[d])}; if(!blocked(p.x,p.y) && monster_at(p)==NONE) walk=std::min(walk,threats(p)); }
+        for(int d=0;d<4;++d) {
+            Position destination=game.player;
+            for(int step=1;step<=3;++step) {
+                Position p{uint8_t(game.player.x+step*dxs[d]),uint8_t(game.player.y+step*dys[d])};
+                if(blocked(p.x,p.y)) break;
+                if(step>=2 && monster_at(p)==NONE) destination=p;
+            }
+            if(destination!=game.player && !feature_is_trap(observed_feature_at(game,destination)) &&
+               threats(destination)<current && threats(destination)<walk) return cast(PHASE_STEP,d);
+        }
+    }
     if(urgent && available(BLINK) && (!escapes || adjacent>=2)) return cast(BLINK);
+    auto lightning=planned_lightning(); if(lightning.kind==ActionKind::Wand) return lightning;
     for(int d=0;d<4;++d) {
         RayResult ray=scan_ray(game.player,dxs[d],dys[d],5);
         if(ray.monster==NONE || (!urgent && (!player_can_see_monster(ray.monster) || !can_see(ray.end)))) continue;
@@ -55,6 +100,19 @@ Action plan_magic() {
         Position pushed{uint8_t(m.pos.x+dxs[d]),uint8_t(m.pos.y+dys[d])};
         if(available(REPULSION) && ray.steps<=2 && !blocked(pushed.x,pushed.y) && monster_at(pushed)==NONE &&
            feature_is_trap(observed_feature_at(game,pushed)) && feature_type(observed_feature_at(game,pushed))!=FEATURE_SUMMONING_TRAP) return cast(REPULSION,d);
+        if(available(FIREBURST) && (player_fire_effect()>0 || ray.steps>=2)) {
+            int cluster=0; for(const auto& n:game.monsters) if(n.type && n.type!=DRAGON && square_contains(ray.end,n.pos,1)) ++cluster;
+            if(cluster>=2 && (urgent || game.mana>=spell_cost(FIREBURST)+reserve)) return cast(FIREBURST,d);
+        }
+        if(available(CHAIN_LIGHTNING) && lightning_target(ray.end,uint16_t(1u<<ray.monster))!=NONE &&
+           (urgent || game.mana>=spell_cost(CHAIN_LIGHTNING)+reserve)) return cast(CHAIN_LIGHTNING,d);
+        if(available(SLUMBER) && ray.steps<=4 && !m.stun &&
+           (urgent || (ray.steps<=2 && monster_strength(m.type)>=player_strength()+2))) return cast(SLUMBER,d);
+        int incoming=0; for(const auto& n:game.monsters) if(n.type && !n.stun && square_contains(game.player,n.pos,2)) incoming+=monster_strength(n.type)+2;
+        bool emergency_resource=false; for(const auto& i:game.inventory) if(i.type==POTION_HEALING || i.type==POTION_EXTRA_HEALING || i.type==SCROLL_TELEPORT) emergency_resource=true;
+        if(available(BLOOD_BOLT) && m.hp>4 && m.hp<=6 && game.hp>incoming*2+15 && game.hp*4>=player_max_hp()*3 &&
+           emergency_resource && (ray.steps>=2 || monster_armor(m.type)>=3) && monster_strength(m.type)>=player_strength()+2)
+            return cast(BLOOD_BOLT,d);
         if(available(PIERCING_BOLT) && ray.steps<5) {
             auto second=scan_ray(ray.end,dxs[d],dys[d],5-ray.steps);
             if(second.monster!=NONE && player_can_see_monster(second.monster) && can_see(second.end) &&
@@ -182,7 +240,7 @@ bool upgrade(Item i) {
 int value(Item i) {
     if(i.type==SPELLBOOK) {
         if(i.info>=SPELL_COUNT || (game.known_spells & spell_bit(i.info))) return 0;
-        return i.info==BLINK || i.info==SHOCKWAVE || i.info==BANISH ? 180 : i.info==SENSE_TRAPS ? 75 : 120;
+        return i.info==BLINK || i.info==SHOCKWAVE || i.info==BANISH || i.info==PHASE_STEP || i.info==SLUMBER ? 180 : i.info==SENSE_TRAPS ? 75 : 120;
     }
     if(i.type == YENDOR_AMULET) return 10000;
     if(is_bow(i.type)) {
@@ -207,6 +265,7 @@ int value(Item i) {
     if(is_wand(i.type)) {
         if(wand_afflicted(i) || !wand_charges(i)) return 0;
         switch(i.type) {
+        case WAND_LIGHTNING: return 70 + 8*wand_charges(i);
         case WAND_STRIKING: return 70 + 8*wand_charges(i);
         case WAND_ICE: return 65 + 6*wand_charges(i);
         case WAND_FIRE: return 55 + 5*wand_charges(i);
@@ -248,6 +307,11 @@ int value(Item i) {
     case SCROLL_REMOVE_CURSE: return 0;
     default: return 0;
     }
+}
+int acquisition_value(Item i) {
+    if(i.type==SPELLBOOK) for(const auto& owned:game.inventory)
+        if(owned.type==SPELLBOOK && owned.info==i.info) return 0;
+    return value(i);
 }
 int discard_value(int s) {
     if(!inventory_item_removable(static_cast<uint8_t>(s)) || equipped(s)) return 100000;
@@ -635,9 +699,9 @@ Action OmniscientAgent::choose_pickup(const DecisionContext&) {
     int best = -1, worth = 0;
     for(int i = 0; i < GROUND_ITEMS; ++i) {
         const GroundItem& g = game.ground[i];
-        if(g.pos != game.player || value(g.item) <= worth ||
+        if(g.pos != game.player || acquisition_value(g.item) <= worth ||
            (g.item.type != YENDOR_AMULET && !fits(g.item) && replacement(g.item) < 0)) continue;
-        best = i; worth = value(g.item);
+        best = i; worth = acquisition_value(g.item);
     }
     return best >= 0 ? pickup(best) : Action{};
 }
@@ -653,7 +717,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
         if(d <= 5 && can_see(m.pos)) ++threats;
         if(d == 1 && (adjacent < 0 || m.hp < game.monsters[adjacent].hp)) adjacent = i;
     }
-    Action magic=plan_magic(); if(magic.kind==ActionKind::Cast) return magic;
+    Action magic=plan_magic(); if(magic.kind==ActionKind::Cast || magic.kind==ActionKind::Wand) return magic;
     if(!threats && game.floor>=2 && context.turns>=sense_until && game.mana==player_max_mana() &&
        (game.known_spells & spell_bit(SENSE_TRAPS))) {
         bool known=false; for(const auto& f:observed_features(game)) if(feature_is_trap(f.id) && distance(f.pos,game.player)<=4) known=true;
@@ -824,7 +888,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
                 a.dx = dxs[d]; a.dy = dys[d]; a.goal = "control dangerous monster"; a.destination = m.pos; return a;
             }
         }
-        for(uint8_t type : {uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(POTION_HARMING),uint8_t(POTION_FIRE)}) {
+        for(uint8_t type : {uint8_t(WAND_LIGHTNING),uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(POTION_HARMING),uint8_t(POTION_FIRE)}) {
             int s = find(type); if(s < 0) continue;
             Item i = game.inventory[s];
             if(is_wand(type) && (wand_afflicted(i) || !wand_charges(i))) continue;
@@ -909,7 +973,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
     }
     int best = -1, best_score = 0;
     for(int i = 0; i < GROUND_ITEMS; ++i) {
-        const GroundItem& g = game.ground[i]; int worth = value(g.item), d = paths.to(g.pos);
+        const GroundItem& g = game.ground[i]; int worth = acquisition_value(g.item), d = paths.to(g.pos);
         if(abandoned_loot[i] || worth <= 0 || d < 0 || (g.item.type != YENDOR_AMULET && !fits(g.item) && replacement(g.item) < 0)) continue;
         int score = worth*100/(d+8);
         if(score > best_score) { best = i; best_score = score; }

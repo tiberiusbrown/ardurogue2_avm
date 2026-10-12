@@ -28,6 +28,8 @@ const Field<ItemMetrics> item_fields[] = {
     {"generated",&ItemMetrics::generated},{"reached",&ItemMetrics::reached},
     {"picked_up",&ItemMetrics::picked_up},{"used",&ItemMetrics::used},{"consumed",&ItemMetrics::consumed},
     {"equipped",&ItemMetrics::equipped},{"dropped",&ItemMetrics::dropped},{"discarded",&ItemMetrics::discarded},
+    {"damage",&ItemMetrics::damage},{"kills",&ItemMetrics::kills},
+    {"direct_damage",&ItemMetrics::direct_damage},{"chained_damage",&ItemMetrics::chained_damage},
     {"carried",&ItemMetrics::carried},{"charges_used",&ItemMetrics::charges_used},
     {"potions_drunk",&ItemMetrics::drunk},{"potions_thrown",&ItemMetrics::thrown},
     {"scrolls_read",&ItemMetrics::scrolls_read},{"turns_equipped",&ItemMetrics::turns_equipped},
@@ -129,7 +131,7 @@ const char* item_name(uint8_t type) {
         "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT","AMULET_BRILLIANCE",
         "SCROLL_IDENTIFY","SCROLL_ENCHANT","SCROLL_REMOVE_CURSE","SCROLL_TELEPORT","SCROLL_MAPPING",
         "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","SCROLL_HOLD_MONSTER","SCROLL_DETECT_TRAPS","SCROLL_SUMMONING","SCROLL_MASS_TELEPORT","SCROLL_FIRE","SCROLL_DETECT_OBJECTS","WAND_FORCE",
-        "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH","SPELLBOOK"};
+        "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH","WAND_LIGHTNING","SPELLBOOK"};
     static_assert(sizeof(names)/sizeof(*names) == rogue::SPELLBOOK+1, "item names changed");
     return type <= rogue::SPELLBOOK ? names[type] : "INVALID";
 }
@@ -287,7 +289,7 @@ void Collector::enter_floor() {
         if(rogue::is_wand(i.type) && !rogue::wand_afflicted(i) && i.type!=rogue::WAND_DIGGING) {
             auto charges=rogue::wand_charges(i);
             f.entry_wand_charges+=charges;
-            if(i.type==rogue::WAND_FIRE || i.type==rogue::WAND_STRIKING || i.type==rogue::WAND_ICE)
+            if(i.type==rogue::WAND_LIGHTNING || i.type==rogue::WAND_FIRE || i.type==rogue::WAND_STRIKING || i.type==rogue::WAND_ICE)
                 f.entry_offensive_charges+=charges;
             if(i.type==rogue::WAND_FORCE || i.type==rogue::WAND_TELEPORT || i.type==rogue::WAND_POLYMORPH)
                 f.entry_emergency_charges+=charges;
@@ -525,6 +527,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         case Cause::Trap: data.death_cause = "trap:"+std::to_string(cause_type); break;
         case Cause::Feature: data.death_cause = "feature:"+std::to_string(cause_type); break;
         case Cause::Monster: data.death_cause = monster_name(cause_type); break;
+        case Cause::Spell: data.death_cause = "spell:"+std::to_string(cause_type); break;
         case Cause::Starvation: data.death_cause = "starvation"; break;
         case Cause::Item: data.death_cause = std::string("item:")+item_name(cause_type); break;
         case Cause::Fire: data.death_cause = cause_type ? std::string("fire:")+monster_name(cause_type) : "fire"; break;
@@ -559,6 +562,17 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
     };
     switch(k) {
+    case EventKind::LightningDamage:
+        if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) {
+            auto& s=data.spells[cause_type]; (detail ? s.chained_damage : s.direct_damage)+=amount;
+        } else if(cause==Cause::Item && cause_type<=rogue::SPELLBOOK) {
+            auto& i=data.items[cause_type]; (detail ? i.chained_damage : i.direct_damage)+=amount;
+            if(f) { auto& v=f->items[cause_type]; (detail ? v.chained_damage : v.direct_damage)+=amount; }
+        } break;
+    case EventKind::SpellDisabled:
+        ++data.spells[type].disabled; data.spells[type].stun_turns+=amount; break;
+    case EventKind::HealthSacrificed: data.spells[type].hp_paid+=amount; break;
+    case EventKind::BloodDeath: ++data.spells[type].self_deaths; break;
     case EventKind::ManaRegenerated: ++data.mana_regenerated; break;
     case EventKind::StudyStarted: ++data.spells[type].studied; break;
     case EventKind::StudyTurn: ++data.spells[type].study_turns; break;
@@ -635,12 +649,20 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::PlayerAttack: ++data.monsters[type].player_attacks; engage(); break;
     case EventKind::MonsterDamage:
         if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) data.spells[cause_type].damage+=amount;
+        if(cause==Cause::Item && cause_type<=rogue::SPELLBOOK) {
+            data.items[cause_type].damage+=amount;
+            if(f) f->items[cause_type].damage+=amount;
+        }
         if(cause == Cause::MonsterTrap) feature_metric(cause_type, &FeatureMetrics::monster_damage, amount);
         data.monsters[type].damage_taken += amount;
         if(detail) { engage(); if(f) f->damage_dealt += amount; }
         break;
     case EventKind::MonsterKilled:
         if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) ++data.spells[cause_type].kills;
+        if(cause==Cause::Item && cause_type<=rogue::SPELLBOOK) {
+            ++data.items[cause_type].kills;
+            if(f) ++f->items[cause_type].kills;
+        }
         if(cause == Cause::MonsterTrap) feature_metric(cause_type, &FeatureMetrics::monster_killed, 1);
         ++data.monsters[type].killed; if(f) ++f->kills; break;
     case EventKind::MonsterAttack: ++data.monsters[type].attacks; engage(); break;
@@ -861,14 +883,14 @@ void write_features(std::ostream& o, const RunMetrics& r) {
     }
 }
 void write_spells_header(std::ostream& o) {
-    o<<"seed,effective_seed,agent,spell,generated,collected,studied,study_turns,learned,interrupted,message_interruptions,hunger_interruptions,canceled,casts,mana_spent,damage,kills,displaced,displacement_tiles,multi_tile_pushes,mana_regenerated\n";
+    o<<"seed,effective_seed,agent,spell,generated,collected,studied,study_turns,learned,interrupted,message_interruptions,hunger_interruptions,canceled,casts,mana_spent,damage,kills,displaced,displacement_tiles,multi_tile_pushes,mana_regenerated,direct_damage,chained_damage,disabled,stun_turns,hp_paid,self_deaths\n";
 }
 void write_spells(std::ostream& o,const RunMetrics& r) {
     for(unsigned i=0;i<rogue::SPELL_COUNT;++i) {
         const auto& s=r.spells[i]; key(o,r);
         o<<','<<i<<','<<s.generated<<','<<s.collected<<','<<s.studied<<','<<s.study_turns<<','<<s.learned<<','<<s.interrupted
          <<','<<s.message_interruptions<<','<<s.hunger_interruptions<<','<<s.canceled<<','<<s.casts<<','<<s.mana_spent<<','<<s.damage<<','<<s.kills
-         <<','<<s.displaced<<','<<s.displacement_tiles<<','<<s.multi_tile_pushes<<','<<(i==0 ? r.mana_regenerated : 0)<<'\n';
+         <<','<<s.displaced<<','<<s.displacement_tiles<<','<<s.multi_tile_pushes<<','<<(i==0 ? r.mana_regenerated : 0)<<','<<s.direct_damage<<','<<s.chained_damage<<','<<s.disabled<<','<<s.stun_turns<<','<<s.hp_paid<<','<<s.self_deaths<<'\n';
     }
 }
 const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{

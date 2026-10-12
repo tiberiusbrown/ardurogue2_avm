@@ -54,7 +54,7 @@ constexpr uint8_t PHANTOM_HEALTH = 10;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 30;
+constexpr uint8_t SAVE_VERSION = 31;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -105,22 +105,62 @@ enum ItemType : uint8_t {
     SCROLL_LAST = SCROLL_DETECT_OBJECTS,
     WAND_FIRST,
     WAND_FORCE = WAND_FIRST, WAND_TELEPORT, WAND_DIGGING, WAND_FIRE,
-    WAND_STRIKING, WAND_ICE, WAND_POLYMORPH,
-    WAND_LAST = WAND_POLYMORPH,
+    WAND_STRIKING, WAND_ICE, WAND_POLYMORPH, WAND_LIGHTNING,
+    WAND_LAST = WAND_LIGHTNING,
     SPELLBOOK
 };
+// Single source for IDs, costs, study, targeting, generation and flash text.
+#define SPELL_DEFINITIONS(X) \
+    X(MAGIC_DART, "Magic Dart", 2, 0, 40, Direction, None, 0, "Range 5. First hit takes 2-4 magic damage.") \
+    X(FROSTBIND, "Frostbind", 3, 0, 40, Direction, Basic, 3, "Range 5. Slow the first hit for 4-6 turns.") \
+    X(REPULSION, "Repulsion", 3, 0, 40, Direction, Basic, 3, "Range 5. Push the first hit 1-2 tiles.") \
+    X(CONFOUND, "Confound", 3, 0, 40, Direction, Basic, 3, "Range 5. Confuse the first hit for 4-6 turns.") \
+    X(SENSE_TRAPS, "Sense Traps", 3, 0, 40, Self, Basic, 3, "Reveal traps within radius 4; leave them active.") \
+    X(BLINK, "Blink", 4, 0, 60, Self, Intermediate, 3, "Random teleport within radius 3, through walls.") \
+    X(SHOCKWAVE, "Shockwave", 5, 0, 60, Self, Intermediate, 3, "Push adjacent monsters outward 2-3 tiles.") \
+    X(PIERCING_BOLT, "Piercing Bolt", 5, 0, 60, Direction, Intermediate, 3, "Range 5. First two hits take 3-5 damage each.") \
+    X(BANISH, "Banish", 5, 0, 60, Direction, Intermediate, 3, "Range 5. Teleport the first hit elsewhere.") \
+    X(EXCHANGE, "Exchange", 5, 0, 80, Monster, Advanced, 3, "Swap with a visible monster within radius 3.") \
+    X(CLEANSE, "Cleanse", 5, 0, 60, Self, Intermediate, 3, "Remove blindness, confusion or slowing; one only.") \
+    X(FIREBURST, "Fireburst", 6, 0, 80, Direction, Advanced, 1, "Range 5. Radius 1 burst, 3-6 fire damage; can burn you.") \
+    X(PHASE_STEP, "Phase Step", 5, 0, 60, Direction, Intermediate, 2, "Teleport 3, else 2 tiles. Cross foes, never walls; landing traps activate.") \
+    X(CHAIN_LIGHTNING, "Chain Lightning", 6, 0, 80, Direction, Advanced, 1, "Range 5. 3-5 magic damage; one visible nearby arc for 3-4.") \
+    X(SLUMBER, "Slumber", 5, 0, 60, Direction, Intermediate, 2, "Range 4. Stun first hit for 3-4 enemy turns.") \
+    X(BLOOD_BOLT, "Blood Bolt", 3, 3, 60, Direction, Intermediate, 2, "Costs 3 MP AND 3 HP, even on a miss. Can kill you. Range 5, 6-9 damage.")
+enum class SpellTarget : uint8_t { Self, Direction, Monster };
+enum class SpellCategory : uint8_t { None, Basic, Intermediate, Advanced };
 enum Spell : uint8_t {
-    MAGIC_DART, FROSTBIND, REPULSION, CONFOUND, SENSE_TRAPS, BLINK,
-    SHOCKWAVE, PIERCING_BOLT, BANISH, EXCHANGE, CLEANSE, SPELL_COUNT
+#define SPELL_ENUM(id, name, mp, hp, turns, target, category, weight, desc) id,
+    SPELL_DEFINITIONS(SPELL_ENUM)
+#undef SPELL_ENUM
+    SPELL_COUNT
 };
 constexpr uint16_t spell_bit(uint8_t spell) { return spell < SPELL_COUNT ? uint16_t(1u << spell) : 0; }
-constexpr uint8_t spell_cost(uint8_t spell) {
-    return spell == MAGIC_DART ? 2 : spell <= SENSE_TRAPS ? 3 : spell == BLINK ? 4 : 5;
+struct SpellDefinition { uint8_t mana, health, study; SpellTarget target; SpellCategory category; uint8_t weight; };
+constexpr SpellDefinition spell_definition(uint8_t spell) {
+    switch(spell) {
+#define SPELL_RULE(id, name, mp, hp, turns, target, category, weight, desc) \
+    case id: return {mp, hp, turns, SpellTarget::target, SpellCategory::category, weight};
+    SPELL_DEFINITIONS(SPELL_RULE)
+#undef SPELL_RULE
+    default: return {0, 0, 0, SpellTarget::Self, SpellCategory::None, 0};
+    }
 }
-constexpr uint8_t spell_study_turns(uint8_t spell) { return spell <= SENSE_TRAPS ? 40 : spell == EXCHANGE ? 80 : 60; }
-constexpr bool spell_directional(uint8_t spell) {
-    return spell <= CONFOUND || spell == PIERCING_BOLT || spell == BANISH;
+constexpr uint8_t spell_cost(uint8_t spell) { return spell_definition(spell).mana; }
+constexpr uint8_t spell_hp_cost(uint8_t spell) { return spell_definition(spell).health; }
+constexpr uint8_t spell_study_turns(uint8_t spell) { return spell_definition(spell).study; }
+constexpr bool spell_directional(uint8_t spell) { return spell_definition(spell).target == SpellTarget::Direction; }
+constexpr bool expansion_spell(uint8_t spell) {
+    switch(spell) { case FIREBURST: case PHASE_STEP: case CHAIN_LIGHTNING: case SLUMBER: case BLOOD_BOLT: return true; default: return false; }
 }
+constexpr bool valid_spell_definitions() {
+    for(uint8_t s=0; s<SPELL_COUNT; ++s)
+        if(!spell_cost(s) || !spell_study_turns(s) || (s != MAGIC_DART && !spell_definition(s).weight)) return false;
+    return true;
+}
+static_assert(SPELL_COUNT == 16 && SPELL_COUNT <= 16 && MAGIC_DART == 0 && CLEANSE == 10 &&
+              FIREBURST == 11 && BLOOD_BOLT == 15 && spell_bit(BLOOD_BOLT) == 0x8000 &&
+              valid_spell_definitions(), "spell definitions/known mask disagree");
 // Hunger is 0..255; ordinary food consumption is at most one unit per turn.
 // Reading stops below 60. Reserve covers the whole study even with cursed sustenance.
 constexpr uint8_t STUDY_HUNGRY = 60, STUDY_FOOD_MARGIN = 12;
@@ -516,10 +556,10 @@ static_assert(offsetof(Game, mana) == offsetof(Game, fire_resistance) + 1 &&
               "magic must append exactly three saved bytes");
 #endif
 static_assert(POTION_COUNT == 18 && SCROLL_COUNT == 15 &&
-              RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 7,
+              RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 8,
               "item table counts changed");
 static_assert(sizeof(Game::identified_items) == 8 &&
-              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 62 &&
+              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 63 &&
               POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
                   sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 

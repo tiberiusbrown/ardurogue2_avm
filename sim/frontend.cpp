@@ -22,6 +22,7 @@ void status(const Monster& m, char) { study_status_output(); status(m); }
 void status_number(uint8_t) { study_status_output();}
 void status_number(uint8_t, char) { study_status_output();}
 void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
+void animate_lightning(Position, Position) {}
 void animate_ray(Position, int8_t, int8_t, uint8_t) {}
 void animate_fire_burst(Position) {}
 void animate_spreading_rays(Position, const uint8_t[4]) {}

@@ -690,3 +690,18 @@ limitations and exact reproduction specifications.
 The ordinary healing conversion and its simulator control have been removed. `sim/game_balance_configurations.json` supplies explicit original and selected arms. The current selected controls use `natural-regen-interval=128`, `healing-min-quarters=2`, `healing-random-quarters=2`, and `late-health-percent=65`; the original arm disables recovery and uses potion quarters 1/2 and original monster statistics. Valid recovery intervals are 0 (ablation), 64, and 128, which divide the saved eight-bit clock; potion minimum quarters range from 1 to 4 and random quarters from 0 to 2.
 
 Freeze policy and compare the same executable in both arms. Recovery adds no telemetry or observation fields; existing HP, damage, item use, hunger, lighting and progression counters remain schema 8. The revision repeats the complete primary and oracle populations and streams counter reconciliation. Exact selection evidence, limitations, and reproduction commands are in [the current report](../docs/GAME_BALANCE_2_TO_5_PERCENT.md); [the preceding report](../docs/GAME_BALANCE_PRE_REGENERATION.md) is explicitly historical.
+
+
+## Magic expansion experiment
+
+The 2026-10-12 experiment uses explicit weighted book pools at the existing 6%
+replacement rate and 12% same-slot lightning wand replacement. The two controls
+in `sim/README.md` define the four factorial conditions. Both maintained agents
+use fixed updated policies throughout each comparison. Historical 1.466% and
+50.764% census results use older policies and are contextual references.
+Native generation tests prove identical terrain, features, monsters, essential
+supplies, artifact items, loot positions and wand instance info across controls.
+Report practical paired escape differences, floor survival, death causes and
+spell-specific learning/use; exploratory comparisons receive BH-adjusted q-values.
+Raw data, executable manifests, specifications and trace audits belong in ignored
+`build/magic-expansion/`. See [the report](../docs/MAGIC-EXPANSION-RESULTS.md).

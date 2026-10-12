@@ -7,7 +7,7 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 6;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 7;
 inline constexpr int EXPLORER_APPEARANCES = 18;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
@@ -134,7 +134,7 @@ class ExplorerAgent final {
     unsigned retreat_budget=0, quiet_turns=0, stalled=0, bow_cooldown=0;
     SeenPosition prolonged_target;
     unsigned prolonged_melee=0;
-    uint64_t study_defer_until=0, magic_control_until=0, trap_sense_until=0;
+    uint64_t study_defer_until=0, magic_control_until=0, trap_sense_until=0, blood_until=0;
     uint8_t previous_study=255;
     uint8_t pending_ring=255;
     uint8_t previous_hp=0;

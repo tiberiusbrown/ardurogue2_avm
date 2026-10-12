@@ -59,6 +59,7 @@ void status(const Monster&, char) { study_status_output(); ++monster_status_coun
 void status_number(uint8_t) { study_status_output();}
 void status_number(uint8_t, char) { study_status_output();}
 void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
+void animate_lightning(Position, Position) {}
 void animate_ray(Position origin, int8_t, int8_t, uint8_t steps) {
     ++ray_animations;
     animated_origin = origin;
@@ -184,8 +185,8 @@ void check_floor_generation_snapshots()
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
         // Descent includes isolated spellbook replacement; ascent stays identical.
-        {0x8ff7a04du, 0x091ec48cu}, {0x20de71bau, 0xc3c40c3bu},
-        {0x9c8c31fau, 0x5fe53bf0u}, {0xb8084bcau, 0x41e15138u}
+        {0x71c327b6u, 0x091ec48cu}, {0x1453d9eeu, 0xc3c40c3bu},
+        {0x3db48893u, 0x5fe53bf0u}, {0xc5adb11du, 0x41e15138u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -1982,7 +1983,7 @@ void check_wand_encoding_and_scrolls()
 
 void check_wand_identity_and_generation()
 {
-    static_assert(WAND_COUNT == 7 && sizeof(Item) == 2,
+    static_assert(WAND_COUNT == 8 && sizeof(Item) == 2,
                   "wand layout changed");
     start_new(0x1248);
     uint8_t first[WAND_COUNT];
@@ -2006,7 +2007,7 @@ void check_wand_identity_and_generation()
         different |= item_appearance(static_cast<uint8_t>(WAND_FORCE + i)) != first[i];
     require(different, "wand appearances do not vary between runs");
 
-    unsigned generated = 0;
+    unsigned generated = 0, generated_lightning = 0;
     for(uint16_t seed = 1; seed <= 100; ++seed) {
         start_new(seed);
         for(uint8_t floor = 0; floor < FLOORS; ++floor) {
@@ -2020,7 +2021,7 @@ void check_wand_identity_and_generation()
                     "floor generation consumed combat randomness");
             for(const GroundItem& ground : game.ground)
                 if(is_wand(ground.item.type)) {
-                    ++generated;
+                    ++generated; generated_lightning+=ground.item.type==WAND_LIGHTNING;
                     require(item_value(ground.item) >= 3 &&
                             item_value(ground.item) <= 10 &&
                             wand_modifier(ground.item) <= WAND_OVERPOWERED,
@@ -2038,7 +2039,7 @@ void check_wand_identity_and_generation()
             require(ground.item.type == NO_ITEM,
                     "ascent generated ordinary items");
     }
-    require(generated > 0, "descent never generated a wand");
+    require(generated > 0 && generated_lightning*100>generated*8 && generated_lightning*100<generated*16, "lightning wand generation weight");
 
     wand_arena(WAND_FIRE);
     game.ground[0] = {game.player, {WAND_FIRE, 4}};

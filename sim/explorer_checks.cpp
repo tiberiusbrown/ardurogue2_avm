@@ -767,7 +767,13 @@ void magic_observations() {
     };
     setup(MAGIC_DART); game.ground[0]={{11,10},{SPELLBOOK,BLINK}};
     auto o=observe_explorer(0,0);
-    check(o.mana==16 && o.max_mana==6 && o.known_spells==1 && o.ground_count==1 && o.ground[0].item.type==SPELLBOOK && o.ground[0].item.spell==BLINK,"public magic/book identity absent");
+    check(o.mana==16 && o.max_mana==6 && o.known_spells==1 && o.ground_count==1 && o.ground[0].item.category==ItemCategory::Spellbook && o.ground[0].item.type==0 && o.ground[0].item.spell==255,"public magic/book identity absent");
+    Game remote_book=game; remote_book.ground[0].item.info=BLOOD_BOLT;
+    identical(game,remote_book,"remote spellbook icon disclosed spell identity");
+    game.ground[0].item.info=BLINK;
+    game.player=game.ground[0].pos; auto inspected=observe_explorer(0,0);
+    check(inspected.ground[0].item.spell==BLINK && inspected.ground[0].item.type==SPELLBOOK,"standing pickup inspection lost public book name");
+    game.player={10,10};
     Game public_world=game,hidden=game; hidden.ground[1]={{60,30},{SPELLBOOK,EXCHANGE}};
     hidden.monsters[3]={{60,29},LORD,100,0,{0,0},0}; hidden.features[2]={{11,11},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
     identical(public_world,hidden,"magic observation leaked hidden content");
@@ -848,8 +854,58 @@ void magic_observations() {
     for(unsigned turn=0;turn<80;++turn) { oa=oracle.choose_action({game,turn+1,turn}); check(oa.kind==ActionKind::Wait && dispatch(oa),"oracle study skipped/rejected turn"); }
     check((game.known_spells & spell_bit(EXCHANGE)) && !studying() && game.turns==80,"oracle failed complete learning");
 }
+void expansion_agents() {
+    auto policy=std::make_unique<ExplorerAgent>(); OmniscientAgent oracle;
+    auto setup=[&](uint8_t spell) {
+        arena(); game.known_spells=spell_bit(spell); game.mana=16;
+        game.inventory[18]={GLOWING_ORB,0}; game.offhand_slot=18;
+        game.inventory[19]={AMULET_BRILLIANCE,1}; game.amulet_slot=19;
+        for(uint8_t y=6;y<=16;++y) for(uint8_t x=6;x<=16;++x) carve(x,y);
+        policy->reset(); oracle.reset();
+    };
+    for(uint8_t spell : {uint8_t(FIREBURST),uint8_t(CHAIN_LIGHTNING)}) {
+        setup(spell); game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0}; game.monsters[1]={{13,11},ORC,100,15,{0,0},0};
+        auto a=policy->choose_action(observe_explorer(0,0));
+        check(a.kind==ExplorerActionKind::Cast && a.slot==spell,"explorer failed clustered new attack");
+        auto b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Cast && b.slot==spell,"oracle failed clustered new attack");
+    }
+    setup(FIREBURST); game.monsters[0]={{11,10},ORC,100,15,{0,0},0}; game.monsters[1]={{12,11},ORC,100,15,{0,0},0};
+    auto a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Cast,"explorer unsafe self-burning Fireburst");
+    setup(PHASE_STEP); game.hp=1; game.monsters[0]={{11,10},LORD,100,15,{0,0},0}; game.monsters[1]={{10,11},ORC,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==PHASE_STEP,"explorer failed safe controlled escape");
+    Game known=game,hidden=game; hidden.features[0]={{10,7},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+    identical(known,hidden,"Phase Step policy inspected hidden landing trap");
+    game=known; auto b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Cast && b.slot==PHASE_STEP,"oracle failed controlled escape");
+    setup(SLUMBER); game.hp=1; game.monsters[0]={{11,10},LORD,100,0,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==SLUMBER,"explorer failed emergency Slumber");
+    b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Cast && b.slot==SLUMBER,"oracle failed emergency Slumber");
+    setup(BLOOD_BOLT); game.hp=game.max_hp=200; game.inventory[0]={POTION_HEALING,1}; identify_type(POTION_HEALING);
+    game.monsters[0]={{13,10},DRAGON,6,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Cast && a.slot==BLOOD_BOLT,"explorer ignored conservative Blood Bolt opportunity");
+    b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Cast && b.slot==BLOOD_BOLT,"oracle ignored efficient Blood Bolt kill");
+    game.hp=3; policy->reset(); oracle.reset();
+    a=policy->choose_action(observe_explorer(0,0)); b=oracle.choose_action({game,0,0});
+    check(a.kind!=ExplorerActionKind::Cast && b.kind!=ActionKind::Cast,"agent attempted suicidal Blood Bolt");
+    setup(MAGIC_DART); game.known_spells=0; game.inventory[0]={WAND_LIGHTNING,uint8_t(ITEM_IDENTIFIED|3)}; identify_type(WAND_LIGHTNING);
+    game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0}; game.monsters[1]={{13,11},ORC,100,15,{0,0},0};
+    a=policy->choose_action(observe_explorer(0,0)); b=oracle.choose_action({game,0,0});
+    check(a.kind==ExplorerActionKind::Wand && b.kind==ActionKind::Wand,"agents missed efficient lightning wand chain");
+    check(b.goal=="efficient lightning chain","oracle dropped planned chain action");
+    for(auto modifier : {WAND_CURSED,WAND_UNRELIABLE}) {
+        set_wand_modifier(game.inventory[0],modifier); policy->reset(); oracle.reset();
+        a=policy->choose_action(observe_explorer(0,0)); b=oracle.choose_action({game,0,0});
+        check(a.kind!=ExplorerActionKind::Wand && b.kind!=ActionKind::Wand,"agent used known afflicted lightning wand");
+    }
+    for(uint8_t spell=FIREBURST;spell<SPELL_COUNT;++spell) {
+        setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spell};
+        a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed new book safe study");
+        b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Use && b.slot==0,"oracle failed new book safe study");
+        game.ground[0]={game.player,{SPELLBOOK,spell}};
+        b=oracle.choose_pickup({game,0,0}); check(b.kind!=ActionKind::Take,"oracle collected a carried duplicate spellbook");
+    }
+}
 int main() {
-    try { magic_observations(); prolonged_visible_combat(); consumable_observations(); potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
+    try { expansion_agents(); magic_observations(); prolonged_visible_combat(); consumable_observations(); potion_capacity_boundary(); noninterference(); perception_and_memory(); identification_and_mapping(); navigation_and_tactics(); stationary_contact_detour(); invisible_contact_checks(); hazard_navigation(); controlled_roundtrip(); replay(); parameters_and_messages(); competence();
         std::cout<<checks<<" explorer checks passed; policy bytes="<<sizeof(ExplorerAgent)<<'\n'; return 0;
     } catch(const std::exception& e) { std::cerr<<"explorer check failed: "<<e.what()<<'\n'; return 1; }
 }

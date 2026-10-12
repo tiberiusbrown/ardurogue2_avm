@@ -128,6 +128,77 @@ __attribute__((noinline)) static void shockwave() {
         knockback_monster(i, dx, dy, 2 + roll(2));
     }
 }
+const LightningProfile PROGMEM LIGHTNING_SPELL = {5,2,{3,3,0},{3,2,0}};
+const LightningProfile PROGMEM LIGHTNING_WAND = {6,2,{6,4,0},{5,4,0}};
+const LightningProfile PROGMEM LIGHTNING_POWERFUL = {6,3,{10,7,4},{5,4,4}};
+
+__attribute__((noinline)) uint8_t lightning_target(Position origin, uint16_t hit_mask) {
+    static_assert(MONSTERS<=16,"lightning hit mask is too small");
+    uint8_t best=NONE, nearest=3;
+    for(uint8_t i=0;i<MONSTERS;++i) {
+        const Monster& m=game.monsters[i];
+        if(!m.type || (hit_mask & (1u<<i)) || !square_contains(origin,m.pos,2)) continue;
+        uint8_t dx=m.pos.x>origin.x ? m.pos.x-origin.x : origin.x-m.pos.x;
+        uint8_t dy=m.pos.y>origin.y ? m.pos.y-origin.y : origin.y-m.pos.y;
+        uint8_t distance=dx>dy ? dx : dy;
+        if(distance>=nearest || !player_can_see_monster(i) || !can_see(m.pos) || !line_of_effect(origin,m.pos)) continue;
+        best=i; nearest=distance; // Ascending slots provide deterministic ties.
+    }
+    return best;
+}
+// Scratch is transient, shared by sequential activations; callbacks do not cast.
+static struct { Position origin; uint8_t target; } lightning_state;
+__attribute__((noinline)) static void lightning_start(int8_t dx,int8_t dy,uint8_t range) {
+    RayResult ray=scan_ray(game.player,dx,dy,range);
+    animate_lightning(game.player,ray.end);
+    lightning_state={ray.end,ray.monster};
+}
+__attribute__((noinline)) static void lightning_hit(uint8_t minimum,uint8_t spread,uint8_t jump) {
+    uint8_t hit=lightning_state.target;
+    SIM_EVENT(sim::EventKind::PlayerAttack,hit,game.monsters[hit].type);
+    (void)jump;
+    uint8_t damage=minimum+roll(spread);
+    SIM_EVENT(sim::EventKind::LightningDamage,hit,game.monsters[hit].type,damage<game.monsters[hit].hp ? damage : game.monsters[hit].hp,jump);
+    damage_monster(hit,damage,true);
+    if(game.monsters[hit].type) monster_status(game.monsters[hit],F("is struck!"));
+}
+__attribute__((noinline)) void lightning_ray(int8_t dx,int8_t dy,const LightningProfile PROGMEM* profile,uint16_t& hit_mask) {
+    lightning_start(dx,dy,profile->range);
+    uint8_t hit=lightning_state.target;
+    if(hit==NONE || (hit_mask & (1u<<hit))) return;
+    for(uint8_t jump=0;jump<profile->targets && !session.ended;++jump) {
+        hit_mask |= uint16_t(1u<<lightning_state.target);
+        // Origin survives death of the target; never retain Monster references.
+        lightning_state.origin=game.monsters[lightning_state.target].pos;
+        lightning_hit(profile->minimum[jump],profile->spread[jump],jump);
+        if(jump+1>=profile->targets) break;
+        hit=lightning_target(lightning_state.origin,hit_mask);
+        if(hit==NONE) break;
+        animate_lightning(lightning_state.origin,game.monsters[hit].pos);
+        lightning_state.target=hit;
+    }
+}
+__attribute__((noinline)) static void fireburst(int8_t dx,int8_t dy) {
+    RayResult ray=scan_ray(game.player,dx,dy,5);
+    animate_ray(game.player,dx,dy,ray.steps);
+    animate_fire_burst(ray.end);
+    fire_burst_damage(ray.end,true,1,3,4);
+}
+__attribute__((noinline)) static void phase_step(int8_t dx,int8_t dy) {
+    Position destination=game.player;
+    uint8_t chosen=0;
+    for(uint8_t step=1;step<=3;++step) {
+        int16_t x=int16_t(game.player.x)+step*dx, y=int16_t(game.player.y)+step*dy;
+        if(blocked(x,y)) break;
+        Position pos{static_cast<uint8_t>(x),static_cast<uint8_t>(y)};
+        if(step>=2 && monster_at(pos)==NONE) { destination=pos; chosen=step; }
+    }
+    SIM_EVENT(sim::EventKind::SpellDisplacement,NONE,PHASE_STEP,chosen);
+    if(!chosen) { status(F("There is nowhere to phase.")); return; }
+    game.player=destination; session.forced_entry=true;
+    status(F("You phase forward!"));
+}
+
 static struct { Position origin; uint8_t remaining,hits; } ray_state;
 __attribute__((noinline)) static uint8_t spell_ray_target(int8_t dx,int8_t dy) {
     RayResult ray=scan_ray(ray_state.origin,dx,dy,ray_state.remaining);
@@ -136,7 +207,7 @@ __attribute__((noinline)) static uint8_t spell_ray_target(int8_t dx,int8_t dy) {
     return ray.monster;
 }
 __attribute__((noinline)) static void spell_ray(uint8_t spell, int8_t dx, int8_t dy) {
-    ray_state = {game.player, 5, 0};
+    ray_state = {game.player, uint8_t(spell == SLUMBER ? 4 : 5), 0};
     do {
         uint8_t hit = spell_ray_target(dx, dy);
         if(hit == NONE) { if(!ray_state.hits) status(F("Nothing happens.")); break; }
@@ -144,11 +215,17 @@ __attribute__((noinline)) static void spell_ray(uint8_t spell, int8_t dx, int8_t
         SIM_EVENT(sim::EventKind::PlayerAttack, hit, game.monsters[hit].type);
         ++ray_state.hits;
         switch(spell) {
-        case MAGIC_DART: case PIERCING_BOLT:
+        case MAGIC_DART: case PIERCING_BOLT: case BLOOD_BOLT:
             // The ordinary wand magic path has no monster resistance stat.
-            damage_monster(hit, (spell == MAGIC_DART ? 2 : 3) + roll(3), true);
+            damage_monster(hit, (spell == MAGIC_DART ? 2 : spell == BLOOD_BOLT ? 6 : 3) + roll(spell == BLOOD_BOLT ? 4 : 3), true);
             if(game.monsters[hit].type) monster_status(game.monsters[hit], F("is struck!"));
             break;
+        case SLUMBER: {
+            uint8_t duration=3+roll(2);
+            if(game.monsters[hit].stun<duration) game.monsters[hit].stun=duration;
+            SIM_EVENT(sim::EventKind::SpellDisabled,hit,SLUMBER,duration);
+            monster_status(game.monsters[hit],F("falls asleep!")); break;
+        }
         case FROSTBIND: case CONFOUND:
             set_monster_effect(game.monsters[hit], spell == FROSTBIND ? MON_SLOWED : MON_CONFUSED, 4 + roll(3));
             monster_status(game.monsters[hit], spell == FROSTBIND ? F("slows down!") : F("looks confused!")); break;
@@ -198,7 +275,18 @@ __attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, u
 #if defined(ARDUROGUE2_SIM)
         sim::DamageScope source(sim::Cause::Spell, spell);
 #endif
-        if(spell_directional(spell)) spell_ray(spell,dx,dy);
+        if(spell_hp_cost(spell)) {
+            // hurt_player is the raw HP/lifecycle primitive. It applies no armor,
+            // MR, bonuses or fire mitigation and consumes Phoenix Heart normally.
+            SIM_EVENT(sim::EventKind::HealthSacrificed,NONE,spell,game.hp<spell_hp_cost(spell) ? game.hp : spell_hp_cost(spell));
+            hurt_player(spell_hp_cost(spell));
+            if(session.ended) { SIM_EVENT(sim::EventKind::BloodDeath,NONE,spell); return true; }
+            status(F("You sacrifice 3 HP!"));
+        }
+        if(spell == FIREBURST) fireburst(dx,dy);
+        else if(spell == PHASE_STEP) phase_step(dx,dy);
+        else if(spell == CHAIN_LIGHTNING) { uint16_t hit_mask=0; lightning_ray(dx,dy,&LIGHTNING_SPELL,hit_mask); }
+        else if(spell_directional(spell)) spell_ray(spell,dx,dy);
         else switch(spell) {
         case BLINK: blink(); break; case SHOCKWAVE: shockwave(); break;
         case EXCHANGE: exchange(target); break; case SENSE_TRAPS: sense_traps(); break;
@@ -209,6 +297,24 @@ __attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, u
     return true;
 }
 
+// Explicit weighted pools share the metadata; no ordinal category tests.
+static uint8_t book_from_pool(uint16_t draw,bool basic,bool expanded) {
+    uint8_t total=0;
+    for(uint8_t s=0;s<SPELL_COUNT;++s) {
+        auto def=spell_definition(s);
+        if(!def.weight || (!expanded && expansion_spell(s)) || (def.category==SpellCategory::Basic)!=basic) continue;
+        total+=expanded ? def.weight : 1;
+    }
+    uint8_t pick=draw%total;
+    for(uint8_t s=0;s<SPELL_COUNT;++s) {
+        auto def=spell_definition(s);
+        if(!def.weight || (!expanded && expansion_spell(s)) || (def.category==SpellCategory::Basic)!=basic) continue;
+        uint8_t weight=expanded ? def.weight : 1;
+        if(pick<weight) return s;
+        pick-=weight;
+    }
+    return FROSTBIND;
+}
 void generate_spellbooks() {
     if(game.has_amulet || game.floor == 4 || !BALANCE_VALUE("magic", 1)) return;
     uint16_t seed = static_cast<uint16_t>(game.run_seed ^ ((game.floor + 1u) * 0x6badu));
@@ -216,8 +322,9 @@ void generate_spellbooks() {
         uint8_t type = ground.item.type;
         if(!type || is_artifact(type) || type == YENDOR_AMULET || type == FOOD || is_ammo(type) || is_light(type)) continue;
         if(next_random(seed) % 100 >= BALANCE_VALUE("spellbook-percent", 6)) continue;
-        uint8_t simple = static_cast<uint8_t>(1 + next_random(seed) % 4);
-        uint8_t advanced = static_cast<uint8_t>(BLINK + next_random(seed) % (SPELL_COUNT - BLINK));
+        bool expanded=BALANCE_VALUE("expanded-spells",1);
+        uint8_t simple = book_from_pool(next_random(seed),true,expanded);
+        uint8_t advanced = book_from_pool(next_random(seed),false,expanded);
         uint8_t depth = game.floor + BALANCE_VALUE("spellbook-depth-bias", 3);
         uint8_t spell = next_random(seed) % 16 >= depth ? simple : advanced;
         ground.item = {SPELLBOOK, spell};

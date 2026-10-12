@@ -130,7 +130,15 @@ using namespace rogue;
     X(magic_cleanse, "Cleanse blindness and restore sight", spell, A, room, NO_ITEM, 0, 0) \
     X(magic_sense, "Sense nearby traps on full map", spell, A, room, NO_ITEM, 0, 0) \
     X(study_turn, "One real spellbook study turn and rune redraw", study, A, room, NO_ITEM, 0, 0) \
-    X(study_interrupt, "Study interrupted by potion sight expiration", study, A, room, NO_ITEM, 0, 0)
+    X(study_interrupt, "Study interrupted by potion sight expiration", study, A, room, NO_ITEM, 0, 0) \
+    X(magic_fireburst, "Fireburst cluster and player self damage", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_phase, "Phase Step onto an active hidden spike trap", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_chain, "Chain Lightning with two targets", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_slumber, "Slumber disables dangerous target", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(magic_blood, "Blood Bolt health sacrifice and damage", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
+    X(wand_lightning, "Normal lightning wand with two targets", wand, RIGHT, room, WAND_LIGHTNING, 2, 0) \
+    X(wand_lightning_powerful, "Powerful lightning wand with three targets", wand, RIGHT, room, WAND_LIGHTNING, 2, 0) \
+    X(wand_lightning_overpowered, "Overpowered spreading lightning in dense group", use, A, room, WAND_LIGHTNING, 2, 0)
 
 
 namespace {
@@ -508,6 +516,33 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         if(spell==EXCHANGE) game.features[0]={{33,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
         if(spell==SENSE_TRAPS) game.features[0]={{35,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
         if(spell==CLEANSE) game.blindness=10;
+        break;
+    }
+    case Case::magic_fireburst: case Case::magic_phase: case Case::magic_chain:
+    case Case::magic_slumber: case Case::magic_blood: {
+        uint8_t spell=scenario==Case::magic_fireburst ? FIREBURST : scenario==Case::magic_phase ? PHASE_STEP :
+            scenario==Case::magic_chain ? CHAIN_LIGHTNING : scenario==Case::magic_slumber ? SLUMBER : BLOOD_BOLT;
+        game.known_spells=spell_bit(spell); game.mana=16;
+        if(spell!=PHASE_STEP) add_monster(0,{33,16},GOBLIN,100);
+        if(spell==FIREBURST || spell==CHAIN_LIGHTNING) add_monster(1,{34,17},GOBLIN,100);
+        if(spell==PHASE_STEP) game.features[0]={{35,16},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
+        for(auto& m:game.monsters) if(m.type) m.stun=15;
+        if(spell==SLUMBER) game.monsters[0].stun=0;
+        break;
+    }
+    case Case::wand_lightning: case Case::wand_lightning_powerful: case Case::wand_lightning_overpowered: {
+        set_wand_modifier(game.inventory[0],scenario==Case::wand_lightning ? WAND_NORMAL :
+            scenario==Case::wand_lightning_powerful ? WAND_POWERFUL : WAND_OVERPOWERED);
+        game.inventory[15]={GLOWING_ORB,0}; game.offhand_slot=15;
+        game.inventory[14]={AMULET_BRILLIANCE,uint8_t(1|ITEM_IDENTIFIED)}; game.amulet_slot=14;
+        if(scenario==Case::wand_lightning_overpowered) {
+            const Position group[]={{32,14},{33,14},{34,15},{34,16},{34,17},{33,18},{32,18},{31,18},{30,17},{30,16},{30,15},{31,14}};
+            for(uint8_t i=0;i<MONSTERS;++i) add_monster(i,group[i],GOBLIN,100);
+        } else {
+            add_monster(0,{34,16},GOBLIN,100); add_monster(1,{35,17},GOBLIN,100);
+            if(scenario==Case::wand_lightning_powerful) add_monster(2,{36,18},GOBLIN,100);
+        }
+        for(auto& m:game.monsters) if(m.type) m.stun=15;
         break;
     }
     case Case::study_turn: case Case::study_interrupt:

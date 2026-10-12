@@ -33,7 +33,7 @@ int identity_group(ItemCategory c) {
 }
 SeenItem describe(Item i, bool detailed) {
     SeenItem s; s.category=category(i.type);
-    if(i.type==SPELLBOOK) { s.type=SPELLBOOK; s.spell=i.info; s.individual=true; s.quantity=1; return s; }
+    if(i.type==SPELLBOOK && detailed) { s.type=SPELLBOOK; s.spell=i.info; s.individual=true; s.quantity=1; return s; }
     if(s.category==ItemCategory::None || !detailed) return s; // Empty slots carry no details; sprites communicate category only.
     bool shuffled=is_potion(i.type)||is_scroll(i.type)||is_ring(i.type)||is_amulet(i.type)||is_wand(i.type);
     s.type=shuffled && !item_type_identified(i.type) ? uint8_t(NO_ITEM) : i.type;

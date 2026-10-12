@@ -23,8 +23,54 @@ ExplorerAction use(int s,const char* goal,int target=255) {
 ExplorerAction move(int d,const char* goal,SeenPosition target={}) {
     ExplorerAction a; a.kind=ExplorerActionKind::Move; a.dx=dxs[d]; a.dy=dys[d]; a.goal=goal; a.destination=target; return a;
 }
+bool observed_effect_clear(const ExplorerFloor& f,SeenPosition from,SeenPosition to) {
+    int x=from.x,y=from.y,dx=std::abs(int(to.x)-x),dy=std::abs(int(to.y)-y),ix=0,iy=0;
+    int sx=x<to.x ? 1 : -1,sy=y<to.y ? 1 : -1;
+    auto clear=[&](int a,int b) { return inside(a,b) && passable(f.tiles[b*EXPLORER_W+a].terrain) && f.tiles[b*EXPLORER_W+a].terrain!=Terrain::ClosedDoor; };
+    while(ix<dx || iy<dy) {
+        int a=(1+2*ix)*dy,b=(1+2*iy)*dx;
+        if(a==b) { if(!clear(x+sx,y) || !clear(x,y+sy)) return false; x+=sx; y+=sy; ++ix; ++iy; }
+        else if(a<b) { x+=sx; ++ix; } else { y+=sy; ++iy; }
+        if(!clear(x,y)) return false;
+    }
+    return true;
+}
+int observed_lightning_target(const ExplorerObservation& o,const ExplorerFloor& f,SeenPosition origin,uint16_t mask) {
+    int best=-1,nearest=3;
+    for(int i=0;i<o.monster_count;++i) {
+        if(mask&(1u<<i)) continue;
+        auto p=o.monsters[i].pos; int r=std::max(std::abs(int(p.x)-origin.x),std::abs(int(p.y)-origin.y));
+        if(r>=nearest || !observed_effect_clear(f,origin,p)) continue;
+        best=i; nearest=r;
+    }
+    return best;
+}
+bool observed_fire_immune(const ExplorerObservation& o) {
+    if(o.fire_resistance) return true;
+    int slot=o.equipped[1];
+    return slot<o.inventory_capacity && o.inventory[slot].type==DRAGONHIDE && o.inventory[slot].individual && !o.inventory[slot].cursed;
+}
+int observed_lightning_hits(const ExplorerObservation& o,const ExplorerFloor& f,const SeenItem& wand,int d) {
+    uint16_t mask=0;
+    bool spread=wand.modifier==WAND_SPREADING || wand.modifier==WAND_OVERPOWERED;
+    int targets=wand.modifier==WAND_POWERFUL || wand.modifier==WAND_OVERPOWERED ? 3 : 2;
+    for(int ray=0;ray<(spread ? 4 : 1);++ray) {
+        int direction=spread ? ray : d,hit=-1;
+        for(int step=1;step<=6 && hit<0;++step) {
+            SeenPosition p{uint8_t(o.player.x+step*dxs[direction]),uint8_t(o.player.y+step*dys[direction])};
+            if(!inside(p.x,p.y) || !passable(f.tiles[cell(p)].terrain) || f.tiles[cell(p)].terrain==Terrain::ClosedDoor) break;
+            for(int i=0;i<o.monster_count;++i) if(o.monsters[i].pos==p) { hit=i; break; }
+        }
+        if(hit<0 || (mask&(1u<<hit))) continue;
+        for(int n=0;n<targets && hit>=0;++n) {
+            mask|=uint16_t(1u<<hit);
+            hit=observed_lightning_target(o,f,o.monsters[hit].pos,mask);
+        }
+    }
+    int count=0; for(int i=0;i<o.monster_count;++i) count+=(mask>>i)&1; return count;
+}
 ExplorerAction magic_action(const ExplorerObservation& o,const ExplorerFloor& f,const SurvivalRisk& risk,
-                           uint64_t control_until,uint64_t sense_until) {
+                           uint64_t control_until,uint64_t sense_until,uint64_t blood_until) {
     auto available=[&](uint8_t s) { return (o.known_spells & spell_bit(s)) && o.mana>=spell_cost(s); };
     auto cast=[&](uint8_t s,int d=-1,uint8_t handle=255) {
         ExplorerAction a; a.kind=ExplorerActionKind::Cast; a.slot=s; a.target=handle;
@@ -58,6 +104,22 @@ ExplorerAction magic_action(const ExplorerObservation& o,const ExplorerFloor& f,
             if(nearby<adjacent) return cast(EXCHANGE,-1,o.monsters[m].handle);
         }
     }
+    if((urgent || (threatened && risk.two>o.hp/3)) && available(PHASE_STEP)) {
+        auto nearby=[&](SeenPosition p) { int n=0; for(int m=0;m<o.monster_count;++m) if(std::max(std::abs(int(p.x)-o.monsters[m].pos.x),std::abs(int(p.y)-o.monsters[m].pos.y))<=2) ++n; return n; };
+        int current=nearby(o.player),walk=current;
+        for(int d=0;d<4;++d) { SeenPosition p{uint8_t(o.player.x+dxs[d]),uint8_t(o.player.y+dys[d])}; if(clear(p)) walk=std::min(walk,nearby(p)); }
+        for(int d=0;d<4;++d) {
+            SeenPosition dest; bool option=false;
+            for(int step=1;step<=3;++step) {
+                SeenPosition p{uint8_t(o.player.x+step*dxs[d]),uint8_t(o.player.y+step*dys[d])};
+                if(!inside(p.x,p.y) || f.tiles[cell(p)].terrain==Terrain::Unknown) { option=false; break; }
+                if(!passable(f.tiles[cell(p)].terrain) || f.tiles[cell(p)].terrain==Terrain::ClosedDoor) break;
+                bool occupied=false; for(int m=0;m<o.monster_count;++m) if(o.monsters[m].pos==p) occupied=true;
+                if(step>=2 && !occupied) { dest=p; option=true; } // Must evaluate actual preferred landing, even if unsafe.
+            }
+            if(option && clear(dest) && nearby(dest)<current && nearby(dest)<walk) return cast(PHASE_STEP,d);
+        }
+    }
     if(urgent && available(BLINK) && (!escapes || risk.two>=o.hp)) {
         bool option=false;
         for(int y=std::max(0,int(o.player.y)-3);y<=std::min(31,int(o.player.y)+3);++y)
@@ -86,6 +148,20 @@ ExplorerAction magic_action(const ExplorerObservation& o,const ExplorerFloor& f,
             if(inside(p.x,p.y) && !occupied && feature_is_trap(f.tiles[cell(p)].feature) &&
                f.tiles[cell(p)].feature!=FEATURE_SUMMONING_TRAP) return cast(REPULSION,d);
         }
+        if(available(FIREBURST) && (observed_fire_immune(o) || first_distance>=2)) {
+            int cluster=0; for(int m=0;m<o.monster_count;++m)
+                if(o.monsters[m].type!=DRAGON && std::max(std::abs(int(o.monsters[m].pos.x)-enemy.pos.x),std::abs(int(o.monsters[m].pos.y)-enemy.pos.y))<=1) ++cluster;
+            if(cluster>=2 && (urgent || o.mana>=spell_cost(FIREBURST)+reserve)) return cast(FIREBURST,d);
+        }
+        if(available(CHAIN_LIGHTNING) && observed_lightning_target(o,f,enemy.pos,uint16_t(1u<<first))>=0 &&
+           (urgent || o.mana>=spell_cost(CHAIN_LIGHTNING)+reserve)) return cast(CHAIN_LIGHTNING,d);
+        if(available(SLUMBER) && first_distance<=4 && o.turns>=control_until &&
+           (urgent || (first_distance<=2 && enemy.strength>=o.strength+2))) return cast(SLUMBER,d);
+        bool emergency_resource=false; for(const auto& i:o.inventory)
+            if(i.type==POTION_HEALING || i.type==POTION_EXTRA_HEALING || i.type==SCROLL_TELEPORT) emergency_resource=true;
+        if(available(BLOOD_BOLT) && o.turns>=blood_until && o.hp>risk.two+15 && o.hp*4>=o.max_hp*3 &&
+           emergency_resource && enemy.strength>=o.strength+2 && enemy.armor>=3 && first_distance>=2 &&
+           (!available(MAGIC_DART) || o.mana>=spell_cost(BLOOD_BOLT)+reserve)) return cast(BLOOD_BOLT,d);
         if(available(PIERCING_BOLT) && hits>=2 && (urgent || o.mana>=spell_cost(PIERCING_BOLT)+std::max<uint8_t>(2,reserve))) return cast(PIERCING_BOLT,d);
         if(o.turns>=control_until && first_distance<=2 && (urgent || enemy.strength>=o.strength+2)) {
             if(available(CONFOUND)) return cast(CONFOUND,d);
@@ -249,7 +325,7 @@ int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const See
     if(i.type==SPELLBOOK) {
         if(i.spell>=SPELL_COUNT || (o.known_spells & spell_bit(i.spell))) return 0;
         for(const auto& own:o.inventory) if(&own!=&i && own.type==SPELLBOOK && own.spell==i.spell && !retention) return 0;
-        int utility=i.spell==BLINK || i.spell==SHOCKWAVE || i.spell==BANISH ? 180 : i.spell==SENSE_TRAPS ? 75 : 120;
+        int utility=i.spell==BLINK || i.spell==SHOCKWAVE || i.spell==BANISH || i.spell==PHASE_STEP || i.spell==SLUMBER ? 180 : i.spell==SENSE_TRAPS ? 75 : 120;
         if(i.spell==PIERCING_BOLT && best_weapon(prefs,o,true)<o.inventory_capacity) utility-=25;
         if(o.hunger<STUDY_HUNGRY && !quantity(o,FOOD)) utility/=3;
         return utility+(o.floor>=6 ? 20 : 0);
@@ -258,7 +334,7 @@ int value(const ExplorerParameters& prefs,const ExplorerObservation& o,const See
         switch(i.category) {
         case ItemCategory::Potion:return prefs.unknown_potion_value; case ItemCategory::Scroll:return prefs.unknown_scroll_value;
         case ItemCategory::Ring:case ItemCategory::Amulet:return 95;
-        case ItemCategory::Wand:return prefs.unknown_wand_value; case ItemCategory::Food:return quantity(o,FOOD)>=prefs.food_stock_target ? 0 : o.hunger<60 ? 180 : 70;
+        case ItemCategory::Wand:return prefs.unknown_wand_value; case ItemCategory::Spellbook:return 100; case ItemCategory::Food:return quantity(o,FOOD)>=prefs.food_stock_target ? 0 : o.hunger<60 ? 180 : 70;
         case ItemCategory::Light: {
             int reserve=0;
             for(auto own:o.inventory) if(is_light(own.type)) reserve+=own.type==GLOWING_ORB ? 10000 : own.quantity*fuel_denominator(own.type);
@@ -475,7 +551,7 @@ SurvivalRisk estimate_risk(const ExplorerObservation& o,const ExplorerFloor& f,c
     return r;
 }
 void ExplorerAgent::reset() {
-    study_defer_until=magic_control_until=trap_sense_until=0; previous_study=255;
+    study_defer_until=magic_control_until=trap_sense_until=blood_until=0; previous_study=255;
     for(auto& f:floors) { f.tiles.fill({}); f.enemies.fill({}); f.up=f.down={}; f.visited=false; f.ascent_layout=false; }
     identities={}; stats={}; active_floor=255; last_actions=last_turns=UINT64_MAX; last_experiment=last_mass_scroll=0;
     last_position=frontier=last_retreat=shadow={}; shadow_turn=0; probe_direction=0; previous={}; retreat_budget=quiet_turns=stalled=bow_cooldown=0;
@@ -893,9 +969,11 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
         // Incoming status text establishes danger without establishing a bearing.
         // An invisible attacker still warrants combat healing and escape supplies.
         if(o.incoming_attack || (o.attacked && o.reported_attacker)) threats=std::max(1,threats);
-        auto magic=magic_action(o,f,risk,magic_control_until,trap_sense_until);
+        auto magic=magic_action(o,f,risk,magic_control_until,trap_sense_until,blood_until);
         if(magic.kind==ExplorerActionKind::Cast) {
-            if(magic.slot==FROSTBIND || magic.slot==CONFOUND || magic.slot==REPULSION) magic_control_until=o.turns+8;
+            if(magic.slot==BLOOD_BOLT) blood_until=o.turns+32;
+                if(magic.slot==SLUMBER) magic_control_until=o.turns+3;
+                if(magic.slot==FROSTBIND || magic.slot==CONFOUND || magic.slot==REPULSION) magic_control_until=o.turns+8;
             if(magic.slot==SENSE_TRAPS) trap_sense_until=o.turns+96;
             return magic;
         }
@@ -1153,14 +1231,17 @@ ExplorerAction ExplorerAgent::choose_action(const ExplorerObservation& incoming)
                     bool known=i.type!=0;
                     if(!stalemate && range<(known ? prefs.known_wand_experiment_range : prefs.unknown_wand_experiment_range)) continue;
                     if((!known || i.type==WAND_FIRE) && (adjacent>=0 || range<3)) continue;
+                    if(i.type==WAND_LIGHTNING && o.hp<=12+risk.two) continue;
                     if(i.type==WAND_DIGGING || (i.type==WAND_POLYMORPH && (!emergency || monster.type==LORD)) ||
                         ((i.type==WAND_TELEPORT || i.type==WAND_FORCE) && !emergency)) continue;
                     last_experiment=o.turns; ExplorerAction a; a.kind=ExplorerActionKind::Wand; a.slot=uint8_t(s);
                     a.dx=dxs[d]; a.dy=dys[d]; a.goal="test unexamined wand against observed distant enemy"; a.destination=monster.pos; return a;
                 }
             }
-            for(int t:{POTION_PARALYSIS,POTION_CONFUSION,POTION_BLINDNESS,POTION_SLOWING,POTION_POISON,WAND_ICE,WAND_STRIKING,WAND_FIRE,POTION_HARMING,POTION_FIRE,WAND_TELEPORT,WAND_FORCE,WAND_POLYMORPH}) {
-                int s=find(o,t); if(s<0 || !danger) continue;
+            for(int t:{POTION_PARALYSIS,POTION_CONFUSION,POTION_BLINDNESS,POTION_SLOWING,POTION_POISON,WAND_LIGHTNING,WAND_ICE,WAND_STRIKING,WAND_FIRE,POTION_HARMING,POTION_FIRE,WAND_TELEPORT,WAND_FORCE,WAND_POLYMORPH}) {
+                int s=find(o,t); if(s<0) continue;
+                bool lightning_group=t==WAND_LIGHTNING && observed_lightning_hits(o,f,o.inventory[s],d)>=2;
+                if(!danger && !lightning_group) continue;
                 auto i=o.inventory[s];
                 if(is_wand(t) && (!i.individual || !i.quantity || i.modifier==WAND_CURSED || i.modifier==WAND_UNRELIABLE)) continue;
                 if((t==WAND_FIRE || t==POTION_FIRE) && (monster.type==DRAGON || !fire_safe(o,i,monster.pos))) continue;

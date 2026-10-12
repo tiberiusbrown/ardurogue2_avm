@@ -48,16 +48,16 @@ Arrows use all eight info bits as unsigned quantity
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 30 stores one active floor in an 844-byte AVM `Game`. Generation
+Save version 31 stores one active floor in an 844-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 29 and older saves are incompatible; no migration is attempted.
+Version 30 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
 subtypes with independent enchantment and curse rolls. The former attack and
 cached defense fields store strength and magic resistance.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed
-instead of storing mapping arrays. Eight bytes track discoveries across 62
+instead of storing mapping arrays. Eight bytes track discoveries across 63
 identifiable types. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
 
@@ -77,7 +77,7 @@ torment, confusion, or poison. Reading a scroll reveals its type. Each run
 randomly assigns unknown scroll descriptions, and scrolls of the same type
 stack in inventory.
 
-Every character starts with Magic Dart and 6/6 MP. Learn ten other spells from
+Every character starts with Magic Dart and 6/6 MP. Learn fifteen other spells from
 explicitly named, nonstacking spellbooks through 40–80 ordinary turns of study.
 Prepare food and light, choose a quiet location, and press B to cancel between
 animated study updates. Any gameplay message interrupts learning and keeps the
@@ -113,16 +113,20 @@ The player has a base speed of 4. Enemy speed values are turn costs, as in
 ArduRogue: lower values act more often. Slowing doubles an enemy's turn cost;
 a slowed player gives enemies more turns.
 
-The seven wands are force, teleportation, digging, fire, striking, ice, and
-polymorph. Each type has a permuted unknown appearance (long, short, slender,
-thick, twisted, curved, or glossy). Using or identifying a wand reveals that
+The eight wands are force, teleportation, digging, fire, striking, ice, polymorph, and lightning. Each type has a permuted unknown appearance (long, short, slender,
+thick, twisted, curved, glossy, or forked). Using or identifying a wand reveals that
 appearance's type for the run. Every individual wand also has one modifier:
 normal, cursed, unreliable, spreading, powerful, or overpowered. Its modifier
 and exact charges remain unknown until that specific wand is used or identified,
 even when its type is already known. A wand starts with 3–10 charges, never
 stacks, and crumbles after its last charge. Enchanting adds four charges, up to
 15. Remove Curse changes cursed and unreliable wands to normal without
-identifying them. Wands appear only during descent.
+identifying them. Wands appear only during descent. Lightning fires a range-6
+ray for 6–10 magic damage and one visible nearby arc for 4–7. Powerful increases
+those rolls to 10–14 and 7–10, then adds a 4–7 third hit. Spreading fires in
+N/E/S/W order with one activation-wide hit mask; overpowered combines both.
+Cursed lightning inflicts 8–12 player magic damage and no monster attack;
+unreliable chooses a random cardinal bearing. See the [expansion report](docs/MAGIC-EXPANSION-RESULTS.md).
 
 Choose **Use Item** and select a wand. Normal and powerful wands ask for a
 direction; B cancels without spending a charge or turn. Cursed wands immediately
@@ -457,5 +461,13 @@ monsters, and four-byte ground items. The magic build has a complete
 247-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM
 stack. Future changes must continue checking the linker report. Rendering
 reuses transient row scratch outside the saved layout and preserves explored
-terrain separately from current sight. See the [magic implementation report](docs/SPELLS-RESULTS.md)
+terrain separately from current sight. See the [magic expansion report](docs/MAGIC-EXPANSION-RESULTS.md)
 for RAM, flash, final-ELF benchmarks and paired balance validation.
+
+
+The learned magic roster now contains sixteen spells. Fireburst, Phase Step,
+Chain Lightning, Slumber and Blood Bolt append IDs 11–15; the original eleven
+retain their costs and mechanics. Blood Bolt explicitly costs 3 MP and 3 current
+HP and can kill its caster. The [spell guide](docs/SPELLS.md) contains all exact
+effects, study durations and generation weights. Save version 31 rejects older
+raw item IDs after inserting Wand of Lightning; the saved Game remains 844 bytes.

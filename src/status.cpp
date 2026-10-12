@@ -219,7 +219,7 @@ static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
 };
 static const char PROGMEM* const PROGMEM wand_names[] = {
     F("force"), F("teleportation"), F("digging"), F("fire"),
-    F("striking"), F("ice"), F("polymorph")
+    F("striking"), F("ice"), F("polymorph"), F("lightning")
 };
 static const char PROGMEM* const PROGMEM wand_modifier_names[] = {
     F(""), F("cursed"), F("unreliable"), F("spreading"),
@@ -227,7 +227,7 @@ static const char PROGMEM* const PROGMEM wand_modifier_names[] = {
 };
 static const char PROGMEM* const PROGMEM wand_descriptors[] = {
     F("long"), F("short"), F("slender"), F("thick"),
-    F("twisted"), F("curved"), F("glossy")
+    F("twisted"), F("curved"), F("glossy"), F("forked")
 };
 
 static_assert(sizeof(potion_effect_names) / sizeof(*potion_effect_names) == POTION_COUNT &&
@@ -239,6 +239,10 @@ static_assert(sizeof(ring_names) / sizeof(*ring_names) == RING_COUNT &&
               sizeof(jewel_descriptors) / sizeof(*jewel_descriptors) >= RING_COUNT &&
               sizeof(jewel_descriptors) / sizeof(*jewel_descriptors) >= AMULET_COUNT,
               "jewelry naming tables too small");
+
+static_assert(sizeof(wand_names)/sizeof(*wand_names) == WAND_COUNT &&
+              sizeof(wand_descriptors)/sizeof(*wand_descriptors) == WAND_COUNT,
+              "wand naming tables changed");
 
 const char PROGMEM* ring_name(uint8_t type)
 {

@@ -113,7 +113,7 @@ Existing files changed: root `README.md` links these instructions; root
 `CMakeLists.txt` adds the host-only subdirectory
 and the production hook-header build dependency; `src/state.cpp`,
 `src/combat.cpp`, `src/items.cpp`, `src/world_gen.cpp` gain gated hooks.
-Instrumentation adds no saved fields. Current gameplay uses save version 30 and
+Instrumentation adds no saved fields. Current gameplay uses save version 31 and
 an 844-byte AVM `Game`; magic appends three bytes to the earlier consumables
 layout. See [the magic guide](../docs/SPELLS.md) and [the consumables guide](../docs/CONSUMABLES.md).
 
@@ -459,7 +459,7 @@ current results and [seed ledger](../docs/EXPLORER_SEED_LEDGER.json). Explorer
 protocol 3 supplies anonymous incoming feedback without hidden species or
 bearing. There are 103 preferences; tuning rewards escapes, Yendor, Lord kills,
 progression, fewer actions, then score. Core telemetry is version 7 and
-exploration telemetry is version 6 and survival telemetry is version 1. `OBS` trace lines are policy observations;
+exploration telemetry is version 6 and survival telemetry is version 2. `OBS` trace lines are policy observations;
 other trace lines remain privileged reporting and never feed decisions.
 
 Monster awareness is now the engine default. `--intervention legacy-awareness`
@@ -499,3 +499,30 @@ to zero in a complete parameter JSON for the contact-aware baseline. Binary
 feature switches remain excluded from parameter mutation. See the
 [implementation and measured results](../docs/EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md)
 for encounter segmentation, counting conventions, seed usage and limitations.
+
+
+## Sixteen-spell expansion controls
+
+Observation protocol 7 fixes remote spellbook parity. Core CSV schema 10 adds
+item damage/kills and direct/chained damage. `spells.csv` appends direct/chained
+damage, disabled monsters, rolled stun actions, HP paid and Blood Bolt self-deaths.
+Damage remains attributed separately to spell IDs and item types. Full Slumber
+duration is counted before the immediate enemy response ages stun. Phase Step
+records chosen teleport distance in ordinary spell displacement counters.
+
+Use one executable and unchanged agent policies for these paired conditions:
+
+| Condition | `balance:expanded-spells` | `balance:lightning-wand-percent` |
+| --- | ---: | ---: |
+| Original magic | 0 | 0 |
+| New spells | 1 | 0 |
+| New wand | 0 | 12 |
+| Combined | 1 | 12 |
+
+Pass each setting through `--intervention balance:NAME=VALUE`. Spellbook locations
+and the 6% replacement rate stay fixed; only spell identity pools differ. Wand
+slots keep location, modifier and charges; lightning changes only type via an
+isolated draw. With both controls zero, original spell-selection draws and
+ordinary supply generation are retained. `sim/balance.py compare` validates
+policy identities and pairs effective seeds; `sim/spell_report.py` supplies study
+and resource diagnostics. See [the expansion report](../docs/MAGIC-EXPANSION-RESULTS.md).

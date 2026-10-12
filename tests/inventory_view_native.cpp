@@ -23,7 +23,7 @@ int main()
     for(uint16_t sample = 0; sample < 256; ++sample) {
         for(Item& item : source.inventory) {
             random = random * 1664525u + 1013904223u;
-            item = {static_cast<uint8_t>((random >> 16) % (WAND_POLYMORPH + 1)), 1};
+            item = {static_cast<uint8_t>((random >> 16) % (WAND_LAST + 1)), 1};
             if(sample == 0) item.type = NO_ITEM;
             if(sample == 1) item.type = WAND_FORCE;
             if(sample % 3 == 0 && (random & 1)) item.type = NO_ITEM;

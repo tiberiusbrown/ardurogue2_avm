@@ -4,37 +4,26 @@
 namespace rogue {
 inline const char PROGMEM* spell_name(uint8_t spell) {
     switch(spell) {
-    case MAGIC_DART: return F("Magic Dart");
-    case FROSTBIND: return F("Frostbind");
-    case REPULSION: return F("Repulsion");
-    case CONFOUND: return F("Confound");
-    case SENSE_TRAPS: return F("Sense Traps");
-    case BLINK: return F("Blink");
-    case SHOCKWAVE: return F("Shockwave");
-    case PIERCING_BOLT: return F("Piercing Bolt");
-    case BANISH: return F("Banish");
-    case EXCHANGE: return F("Exchange");
-    case CLEANSE: return F("Cleanse");
+#define SPELL_NAME(id, name, mp, hp, turns, target, category, weight, desc) case id: return F(name);
+    SPELL_DEFINITIONS(SPELL_NAME)
+#undef SPELL_NAME
     default: return F("Unknown");
     }
 }
 inline bool studying() { return session.study_slot != NONE; }
 inline const char PROGMEM* spell_description(uint8_t spell) {
     switch(spell) {
-    case MAGIC_DART: return F("Range 5. First hit takes 2-4 magic damage.");
-    case FROSTBIND: return F("Range 5. Slow the first hit for 4-6 turns.");
-    case REPULSION: return F("Range 5. Push the first hit 1-2 tiles.");
-    case CONFOUND: return F("Range 5. Confuse the first hit for 4-6 turns.");
-    case SENSE_TRAPS: return F("Reveal traps within radius 4; leave them active.");
-    case BLINK: return F("Random teleport within radius 3, through walls.");
-    case SHOCKWAVE: return F("Push adjacent monsters outward 2-3 tiles.");
-    case PIERCING_BOLT: return F("Range 5. First two hits take 3-5 damage each.");
-    case BANISH: return F("Range 5. Teleport the first hit elsewhere.");
-    case EXCHANGE: return F("Swap with a visible monster within radius 3.");
-    case CLEANSE: return F("Remove blindness, confusion or slowing; one only.");
+#define SPELL_DESC(id, name, mp, hp, turns, target, category, weight, desc) case id: return F(desc);
+    SPELL_DEFINITIONS(SPELL_DESC)
+#undef SPELL_DESC
     default: return F("Unknown spell.");
     }
 }
+// Flash-resident profiles; the caller owns resources and damage attribution.
+struct LightningProfile { uint8_t range, targets, minimum[3], spread[3]; };
+extern const LightningProfile PROGMEM LIGHTNING_SPELL, LIGHTNING_WAND, LIGHTNING_POWERFUL;
+void lightning_ray(int8_t dx, int8_t dy, const LightningProfile PROGMEM* profile, uint16_t& hit_mask);
+uint8_t lightning_target(Position origin, uint16_t hit_mask);
 // Returns true only for the first genuine output during this study.
 inline bool study_status_output() {
     if(!studying() || session.study_message) return false;

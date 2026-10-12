@@ -8,7 +8,7 @@ void require(bool, const char*);
 
 void check_monster_awareness()
 {
-    static_assert(sizeof(Monster)==8 && offsetof(Game,see_invisible)==813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==30);
+    static_assert(sizeof(Monster)==8 && offsetof(Game,see_invisible)==813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==31);
     game={}; session={}; game.valid=1; game.version=SAVE_VERSION;
     game.hp=game.max_hp=100; game.hunger=255; game.speed=4;
     game.player={10,10}; game.random_state=123; game.strength=4; game.dexterity=4;

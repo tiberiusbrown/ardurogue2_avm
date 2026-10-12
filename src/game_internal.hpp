@@ -65,6 +65,7 @@ bool summon_adjacent_monster();
 void animate_arrow(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_ray(Position origin, int8_t dx, int8_t dy, uint8_t steps);
 void animate_fire_burst(Position center);
+void animate_lightning(Position from, Position to);
 void animate_spreading_rays(Position origin, const uint8_t steps[4]);
 void animate_fire_bursts(const Position* centers, uint8_t count,
                          bool powerful);

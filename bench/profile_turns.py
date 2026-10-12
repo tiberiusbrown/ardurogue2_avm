@@ -27,7 +27,7 @@ INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("CANDLE", "TOWER_SHIELD", "OFFHANDS"),
                     ("RING_SEE_INVISIBLE", "RING_ILLUMINATION", "RINGS"),
                     ("AMULET_SPEED", "AMULET_BRILLIANCE", "AMULETS"),
-                    ("WAND_FORCE", "WAND_POLYMORPH", "WANDS"),
+                    ("WAND_FORCE", "WAND_LAST", "WANDS"),
                     ("POTION_HEALING", "POTION_FIRE", "POTIONS"),
                     ("SCROLL_IDENTIFY", "SCROLL_DETECT_OBJECTS", "SCROLLS"),
                     ("SPELLBOOK", "SPELLBOOK", "SPELLBOOKS"))
@@ -257,6 +257,12 @@ def validate_outcome(case, before, after, explored):
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
     if case.name.startswith("magic_"):
         require(after["mana"]<before["mana"],"spell did not spend mana")
+    if case.name=="magic_phase": require(after["x"]==before["x"]+3 and after["hp"]<before["hp"],"Phase Step did not land on trap")
+    if case.name=="magic_blood": require(after["hp"]==before["hp"]-3 and after["monster_hp"]<before["monster_hp"],"Blood Bolt sacrifice/effect absent")
+    if case.name=="magic_fireburst": require(after["hp"]<before["hp"] and after["other_hp_1"]<before["other_hp_1"],"Fireburst cluster/self damage absent")
+    if case.name=="magic_chain" or case.name.startswith("wand_lightning"):
+        require(after["monster_hp"]<before["monster_hp"] and after["other_hp_1"]<before["other_hp_1"],"lightning chain absent")
+    if case.name=="wand_lightning_powerful": require(after["other_hp_2"]<before["other_hp_2"],"powerful third target absent")
     if case.name=="magic_shockwave": require(after["monster_x"]>=35,"Shockwave failed multi-tile displacement")
     if case.name=="study_turn": require(after["study_progress"]==before["study_progress"]+1 and after["study_slot"]!=255,"study did not advance once")
     if case.name=="study_interrupt": require(after["study_slot"]==255 and after["study_progress"]==0,"study failed interruption")
@@ -293,6 +299,8 @@ def validate_outcome(case, before, after, explored):
             require((after["monster_x"], after["monster_y"]) != (33,16) and after["monster_hp"] == before["monster_hp"], "monster teleport missing")
         if case.name == "monster_trap_summon":
             require(after["other_type_1"] != 0 and after["monster_hp"] == before["monster_hp"], "monster summons missing")
+    if case.name.startswith("wand_lightning"):
+        require(after["item_type"] == before["item_type"] and (after["item_info"] & 15) == (before["item_info"] & 15)-1,"lightning charge not consumed")
     if case.name.startswith("move_"):
         require(position_after == (before["x"] + 1, before["y"]), "player did not move right")
     if case.name == "attack_hit":
@@ -330,7 +338,7 @@ def validate_outcome(case, before, after, explored):
     if case.name == "blind_recovery": require(after["blindness"] == 0, "blindness failed to expire")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
-    if case.index >= 87 and case.item != "NO_ITEM":
+    if case.index >= 87 and case.item != "NO_ITEM" and not case.item.startswith("WAND_"):
         require(after["item_type"] == 0, "new consumable was not consumed")
     if case.name == "drink_extra_healing":
         require(after["hp"] >= 85 and not after["confused"] and not after["slowed"], "extra healing failed")

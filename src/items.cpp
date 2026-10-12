@@ -1043,6 +1043,10 @@ static void cursed_wand_effect(uint8_t type)
         game.slowed = static_cast<uint8_t>(8 + roll(8));
         player_take_magic_damage(static_cast<uint8_t>(8 + roll(8)), 8);
         break;
+    case WAND_LIGHTNING:
+        status(F("Lightning strikes you!"));
+        player_take_magic_damage(static_cast<uint8_t>(8+roll(5)),8);
+        break;
     case WAND_POLYMORPH:
         status(F("Your form twists!"));
         switch(roll(4)) {
@@ -1175,7 +1179,15 @@ __attribute__((noinline)) static uint16_t apply_wand_effect(uint8_t slot, int8_t
             dx = wand_directions[direction * 2];
             dy = wand_directions[direction * 2 + 1];
         }
-        if(type == WAND_DIGGING) {
+        if(type == WAND_LIGHTNING) {
+            uint16_t hit_mask=0;
+            const LightningProfile PROGMEM* profile=powerful ? &LIGHTNING_POWERFUL : &LIGHTNING_WAND;
+            if(spreading) {
+                for(uint8_t i=0;i<4 && !session.ended;++i)
+                    lightning_ray(wand_directions[i*2],wand_directions[i*2+1],profile,hit_mask);
+            } else lightning_ray(dx,dy,profile,hit_mask);
+            if(!hit_mask) status(F("Nothing happens."));
+        } else if(type == WAND_DIGGING) {
             if(spreading) {
                 for(uint8_t i = 0; i < 4; ++i)
                     dig_ray(wand_directions[i * 2],

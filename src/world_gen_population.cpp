@@ -78,6 +78,14 @@ static uint8_t floor_ring_type(uint16_t& seed)
         RING_ILLUMINATION; // Invisibility now uses the unique artifact schedule.
 }
 
+static uint8_t floor_wand_type(uint16_t& seed)
+{
+    uint8_t original = floor_roll(seed, 7);
+    uint16_t extra_seed = static_cast<uint16_t>(seed ^ 0xa359u);
+    return floor_roll(extra_seed, 100) < BALANCE_VALUE("lightning-wand-percent", 12)
+        ? uint8_t(WAND_LIGHTNING) : uint8_t(WAND_FIRST + original);
+}
+
 static uint8_t floor_amulet_type(uint16_t& seed)
 {
     uint8_t chance = floor_roll(seed, 17);
@@ -342,8 +350,7 @@ __attribute__((noinline)) void populate_ordinary_items(uint16_t seed, uint16_t e
               chance < 48 ? floor_scroll_type(seed) :
               chance < 56 ? floor_weapon_type(equipment_seed) :
               chance < 64 ? floor_armor_type(equipment_seed) :
-              chance < 68 ? static_cast<uint8_t>(WAND_FIRST +
-                                                 floor_roll(seed, WAND_COUNT)) :
+              chance < 68 ? floor_wand_type(seed) :
               chance < 70
                 ? floor_ring_type(seed)
                 : chance < 72 ? floor_amulet_type(seed) :

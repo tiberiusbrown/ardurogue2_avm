@@ -38,7 +38,8 @@ Rule parse_rule(const std::string& text) {
         Rule r; r.balance_parameter=text.substr(8,equal-8); int value=integer(text.substr(equal+1));
         int min=0,max=100;
         auto& n=r.balance_parameter;
-        if(n=="magic") max=1;
+        if(n=="magic" || n=="expanded-spells") max=1;
+        else if(n=="lightning-wand-percent") max=100;
         else if(n=="spellbook-percent") max=100;
         else if(n=="spellbook-depth-bias") max=16;
         else if(n=="new-consumables-percent") max=100;

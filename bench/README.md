@@ -38,11 +38,13 @@ and a gameplay-message interruption). Shockwave captures four adjacent monsters,
 pushes multiple tiles and enters an intermediate trap. Cast confirmation uses the
 actual scrolling action menu and deferred targeting flow. Study benchmarks exclude
 the intentional 90 ms presentation pacing and measure gameplay plus rendering.
-The [magic report](../docs/SPELLS-RESULTS.md) records the final 115-case run.
+The [magic report](../docs/SPELLS-RESULTS.md) records the historical 115-case run.
+The [expansion report](../docs/MAGIC-EXPANSION-RESULTS.md) records the current
+123-case run, including five additional spells and three lightning wand workloads.
 
 ## Run
 
-Build the game and run all 115 cases once:
+Build the game and run all 123 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
@@ -164,7 +166,7 @@ the mapping check reads the explored array using its actual `sizeof`.
   from the top of a scrolled viewport for each of these layouts:
   - A full 16-slot pack with all eleven groups interleaved (27 rows including
     headers), identified equipment and accessories, and long consumable names.
-  - A full 16-slot group containing all seven identified wand types, alternating
+  - A full 16-slot group containing all eight identified wand types, alternating
     overpowered and unreliable modifiers, and 10–15 charges. Scrolled views
     render seven item names rather than spending a row on the group header.
   - All eleven groups with one item each (22 rows). The eleven items occupy the last
@@ -247,3 +249,16 @@ case from 99.299 to 92.773 ms with 81/81 equivalent cases and a complete
 The current suite has 87 cases: the earlier 81, four temporary-sight cases, and `natural_recovery` plus `recovery_dense`. The recovery fixtures start at turn 255 with injured HP, exercise the saved clock wrapping to zero, and run through ordinary input, enemy actions, recovery feedback, and rendering. Native checks verify the quiet fixture restores exactly one HP; the profiler verifies that completed outcome as well.
 
 The natural-regeneration revision passes all 87 cases, with a 92.9854375 ms worst turn, complete 241-byte production and 245-byte benchmark stack bounds, and no new saved bytes. See [the current balance report](../docs/GAME_BALANCE_2_TO_5_PERCENT.md) for selected gameplay, profiles, package measurements and census results.
+
+
+## Magic expansion cases
+
+Eight additional workloads bring the suite to 123: clustered/self-damaging
+Fireburst, Phase Step onto a hidden spike trap, two-target Chain Lightning,
+Slumber, Blood Bolt, normal Lightning, powerful three-target Lightning, and
+overpowered spreading Lightning around twelve monsters. Each uses the actual
+deferred directional or modifier-aware wand UI. Outcome checks assert effects
+and costs as well as the ordinary turn. Deliberate animations are excluded;
+gameplay, status paging and final rendering remain measured. The linker proves
+the complete stack bound for production and benchmark ELFs. Results are in
+[MAGIC-EXPANSION-RESULTS.md](../docs/MAGIC-EXPANSION-RESULTS.md).

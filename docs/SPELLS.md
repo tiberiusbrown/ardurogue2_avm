@@ -23,9 +23,13 @@ player buff timers.
 | Banish | 5 | 60 | Cardinal ray, range 5; teleport the first monster using ordinary monster teleport placement. |
 | Exchange | 5 | 80 | Swap with a selected visible monster within circular radius 3. |
 | Cleanse | 5 | 60 | Remove exactly one condition: blindness, then confusion, then slowing. |
+| Fireburst | 6 | 80 | Range-5 projectile; radius-1 square explosion at first monster or last clear tile, 3–6 fire damage to each monster and the player. Dragons ignore fire; player fire protection and MR apply. |
+| Phase Step | 5 | 60 | Cardinal teleport: prefer exactly 3 tiles, otherwise 2. Cross monsters and intermediate traps, never walls/closed doors/edges; occupied landings are invalid. Destination traps activate normally. |
+| Chain Lightning | 6 | 80 | Range-5 first hit for 3–5 magic damage; one visible secondary within Chebyshev 2 takes 3–4. Clear geometric jump path required, nearest target then lowest slot. Invisible monsters cannot receive secondary arcs; lightning can strike and reveal a disguised mimic. |
+| Slumber | 5 | 60 | Range-4 ray; first monster stunned for 3–4 enemy actions, refreshing to the greater duration. The immediate enemy response consumes a stun action. |
+| Blood Bolt | 3 + **3 HP** | 60 | Range-5 first hit for 6–9 magic damage. Sacrifice current HP before firing, even on a miss; bypasses all mitigation, can kill the caster. Phoenix Heart uses its ordinary resurrection lifecycle. No bolt or enemy turn after final death. |
 
-Names and descriptions are flash strings; costs and durations are compile-time
-definitions. Identify and Remove Curse remain future possibilities, with no
+Names and descriptions are flash strings. A single `SPELL_DEFINITIONS` roster defines IDs, mana/HP costs, study durations, targeting modes and weighted generation categories. IDs 0–10 remain unchanged; IDs 11–15 fill the existing 16-bit known-spell mask. Compile-time checks guard coverage and the two-byte Item layout. Identify and Remove Curse remain future possibilities, with no
 spell IDs or effects implemented. Illumination, Arcane Ward, Stone to Mud,
 Survey and Fetch are absent.
 
@@ -83,13 +87,13 @@ Any nonempty gameplay status word, including number-only output, flags an
 interruption. Attack misses, expiration messages and hunger warnings all count.
 Study drawing bypasses the status stream. The first gameplay word clears the
 study panel; triggering text remains in normal paginated status, followed by
-“Study interrupted.” Progress drawing does not overwrite it. Interruption wins
+“You lose your concentration.” Progress drawing does not overwrite it. Interruption wins
 even on the final required turn. Displacement, death, floor changes, paralysis,
 blindness, confusion and lifecycle transitions also stop study. Progress resets
 to zero; ordinary turns, damage and resource costs remain spent.
 
 Progress is transient session state. Save/exit and resume cancel study while
-retaining the book. MP and known spells persist. Save version 30 rejects older
+retaining the book. MP and known spells persist. Save version 31 rejects older
 versions under the existing no-migration policy.
 
 ## Controls
@@ -108,9 +112,12 @@ shows current/maximum MP, sight radius and temporary See Invisible's `S` marker.
 An isolated stream replaces 6% of eligible nonessential descent loot with books.
 Food, arrows, all lights, artifacts and Yendor are excluded. Loot positions,
 ordinary generation streams and artifact schedules are preserved. No fresh books
-appear on ascent or the special all-phantom floor (zero-based floor 4). Frostbind
-through Sense Traps share the simple pool; Blink through Cleanse share the advanced
-pool. Advanced probability is `min(16, floor + 3) / 16`, starting at 18.75% and
+appear on ascent or the special all-phantom floor (zero-based floor 4). Explicit
+metadata pools replace ordinal ID comparisons. Frostbind, Repulsion, Confound
+and Sense Traps form the basic pool. The deeper pool contains the original six
+other book spells with weight 3 each; Phase Step, Slumber and Blood Bolt have
+weight 2 each; Fireburst and Chain Lightning have weight 1 each. Intermediate
+and advanced categories currently share this deeper pool. Deeper-pool probability is `min(16, floor + 3) / 16`, starting at 18.75% and
 reaching 100% on zero-based floor 13. Magic Dart books are not generated.
 The ordinary early-light guarantee still runs.
 
@@ -120,21 +127,29 @@ attempts are deferred at least 128 simulated turns. Explorer-v1 uses only public
 observations and its own memory: visible monsters, reported attacks, known
 terrain/hazards, public book identities, learned spells/MP and study progress.
 It does not receive hidden positions, traps, timers or monster HP. Its policy
-object compiles without production `Game` declarations. Observation protocol 6
-adds magic and handles for visible Exchange targets.
+object compiles without production `Game` declarations. Observation protocol 7
+withholds a remote spellbook's identity until standing pickup inspection; inventory
+and previously examined names remain public. Exact hidden item identities never
+enter the observation interface.
 
-Policies support all eleven effects: emergency displacement/teleportation,
+Policies support all sixteen effects: emergency displacement/teleportation,
 trap-directed Repulsion, dangerous-monster control, two-target bolts, conservative
 dart attacks, local trap detection and harmful-condition cleansing. Omniscient-v2
 retains its deliberate knowledge advantages while obeying the same actual action,
 resource and study rules. Weapons, modifier wands, area scrolls, healing potions,
-food and light retain distinct roles.
+food and light retain distinct roles. Fireburst requires a useful cluster and
+safe splash. Phase Step evaluates preferred known landings and requires a safer
+position than walking. Lightning predictions use observed monsters and known
+obstructions. Slumber provides emergency single-target control. Blood Bolt
+requires a substantial HP reserve and a healing/escape resource; explorer also
+limits repeated sacrifices with a 32-turn policy cooldown. Oracle uses actual
+remaining enemy HP to identify efficient kills. These are native policy fields,
+not saved gameplay state.
 
 ## Measurements
 
 Build sizes, test results, policy identities, paired outcomes and design risks
-are in [SPELLS-RESULTS.md](SPELLS-RESULTS.md). Raw datasets and AVM profiles belong
+are in [SPELLS-RESULTS.md](SPELLS-RESULTS.md) for the historical eleven-spell system and [MAGIC-EXPANSION-RESULTS.md](MAGIC-EXPANSION-RESULTS.md) for this expansion. Raw datasets and AVM profiles belong
 in ignored `build/`. `sim/spell_report.py` reports spell use, learning cohorts,
 resources, death causes and floor survival from validated datasets. `spells.csv`
-is a separate version-1 sidecar with one row per run/spell; core telemetry remains
-9 and exploration telemetry remains 6.
+has one row per run/spell, including direct/chained lightning damage, Slumber disables and rolled stun actions, HP sacrificed and self-inflicted Blood Bolt deaths. Core telemetry is version 10; observation is 7 and exploration telemetry remains 6.

@@ -63,6 +63,7 @@ void render_inventory(const char*, const InventoryView& view, uint8_t selection,
 void render_yesno_prompt(const char*, const Item*) { restore_play_render(); }
 void render() { ++full_renders; play_render_pending = false; }
 void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
+void animate_lightning(Position, Position) {}
 void animate_ray(Position, int8_t, int8_t, uint8_t) {}
 void animate_fire_burst(Position) {}
 void animate_spreading_rays(Position, const uint8_t[4]) {}
@@ -387,6 +388,12 @@ int main()
     ui.next_repeat_ms=0;
     require(handle_input(AVM_BUTTON_R)==INPUT_STUDY_TURN,"held movement repeatedly paused study");
     handle_input(0); handle_input(AVM_BUTTON_B); require(!studying(),"B failed to cancel between study turns");
+    game.known_spells=0xffff; game.mana=16; session.study_slot=NONE;
+    ui={}; ui.mode=SPELL_MENU; ui.selection=MAGIC_DART;
+    for(uint8_t s=1;s<SPELL_COUNT;++s) { handle_input(AVM_BUTTON_D); handle_input(0); require(ui.selection==s,"16-spell menu skipped/wrapped a spell"); }
+    require(ui.selection==BLOOD_BOLT,"spell menu cannot reach bit 15");
+    unchanged=game; handle_input(AVM_BUTTON_A); handle_input(0); handle_input(AVM_BUTTON_B);
+    require(ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"Blood Bolt cancellation paid HP/MP");
     std::puts("equipment, scroll, wand, inventory, spell and feature UI flow passed");
     return 0;
 }

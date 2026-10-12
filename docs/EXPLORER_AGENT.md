@@ -8,8 +8,8 @@ competence experiments and preserved historical reference are described in
 [the competence and rebalance report](EXPLORER_COMPETENCE_AND_REBALANCE.md).
 Consumable tactics and the earlier protocol-5 measurements are described in
 [the consumables report](CONSUMABLES.md).
-Learned magic extends the same policy with observation protocol 6, spellbook
-valuation, food/light preparation, safe study, interruption deferral and all eleven
+Learned magic extends the same policy with observation protocol 7, spellbook
+valuation, food/light preparation, safe study, interruption deferral and all sixteen
 spell tactics. Mana reserves protect learned escapes. Urgent ray targets may use
 a just-confirmed public melee bearing; anonymous attack counts may justify an
 untargeted Shockwave, without revealing hidden coordinates. See
@@ -81,7 +81,7 @@ It adds cautious route cost; it never supplies a live combat target.
 
 Production regenerates different layouts on ascent. Historical descent
 geometry remains recorded separately, but ascent routes require fresh observed
-terrain. The agent is about 662 KiB of host memory, with no firmware footprint.
+terrain. The agent is about 727 KiB of host memory, with no firmware footprint.
 
 Dijkstra routes traverse known passable cells only, with configurable costs
 for traps and remembered threats. Frontiers score nearby unknown area,
@@ -490,3 +490,25 @@ with the current executable.
 
 See [the hazard, survival diagnostics, and AVM report](EXPLORER_HAZARD_ROUTING_AND_AVM_OPTIMIZATION.md)
 for constructed tests, paired results, exact limitations, and reproducibility.
+
+
+## Magic expansion
+
+Remote book sprites expose category only. Standing on the book opens the normal
+pickup inspection and exposes its public spell name; inventory and remembered
+examined books retain names. Boundary tests vary remote spell IDs and hidden
+Phase Step traps without changing observations or policy actions.
+
+Fireburst planning counts visible clusters and rejects unsafe splash. Controlled
+Phase Step compares the actual preferred known landing with ordinary movement;
+unknown third tiles are never assumed to permit a two-tile fallback. Chain
+Lightning and Wand of Lightning predict deterministic nearby arcs using known
+supercover obstruction geometry. Slumber has a three-turn retry horizon rather
+than the older eight-turn slow/confusion horizon. Blood Bolt requires health
+above immediate two-action risk plus 15 HP, at least 75% of maximum HP, a retained
+healing/escape resource, a dangerous armored target at range, and a 32-turn
+cooldown. Known cursed/unreliable lightning is avoided; individually unknown
+lightning is tested only with health to cover a full 12-point backfire and current
+threats. Group opportunities justify spending identified lightning charges.
+
+See [MAGIC-EXPANSION-RESULTS.md](MAGIC-EXPANSION-RESULTS.md) for paired outcomes.
