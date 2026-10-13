@@ -27,7 +27,7 @@ void arena() {
     for(int y=8;y<=12;++y) for(int x=8;x<=12;++x) carve(uint8_t(x),uint8_t(y));
 }
 void item_text(std::ostream& s,const SeenItem& i) {
-    s<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<int(i.magnitude)<<':'<<int(i.modifier)<<':'<<int(i.enchant)<<':'<<int(i.spell)<<':'<<i.individual<<':'<<i.cursed<<';';
+    s<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<int(i.magnitude)<<':'<<int(i.modifier)<<':'<<int(i.enchant)<<':'<<int(i.book)<<':'<<i.individual<<':'<<i.cursed<<';';
 }
 std::string observation_text(const ExplorerObservation& o) {
     std::ostringstream s;
@@ -765,16 +765,16 @@ void magic_observations() {
         for(uint8_t y=7;y<=13;++y) for(uint8_t x=7;x<=13;++x) carve(x,y);
         policy->reset();
     };
-    setup(MAGIC_DART); game.ground[0]={{11,10},{SPELLBOOK,BLINK}};
+    setup(MAGIC_DART); game.ground[0]={{11,10},{SPELLBOOK,spellbook_for_spell(BLINK)}};
     auto o=observe_explorer(0,0);
-    check(o.mana==16 && o.max_mana==6 && o.known_spells==1 && o.ground_count==1 && o.ground[0].item.category==ItemCategory::Spellbook && o.ground[0].item.type==0 && o.ground[0].item.spell==255,"public magic/book identity absent");
-    Game remote_book=game; remote_book.ground[0].item.info=BLOOD_BOLT;
+    check(o.mana==16 && o.max_mana==6 && o.known_spells==1 && o.ground_count==1 && o.ground[0].item.category==ItemCategory::Spellbook && o.ground[0].item.type==0 && o.ground[0].item.book==255,"public magic/book identity absent");
+    Game remote_book=game; remote_book.ground[0].item.info=spellbook_for_spell(BLOOD_BOLT);
     identical(game,remote_book,"remote spellbook icon disclosed spell identity");
-    game.ground[0].item.info=BLINK;
+    game.ground[0].item.info=spellbook_for_spell(BLINK);
     game.player=game.ground[0].pos; auto inspected=observe_explorer(0,0);
-    check(inspected.ground[0].item.spell==BLINK && inspected.ground[0].item.type==SPELLBOOK,"standing pickup inspection lost public book name");
+    check(inspected.ground[0].item.book==spellbook_for_spell(BLINK) && inspected.ground[0].item.type==SPELLBOOK,"standing pickup inspection lost public book name");
     game.player={10,10};
-    Game public_world=game,hidden=game; hidden.ground[1]={{60,30},{SPELLBOOK,EXCHANGE}};
+    Game public_world=game,hidden=game; hidden.ground[1]={{60,30},{SPELLBOOK,spellbook_for_spell(EXCHANGE)}};
     hidden.monsters[3]={{60,29},LORD,100,0,{0,0},0}; hidden.features[2]={{11,11},FEATURE_SPIKE_TRAP|MAP_FEATURE_HIDDEN};
     identical(public_world,hidden,"magic observation leaked hidden content");
     setup(MAGIC_DART); game.monsters[0]={{12,10},GOBLIN,10,15,{0,0},0};
@@ -823,36 +823,46 @@ void magic_observations() {
     o=observe_explorer(0,0);
     a=policy->choose_action(o); check(a.kind==ExplorerActionKind::Cast && a.slot==SENSE_TRAPS,"explorer missed unsurveyed trap detection opportunity");
     o.turns=1; a=policy->choose_action(o); check(a.kind!=ExplorerActionKind::Cast,"explorer repeated trap detection without regeneration/navigation");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,EXCHANGE}; game.inventory[1]={FOOD,1}; game.hunger=90;
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spellbook_for_spell(EXCHANGE)}; game.inventory[1]={FOOD,2}; game.hunger=90;
     a=policy->choose_action(observe_explorer(0,0));
     check(a.kind==ExplorerActionKind::Use && a.slot==1 && use_inventory(a.slot),"explorer failed food preparation for study");
     a=policy->choose_action(observe_explorer(1,1)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed study after eating");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,BLINK}; game.inventory[19]={}; game.amulet_slot=NONE;
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spellbook_for_spell(BLINK)}; game.inventory[19]={}; game.amulet_slot=NONE;
     game.inventory[1]=make_equipment(ROUND_SHIELD,0); game.offhand_slot=1;
     a=policy->choose_action(observe_explorer(0,0));
     check(a.kind==ExplorerActionKind::Use && a.slot==18 && use_inventory(a.slot),"explorer failed lighting preparation for study");
     a=policy->choose_action(observe_explorer(1,1)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed study after lighting");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,FROSTBIND};
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spellbook_for_spell(FROSTBIND)};
     a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer ignored safe study");
-    check(use_inventory(a.slot) && studying(),"explorer study initiation rejected");
+    check(use_inventory(a.slot,a.target) && studying(),"explorer study initiation rejected");
     a=policy->choose_action(observe_explorer(1,0)); check(a.kind==ExplorerActionKind::Wait,"explorer did another action while studying");
     game.see_invisible=1; check(dispatch(Action{}),"study tick rejected");
     check(!studying() && game.inventory[0].type==SPELLBOOK,"sim study interruption consumed book");
     a=policy->choose_action(observe_explorer(2,1)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer retried interrupted study immediately");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,FROSTBIND}; game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0};
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spellbook_for_spell(FROSTBIND)}; game.monsters[0]={{12,10},GOBLIN,100,15,{0,0},0};
     a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer studied by visible hostile");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,MAGIC_DART};
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,255};
     a=policy->choose_action(observe_explorer(0,0)); check(a.kind!=ExplorerActionKind::Use || a.slot!=0,"explorer studied duplicate");
     // The oracle uses the same authoritative spell rules, including safe study.
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,BOOK_SURVIVAL}; game.inventory[1]={SPELLBOOK,BOOK_DISPLACEMENT};
+    a=policy->choose_action(observe_explorer(0,0));
+    check(a.kind==ExplorerActionKind::Use && a.slot==1 && a.target==BLINK,"explorer study depended on inventory ordering");
+    OmniscientAgent priority_oracle;
+    auto pa=priority_oracle.choose_action({game,0,0});
+    check(pa.kind==ActionKind::Use && pa.slot==1 && pa.target==BLINK,"oracle study depended on inventory ordering");
+    game.known_spells=spell_bit(MAGIC_DART)|spell_bit(CONFOUND)|spell_bit(BLINK); policy->reset(); priority_oracle.reset();
+    a=policy->choose_action(observe_explorer(0,0)); pa=priority_oracle.choose_action({game,0,0});
+    check((a.kind!=ExplorerActionKind::Use || game.inventory[a.slot].type!=SPELLBOOK) &&
+          (pa.kind!=ActionKind::Use || game.inventory[pa.slot].type!=SPELLBOOK),"agents overinvested early study budget");
     setup(SHOCKWAVE); game.hp=1; game.monsters[0]={{11,10},GOBLIN,100,15,{0,0},0}; game.monsters[1]={{10,11},GOBLIN,100,15,{0,0},0};
     OmniscientAgent oracle; auto oa=oracle.choose_action({game,0,0});
     check(oa.kind==ActionKind::Cast && oa.slot==SHOCKWAVE && dispatch(oa),"oracle Shockwave execution");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,EXCHANGE}; game.inventory[1]={FOOD,1}; game.hunger=90; oracle.reset();
+    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spellbook_for_spell(EXCHANGE)}; game.inventory[1]={FOOD,2}; game.hunger=90; oracle.reset();
     oa=oracle.choose_action({game,0,0}); check(oa.kind==ActionKind::Use && oa.slot==1 && dispatch(oa),"oracle failed food preparation for study");
-    setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,EXCHANGE}; oracle.reset(); oa=oracle.choose_action({game,0,0});
+    setup(MAGIC_DART); game.floor=6; game.known_spells|=spell_bit(SENSE_TRAPS)|spell_bit(CLEANSE); game.inventory[0]={SPELLBOOK,BOOK_SURVIVAL}; oracle.reset(); oa=oracle.choose_action({game,0,0});
     check(oa.kind==ActionKind::Use && oa.slot==0 && dispatch(oa) && studying(),"oracle safe study missing");
-    for(unsigned turn=0;turn<80;++turn) { oa=oracle.choose_action({game,turn+1,turn}); check(oa.kind==ActionKind::Wait && dispatch(oa),"oracle study skipped/rejected turn"); }
-    check((game.known_spells & spell_bit(EXCHANGE)) && !studying() && game.turns==80,"oracle failed complete learning");
+    for(unsigned turn=0;turn<spell_study_turns(EXCHANGE);++turn) { oa=oracle.choose_action({game,turn+1,turn}); check(oa.kind==ActionKind::Wait && dispatch(oa),"oracle study skipped/rejected turn"); }
+    check((game.known_spells & spell_bit(EXCHANGE)) && !studying() && game.turns==spell_study_turns(EXCHANGE),"oracle failed complete learning");
 }
 void expansion_agents() {
     auto policy=std::make_unique<ExplorerAgent>(); OmniscientAgent oracle;
@@ -897,10 +907,10 @@ void expansion_agents() {
         check(a.kind!=ExplorerActionKind::Wand && b.kind!=ActionKind::Wand,"agent used known afflicted lightning wand");
     }
     for(uint8_t spell=FIREBURST;spell<SPELL_COUNT;++spell) {
-        setup(MAGIC_DART); game.inventory[0]={SPELLBOOK,spell};
+        setup(MAGIC_DART); game.floor=11; game.inventory[0]={SPELLBOOK,spellbook_for_spell(spell)};
         a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed new book safe study");
         b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Use && b.slot==0,"oracle failed new book safe study");
-        game.ground[0]={game.player,{SPELLBOOK,spell}};
+        game.ground[0]={game.player,{SPELLBOOK,spellbook_for_spell(spell)}};
         b=oracle.choose_pickup({game,0,0}); check(b.kind!=ActionKind::Take,"oracle collected a carried duplicate spellbook");
     }
 }

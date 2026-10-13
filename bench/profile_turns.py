@@ -26,9 +26,9 @@ INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("CHAIN_MAIL", "TITAN_PLATE", "ARMORS"),
                     ("CANDLE", "TOWER_SHIELD", "OFFHANDS"),
                     ("RING_SEE_INVISIBLE", "RING_ILLUMINATION", "RINGS"),
-                    ("AMULET_SPEED", "AMULET_BRILLIANCE", "AMULETS"),
+                    ("AMULET_SPEED", "AMULET_MEDITATION", "AMULETS"),
                     ("WAND_FORCE", "WAND_LAST", "WANDS"),
-                    ("POTION_HEALING", "POTION_FIRE", "POTIONS"),
+                    ("POTION_HEALING", "POTION_MANA_RESTORATION", "POTIONS"),
                     ("SCROLL_IDENTIFY", "SCROLL_DETECT_OBJECTS", "SCROLLS"),
                     ("SPELLBOOK", "SPELLBOOK", "SPELLBOOKS"))
 
@@ -60,7 +60,8 @@ def read_benchmarks(path):
     require(all((case.setup in ("browse", "projectile_browse") and case.button in ("A", "DOWN", "UP") and
                  (case.button != "A" or not (case.down or case.up))) or
                 (case.setup in ("play", "wait", "use", "drop", "wand", "pickup", "projectile", "feature", "feature_item", "spell", "spell_ray", "spell_target", "study") and
-                 case.button in ("RIGHT", "A") and (not (case.down or case.up) or case.setup in ("use", "wand")))
+                 case.button in ("RIGHT", "A") and (not (case.down or case.up) or case.setup in ("use", "wand"))) or
+                (case.setup in ("book_open", "book_browse", "book_confirm") and case.button in ("A", "B", "DOWN", "UP"))
                 for case in cases), "unsupported benchmark input preparation")
     return cases
 
@@ -79,6 +80,7 @@ def source_contract(source_dir):
     return {
         "main_idle": idle_after(main_lines, "Sleep until an interrupt"),
         "item_idle": idle_after(ui_lines, "uint8_t selection = view.first_slot();"),
+        "book_idle": idle_after(ui_lines, "uint8_t choose_book_spell("),
         "yesno_idle": idle_after(ui_lines, "static bool yesno_modal("),
         "bench_sha256": hashlib.sha256((source_dir.parent / "bench/bench.cpp").read_bytes()).hexdigest(),
     }
@@ -103,7 +105,7 @@ def state_fields(case):
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.item != "NO_ITEM":
         fields["expected_item"] = "rogue::game.inventory[0].type == rogue::ItemType::" + case.item
-    if case.index >= 87 or case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
+    if case.setup not in ("book_open","book_browse") and (case.index >= 87 or case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap")):
         fields["monster_x"] = "rogue::game.monsters[0].pos.x"
         fields["monster_y"] = "rogue::game.monsters[0].pos.y"
         for i in range(1, 4):
@@ -114,7 +116,7 @@ def state_fields(case):
             fields[name] = "rogue::game." + name
         fields["monster_stun"] = "rogue::game.monsters[0].stun"
         fields["object_map"] = "rogue::ui.mode == rogue::Mode::OBJECT_MAP"
-    if case.name.startswith(("magic_", "study_")):
+    if case.name.startswith(("magic_", "study_", "book_")) or case.name=="drink_mana":
         fields["mana"]="rogue::game.mana"
         fields["study_progress"]="rogue::session.study_progress"
         fields["study_slot"]="rogue::session.study_slot"
@@ -134,7 +136,7 @@ def state_fields(case):
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(POTION_FIRE - POTION_HEALING + 1 + SCROLL_DETECT_OBJECTS - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_MANA_RESTORATION - POTION_HEALING + 1 + SCROLL_DETECT_OBJECTS - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
@@ -191,7 +193,7 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         if case.setup in ("spell_ray", "spell_target"): commands += press("A")
     if case.setup == "wait":
         commands += press("B")
-    if case.setup in ("use", "drop", "wand", "browse", "projectile", "projectile_browse"):
+    if case.setup in ("use", "drop", "wand", "browse", "projectile", "projectile_browse", "book_open", "book_browse", "book_confirm"):
         commands += press("B")
         selection = 3 if case.setup in ("projectile", "projectile_browse") else 2 if case.setup == "drop" else 1
         for _ in range(selection):
@@ -217,6 +219,15 @@ def make_commands(case, contract, folder, native=False, deadline_ms=10000):
         commands += ["breakpoint disable 4", "breakpoint enable 3"]
         if case.setup in ("wand", "projectile"):
             commands += press("A")  # Confirm slot; stop after direction prompt is ready.
+    if case.setup in ("book_open", "book_browse", "book_confirm"):
+        commands += ["breakpoint disable 3", f"breakpoint set --file ui.cpp --line {contract['item_idle']}"]
+        commands += press("A")  # Open ordinary inventory.
+        if case.setup != "book_open":
+            commands += ["breakpoint delete 4", f"breakpoint set --file ui.cpp --line {contract['book_idle']}", "breakpoint list 5"]
+            commands += press("A")  # Select book; stop after its full-screen redraw.
+            if case.setup == "book_confirm": commands += ["breakpoint disable 5", "breakpoint enable 3"]
+        else:
+            commands += ["breakpoint delete 4", f"breakpoint set --file ui.cpp --line {contract['book_idle']}", "breakpoint list 5"]
     if case.setup in ("feature", "feature_item"):
         commands += ["breakpoint disable 3", f"breakpoint set --file ui.cpp --line {contract['yesno_idle']}",
                      "avm button set RIGHT", run, "avm button set", run, "breakpoint disable 4"]
@@ -251,7 +262,7 @@ def records_from(output):
 
 
 def validate_outcome(case, before, after, explored):
-    expected_turns = before["turns"] if case.setup in ("browse", "projectile_browse") else (before["turns"] + 1) % 256
+    expected_turns = before["turns"] if case.setup in ("browse", "projectile_browse", "book_open", "book_browse", "book_confirm") else (before["turns"] + 1) % 256
     require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup in ("browse", "projectile_browse")
             else "expected one completed game turn")
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
@@ -264,6 +275,8 @@ def validate_outcome(case, before, after, explored):
         require(after["monster_hp"]<before["monster_hp"] and after["other_hp_1"]<before["other_hp_1"],"lightning chain absent")
     if case.name=="wand_lightning_powerful": require(after["other_hp_2"]<before["other_hp_2"],"powerful third target absent")
     if case.name=="magic_shockwave": require(after["monster_x"]>=35,"Shockwave failed multi-tile displacement")
+    if case.name=="book_start": require(after["study_slot"]==0 and after["study_progress"]==0,"book confirm failed deferred study")
+    if case.name in ("book_open","book_down","book_cancel"): require(after["study_slot"]==255,"book inspection started study")
     if case.name=="study_turn": require(after["study_progress"]==before["study_progress"]+1 and after["study_slot"]!=255,"study did not advance once")
     if case.name=="study_interrupt": require(after["study_slot"]==255 and after["study_progress"]==0,"study failed interruption")
     if case.name.startswith("visibility_trap_"):
@@ -338,8 +351,10 @@ def validate_outcome(case, before, after, explored):
     if case.name == "blind_recovery": require(after["blindness"] == 0, "blindness failed to expire")
     if case.name == "drink_healing":
         require(after["hp"] > before["hp"], "potion did not heal")
-    if case.index >= 87 and case.item != "NO_ITEM" and not case.item.startswith("WAND_"):
+    if case.index >= 87 and case.item.startswith(("POTION_", "SCROLL_")):
         require(after["item_type"] == 0, "new consumable was not consumed")
+    if case.name == "drink_mana": require(3<=after["mana"]<=6 and after["hp"]==before["hp"],"mana restoration range/HP changed")
+    if case.name == "equip_meditation": require(after["amulet"]==0 and after["expected_item"],"Meditation was not equipped")
     if case.name == "drink_extra_healing":
         require(after["hp"] >= 85 and not after["confused"] and not after["slowed"], "extra healing failed")
     if case.name == "drink_vitality":
@@ -483,6 +498,10 @@ def validate_sample(case, contract, folder, output, more_pcs=(), completed_after
         modal_pcs += re.findall(r'^\s*4\.\d+:.*address = (?:.*?\[)?(0x[0-9a-fA-F]+)', output, re.M)
         require(modal_pcs and end["pc"] in {int(pc, 16) for pc in modal_pcs},
                 "stopped before inventory display returned to the modal input loop")
+    elif case.setup in ("book_open", "book_browse"):
+        modal_pcs = re.findall(r'^Breakpoint 5:.*address = (0x[0-9a-fA-F]+)', output, re.M)
+        modal_pcs += re.findall(r'^\s*5\.\d+:.*address = (?:.*?\[)?(0x[0-9a-fA-F]+)', output, re.M)
+        require(modal_pcs and end["pc"] in {int(pc,16) for pc in modal_pcs}, "book display did not return to input boundary")
     else:
         require(end["pc"] == ready["pc"] or end["pc"] in more_pcs, "stopped before final render or displayed [more] input boundary")
     profile = json.loads((folder / "turn.avmp").read_text(encoding="utf-8"))
@@ -495,7 +514,7 @@ def validate_sample(case, contract, folder, output, more_pcs=(), completed_after
             int(window["end_cycle"]) == end["cycles"] and cycles > 0 and
             sum(int(row["cycles"]) for row in profile["pcs"]) == cycles,
             "profile and input-to-ready clock interval do not reconcile")
-    renderer = "_ZN5rogue16render_inventoryE" if case.setup in ("browse", "projectile_browse") else "_ZN5rogue6renderEv"
+    renderer = "_ZN5rogue16render_spellbookE" if case.setup in ("book_open", "book_browse") else "_ZN5rogue16render_inventoryE" if case.setup in ("browse", "projectile_browse") else "_ZN5rogue6renderEv"
     require(end["pc"] in more_pcs or any(row["linkage"].startswith(renderer) for row in profile["pcs"]),
             "the measured turn did not execute the final render")
     require(not any(("rogue::animate_" in row["function"] and case.setup not in ("projectile", "wand", "spell_ray") and case.name != "scroll_fire") or
@@ -662,7 +681,7 @@ def main(argv=None):
         if args.emit_only:
             continue
         try:
-            if case.index >= 87 or case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap"):
+            if case.setup not in ("book_open","book_browse") and (case.index >= 87 or case.name.startswith("monster_trap_") or case.name in ("drink_sight", "throw_sight", "sight_expire_dense", "sight_cursed_trap")):
                 measurement = run_paginated(case, contract, case_dir, Path(lldb).resolve(), args.elf.resolve(),
                                             args.native, args.deadline_ms, args.timeout)
             else:

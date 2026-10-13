@@ -51,7 +51,7 @@ static void check_equipment_definitions_and_ranges()
 {
     static_assert(LONG_SWORD == POTION_LAST + 1 && WEAPON_LAST - WEAPON_FIRST + 1 == 10 &&
                   PLATE_MAIL - CHAIN_MAIL + 1 == 6 &&
-                  POTION_COUNT == 18 && RING_COUNT == 11 && AMULET_COUNT == 11 &&
+                  POTION_COUNT == 19 && RING_COUNT == 11 && AMULET_COUNT == 12 &&
                   SCROLL_COUNT == 15 && WAND_COUNT == 8,
                   "item groups are no longer contiguous or changed size");
     for(const auto& weapon : weapons) {
@@ -552,6 +552,9 @@ static void check_generated_equipment()
         require(count != 0, "generation omitted an amulet type");
         amulets += count;
     }
+    unsigned meditation = amulet_counts[AMULET_MEDITATION-AMULET_SPEED];
+    require(meditation*100>amulets*5 && meditation*100<amulets*11,"Meditation ordinary rarity");
+    amulets -= meditation; // Preserve relative original amulet odds after the 8% replacement.
     unsigned speed = amulet_counts[0];
     unsigned vampire = amulet_counts[AMULET_VAMPIRE - AMULET_SPEED];
     if(!(speed * 100 > amulets * 5 && speed * 100 < amulets * 8 &&
@@ -569,6 +572,9 @@ static void check_generated_equipment()
             else require(count != 0, "generation omitted a potion at a depth");
             potions += count;
         }
+        unsigned mana=potion_counts[floor][POTION_MANA_RESTORATION-POTION_HEALING];
+        require(mana*100>potions*5 && mana*100<potions*11,"mana potion first-floor/depth rarity");
+        potions-=mana; // Conditional original-type distribution after mana replacement.
         unsigned experience = potion_counts[floor][POTION_EXPERIENCE - POTION_HEALING];
         unsigned replacement = potion_counts[floor][(floor == 0 || (floor >= 5 && floor < 10) ? POTION_SLOWING : POTION_HEALING) - POTION_HEALING];
         const double sight = (floor >= 2 && floor <= 4 ? SEE_INVISIBLE_EARLY_PERCENT : SEE_INVISIBLE_POTION_PERCENT) / 100.0;

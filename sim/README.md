@@ -113,8 +113,8 @@ Existing files changed: root `README.md` links these instructions; root
 `CMakeLists.txt` adds the host-only subdirectory
 and the production hook-header build dependency; `src/state.cpp`,
 `src/combat.cpp`, `src/items.cpp`, `src/world_gen.cpp` gain gated hooks.
-Instrumentation adds no saved fields. Current gameplay uses save version 31 and
-an 844-byte AVM `Game`; magic appends three bytes to the earlier consumables
+Instrumentation adds no saved fields. Current gameplay uses save version 32 and
+an 845-byte AVM `Game`; magic appends three bytes to the earlier consumables
 layout. See [the magic guide](../docs/SPELLS.md) and [the consumables guide](../docs/CONSUMABLES.md).
 
 The simulator library compiles and links `state.cpp`, `combat.cpp`,
@@ -503,14 +503,18 @@ for encounter segmentation, counting conventions, seed usage and limitations.
 
 ## Sixteen-spell expansion controls
 
-Observation protocol 7 fixes remote spellbook parity. Core CSV schema 10 adds
+Observation protocol 7 fixed remote spellbook parity; protocol 8 added public
+book IDs after inspection and nineteen potion appearances; protocol 9 also exposes
+the public experimental cost profile. Core CSV schema 10 adds
 item damage/kills and direct/chained damage. `spells.csv` appends direct/chained
 damage, disabled monsters, rolled stun actions, HP paid and Blood Bolt self-deaths.
 Damage remains attributed separately to spell IDs and item types. Full Slumber
 duration is counted before the immediate enemy response ages stun. Phase Step
 records chosen teleport distance in ordinary spell displacement counters.
 
-Use one executable and unchanged agent policies for these paired conditions:
+The historical single-spell pool requires `balance:multi-spell-books=0`.
+Its `expanded-spells` control does not change production themed-book membership.
+Use one executable and unchanged agent policies for these historical conditions:
 
 | Condition | `balance:expanded-spells` | `balance:lightning-wand-percent` |
 | --- | ---: | ---: |
@@ -526,3 +530,26 @@ isolated draw. With both controls zero, original spell-selection draws and
 ordinary supply generation are retained. `sim/balance.py compare` validates
 policy identities and pairs effective seeds; `sim/spell_report.py` supplies study
 and resource diagnostics. See [the expansion report](../docs/MAGIC-EXPANSION-RESULTS.md).
+
+## Themed spellbooks and mana recovery
+
+`Use.slot` identifies the carried book and `Use.target` selects its unknown spell.
+Both agents invoke production `begin_study(slot, spell)` through `use_inventory`;
+waiting advances the same study state machine, and completing a member need not
+consume its book. Agents rank remaining utility per study turn, keep food/light
+precautions and retry delays, skip duplicate carried/completed books, and conserve
+mana restoration for substantial casting or escape needs. Meditation's visible
+equipment state adjusts the mana reserve used for discretionary casting.
+
+The same-binary comparison uses `balance:multi-spell-books=0`,
+`balance:mana-potion-percent=0`, `balance:meditation-percent=0`, and
+`balance:silent-regeneration=0`, plus `balance:legacy-spell-rules=1`. They restore single-spell book selection, old spell costs/studies, the
+original same-slot ordinary potion/amulet, and the former HP amulet message.
+Production defaults use themed books, 8% mana potion/amulet replacement, and
+silent passive recovery. Run both arms with the same policy and 60,000-action
+limit. `magic.csv` schema 2 complements `spells.csv` with per-floor spell, book,
+mana and study-window counters. These host-only measurements never enter the
+Explorer observation. See [BALANCE.md](BALANCE.md) and
+[the implementation report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).
+
+The public host control `balance:legacy-spell-rules=1` restores pre-tuning MP costs and 40/60/80-turn studies. The default is 0. Observation protocol 9 supplies this public rule profile without exposing hidden game state. Use it with the four multi-spell comparison controls to retain the previous gameplay comparator. Agents rank spells across carried books and limit learned additions to `2 + floor / 2` before further study (zero-based floor). `spells.csv` and `magic.csv` schema 2 expose damage, displacement, stun, slow/confusion, reveal and cleanse effects; assigned durations are not realized enemy turns prevented. See [the implementation report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).

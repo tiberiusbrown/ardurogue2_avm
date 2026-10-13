@@ -614,7 +614,7 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
     case POTION_STRENGTH: case POTION_DEXTERITY: case POTION_PARALYSIS: case POTION_SLOWING:
     case POTION_EXPERIENCE: case POTION_INVISIBILITY: case POTION_BLINDNESS:
     case POTION_SEE_INVISIBLE: case POTION_EXTRA_HEALING: case POTION_RESTORE_VITALITY:
-    case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: case POTION_FIRE: {
+    case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: case POTION_FIRE: case POTION_MANA_RESTORATION: {
         uint8_t type = item.type;
         bool known = potion_identified(type);
         status(F("You drink"));
@@ -628,6 +628,15 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
             status(Item{type, 1}, '.');
         }
         switch(type) {
+        case POTION_MANA_RESTORATION: {
+            uint8_t maximum = player_max_mana();
+            uint16_t restored = static_cast<uint16_t>(game.mana) + mana_restoration_amount(maximum);
+            uint8_t before = game.mana;
+            game.mana = static_cast<uint8_t>(restored > maximum ? maximum : restored);
+            SIM_EVENT(sim::EventKind::ManaRestored, slot, type, game.mana > before ? game.mana - before : 0);
+            (void)before;
+            break;
+        }
         case POTION_EXTRA_HEALING:
             heal_player(extra_healing_amount(player_max_hp()));
             game.confused = game.slowed = 0;
@@ -753,7 +762,7 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
 __attribute__((noinline)) bool use_inventory(uint8_t slot, uint8_t target_slot)
 {
     if(studying()) return false;
-    if(slot < INVENTORY && game.inventory[slot].type == SPELLBOOK) return begin_study(slot);
+    if(slot < INVENTORY && game.inventory[slot].type == SPELLBOOK) return begin_study(slot, target_slot);
     uint8_t used_type = slot < INVENTORY ? game.inventory[slot].type : NO_ITEM;
     if(!apply_inventory(slot))
         return false;

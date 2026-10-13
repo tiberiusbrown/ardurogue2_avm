@@ -129,6 +129,12 @@ using namespace rogue;
     X(magic_exchange, "Exchange target confirmation and trap entry", spell_target, A, room, NO_ITEM, 0, 0) \
     X(magic_cleanse, "Cleanse blindness and restore sight", spell, A, room, NO_ITEM, 0, 0) \
     X(magic_sense, "Sense nearby traps on full map", spell, A, room, NO_ITEM, 0, 0) \
+    X(book_open, "Open the book menu with a Known member", book_open, A, room, SPELLBOOK, 0, 0) \
+    X(book_down, "Navigate past a Known book member", book_browse, DOWN, room, SPELLBOOK, 0, 0) \
+    X(book_start, "Confirm selected spell after menu unwinds", book_confirm, A, room, SPELLBOOK, 0, 0) \
+    X(book_cancel, "Cancel the learning menu without a turn", book_confirm, B, room, SPELLBOOK, 0, 0) \
+    X(drink_mana, "Mana potion identification and restoration", use, A, room, POTION_MANA_RESTORATION, 0, 0) \
+    X(equip_meditation, "Equip the mana regeneration amulet", use, A, room, AMULET_MEDITATION, 0, 0) \
     X(study_turn, "One real spellbook study turn and rune redraw", study, A, room, NO_ITEM, 0, 0) \
     X(study_interrupt, "Study interrupted by potion sight expiration", study, A, room, NO_ITEM, 0, 0) \
     X(magic_fireburst, "Fireburst cluster and player self damage", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
@@ -545,9 +551,14 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         for(auto& m:game.monsters) if(m.type) m.stun=15;
         break;
     }
+    case Case::book_open: case Case::book_down: case Case::book_start: case Case::book_cancel:
+        game.inventory[0]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=spell_bit(MAGIC_DART)|spell_bit(CONFOUND);
+        break;
+    case Case::drink_mana: game.mana=0; break;
+    case Case::equip_meditation: break;
     case Case::study_turn: case Case::study_interrupt:
-        game.inventory[0]={SPELLBOOK,FROSTBIND}; game.known_spells=1;
-        begin_study(0);
+        game.inventory[0]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=1;
+        begin_study(0,FROSTBIND);
         if(scenario==Case::study_interrupt) game.see_invisible=1;
         break;
     case Case::open_door:

@@ -212,6 +212,8 @@ static constexpr CoprimeMultipliers<SCROLL_COUNT> PROGMEM scroll_multipliers =
     make_coprime_multipliers<SCROLL_COUNT>();
 static constexpr CoprimeMultipliers<RING_COUNT> PROGMEM jewel_multipliers =
     make_coprime_multipliers<RING_COUNT>();
+static constexpr CoprimeMultipliers<AMULET_COUNT> PROGMEM amulet_multipliers =
+    make_coprime_multipliers<AMULET_COUNT>();
 static constexpr CoprimeMultipliers<WAND_COUNT> PROGMEM wand_multipliers =
     make_coprime_multipliers<WAND_COUNT>();
 
@@ -240,7 +242,7 @@ uint8_t item_appearance(uint8_t type)
                                    RING_COUNT, 3, jewel_multipliers.values);
     if(is_amulet(type))
         return permuted_appearance(static_cast<uint8_t>(type - AMULET_FIRST),
-                                   AMULET_COUNT, 4, jewel_multipliers.values);
+                                   AMULET_COUNT, 4, amulet_multipliers.values);
     if(is_wand(type))
         return permuted_appearance(static_cast<uint8_t>(type - WAND_FIRST),
                                    WAND_COUNT, 5, wand_multipliers.values);

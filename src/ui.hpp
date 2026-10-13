@@ -22,6 +22,7 @@ FeatureChoice prompt_feature();
 // Returns an inventory slot, or NONE when canceled or no item matches.
 uint8_t choose_item(const char AVM_PROGMEM* prompt_text,
                     ItemTypeFilter item_type_filter);
+uint8_t choose_book_spell(uint8_t slot);
 
 // A confirms; B cancels. The optional item is formatted like status(Item).
 bool yesno(const char AVM_PROGMEM* prompt_text);

@@ -60,6 +60,7 @@ void render_inventory(const char*, const InventoryView& view, uint8_t selection,
     last_inventory_total = total;
     ++inventory_renders;
 }
+void render_spellbook(uint8_t, const SpellbookView&, uint8_t, uint8_t) {}
 void render_yesno_prompt(const char*, const Item*) { restore_play_render(); }
 void render() { ++full_renders; play_render_pending = false; }
 void animate_arrow(Position, int8_t, int8_t, uint8_t) {}
@@ -106,6 +107,26 @@ static rogue::InputAction dispatch_input(uint8_t buttons)
 int main()
 {
     using namespace rogue;
+    // The book modal is inspection-only until its selection frame has unwound.
+    for(bool cancel : {false,true}) {
+        start_new(71); std::memset(game.monsters,0,sizeof game.monsters); std::memset(game.inventory,0,sizeof game.inventory);
+        game.inventory[0]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=1|spell_bit(FROSTBIND)|spell_bit(CONFOUND);
+        ui={}; ui.mode=MENU; ui.selection=1;
+        const uint8_t confirm[]={0,AVM_BUTTON_A,0,AVM_BUTTON_D,0,AVM_BUTTON_D,0,AVM_BUTTON_U,0,AVM_BUTTON_A};
+        const uint8_t dismiss[]={0,AVM_BUTTON_A,0,AVM_BUTTON_B};
+        std::memcpy(avm_test_buttons,cancel ? dismiss : confirm,cancel ? sizeof dismiss : sizeof confirm);
+        avm_test_button_count=cancel ? sizeof dismiss : sizeof confirm; avm_test_button_index=0;
+        Game snapshot=game; InputAction result=handle_input(AVM_BUTTON_A);
+        require(!std::memcmp(&snapshot,&game,sizeof game) && !studying(),"book selection changed turn/MP/hunger/RNG before unwinding");
+        if(cancel) require(result==INPUT_NONE && ui.mode==PLAY,"book B cancellation emitted action");
+        else {
+            require(result==INPUT_USE_INVENTORY && ui.selection==0 && ui.use_target==BANISH,"book navigation/confirmation selected wrong unknown spell");
+            require(use_inventory(ui.selection,ui.use_target) && studying() && !game.turns && session.study_spell==BANISH,"deferred book study failed");
+            cancel_study(false);
+        }
+    }
+    start_new(71); game.inventory[0]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=0xffff; ui={};
+    require(choose_book_spell(0)==NONE && !studying(),"completed book opened empty learning menu");
     // Inventory modals return a command; consumption and effects run afterwards.
     for(uint8_t type : {uint8_t(SCROLL_DETECT_OBJECTS), uint8_t(POTION_HASTE)}) {
         start_new(0x4312);
@@ -380,7 +401,7 @@ int main()
     require(handle_input(AVM_BUTTON_A)==INPUT_NONE && ui.mode==SPELL_TARGET && ui.use_target==2,"Exchange target prompt missing");
     handle_input(0); handle_input(AVM_BUTTON_D); require(ui.use_target==5,"Exchange target navigation ignored visible alternative");
     handle_input(0); handle_input(AVM_BUTTON_B); require(ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"target cancel spent mana/turn/RNG");
-    ui={}; ui.mode=SPELL_MENU; ui.selection=EXCHANGE; game.mana=4; unchanged=game;
+    ui={}; ui.mode=SPELL_MENU; ui.selection=EXCHANGE; game.mana=spell_cost(EXCHANGE)-1; unchanged=game;
     require(handle_input(AVM_BUTTON_A)==INPUT_NONE && ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"insufficient menu mana spent resources");
     session.study_slot=2; session.study_spell=FROSTBIND;
     ui={}; ui.mode=PLAY;

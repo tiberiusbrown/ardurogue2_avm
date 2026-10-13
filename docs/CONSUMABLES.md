@@ -68,7 +68,7 @@ shares are approximately 5.56% for weight 2 and 2.78% for weight 1. Each origina
 scroll retains approximately 8.33%. These are explicit relative weights, not
 an accidental redistribution from a larger enum range.
 
-All eighteen potion colors and fifteen scroll descriptions are unique within
+All nineteen potion colors and fifteen scroll descriptions are unique within
 each run and derived deterministically from the run seed. Names and descriptor
 tables remain in flash. Item and Monster representations remain two and eight
 bytes respectively.
@@ -84,7 +84,9 @@ rejects version 28 and earlier, including shifted raw item IDs. There is no
 unsafe save migration.
 
 The subsequent magic expansion adds the eighth wand, bringing identification
-to 63 types in the same eight-byte bitmap. Its current save version is 31.
+to 63 types in the same eight-byte bitmap. That expansion used save version 31. The themed-book/mana update uses version 32,
+with 19 potions, 15 scrolls, 11 rings, 12 amulets and 8 wands: 65 discoveries in
+a nine-byte bitmap. Older saves are rejected.
 See the Lightning section below and [the expansion report](MAGIC-EXPANSION-RESULTS.md).
 
 Detect Objects uses a transient Session request and UI mode. The renderer
@@ -284,8 +286,8 @@ python sim/balance.py compare build/consumables-control-all build/consumables-ca
 
 ## Wand of Lightning (save version 31)
 
-There are now eight wands and 63 identifiable types in the existing eight-byte
-bitmap. The new unknown descriptor is **forked**, shuffled bijectively with the
+There are eight wands. The themed-book/mana update brings the full item roster
+to 65 identifiable types in a nine-byte bitmap. The new unknown descriptor is **forked**, shuffled bijectively with the
 other seven appearances. Item size, four-bit charges and three-bit modifiers
 remain unchanged. Lightning replaces 12% of ordinary wand slots using a local
 derived draw; the original seven retain their relative weights and supply RNG.
@@ -306,3 +308,28 @@ Dragons have no lightning immunity. Each activation spends one charge and one
 ordinary action, even on a miss. Identification, recharge, curse removal and
 depletion use the ordinary wand lifecycle. Flash-resident profiles and a bounded
 nonrecursive routine also serve Chain Lightning.
+
+## Mana restoration and Meditation
+
+Potion of Mana Restoration is ordinary and stackable, available from floor 1.
+A slot-local 8% replacement of ordinary potion results preserves generation RNG
+and the other potion types' relative selection weights. Its new randomized color
+is lavender; all 19 potion appearances remain unique per run. Drinking restores
+an unbiased integer draw in `ceil(player_max_mana()/2)..player_max_mana()`, capped
+at capacity. It spends one ordinary action, identifies normally and obeys potion
+conservation. It does not heal HP, remove status effects or grant a buff. Throwing
+has no effect on monsters.
+
+Amulet of Meditation is ordinary, nonstackable equipment, using an 8% slot-local
+replacement of ordinary amulet results. The twelve amulet descriptors include
+amethyst and use their own coprime appearance permutation. Equipping identifies
+it. Normal Meditation regenerates one MP on multiples of 8 turns; cursed
+Meditation uses multiples of 32. Without it the interval is 16. Its curse locks
+removal through the ordinary accessory rules. Starvation, death and full MP
+suppress natural recovery. The persistent eight-bit turn clock supplies cadence
+across wrap, stairs, save/resume and study, without another timer.
+
+Passive MP recovery and HP Regeneration amulet healing are silent. The original
+HP probability/effect and simulator resource events remain. Other effect and
+expiration messages still appear and still interrupt study. See
+[SPELLS.md](SPELLS.md) and [the implementation report](MULTI-SPELL-BOOKS-RESULTS.md).

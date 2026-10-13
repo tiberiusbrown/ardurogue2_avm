@@ -11,12 +11,17 @@ SPELLS = ("Magic Dart", "Frostbind", "Repulsion", "Confound", "Sense Traps", "Bl
 COUNTERS = ("generated", "collected", "studied", "study_turns", "learned", "interrupted",
             "message_interruptions", "hunger_interruptions", "canceled", "casts", "mana_spent",
             "damage", "kills", "displaced", "displacement_tiles", "multi_tile_pushes", "mana_regenerated",
-            "direct_damage", "chained_damage", "disabled", "stun_turns", "hp_paid", "self_deaths")
+            "direct_damage", "chained_damage", "disabled", "stun_turns", "hp_paid", "self_deaths", "status_targets", "status_turns", "traps_revealed", "statuses_cleared")
 
 
 def report(directory, output):
     manifest, tables = load_directory(directory, visits=False)
     spells = pd.read_csv(directory / "spells.csv", keep_default_na=False)
+    effect_fields = ("status_targets", "status_turns", "traps_revealed", "statuses_cleared")
+    effect_counters_available = all(c in spells for c in effect_fields)
+    for column in effect_fields:
+        if column not in spells:
+            spells[column] = 0  # Historical schemas did not record these effects.
     runs = tables["runs"]
     if (len(spells) != len(runs) * len(SPELLS) or
         spells.duplicated(["effective_seed", "spell"]).any() or
@@ -35,13 +40,27 @@ def report(directory, output):
         consumed = consumed.add(books.groupby("effective_seed").consumed.sum(), fill_value=0)
         descending = books[books.direction == "descent"]
         descent_learned = descent_learned.add(descending.groupby("effective_seed").consumed.sum(), fill_value=0)
-    destroyed = consumed.reindex(learned.index) - learned
+    magic_path = directory / "magic.csv"
+    if magic_path.is_file():
+        magic = pd.read_csv(magic_path, keep_default_na=False)
+        if (magic.duplicated(["effective_seed", "visit", "spell"]).any() or
+            set(magic.effective_seed) != set(runs.effective_seed) or
+            not magic.groupby(["effective_seed", "visit"]).size().eq(len(SPELLS)).all() or
+            not magic.groupby("effective_seed").learned.sum().reindex(learned.index).eq(learned).all()):
+            raise ValueError("incomplete or inconsistent per-visit magic telemetry")
+        completed = magic.groupby("effective_seed").books_completed.sum().reindex(learned.index, fill_value=0)
+        destroyed = consumed.reindex(learned.index) - completed
+        descent = magic[magic.direction == "descent"]
+        descent_lower = descent.groupby("effective_seed").learned.sum().reindex(learned.index, fill_value=0)
+        descent_upper = descent_lower.copy()  # Authoritative learning events, independent of book consumption.
+    else:
+        # Historical single-spell datasets lack per-visit learning events.
+        destroyed = consumed.reindex(learned.index) - learned
+        descent_lower = (descent_learned - destroyed).clip(lower=0)
+        descent_upper = pd.concat([descent_learned, learned], axis=1).min(axis=1)
     if (destroyed < 0).any():
-        raise ValueError("spellbook consumption is below successful learning")
-    # Existing item telemetry includes sacrifice/destruction as consumption.
-    # Bound descent learning without pretending a destroyed book was learned.
-    descent_lower = (descent_learned - destroyed).clip(lower=0)
-    descent_upper = pd.concat([descent_learned, learned], axis=1).min(axis=1)
+        raise ValueError("spellbook consumption is below completed books")
+
     cohorts = {}
     descent_cohorts = {}
     for name, selection in (("all", runs), ("reached_depth_10", runs[runs.deepest_floor >= 10]),
@@ -76,10 +95,15 @@ def report(directory, output):
     potion_names = ("HEALING", "CONFUSION", "POISON", "HARMING", "STRENGTH", "DEXTERITY",
                     "PARALYSIS", "SLOWING", "EXPERIENCE", "INVISIBILITY", "BLINDNESS",
                     "SEE_INVISIBLE", "EXTRA_HEALING", "RESTORE_VITALITY", "HASTE",
-                    "LEVITATION", "FIRE_RESISTANCE", "FIRE")
+                    "LEVITATION", "FIRE_RESISTANCE", "FIRE", "MANA_RESTORATION")
     potions = items.loc[items.index.isin(potion_names)]
     resource["potions"] = {name: int(potions[name].sum()) for name in resource["potions"]}
-    summary = dict(schema=1, agent=manifest["agent"], policy_hash=manifest["agent_policy_hash"],
+    magic_totals = {}
+    if magic_path.is_file():
+        magic_totals = {field: int(magic[field].sum()) for field in (
+            "books_generated", "books_collected", "books_completed", "mana_regenerated",
+            "mana_restored", "meditation_mp", "amulet_hp", "study_deaths", "shortly_after_study_deaths")}
+    summary = dict(schema=3, effect_counters_available=effect_counters_available, magic=magic_totals, agent=manifest["agent"], policy_hash=manifest["agent_policy_hash"],
                    runs=len(runs), escapes=int((runs.result == "escaped").sum()),
                    escape_percent=float((runs.result == "escaped").mean() * 100),
                    learned_additional=cohorts, learned_on_descent=descent_cohorts,
@@ -98,6 +122,19 @@ def report(directory, output):
     write_json(output / "magic.json", summary)
     totals.to_csv(output / "spells.csv", index_label="spell")
     floor_survival(tables).to_csv(output / "floor_survival.csv", index=False)
+    if magic_path.is_file():
+        fields = [c for c in COUNTERS if c in magic and c != "mana_regenerated"]
+        by_floor = magic.groupby(["floor", "direction", "spell"])[fields].sum().reset_index()
+        by_floor.insert(3, "name", by_floor.spell.map(dict(enumerate(SPELLS))))
+        by_floor.to_csv(output / "spells_by_floor.csv", index=False)
+        visits = magic[magic.spell.eq(0)].copy()
+        for endpoint in ("entry", "exit"):
+            visits[f"additional_known_{endpoint}"] = visits[f"{endpoint}_known"].map(lambda mask: (int(mask) & 0xfffe).bit_count())
+        resources = visits.groupby(["floor", "direction"])[list(magic_totals)].sum()
+        resources["visits"] = visits.groupby(["floor", "direction"]).size()
+        for endpoint in ("entry", "exit"):
+            resources[f"mean_additional_known_{endpoint}"] = visits.groupby(["floor", "direction"])[f"additional_known_{endpoint}"].mean()
+        resources.to_csv(output / "magic_by_floor.csv")
     lines = [f"# Magic report: {manifest['agent']}", "",
              f"{len(runs):,} validated runs; {summary['escapes']:,} escapes ({summary['escape_percent']:.3f}%).", "",
              "Learned counts exclude starting Magic Dart. Depths use zero-based floor IDs.", "",
@@ -110,6 +147,12 @@ def report(directory, output):
               "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for row in totals.itertuples():
         lines.append(f"| {row.name} | {row.generated} | {row.collected} | {row.studied} | {row.learned} | {row.interrupted} | {row.casts} | {row.damage} | {row.kills} | {row.multi_tile_pushes} |")
+    if effect_counters_available:
+        lines += ["", "| Spell | Slow/confuse targets | Assigned status turns | Traps revealed | Conditions cleansed | Successful displacements |",
+                  "| --- | ---: | ---: | ---: | ---: | ---: |"]
+        for row in totals.itertuples():
+            if row.status_targets or row.traps_revealed or row.statuses_cleared or row.displaced:
+                lines.append(f"| {row.name} | {row.status_targets} | {row.status_turns} | {row.traps_revealed} | {row.statuses_cleared} | {row.displaced} |")
     lines += ["", "| Spell | Initial lightning damage | Chained damage | Disabled | Rolled stun actions | HP paid | Sacrifice deaths |",
               "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for row in totals.itertuples():
@@ -122,8 +165,11 @@ def report(directory, output):
               "Displacement counts forced tiles before the enemy response, not proven counterfactual survival.",
               "Message interruptions include attack misses and condition/fuel expiration. Canceled also includes lifecycle/death cancellation.",
               "Mana regenerated is counted once per run in Magic Dart's row. Resource totals and floor survival accompany this report."]
-    lines += ["Descent learning bounds use consumed SPELLBOOK rows and total successful learning. Existing consumption telemetry also includes destroyed/sacrificed books, whose descent/ascent allocation is not recorded.",
-              "Whole-run learning can include study on ascent of books carried from descent. Starting Magic Dart is excluded from both."]
+    if magic_path.is_file():
+        lines += ["Descent learning uses authoritative per-visit learning events. Completed books are counted separately from learned members; destruction/sacrifice is consumption minus completion."]
+    else:
+        lines += ["Historical descent learning bounds use consumed SPELLBOOK rows and total successful learning; destruction/sacrifice allocation is unknown."]
+    lines += ["Starting Magic Dart is excluded from learned additional spells. Whole-run cohorts are descriptive and subject to survival selection."]
     (output / "magic.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return summary
 

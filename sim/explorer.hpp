@@ -7,8 +7,8 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 7;
-inline constexpr int EXPLORER_APPEARANCES = 18;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 9;
+inline constexpr int EXPLORER_APPEARANCES = 19;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
     uint8_t x=255, y=255;
@@ -21,7 +21,7 @@ struct SeenItem {
     ItemCategory category=ItemCategory::None;
     uint8_t type=0, appearance=255, quantity=0, magnitude=0, modifier=0;
     int8_t enchant=0;
-    uint8_t spell=255;
+    uint8_t book=255;
     bool individual=false, cursed=false;
 };
 struct SeenGround { SeenPosition pos; SeenItem item; uint8_t handle=255; };
@@ -40,6 +40,7 @@ struct ExplorerObservation {
     uint16_t known_spells=0;
     uint8_t mana=0, max_mana=0, study_spell=255, study_progress=0;
     bool studying=false;
+    bool legacy_spell_rules=false; // Public experimental costs/durations, never hidden state.
     bool vitality_drained=false;
     bool haste=false, levitation=false, fire_resistance=false;
     std::bitset<EXPLORER_CELLS> detected_objects; // Positions only, one public map snapshot.

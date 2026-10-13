@@ -30,6 +30,7 @@ void write_manifest(const std::filesystem::path& path,uint64_t start,uint64_t co
      <<",\n  \"survival_schema_version\": "<<SURVIVAL_SCHEMA_VERSION
      <<",\n  \"executable\": "<<json(std::filesystem::absolute(argv[0]).string())
      <<",\n  \"agent_code_hash\": "<<json(options.agent=="explorer-v1" ? SIM_EXPLORER_POLICY_HASH : SIM_AGENT_POLICY_HASH);
+    o<<",\n  \"magic_schema_version\": 2,\n  \"spells_schema_version\": 2";
     if(options.agent=="explorer-v1") o<<",\n  \"agent_parameter_hash\": "<<json(parameter_hash(options.parameters))
         <<",\n  \"agent_parameters\": "<<parameter_json(options.parameters);
     o<<",\n  \"seed_selection\": {\"first\": "<<start

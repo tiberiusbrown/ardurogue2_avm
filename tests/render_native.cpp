@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include <string>
 
 uint8_t __avm_framebuffer[1024] = {};
 void (*avm_test_text_hook)(int16_t, int16_t, const char*) = nullptr;
@@ -736,8 +737,8 @@ static bool check_study_render() {
     game.player={20,15}; game.up={2,2}; game.down={40,25}; game.hp=game.max_hp=100; game.hunger=255; game.level=1;
     game.run_seed=game.random_state=71; game.speed=1;
     game.weapon_slot=game.armor_slot=game.amulet_slot=game.offhand_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
-    game.inventory[2]={SPELLBOOK,FROSTBIND}; game.known_spells=1;
-    if(!begin_study(2)) return false;
+    game.inventory[2]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=1;
+    if(!begin_study(2,FROSTBIND)) return false;
     unsigned start=avm_test_displays;
     uint32_t previous=0;
     for(unsigned turn=1;turn<=40;++turn) {
@@ -751,8 +752,21 @@ static bool check_study_render() {
     }
     return !studying() && (game.known_spells & spell_bit(FROSTBIND));
 }
+static std::string book_text;
+static void capture_book_text(int16_t, int16_t, const char* text) { book_text+=text; book_text+='|'; }
+static bool check_book_render() {
+    using namespace rogue;
+    game={}; game.known_spells=spell_bit(CONFOUND); Game before=game;
+    book_text.clear(); avm_test_text_hook=capture_book_text;
+    SpellbookView view{spellbook_mask(BOOK_CONTROL),game.known_spells};
+    render_spellbook(BOOK_CONTROL,view,FROSTBIND,0); avm_test_text_hook=nullptr;
+    return book_text.find("Book of Control")!=std::string::npos && book_text.find("Known")!=std::string::npos &&
+           book_text.find("40t")!=std::string::npos && book_text.find("60t")!=std::string::npos &&
+           book_text.find("Slumber")!=std::string::npos && !std::memcmp(&before,&game,sizeof game);
+}
 int main()
 {
+    if(!check_book_render()) { std::fprintf(stderr,"Book name/Known/duration rendering failed\n"); return 1; }
     if(!check_study_render()) { std::fprintf(stderr,"Study rendering cadence/rune failed\n"); return 1; }
     using namespace rogue;
     if(!check_feature_rendering()) { std::fprintf(stderr,"Feature visibility, atlas or rendering priority failed\n"); return 1; }

@@ -184,12 +184,12 @@ static const char PROGMEM* const PROGMEM potion_effect_names[] = {
     F("healing"), F("confusion"), F("poison"), F("harming"),
     F("strength"), F("dexterity"), F("paralysis"), F("slowing"),
     F("experience"), F("invisibility"), F("blindness"), F("see invisible"),
-    F("extra healing"), F("restore vitality"), F("haste"), F("levitation"), F("fire resistance"), F("fire")
+    F("extra healing"), F("restore vitality"), F("haste"), F("levitation"), F("fire resistance"), F("fire"), F("mana restoration")
 };
 static const char PROGMEM* const PROGMEM potion_color_names[] = {
     F("red"), F("clear"), F("orange"), F("green"), F("blue"),
     F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown"), F("silver"),
-    F("amber"), F("cyan"), F("golden"), F("crimson"), F("indigo"), F("turquoise")
+    F("amber"), F("cyan"), F("golden"), F("crimson"), F("indigo"), F("turquoise"), F("lavender")
 };
 static const char PROGMEM* const PROGMEM ring_names[] = {
     F("see invisible"), F("strength"), F("dexterity"), F("protection"),
@@ -199,7 +199,7 @@ static const char PROGMEM* const PROGMEM ring_names[] = {
 static const char PROGMEM* const PROGMEM amulet_names[] = {
     F("speed"), F("clarity"), F("conservation"), F("regeneration"),
     F("the vampire"), F("ironblood"), F("vitality"), F("wisdom"),
-    F("Phoenix Heart"), F("Heart of the Giant"), F("brilliance")
+    F("Phoenix Heart"), F("Heart of the Giant"), F("brilliance"), F("meditation")
 };
 static const char PROGMEM* const PROGMEM scroll_names[] = {
     F("identify"), F("enchanting"), F("remove curse"),
@@ -215,7 +215,7 @@ static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
 static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
     F("diamond"), F("ruby"), F("emerald"), F("topaz"),
     F("gold"), F("silver"), F("platinum"), F("iron"),
-    F("sapphire"), F("opal"), F("copper")
+    F("sapphire"), F("opal"), F("copper"), F("amethyst")
 };
 static const char PROGMEM* const PROGMEM wand_names[] = {
     F("force"), F("teleportation"), F("digging"), F("fire"),
@@ -568,9 +568,8 @@ void emit_other_item(Item item, ItemTextStyle style, Output& text, char suffix)
         }
         break;
     case SPELLBOOK:
-        if(style != INVENTORY_ITEM) text.word(F("a"));
-        text.word(F("spellbook of"));
-        text.final_word(spell_name(item.info), suffix);
+        if(style != INVENTORY_ITEM) text.word(style == PROMPT_ITEM ? F("the") : F("a"));
+        text.final_word(spellbook_name(item.info), suffix);
         break;
     case YENDOR_AMULET:
         if(style != INVENTORY_ITEM) text.word(F("the"));

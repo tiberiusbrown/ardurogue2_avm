@@ -774,6 +774,28 @@ __attribute__((noinline)) void render_inventory(const char AVM_PROGMEM* prompt,
     }
 }
 
+__attribute__((noinline)) void render_spellbook(uint8_t book, const SpellbookView& view,
+                                               uint8_t selection, uint8_t top)
+{
+    avm_draw_filled_rect_black(0, 0, 128, 64);
+    avm_draw_text_P(1, 7, spellbook_name(book));
+    avm_draw_filled_rect_white(1, 9, 127, 1);
+    for(uint8_t row = 0; row < INVENTORY_VISIBLE_ROWS; ++row) {
+        uint8_t spell = view.entry_at(static_cast<uint8_t>(top + row));
+        if(spell == NONE) break;
+        int16_t y = static_cast<int16_t>(18 + row * 7);
+        bool known = (view.known & spell_bit(spell)) != 0;
+        if(spell == selection) {
+            avm_draw_filled_rect_white(7, y - 6, 121, 7);
+            avm_set_text_mode(AVM_TEXT_BLACK_TRANSPARENT);
+        }
+        avm_draw_text_P(8, y, spell_name(spell));
+        if(known) avm_draw_text_P(98, y, F("Known"));
+        else avm_draw_textf_P(108, y, F("%ut"), spell_study_turns(spell));
+        avm_set_text_mode(AVM_TEXT_OVERWRITE);
+    }
+}
+
 __attribute__((noinline)) static void render_direction_prompt()
 {
     render_play();

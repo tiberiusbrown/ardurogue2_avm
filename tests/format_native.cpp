@@ -560,8 +560,8 @@ int main()
         std::fprintf(stderr,"shield formatting: %s\n",text); return 1;
     }
     check_drawn_item(shield);
-    Item book{SPELLBOOK,EXCHANGE}; format_item(book,text);
-    if(!std::strstr(text,"Exchange")) { std::fprintf(stderr,"spellbook name: %s\n",text); return 1; }
+    Item book{SPELLBOOK,BOOK_SURVIVAL}; format_item(book,text);
+    if(!std::strstr(text,"Book of Survival")) { std::fprintf(stderr,"spellbook name: %s\n",text); return 1; }
     check_drawn_item(book);
     check_streaming_status();
     check_item_status();

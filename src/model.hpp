@@ -54,7 +54,7 @@ constexpr uint8_t PHANTOM_HEALTH = 10;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 31;
+constexpr uint8_t SAVE_VERSION = 32;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -68,7 +68,8 @@ enum ItemType : uint8_t {
     POTION_SEE_INVISIBLE,
     POTION_EXTRA_HEALING, POTION_RESTORE_VITALITY, POTION_HASTE,
     POTION_LEVITATION, POTION_FIRE_RESISTANCE, POTION_FIRE,
-    POTION_LAST = POTION_FIRE,
+    POTION_MANA_RESTORATION,
+    POTION_LAST = POTION_MANA_RESTORATION,
     WEAPON_FIRST,
     LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
     STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN,
@@ -95,7 +96,8 @@ enum ItemType : uint8_t {
     AMULET_VITALITY, AMULET_WISDOM,
     AMULET_PHOENIX_HEART, AMULET_HEART_OF_GIANT,
     AMULET_BRILLIANCE,
-    AMULET_LAST = AMULET_BRILLIANCE,
+    AMULET_MEDITATION,
+    AMULET_LAST = AMULET_MEDITATION,
     SCROLL_FIRST,
     SCROLL_IDENTIFY = SCROLL_FIRST, SCROLL_ENCHANT, SCROLL_REMOVE_CURSE,
     SCROLL_TELEPORT, SCROLL_MAPPING, SCROLL_FEAR,
@@ -112,21 +114,21 @@ enum ItemType : uint8_t {
 // Single source for IDs, costs, study, targeting, generation and flash text.
 #define SPELL_DEFINITIONS(X) \
     X(MAGIC_DART, "Magic Dart", 2, 0, 40, Direction, None, 0, "Range 5. First hit takes 2-4 magic damage.") \
-    X(FROSTBIND, "Frostbind", 3, 0, 40, Direction, Basic, 3, "Range 5. Slow the first hit for 4-6 turns.") \
-    X(REPULSION, "Repulsion", 3, 0, 40, Direction, Basic, 3, "Range 5. Push the first hit 1-2 tiles.") \
+    X(FROSTBIND, "Frostbind", 2, 0, 40, Direction, Basic, 3, "Range 5. Slow the first hit for 4-6 turns.") \
+    X(REPULSION, "Repulsion", 2, 0, 40, Direction, Basic, 3, "Range 5. Push the first hit 1-2 tiles.") \
     X(CONFOUND, "Confound", 3, 0, 40, Direction, Basic, 3, "Range 5. Confuse the first hit for 4-6 turns.") \
-    X(SENSE_TRAPS, "Sense Traps", 3, 0, 40, Self, Basic, 3, "Reveal traps within radius 4; leave them active.") \
+    X(SENSE_TRAPS, "Sense Traps", 2, 0, 40, Self, Basic, 3, "Reveal traps within radius 4; leave them active.") \
     X(BLINK, "Blink", 4, 0, 60, Self, Intermediate, 3, "Random teleport within radius 3, through walls.") \
-    X(SHOCKWAVE, "Shockwave", 5, 0, 60, Self, Intermediate, 3, "Push adjacent monsters outward 2-3 tiles.") \
-    X(PIERCING_BOLT, "Piercing Bolt", 5, 0, 60, Direction, Intermediate, 3, "Range 5. First two hits take 3-5 damage each.") \
-    X(BANISH, "Banish", 5, 0, 60, Direction, Intermediate, 3, "Range 5. Teleport the first hit elsewhere.") \
-    X(EXCHANGE, "Exchange", 5, 0, 80, Monster, Advanced, 3, "Swap with a visible monster within radius 3.") \
-    X(CLEANSE, "Cleanse", 5, 0, 60, Self, Intermediate, 3, "Remove blindness, confusion or slowing; one only.") \
-    X(FIREBURST, "Fireburst", 6, 0, 80, Direction, Advanced, 1, "Range 5. Radius 1 burst, 3-6 fire damage; can burn you.") \
-    X(PHASE_STEP, "Phase Step", 5, 0, 60, Direction, Intermediate, 2, "Teleport 3, else 2 tiles. Cross foes, never walls; landing traps activate.") \
-    X(CHAIN_LIGHTNING, "Chain Lightning", 6, 0, 80, Direction, Advanced, 1, "Range 5. 3-5 magic damage; one visible nearby arc for 3-4.") \
-    X(SLUMBER, "Slumber", 5, 0, 60, Direction, Intermediate, 2, "Range 4. Stun first hit for 3-4 enemy turns.") \
-    X(BLOOD_BOLT, "Blood Bolt", 3, 3, 60, Direction, Intermediate, 2, "Costs 3 MP AND 3 HP, even on a miss. Can kill you. Range 5, 6-9 damage.")
+    X(SHOCKWAVE, "Shockwave", 4, 0, 60, Self, Intermediate, 3, "Push adjacent monsters outward 2-3 tiles.") \
+    X(PIERCING_BOLT, "Piercing Bolt", 3, 0, 40, Direction, Intermediate, 3, "Range 5. First two hits take 3-5 damage each.") \
+    X(BANISH, "Banish", 4, 0, 60, Direction, Intermediate, 3, "Range 5. Teleport the first hit elsewhere.") \
+    X(EXCHANGE, "Exchange", 4, 0, 60, Monster, Advanced, 3, "Swap with a visible monster within radius 3.") \
+    X(CLEANSE, "Cleanse", 4, 0, 60, Self, Intermediate, 3, "Remove blindness, confusion or slowing; one only.") \
+    X(FIREBURST, "Fireburst", 4, 0, 60, Direction, Advanced, 1, "Range 5. Radius 1 burst, 3-6 fire damage; can burn you.") \
+    X(PHASE_STEP, "Phase Step", 4, 0, 60, Direction, Intermediate, 2, "Teleport 3, else 2 tiles. Cross foes, never walls; landing traps activate.") \
+    X(CHAIN_LIGHTNING, "Chain Lightning", 4, 0, 60, Direction, Advanced, 1, "Range 5. 3-5 magic damage; one visible nearby arc for 3-4.") \
+    X(SLUMBER, "Slumber", 4, 0, 60, Direction, Intermediate, 2, "Range 4. Stun first hit for 3-4 enemy turns.") \
+    X(BLOOD_BOLT, "Blood Bolt", 2, 3, 60, Direction, Intermediate, 2, "Costs 2 MP AND 3 HP, even on a miss. Can kill you. Range 5, 6-9 damage.")
 enum class SpellTarget : uint8_t { Self, Direction, Monster };
 enum class SpellCategory : uint8_t { None, Basic, Intermediate, Advanced };
 enum Spell : uint8_t {
@@ -146,9 +148,23 @@ constexpr SpellDefinition spell_definition(uint8_t spell) {
     default: return {0, 0, 0, SpellTarget::Self, SpellCategory::None, 0};
     }
 }
-constexpr uint8_t spell_cost(uint8_t spell) { return spell_definition(spell).mana; }
+// The host comparator exposes its rule profile publicly to both agents.
+// Firmware always uses the default metadata; unused legacy branches compile away.
+constexpr uint8_t spell_cost(uint8_t spell, bool legacy = false) {
+    if(legacy) switch(spell) {
+    case FROSTBIND: case REPULSION: case SENSE_TRAPS: case BLOOD_BOLT: return 3;
+    case SHOCKWAVE: case PIERCING_BOLT: case BANISH: case EXCHANGE: case CLEANSE: case PHASE_STEP: case SLUMBER: return 5;
+    case FIREBURST: case CHAIN_LIGHTNING: return 6;
+    default: break;
+    }
+    return spell_definition(spell).mana;
+}
 constexpr uint8_t spell_hp_cost(uint8_t spell) { return spell_definition(spell).health; }
-constexpr uint8_t spell_study_turns(uint8_t spell) { return spell_definition(spell).study; }
+constexpr uint8_t spell_study_turns(uint8_t spell, bool legacy = false) {
+    if(legacy && spell == PIERCING_BOLT) return 60;
+    if(legacy && (spell == EXCHANGE || spell == CHAIN_LIGHTNING || spell == FIREBURST)) return 80;
+    return spell_definition(spell).study;
+}
 constexpr bool spell_directional(uint8_t spell) { return spell_definition(spell).target == SpellTarget::Direction; }
 constexpr bool expansion_spell(uint8_t spell) {
     switch(spell) { case FIREBURST: case PHASE_STEP: case CHAIN_LIGHTNING: case SLUMBER: case BLOOD_BOLT: return true; default: return false; }
@@ -164,7 +180,52 @@ static_assert(SPELL_COUNT == 16 && SPELL_COUNT <= 16 && MAGIC_DART == 0 && CLEAN
 // Hunger is 0..255; ordinary food consumption is at most one unit per turn.
 // Reading stops below 60. Reserve covers the whole study even with cursed sustenance.
 constexpr uint8_t STUDY_HUNGRY = 60, STUDY_FOOD_MARGIN = 12;
-constexpr uint8_t study_food_required(uint8_t spell) { return STUDY_HUNGRY + STUDY_FOOD_MARGIN + spell_study_turns(spell); }
+constexpr uint8_t study_food_required(uint8_t spell, bool legacy = false) { return STUDY_HUNGRY + STUDY_FOOD_MARGIN + spell_study_turns(spell, legacy); }
+
+enum Spellbook : uint8_t { BOOK_CONTROL, BOOK_DISPLACEMENT, BOOK_SURVIVAL, BOOK_DESTRUCTION, BOOK_COUNT };
+constexpr uint16_t spellbook_mask(uint8_t book) {
+    switch(book) {
+    case BOOK_CONTROL: return spell_bit(FROSTBIND) | spell_bit(CONFOUND) | spell_bit(SLUMBER) | spell_bit(BANISH);
+    case BOOK_DISPLACEMENT: return spell_bit(REPULSION) | spell_bit(BLINK) | spell_bit(SHOCKWAVE) | spell_bit(PHASE_STEP);
+    case BOOK_SURVIVAL: return spell_bit(SENSE_TRAPS) | spell_bit(CLEANSE) | spell_bit(EXCHANGE);
+    case BOOK_DESTRUCTION: return spell_bit(PIERCING_BOLT) | spell_bit(BLOOD_BOLT) | spell_bit(FIREBURST) | spell_bit(CHAIN_LIGHTNING);
+    default:
+#if defined(ARDUROGUE2_SIM)
+        // Host-only comparator: legacy single-spell books have disjoint IDs.
+        if(book > 0x80 && book < 0x80 + SPELL_COUNT) return spell_bit(book & 0x7f);
+#endif
+        return 0;
+    }
+}
+constexpr uint16_t unknown_book_spells(uint8_t book, uint16_t known) {
+    return spellbook_mask(book) & static_cast<uint16_t>(~known);
+}
+constexpr uint8_t spellbook_for_spell(uint8_t spell) {
+    for(uint8_t book = 0; book < BOOK_COUNT; ++book)
+        if(spellbook_mask(book) & spell_bit(spell)) return book;
+    return NONE;
+}
+constexpr uint8_t book_for_roll(uint8_t floor, uint8_t roll) {
+    uint8_t control = floor < 3 ? 50 : floor < 7 ? 35 : floor < 11 ? 20 : 10;
+    uint8_t displacement = floor < 7 ? 35 : floor < 11 ? 30 : 20;
+    uint8_t survival = floor < 3 ? 12 : floor < 7 ? 22 : 30;
+    return roll < control ? BOOK_CONTROL : roll < control + displacement ? BOOK_DISPLACEMENT :
+           roll < control + displacement + survival ? BOOK_SURVIVAL : BOOK_DESTRUCTION;
+}
+constexpr bool valid_spellbooks() {
+    uint16_t covered = 0;
+    for(uint8_t book = 0; book < BOOK_COUNT; ++book) {
+        uint16_t mask = spellbook_mask(book);
+        if(mask & (covered | spell_bit(MAGIC_DART))) return false;
+        uint8_t count = 0;
+        for(uint8_t s = 0; s < SPELL_COUNT; ++s) if(mask & spell_bit(s)) ++count;
+        if(count < 3 || count > 4) return false;
+        covered |= mask;
+    }
+    return covered == static_cast<uint16_t>(0xffffu & ~spell_bit(MAGIC_DART)) && !spellbook_mask(BOOK_COUNT);
+}
+static_assert(BOOK_COUNT == 4 && BOOK_COUNT < 8 && SPELL_COUNT == 16 && valid_spellbooks(),
+              "books must cover each learnable spell exactly once within the known mask");
 constexpr uint8_t MAX_BOW_RANGE = MAX_LIGHT_RADIUS;
 constexpr bool is_ammo(uint8_t type) { return type >= AMMO_FIRST && type <= AMMO_LAST; }
 constexpr bool is_bow(uint8_t type) { return type == SHORT_BOW || type == LONG_BOW; }
@@ -525,7 +586,7 @@ extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 820 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
+static_assert(sizeof(Game) == 821 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -546,7 +607,7 @@ static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, magic_resistance) == 751 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
               offsetof(Game, identified_items) == 767 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16),
               "game save offsets changed");
-static_assert(offsetof(Game, features) == 775 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features follow expanded knowledge");
+static_assert(offsetof(Game, features) == 776 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features follow expanded knowledge");
 static_assert(offsetof(Game, haste) == offsetof(Game, see_invisible) + 1 &&
               offsetof(Game, fire_resistance) == offsetof(Game, haste) + 2,
               "new timers must append to saved layout");
@@ -555,11 +616,11 @@ static_assert(offsetof(Game, mana) == offsetof(Game, fire_resistance) + 1 &&
               offsetof(Game, known_spells) == offsetof(Game, mana) + 1,
               "magic must append exactly three saved bytes");
 #endif
-static_assert(POTION_COUNT == 18 && SCROLL_COUNT == 15 &&
-              RING_COUNT == 11 && AMULET_COUNT == 11 && WAND_COUNT == 8,
+static_assert(POTION_COUNT == 19 && SCROLL_COUNT == 15 &&
+              RING_COUNT == 11 && AMULET_COUNT == 12 && WAND_COUNT == 8,
               "item table counts changed");
-static_assert(sizeof(Game::identified_items) == 8 &&
-              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 63 &&
+static_assert(sizeof(Game::identified_items) == 9 &&
+              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 65 &&
               POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
                   sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 

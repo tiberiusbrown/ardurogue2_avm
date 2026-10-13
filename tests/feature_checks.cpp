@@ -579,7 +579,7 @@ void generation_checks() {
 }
 }
 void check_map_features() {
-    static_assert(sizeof(MapFeature) == 3 && offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && offsetof(Game, features) == 775 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16), "map feature saved layout");
+    static_assert(sizeof(MapFeature) == 3 && offsetof(Game, see_invisible) == 814 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && offsetof(Game, features) == 776 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16), "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
     monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
 }

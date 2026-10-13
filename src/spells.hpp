@@ -31,8 +31,29 @@ inline bool study_status_output() {
     return true;
 }
 uint8_t player_max_mana();
+#if defined(ARDUROGUE2_SIM)
+bool legacy_spell_rules();
+uint8_t active_spell_cost(uint8_t spell);
+uint8_t active_study_turns(uint8_t spell);
+uint8_t active_study_food_required(uint8_t spell);
+#else
+inline uint8_t active_spell_cost(uint8_t spell) { return spell_cost(spell); }
+inline uint8_t active_study_turns(uint8_t spell) { return spell_study_turns(spell); }
+inline uint8_t active_study_food_required(uint8_t spell) { return study_food_required(spell); }
+#endif
 void regenerate_mana();
-bool begin_study(uint8_t slot);
+bool begin_study(uint8_t slot, uint8_t spell);
+uint8_t mana_regeneration_interval();
+uint8_t mana_restoration_amount(uint8_t maximum);
+inline const char PROGMEM* spellbook_name(uint8_t book) {
+    switch(book) {
+    case BOOK_CONTROL: return F("Book of Control");
+    case BOOK_DISPLACEMENT: return F("Book of Displacement");
+    case BOOK_SURVIVAL: return F("Book of Survival");
+    case BOOK_DESTRUCTION: return F("Book of Destruction");
+    default: return F("Unknown book");
+    }
+}
 bool advance_study(); // Exactly one ordinary turn, frontend renders after return.
 void cancel_study(bool announce = true);
 bool exchange_target(uint8_t index);

@@ -1,0 +1,1985 @@
+agent,arm,casts,collected,damage,direction,disabled,displaced,displacement_tiles,floor,generated,interrupted,kills,learned,mana_spent,name,spell,status_targets,status_turns,statuses_cleared,studied,study_turns,stun_turns,traps_revealed
+explorer-v1,control,235,0,350,ascent,0,0,0,0,0,0,208,0,470,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,0,0,0,0,0,0,0,3,Frostbind,1,1,4,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,3,0,0,ascent,0,0,0,0,0,0,0,0,9,Confound,3,3,16,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,9,0,0,ascent,0,9,277,0,0,0,0,0,45,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,1,2,0,0,0,0,0,5,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Cleanse,10,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,21,0,0,ascent,0,21,62,0,0,0,0,0,105,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,9,0,0,ascent,9,0,0,0,0,0,0,0,45,Slumber,14,0,0,0,0,0,31,0
+explorer-v1,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,53816,0,80853,descent,0,0,0,0,0,0,48593,0,107632,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,115,1253,0,descent,0,0,0,0,1644,263,0,1063,345,Frostbind,1,115,584,0,1326,45878,0,0
+explorer-v1,control,115,1345,0,descent,0,108,155,0,1668,291,0,1165,345,Repulsion,2,0,0,0,1456,50515,0,0
+explorer-v1,control,141,1223,0,descent,0,0,0,0,1637,253,0,1036,423,Confound,3,141,716,0,1289,45212,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,1634,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,16,147,0,descent,0,16,40,0,177,24,0,126,64,Blink,5,0,0,0,150,7987,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,175,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,168,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,182,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,6,139,0,descent,0,6,17,0,155,39,0,107,30,Exchange,9,0,0,0,146,9244,0,0
+explorer-v1,control,7,116,0,descent,0,0,0,0,136,25,0,99,35,Cleanse,10,0,0,7,124,6414,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,65,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,26,101,0,descent,0,26,78,0,117,19,0,85,130,Phase Step,12,0,0,0,104,5405,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,68,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,8,89,0,descent,8,0,0,0,120,19,0,78,40,Slumber,14,0,0,0,97,5026,27,0
+explorer-v1,control,0,0,0,descent,0,0,0,0,115,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,245,0,632,ascent,0,0,0,1,0,0,156,0,490,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,0,0,0,1,0,0,0,0,15,Frostbind,1,5,27,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,10,0,0,ascent,0,0,0,1,0,0,0,0,30,Confound,3,10,52,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,5,1,0,0,0,0,8,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,6,0,0,ascent,0,6,190,1,0,0,0,0,30,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,0,0,1,0,0,0,0,5,Cleanse,10,0,0,1,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,9,0,0,ascent,0,9,26,1,0,0,0,0,45,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,6,ascent,0,0,0,1,0,0,1,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,2,0,0,1,0,0,0,0,10,Slumber,14,0,0,0,0,0,8,0
+explorer-v1,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,30921,0,79268,descent,0,0,0,1,0,0,19100,0,61842,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,319,795,0,descent,0,0,0,1,1420,151,0,742,957,Frostbind,1,319,1618,0,893,31763,0,0
+explorer-v1,control,302,941,0,descent,0,274,387,1,1460,168,0,893,906,Repulsion,2,0,0,0,1061,37978,0,0
+explorer-v1,control,345,820,0,descent,0,0,0,1,1458,176,0,792,1035,Confound,3,345,1717,0,968,34133,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,1494,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,52,179,0,descent,0,52,130,1,218,26,0,147,208,Blink,5,0,0,0,173,9148,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,251,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,225,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,229,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,9,171,0,descent,0,9,24,1,208,44,0,153,45,Exchange,9,0,0,0,197,13548,0,0
+explorer-v1,control,39,191,0,descent,0,0,0,1,236,30,0,160,195,Cleanse,10,0,0,39,190,10108,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,71,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,143,127,0,descent,0,143,419,1,167,22,0,106,715,Phase Step,12,0,0,0,128,6716,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,79,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,19,103,0,descent,19,0,0,1,162,17,0,77,95,Slumber,14,0,0,0,94,4910,66,0
+explorer-v1,control,0,0,0,descent,0,0,0,1,140,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,234,0,682,ascent,0,0,0,2,0,0,26,0,468,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,0,0,0,2,0,0,0,0,15,Frostbind,1,5,22,0,0,0,0,0
+explorer-v1,control,9,0,0,ascent,0,9,13,2,0,0,0,0,27,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,16,0,0,ascent,0,0,0,2,0,0,0,0,48,Confound,3,16,83,0,0,0,0,0
+explorer-v1,control,81,0,0,ascent,0,0,0,2,0,0,0,0,243,Sense Traps,4,0,0,0,0,0,0,1
+explorer-v1,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,18,0,0,ascent,0,18,385,2,0,0,0,0,90,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,0,0,2,0,0,0,0,5,Cleanse,10,0,0,1,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,9,0,0,ascent,0,9,27,2,0,0,0,0,45,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,5,ascent,0,0,0,2,0,0,1,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,1,0,0,2,0,0,0,0,5,Slumber,14,0,0,0,0,0,4,0
+explorer-v1,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,22400,0,64022,descent,0,0,0,2,0,0,2604,0,44800,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,905,516,0,descent,0,0,0,2,1232,138,0,446,2715,Frostbind,1,905,4525,0,584,19705,0,0
+explorer-v1,control,472,700,0,descent,0,421,590,2,1343,161,0,586,1416,Repulsion,2,0,0,0,747,25696,0,0
+explorer-v1,control,1036,505,0,descent,0,0,0,2,1239,129,0,442,3108,Confound,3,1035,5115,0,571,19581,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,1316,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,134,203,0,descent,0,134,367,2,273,65,0,165,536,Blink,5,0,0,0,230,10976,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,283,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,257,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,257,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,5,169,0,descent,0,5,11,2,239,45,0,150,25,Exchange,9,0,0,0,195,13059,0,0
+explorer-v1,control,60,209,0,descent,0,0,0,2,289,52,0,180,300,Cleanse,10,0,0,60,232,12023,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,87,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,214,112,0,descent,0,214,627,2,165,29,0,101,1070,Phase Step,12,0,0,0,130,6662,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,116,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,47,86,0,descent,47,0,0,2,196,7,0,67,235,Slumber,14,0,0,0,74,4178,168,0
+explorer-v1,control,0,0,0,descent,0,0,0,2,193,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,286,0,837,ascent,0,0,0,3,0,0,26,0,572,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,4,0,0,ascent,0,0,0,3,0,0,0,0,12,Frostbind,1,4,20,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,3,3,0,0,0,0,6,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,20,0,0,ascent,0,0,0,3,0,0,0,0,60,Confound,3,20,97,0,0,0,0,0
+explorer-v1,control,110,0,0,ascent,0,0,0,3,0,0,0,0,330,Sense Traps,4,0,0,0,0,0,0,5
+explorer-v1,control,3,0,0,ascent,0,3,6,3,0,0,0,0,12,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,4,3,0,0,0,0,10,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,23,0,0,ascent,0,23,583,3,0,0,0,0,115,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,4,0,0,ascent,0,0,0,3,0,0,0,0,20,Cleanse,10,0,0,4,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,10,0,0,ascent,0,10,29,3,0,0,0,0,50,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,2,0,13,ascent,0,0,0,3,0,0,0,0,12,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,5,0,0,3,0,0,0,0,25,Slumber,14,0,0,0,0,0,18,0
+explorer-v1,control,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,20335,0,58792,descent,0,0,0,3,0,0,2114,0,40670,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,722,333,0,descent,0,0,0,3,1028,86,0,261,2166,Frostbind,1,721,3611,0,347,11720,0,0
+explorer-v1,control,334,529,0,descent,0,304,447,3,1194,106,0,444,1002,Repulsion,2,0,0,0,550,19123,0,0
+explorer-v1,control,981,329,0,descent,0,0,0,3,974,80,0,277,2943,Confound,3,978,4890,0,357,12326,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,1098,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,62,222,0,descent,0,62,165,3,295,52,0,171,248,Blink,5,0,0,0,223,11277,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,281,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,294,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,300,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,6,207,0,descent,0,6,12,3,304,56,0,147,30,Exchange,9,0,0,0,203,13102,0,0
+explorer-v1,control,72,199,0,descent,0,0,0,3,274,54,0,156,360,Cleanse,10,0,0,72,210,10121,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,108,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,189,125,0,descent,0,189,556,3,171,37,0,95,945,Phase Step,12,0,0,0,132,6283,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,114,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,44,70,0,descent,44,0,0,3,177,14,0,40,220,Slumber,14,0,0,0,54,2722,156,0
+explorer-v1,control,0,0,0,descent,0,0,0,3,180,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,62,0,178,ascent,0,0,0,4,0,0,7,0,124,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,16,0,0,ascent,0,0,0,4,0,0,0,0,48,Frostbind,1,16,77,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,4,4,0,0,0,0,6,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,7,0,0,ascent,0,0,0,4,0,0,0,0,21,Confound,3,7,34,0,0,0,0,0
+explorer-v1,control,138,0,0,ascent,0,0,0,4,0,0,0,0,414,Sense Traps,4,0,0,0,0,0,0,12
+explorer-v1,control,3,0,0,ascent,0,3,8,4,0,0,0,0,12,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,6,4,0,0,0,0,10,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,20,0,0,ascent,0,20,532,4,0,0,0,0,100,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,3,0,0,ascent,0,0,0,4,0,0,0,0,15,Cleanse,10,0,0,3,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,6,0,0,ascent,0,6,18,4,0,0,0,0,30,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,4,0,0,ascent,4,0,0,4,0,0,0,0,20,Slumber,14,0,0,0,0,0,15,0
+explorer-v1,control,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,5383,0,15217,descent,0,0,0,4,0,0,783,0,10766,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,451,14,0,descent,0,0,0,4,0,14,0,39,1353,Frostbind,1,451,2233,0,53,1784,0,0
+explorer-v1,control,46,13,0,descent,0,40,58,4,0,12,0,46,138,Repulsion,2,0,0,0,58,2043,0,0
+explorer-v1,control,531,4,0,descent,0,0,0,4,0,12,0,34,1593,Confound,3,531,2644,0,46,1516,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,control,81,6,0,descent,0,81,223,4,0,14,0,30,324,Blink,5,0,0,0,44,1954,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,5,0,descent,0,0,0,4,0,12,0,26,0,Exchange,9,0,0,0,38,2248,0,0
+explorer-v1,control,60,3,0,descent,0,0,0,4,0,16,0,36,300,Cleanse,10,0,0,60,52,2421,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,60,1,0,descent,0,60,175,4,0,13,0,13,300,Phase Step,12,0,0,0,26,948,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,8,4,0,descent,8,0,0,4,0,3,0,6,40,Slumber,14,0,0,0,9,417,28,0
+explorer-v1,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,432,0,1266,ascent,0,0,0,5,0,0,24,0,864,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,12,0,0,ascent,0,0,0,5,0,0,0,0,36,Frostbind,1,12,63,0,0,0,0,0
+explorer-v1,control,12,0,0,ascent,0,11,15,5,0,0,0,0,36,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,12,0,0,ascent,0,0,0,5,0,0,0,0,36,Confound,3,12,60,0,0,0,0,0
+explorer-v1,control,134,0,0,ascent,0,0,0,5,0,0,0,0,402,Sense Traps,4,0,0,0,0,0,0,11
+explorer-v1,control,1,0,0,ascent,0,1,3,5,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,4,0,0,ascent,0,9,18,5,0,0,0,0,20,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,14,0,0,ascent,0,14,260,5,0,0,0,0,70,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,0,0,0,5,0,0,0,0,25,Cleanse,10,0,0,5,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,13,0,0,ascent,0,13,39,5,0,0,0,0,65,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,3,0,21,ascent,0,0,0,5,0,0,1,0,18,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,5,0,0,5,0,0,0,0,25,Slumber,14,0,0,0,0,0,16,0
+explorer-v1,control,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,22431,0,65495,descent,0,0,0,5,0,0,1753,0,44862,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,750,355,0,descent,0,0,0,5,751,68,0,261,2250,Frostbind,1,749,3722,0,329,11565,0,0
+explorer-v1,control,363,350,0,descent,0,331,465,5,826,46,0,255,1089,Repulsion,2,0,0,0,301,10912,0,0
+explorer-v1,control,763,344,0,descent,0,0,0,5,724,58,0,243,2289,Confound,3,763,3815,0,301,10425,0,0
+explorer-v1,control,1019,514,0,descent,0,0,0,5,800,91,0,350,3057,Sense Traps,4,0,0,0,441,15234,0,65
+explorer-v1,control,25,247,0,descent,0,25,61,5,366,50,0,165,100,Blink,5,0,0,0,215,10876,0,0
+explorer-v1,control,1,266,0,descent,0,3,5,5,386,69,0,187,5,Shockwave,6,0,0,0,256,12744,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,5,337,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,13,236,0,descent,0,13,271,5,352,40,0,152,65,Banish,8,0,0,0,192,9913,0,0
+explorer-v1,control,8,186,0,descent,0,8,17,5,341,32,0,131,40,Exchange,9,0,0,0,163,11431,0,0
+explorer-v1,control,50,204,0,descent,0,0,0,5,358,28,0,143,250,Cleanse,10,0,0,50,171,9152,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,5,127,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,127,113,0,descent,0,127,371,5,214,23,0,80,635,Phase Step,12,0,0,0,103,5185,0,0
+explorer-v1,control,0,0,0,descent,0,0,0,5,148,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,48,47,0,descent,48,0,0,5,200,7,0,30,240,Slumber,14,0,0,0,37,1971,170,0
+explorer-v1,control,0,0,0,descent,0,0,0,5,228,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,343,0,1007,ascent,0,0,0,6,0,0,16,0,686,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,6,0,0,ascent,0,0,0,6,0,0,0,0,18,Frostbind,1,6,33,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,2,6,0,0,0,0,6,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,8,0,0,ascent,0,0,0,6,0,0,0,0,24,Confound,3,8,39,0,0,0,0,0
+explorer-v1,control,160,0,0,ascent,0,0,0,6,0,0,0,0,480,Sense Traps,4,0,0,0,0,0,0,13
+explorer-v1,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,4,0,0,ascent,0,4,111,6,0,0,0,0,20,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,6,0,0,ascent,0,0,0,6,0,0,0,0,30,Cleanse,10,0,0,6,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,12,0,0,ascent,0,12,35,6,0,0,0,0,60,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,7,ascent,0,0,0,6,0,0,0,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,11,0,0,ascent,11,0,0,6,0,0,0,0,55,Slumber,14,0,0,0,0,0,36,0
+explorer-v1,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,20442,0,58683,descent,0,0,0,6,0,0,2132,0,40884,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,1027,248,0,descent,0,0,0,6,594,40,0,179,3081,Frostbind,1,1027,5120,0,219,7588,0,0
+explorer-v1,control,437,257,0,descent,0,378,521,6,674,30,0,194,1311,Repulsion,2,0,0,0,224,8135,0,0
+explorer-v1,control,1141,256,0,descent,0,0,0,6,598,37,0,179,3423,Confound,3,1141,5671,0,216,7589,0,0
+explorer-v1,control,2314,377,0,descent,0,0,0,6,627,64,0,288,6942,Sense Traps,4,0,0,0,352,12363,0,160
+explorer-v1,control,57,215,0,descent,0,57,149,6,380,38,0,168,228,Blink,5,0,0,0,206,11084,0,0
+explorer-v1,control,11,227,0,descent,0,22,46,6,407,37,0,185,55,Shockwave,6,0,0,0,222,11868,0,0
+explorer-v1,control,5,158,36,descent,0,0,0,6,350,10,1,78,25,Piercing Bolt,7,0,0,0,88,5041,0,0
+explorer-v1,control,90,227,0,descent,0,90,2122,6,359,49,0,175,450,Banish,8,0,0,0,224,11357,0,0
+explorer-v1,control,10,143,0,descent,0,10,22,6,297,24,0,90,50,Exchange,9,0,0,0,114,7916,0,0
+explorer-v1,control,63,212,0,descent,0,0,0,6,352,36,0,163,315,Cleanse,10,0,0,63,199,10327,0,0
+explorer-v1,control,0,38,0,descent,0,0,0,6,129,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,192,133,0,descent,0,192,561,6,234,27,0,75,960,Phase Step,12,0,0,0,102,5094,0,0
+explorer-v1,control,0,27,0,descent,0,0,0,6,122,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,99,87,0,descent,99,0,0,6,232,6,0,31,495,Slumber,14,0,0,0,37,1948,344,0
+explorer-v1,control,0,45,0,descent,0,0,0,6,257,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,332,0,990,ascent,0,0,0,7,0,0,24,0,664,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,18,0,0,ascent,0,0,0,7,0,0,0,0,54,Frostbind,1,18,85,0,0,0,0,0
+explorer-v1,control,3,0,0,ascent,0,3,3,7,0,0,0,0,9,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,20,0,0,ascent,0,0,0,7,0,0,0,0,60,Confound,3,20,107,0,0,0,0,0
+explorer-v1,control,198,0,0,ascent,0,0,0,7,0,0,0,0,594,Sense Traps,4,0,0,0,0,0,0,15
+explorer-v1,control,5,0,0,ascent,0,5,14,7,0,0,0,0,20,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,15,0,0,ascent,0,15,403,7,0,0,0,0,75,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,8,0,0,ascent,0,0,0,7,0,0,0,0,40,Cleanse,10,0,0,8,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,12,0,0,ascent,0,12,36,7,0,0,0,0,60,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,8,ascent,0,0,0,7,0,0,0,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,7,0,0,ascent,7,0,0,7,0,0,0,0,35,Slumber,14,0,0,0,0,0,23,0
+explorer-v1,control,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,17991,0,51860,descent,0,0,0,7,0,0,1979,0,35982,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,724,178,0,descent,0,0,0,7,470,27,0,149,2172,Frostbind,1,724,3628,0,176,6376,0,0
+explorer-v1,control,404,182,0,descent,0,352,502,7,521,35,0,147,1212,Repulsion,2,0,0,0,182,6517,0,0
+explorer-v1,control,970,177,0,descent,0,0,0,7,476,30,0,149,2910,Confound,3,970,4845,0,179,6371,0,0
+explorer-v1,control,3218,272,0,descent,0,0,0,7,522,41,0,202,9654,Sense Traps,4,0,0,0,243,8674,0,221
+explorer-v1,control,51,181,0,descent,0,51,133,7,376,37,0,130,204,Blink,5,0,0,0,167,8574,0,0
+explorer-v1,control,23,226,0,descent,0,42,89,7,406,42,0,156,115,Shockwave,6,0,0,0,198,10375,0,0
+explorer-v1,control,4,128,28,descent,0,0,0,7,353,8,1,72,20,Piercing Bolt,7,0,0,0,80,4466,0,0
+explorer-v1,control,72,202,0,descent,0,72,1769,7,372,27,0,158,360,Banish,8,0,0,0,185,10234,0,0
+explorer-v1,control,11,144,0,descent,0,11,24,7,335,40,0,94,55,Exchange,9,0,0,0,134,8846,0,0
+explorer-v1,control,62,202,0,descent,0,0,0,7,388,28,0,148,310,Cleanse,10,0,0,62,176,9504,0,0
+explorer-v1,control,0,18,0,descent,0,0,0,7,126,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,154,123,0,descent,0,153,450,7,227,21,0,87,770,Phase Step,12,0,0,0,108,5681,0,0
+explorer-v1,control,0,26,0,descent,0,0,0,7,148,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,61,86,0,descent,61,0,0,7,250,10,0,36,305,Slumber,14,0,0,0,46,2447,209,0
+explorer-v1,control,0,40,0,descent,0,0,0,7,236,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,382,0,1125,ascent,0,0,0,8,0,0,18,0,764,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,33,0,0,ascent,0,0,0,8,0,0,0,0,99,Frostbind,1,33,166,0,0,0,0,0
+explorer-v1,control,2,0,0,ascent,0,2,2,8,0,0,0,0,6,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,35,0,0,ascent,0,0,0,8,0,0,0,0,105,Confound,3,35,175,0,0,0,0,0
+explorer-v1,control,178,0,0,ascent,0,0,0,8,0,0,0,0,534,Sense Traps,4,0,0,0,0,0,0,13
+explorer-v1,control,1,0,0,ascent,0,1,3,8,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,2,4,8,0,0,0,0,5,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,26,0,0,ascent,0,26,570,8,0,0,0,0,130,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,78,0,0,ascent,0,0,0,8,0,0,0,0,390,Cleanse,10,0,0,78,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,16,0,0,ascent,0,16,47,8,0,0,0,0,80,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,6,ascent,0,0,0,8,0,0,0,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,22,0,0,ascent,22,0,0,8,0,0,0,0,110,Slumber,14,0,0,0,0,0,77,0
+explorer-v1,control,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,17910,0,51980,descent,0,0,0,8,0,0,1273,0,35820,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,2327,130,0,descent,0,0,0,8,370,23,0,99,6981,Frostbind,1,2327,11607,0,122,4260,0,0
+explorer-v1,control,348,143,0,descent,0,308,434,8,415,40,0,108,1044,Repulsion,2,0,0,0,148,4879,0,0
+explorer-v1,control,4148,148,0,descent,0,0,0,8,383,19,0,106,12444,Confound,3,4148,20809,0,125,4494,0,0
+explorer-v1,control,3492,171,0,descent,0,0,0,8,409,30,0,136,10476,Sense Traps,4,0,0,0,166,5837,0,233
+explorer-v1,control,74,217,0,descent,0,74,192,8,397,61,0,157,296,Blink,5,0,0,0,218,10681,0,0
+explorer-v1,control,29,203,0,descent,0,60,122,8,397,37,0,136,145,Shockwave,6,0,0,0,173,8935,0,0
+explorer-v1,control,11,146,87,descent,0,0,0,8,413,11,2,57,55,Piercing Bolt,7,0,0,0,68,3645,0,0
+explorer-v1,control,172,202,0,descent,0,172,4203,8,410,38,0,147,860,Banish,8,0,0,0,185,9432,0,0
+explorer-v1,control,5,158,0,descent,0,5,12,8,358,22,0,79,25,Exchange,9,0,0,0,101,6784,0,0
+explorer-v1,control,714,184,0,descent,0,0,0,8,403,28,0,126,3570,Cleanse,10,0,0,714,154,8218,0,0
+explorer-v1,control,0,55,0,descent,0,0,0,8,119,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,241,142,0,descent,0,240,703,8,266,14,0,100,1205,Phase Step,12,0,0,0,114,6243,0,0
+explorer-v1,control,7,62,54,descent,0,0,0,8,142,22,3,41,42,Chain Lightning,13,0,0,0,63,3710,0,0
+explorer-v1,control,336,133,0,descent,336,0,0,8,276,23,0,82,1680,Slumber,14,0,0,0,105,5280,1170,0
+explorer-v1,control,1,138,8,descent,0,0,0,8,283,27,0,101,3,Blood Bolt,15,0,0,0,128,6484,0,0
+explorer-v1,control,178,0,497,ascent,0,0,0,9,0,0,14,0,356,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,21,0,0,ascent,0,0,0,9,0,0,0,0,63,Frostbind,1,21,104,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,1,2,9,0,0,0,0,3,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,21,0,0,ascent,0,0,0,9,0,0,0,0,63,Confound,3,21,108,0,0,0,0,0
+explorer-v1,control,210,0,0,ascent,0,0,0,9,0,0,0,0,630,Sense Traps,4,0,0,0,0,0,0,20
+explorer-v1,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,16,0,0,ascent,0,16,485,9,0,0,0,0,80,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,4,0,0,ascent,0,0,0,9,0,0,0,0,20,Cleanse,10,0,0,4,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,10,0,0,ascent,0,10,30,9,0,0,0,0,50,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,3,0,23,ascent,0,0,0,9,0,0,1,0,18,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,8,0,0,ascent,8,0,0,9,0,0,0,0,40,Slumber,14,0,0,0,0,0,30,0
+explorer-v1,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,8343,0,23677,descent,0,0,0,9,0,0,1005,0,16686,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,577,79,0,descent,0,0,0,9,275,7,0,67,1731,Frostbind,1,577,2869,0,74,2749,0,0
+explorer-v1,control,229,80,0,descent,0,196,282,9,275,8,0,69,687,Repulsion,2,0,0,0,77,2836,0,0
+explorer-v1,control,862,89,0,descent,0,0,0,9,270,6,0,66,2586,Confound,3,862,4309,0,72,2702,0,0
+explorer-v1,control,3873,116,0,descent,0,0,0,9,311,8,0,85,11619,Sense Traps,4,0,0,0,93,3557,0,274
+explorer-v1,control,45,179,0,descent,0,45,120,9,413,22,0,145,180,Blink,5,0,0,0,167,9151,0,0
+explorer-v1,control,9,174,0,descent,0,14,32,9,412,17,0,132,45,Shockwave,6,0,0,0,149,8440,0,0
+explorer-v1,control,3,92,17,descent,0,0,0,9,341,5,1,38,15,Piercing Bolt,7,0,0,0,43,2343,0,0
+explorer-v1,control,202,169,0,descent,0,202,4619,9,404,8,0,123,1010,Banish,8,0,0,0,131,7510,0,0
+explorer-v1,control,11,123,0,descent,0,11,22,9,356,20,0,60,55,Exchange,9,0,0,0,80,5313,0,0
+explorer-v1,control,53,151,0,descent,0,0,0,9,395,22,0,104,265,Cleanse,10,0,0,53,126,6586,0,0
+explorer-v1,control,0,25,0,descent,0,0,0,9,129,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,153,125,0,descent,0,151,441,9,237,20,0,93,765,Phase Step,12,0,0,0,113,6004,0,0
+explorer-v1,control,6,55,45,descent,0,0,0,9,147,8,0,35,36,Chain Lightning,13,0,0,0,43,3074,0,0
+explorer-v1,control,54,104,0,descent,54,0,0,9,255,16,0,71,270,Slumber,14,0,0,0,87,4533,190,0
+explorer-v1,control,0,89,0,descent,0,0,0,9,261,15,0,67,0,Blood Bolt,15,0,0,0,82,4296,0,0
+explorer-v1,control,421,0,1246,ascent,0,0,0,10,0,0,22,0,842,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,96,0,0,ascent,0,0,0,10,0,0,0,0,288,Frostbind,1,96,478,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,0,4,4,10,0,0,0,0,15,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,113,0,0,ascent,0,0,0,10,0,0,0,0,339,Confound,3,113,549,0,0,0,0,0
+explorer-v1,control,182,0,0,ascent,0,0,0,10,0,0,0,0,546,Sense Traps,4,0,0,0,0,0,0,10
+explorer-v1,control,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,0,8,14,10,0,0,0,0,25,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,29,0,0,ascent,0,29,746,10,0,0,0,0,145,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,126,0,0,ascent,0,0,0,10,0,0,0,0,630,Cleanse,10,0,0,126,0,0,0,0
+explorer-v1,control,2,0,19,ascent,0,0,0,10,0,0,0,0,12,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,5,0,0,ascent,0,5,14,10,0,0,0,0,25,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,8,ascent,0,0,0,10,0,0,0,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,34,0,0,ascent,34,0,0,10,0,0,0,0,170,Slumber,14,0,0,0,0,0,126,0
+explorer-v1,control,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,16708,0,48619,descent,0,0,0,10,0,0,1290,0,33416,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,4184,49,0,descent,0,0,0,10,203,9,0,47,12552,Frostbind,1,4184,20824,0,56,2055,0,0
+explorer-v1,control,377,51,0,descent,0,342,493,10,191,11,0,38,1131,Repulsion,2,0,0,0,49,1658,0,0
+explorer-v1,control,6844,42,0,descent,0,0,0,10,198,6,0,40,20532,Confound,3,6844,34239,0,46,1646,0,0
+explorer-v1,control,3067,82,0,descent,0,0,0,10,204,13,0,54,9201,Sense Traps,4,0,0,0,67,2381,0,233
+explorer-v1,control,89,157,0,descent,0,89,224,10,439,31,0,120,356,Blink,5,0,0,0,151,7871,0,0
+explorer-v1,control,45,143,0,descent,0,82,180,10,379,19,0,94,225,Shockwave,6,0,0,0,113,6024,0,0
+explorer-v1,control,8,119,67,descent,0,0,0,10,398,13,2,39,40,Piercing Bolt,7,0,0,0,52,2611,0,0
+explorer-v1,control,431,168,0,descent,0,431,9927,10,407,29,0,105,2155,Banish,8,0,0,0,134,6949,0,0
+explorer-v1,control,19,119,0,descent,0,19,41,10,410,15,0,48,95,Exchange,9,0,0,0,63,4168,0,0
+explorer-v1,control,1402,146,0,descent,0,0,0,10,389,26,0,94,7010,Cleanse,10,0,0,1402,120,6176,0,0
+explorer-v1,control,0,47,0,descent,0,0,0,10,110,12,0,24,0,Fireburst,11,0,0,0,36,2077,0,0
+explorer-v1,control,449,118,0,descent,0,449,1311,10,243,18,0,74,2245,Phase Step,12,0,0,0,92,5035,0,0
+explorer-v1,control,21,38,152,descent,0,0,0,10,110,11,4,28,126,Chain Lightning,13,0,0,0,39,2643,0,0
+explorer-v1,control,697,93,0,descent,697,0,0,10,264,13,0,74,3485,Slumber,14,0,0,0,87,4666,2437,0
+explorer-v1,control,12,101,89,descent,0,0,0,10,257,22,0,57,36,Blood Bolt,15,0,0,0,79,4082,0,0
+explorer-v1,control,450,0,1354,ascent,0,0,0,11,0,0,16,0,900,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,146,0,0,ascent,0,0,0,11,0,0,0,0,438,Frostbind,1,146,729,0,0,0,0,0
+explorer-v1,control,8,0,0,ascent,0,7,9,11,0,0,0,0,24,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,104,0,0,ascent,0,0,0,11,0,0,0,0,312,Confound,3,104,505,0,0,0,0,0
+explorer-v1,control,206,0,0,ascent,0,0,0,11,0,0,0,0,618,Sense Traps,4,0,0,0,0,0,0,13
+explorer-v1,control,1,0,0,ascent,0,1,3,11,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,6,0,0,ascent,0,16,39,11,0,0,0,0,30,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,11,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,25,0,0,ascent,0,25,709,11,0,0,0,0,125,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,11,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,63,0,0,ascent,0,0,0,11,0,0,0,0,315,Cleanse,10,0,0,63,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,11,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,15,0,0,ascent,0,15,45,11,0,0,0,0,75,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,1,0,8,ascent,0,0,0,11,0,0,0,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,37,0,0,ascent,37,0,0,11,0,0,0,0,185,Slumber,14,0,0,0,0,0,130,0
+explorer-v1,control,0,0,0,ascent,0,0,0,11,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,13900,0,40504,descent,0,0,0,11,0,0,861,0,27800,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,3580,16,0,descent,0,0,0,11,102,2,0,15,10740,Frostbind,1,3580,17928,0,17,622,0,0
+explorer-v1,control,397,28,0,descent,0,356,501,11,96,9,0,14,1191,Repulsion,2,0,0,0,23,737,0,0
+explorer-v1,control,4960,21,0,descent,0,0,0,11,92,3,0,9,14880,Confound,3,4960,24799,0,12,389,0,0
+explorer-v1,control,2450,41,0,descent,0,0,0,11,120,5,0,17,7350,Sense Traps,4,0,0,0,22,751,0,172
+explorer-v1,control,107,118,0,descent,0,107,256,11,342,13,0,76,428,Blink,5,0,0,0,89,4864,0,0
+explorer-v1,control,38,120,0,descent,0,60,130,11,330,10,0,69,190,Shockwave,6,0,0,0,79,4314,0,0
+explorer-v1,control,14,100,106,descent,0,0,0,11,353,8,3,20,70,Piercing Bolt,7,0,0,0,28,1303,0,0
+explorer-v1,control,473,148,0,descent,0,473,11227,11,406,26,0,91,2365,Banish,8,0,0,0,117,5921,0,0
+explorer-v1,control,11,108,0,descent,0,11,27,11,338,8,0,29,55,Exchange,9,0,0,0,37,2530,0,0
+explorer-v1,control,652,120,0,descent,0,0,0,11,309,26,0,71,3260,Cleanse,10,0,0,652,97,4770,0,0
+explorer-v1,control,2,34,18,descent,0,0,0,11,110,5,0,18,12,Fireburst,11,0,0,0,23,1630,0,0
+explorer-v1,control,437,80,0,descent,0,431,1264,11,236,8,0,61,2185,Phase Step,12,0,0,0,69,3854,0,0
+explorer-v1,control,20,42,146,descent,0,0,0,11,110,10,3,28,120,Chain Lightning,13,0,0,0,38,2681,0,0
+explorer-v1,control,572,82,0,descent,572,0,0,11,221,7,0,48,2860,Slumber,14,0,0,0,55,3058,2011,0
+explorer-v1,control,11,78,88,descent,0,0,0,11,237,14,0,51,33,Blood Bolt,15,0,0,0,65,3390,0,0
+explorer-v1,control,497,0,1493,ascent,0,0,0,12,0,0,22,0,994,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,289,0,0,ascent,0,0,0,12,0,0,0,0,867,Frostbind,1,289,1453,0,0,0,0,0
+explorer-v1,control,8,0,0,ascent,0,7,10,12,0,0,0,0,24,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,240,0,0,ascent,0,0,0,12,0,0,0,0,720,Confound,3,240,1192,0,0,0,0,0
+explorer-v1,control,180,0,0,ascent,0,0,0,12,0,0,0,0,540,Sense Traps,4,0,0,0,0,0,0,10
+explorer-v1,control,7,0,0,ascent,0,7,16,12,0,0,0,0,28,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,3,0,0,ascent,0,5,9,12,0,0,0,0,15,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,12,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,22,0,0,ascent,0,22,630,12,0,0,0,0,110,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,1,0,0,ascent,0,1,4,12,0,0,0,0,5,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,110,0,0,ascent,0,0,0,12,0,0,0,0,550,Cleanse,10,0,0,110,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,12,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,51,0,0,ascent,0,51,149,12,0,0,0,0,255,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,4,0,30,ascent,0,0,0,12,0,0,0,0,24,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,65,0,0,ascent,65,0,0,12,0,0,0,0,325,Slumber,14,0,0,0,0,0,224,0
+explorer-v1,control,0,0,0,ascent,0,0,0,12,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,10385,0,30610,descent,0,0,0,12,0,0,525,0,20770,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,3354,15,0,descent,0,0,0,12,54,2,0,10,10062,Frostbind,1,3353,16760,0,12,418,0,0
+explorer-v1,control,286,9,0,descent,0,267,390,12,26,2,0,9,858,Repulsion,2,0,0,0,11,400,0,0
+explorer-v1,control,4533,14,0,descent,0,0,0,12,37,3,0,11,13599,Confound,3,4530,22611,0,14,465,0,0
+explorer-v1,control,1802,18,0,descent,0,0,0,12,67,2,0,11,5406,Sense Traps,4,0,0,0,13,475,0,109
+explorer-v1,control,343,111,0,descent,0,343,865,12,343,16,0,70,1372,Blink,5,0,0,0,86,4525,0,0
+explorer-v1,control,33,88,0,descent,0,60,127,12,284,3,0,58,165,Shockwave,6,0,0,0,61,3515,0,0
+explorer-v1,control,7,83,54,descent,0,0,0,12,269,1,0,14,35,Piercing Bolt,7,0,0,0,15,864,0,0
+explorer-v1,control,383,115,0,descent,0,381,9077,12,359,11,0,73,1915,Banish,8,0,0,0,84,4541,0,0
+explorer-v1,control,8,98,0,descent,0,8,16,12,303,8,0,28,40,Exchange,9,0,0,0,36,2474,0,0
+explorer-v1,control,753,105,0,descent,0,0,0,12,326,20,0,53,3765,Cleanse,10,0,0,753,73,3494,0,0
+explorer-v1,control,0,30,0,descent,0,0,0,12,108,3,0,18,0,Fireburst,11,0,0,0,21,1514,0,0
+explorer-v1,control,638,69,0,descent,0,632,1847,12,210,5,0,38,3190,Phase Step,12,0,0,0,43,2425,0,0
+explorer-v1,control,12,28,90,descent,0,0,0,12,93,4,1,14,72,Chain Lightning,13,0,0,0,18,1202,0,0
+explorer-v1,control,682,74,0,descent,682,0,0,12,206,5,0,47,3410,Slumber,14,0,0,0,52,2911,2388,0
+explorer-v1,control,10,59,68,descent,0,0,0,12,188,3,1,31,30,Blood Bolt,15,0,0,0,34,1962,0,0
+explorer-v1,control,777,0,2302,ascent,0,0,0,13,0,0,37,0,1554,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,432,0,0,ascent,0,0,0,13,0,0,0,0,1296,Frostbind,1,432,2189,0,0,0,0,0
+explorer-v1,control,33,0,0,ascent,0,32,48,13,0,0,0,0,99,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,447,0,0,ascent,0,0,0,13,0,0,0,0,1341,Confound,3,447,2210,0,0,0,0,0
+explorer-v1,control,204,0,0,ascent,0,0,0,13,0,0,0,0,612,Sense Traps,4,0,0,0,0,0,0,22
+explorer-v1,control,14,0,0,ascent,0,14,36,13,0,0,0,0,56,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,6,0,0,ascent,0,9,22,13,0,0,0,0,30,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,1,0,8,ascent,0,0,0,13,0,0,0,0,5,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,65,0,0,ascent,0,65,1669,13,0,0,0,0,325,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,13,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,98,0,0,ascent,0,0,0,13,0,0,0,0,490,Cleanse,10,0,0,98,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,13,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,53,0,0,ascent,0,52,153,13,0,0,0,0,265,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,4,0,32,ascent,0,0,0,13,0,0,1,0,24,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,108,0,0,ascent,108,0,0,13,0,0,0,0,540,Slumber,14,0,0,0,0,0,376,0
+explorer-v1,control,0,0,0,ascent,0,0,0,13,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,8037,0,23535,descent,0,0,0,13,0,0,422,0,16074,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,3240,2,0,descent,0,0,0,13,0,0,0,1,9720,Frostbind,1,3240,16206,0,1,40,0,0
+explorer-v1,control,275,2,0,descent,0,254,361,13,0,0,0,1,825,Repulsion,2,0,0,0,1,40,0,0
+explorer-v1,control,4034,3,0,descent,0,0,0,13,0,0,0,1,12102,Confound,3,4031,20149,0,1,40,0,0
+explorer-v1,control,1146,0,0,descent,0,0,0,13,0,0,0,2,3438,Sense Traps,4,0,0,0,2,80,0,82
+explorer-v1,control,345,62,0,descent,0,345,892,13,243,20,0,34,1380,Blink,5,0,0,0,54,2481,0,0
+explorer-v1,control,42,68,0,descent,0,71,156,13,242,7,0,36,210,Shockwave,6,0,0,0,43,2221,0,0
+explorer-v1,control,1,68,10,descent,0,0,0,13,239,3,0,11,5,Piercing Bolt,7,0,0,0,14,688,0,0
+explorer-v1,control,432,76,0,descent,0,432,10687,13,239,18,0,42,2160,Banish,8,0,0,0,60,2825,0,0
+explorer-v1,control,7,67,0,descent,0,7,17,13,213,3,0,16,35,Exchange,9,0,0,0,19,1331,0,0
+explorer-v1,control,520,74,0,descent,0,0,0,13,228,10,0,29,2600,Cleanse,10,0,0,520,39,1889,0,0
+explorer-v1,control,1,31,9,descent,0,0,0,13,81,6,0,22,6,Fireburst,11,0,0,0,28,1909,0,0
+explorer-v1,control,710,62,0,descent,0,710,2074,13,155,7,0,31,3550,Phase Step,12,0,0,0,38,1936,0,0
+explorer-v1,control,17,30,120,descent,0,0,0,13,88,9,2,12,102,Chain Lightning,13,0,0,0,21,1236,0,0
+explorer-v1,control,692,58,0,descent,692,0,0,13,159,7,0,29,3460,Slumber,14,0,0,0,36,1921,2416,0
+explorer-v1,control,10,45,74,descent,0,0,0,13,146,6,0,22,30,Blood Bolt,15,0,0,0,28,1410,0,0
+explorer-v1,control,1368,0,4007,ascent,0,0,0,14,0,0,74,0,2736,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,865,0,0,ascent,0,0,0,14,0,0,0,0,2595,Frostbind,1,865,4331,0,0,0,0,0
+explorer-v1,control,61,0,0,ascent,0,55,81,14,0,0,0,0,183,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,939,0,0,ascent,0,0,0,14,0,0,0,0,2817,Confound,3,939,4698,0,0,0,0,0
+explorer-v1,control,165,0,0,ascent,0,0,0,14,0,0,0,0,495,Sense Traps,4,0,0,0,0,0,0,18
+explorer-v1,control,49,0,0,ascent,0,49,126,14,0,0,0,0,196,Blink,5,0,0,0,0,0,0,0
+explorer-v1,control,12,0,0,ascent,0,21,49,14,0,0,0,0,60,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,14,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,control,109,0,0,ascent,0,109,2714,14,0,0,0,0,545,Banish,8,0,0,0,0,0,0,0
+explorer-v1,control,3,0,0,ascent,0,3,7,14,0,0,0,0,15,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,control,200,0,0,ascent,0,0,0,14,0,0,0,0,1000,Cleanse,10,0,0,200,0,0,0,0
+explorer-v1,control,0,0,0,ascent,0,0,0,14,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,control,123,0,0,ascent,0,121,352,14,0,0,0,0,615,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,control,4,0,29,ascent,0,0,0,14,0,0,0,0,24,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,control,198,0,0,ascent,198,0,0,14,0,0,0,0,990,Slumber,14,0,0,0,0,0,698,0
+explorer-v1,control,0,0,0,ascent,0,0,0,14,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,control,4583,0,13485,descent,0,0,0,14,0,0,263,0,9166,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,2443,0,0,descent,0,0,0,14,0,0,0,0,7329,Frostbind,1,2443,12241,0,0,0,0,0
+explorer-v1,control,161,0,0,descent,0,149,215,14,0,0,0,0,483,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,3093,0,0,descent,0,0,0,14,0,0,0,0,9279,Confound,3,3091,15471,0,0,0,0,0
+explorer-v1,control,516,1,0,descent,0,0,0,14,0,0,0,0,1548,Sense Traps,4,0,0,0,0,0,0,45
+explorer-v1,control,267,38,0,descent,0,267,675,14,144,13,0,22,1068,Blink,5,0,0,0,35,1604,0,0
+explorer-v1,control,16,47,0,descent,0,22,46,14,136,5,0,22,80,Shockwave,6,0,0,0,27,1418,0,0
+explorer-v1,control,1,28,9,descent,0,0,0,14,118,2,0,7,5,Piercing Bolt,7,0,0,0,9,424,0,0
+explorer-v1,control,376,44,0,descent,0,375,9350,14,156,14,0,34,1880,Banish,8,0,0,0,48,2421,0,0
+explorer-v1,control,6,34,0,descent,0,6,14,14,144,4,0,10,30,Exchange,9,0,0,0,14,910,0,0
+explorer-v1,control,505,45,0,descent,0,0,0,14,130,6,0,27,2525,Cleanse,10,0,0,505,33,1751,0,0
+explorer-v1,control,0,21,0,descent,0,0,0,14,52,4,0,9,0,Fireburst,11,0,0,0,13,841,0,0
+explorer-v1,control,450,19,0,descent,0,450,1311,14,83,2,0,13,2250,Phase Step,12,0,0,0,15,788,0,0
+explorer-v1,control,10,15,79,descent,0,0,0,14,42,2,0,9,60,Chain Lightning,13,0,0,0,11,758,0,0
+explorer-v1,control,618,29,0,descent,618,0,0,14,94,3,0,14,3090,Slumber,14,0,0,0,17,894,2170,0
+explorer-v1,control,2,27,18,descent,0,0,0,14,93,5,0,17,6,Blood Bolt,15,0,0,0,22,1101,0,0
+explorer-v1,control,3029,0,8853,descent,0,0,0,15,0,0,112,0,6058,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,control,2197,0,0,descent,0,0,0,15,0,0,0,1,6591,Frostbind,1,2197,10996,0,1,40,0,0
+explorer-v1,control,145,0,0,descent,0,130,186,15,0,0,0,0,435,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,control,3353,0,0,descent,0,0,0,15,0,0,0,0,10059,Confound,3,3353,16751,0,0,0,0,0
+explorer-v1,control,448,0,0,descent,0,0,0,15,0,0,0,0,1344,Sense Traps,4,0,0,0,0,0,0,29
+explorer-v1,control,121,47,0,descent,0,121,319,15,79,6,0,24,484,Blink,5,0,0,0,30,1500,0,0
+explorer-v1,control,15,37,0,descent,0,23,47,15,85,11,0,20,75,Shockwave,6,0,0,0,31,1346,0,0
+explorer-v1,control,1,25,6,descent,0,0,0,15,71,0,0,5,5,Piercing Bolt,7,0,0,0,5,300,0,0
+explorer-v1,control,420,25,0,descent,0,420,10131,15,78,3,0,17,2100,Banish,8,0,0,0,20,1083,0,0
+explorer-v1,control,6,24,0,descent,0,6,13,15,61,2,0,9,30,Exchange,9,0,0,0,11,727,0,0
+explorer-v1,control,839,18,0,descent,0,0,0,15,66,4,0,17,4195,Cleanse,10,0,0,839,21,1051,0,0
+explorer-v1,control,1,14,12,descent,0,0,0,15,24,2,0,6,6,Fireburst,11,0,0,0,8,556,0,0
+explorer-v1,control,159,20,0,descent,0,157,463,15,42,3,0,14,795,Phase Step,12,0,0,0,17,926,0,0
+explorer-v1,control,8,10,57,descent,0,0,0,15,24,2,0,6,48,Chain Lightning,13,0,0,0,8,573,0,0
+explorer-v1,control,667,24,0,descent,667,0,0,15,54,4,0,18,3335,Slumber,14,0,0,0,22,1106,2339,0
+explorer-v1,control,15,22,112,descent,0,0,0,15,50,5,0,13,45,Blood Bolt,15,0,0,0,18,942,0,0
+explorer-v1,candidate,145,0,215,ascent,0,0,0,0,0,0,133,0,290,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,0,0,0,0,0,0,0,2,Frostbind,1,1,6,0,0,0,0,0
+explorer-v1,candidate,5,0,0,ascent,0,5,7,0,0,0,0,0,10,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,0,0,0,0,0,0,0,6,Confound,3,2,10,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,15,0,0,ascent,0,15,300,0,0,0,0,0,60,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,0,0,0,0,0,0,0,4,Cleanse,10,0,0,1,0,0,0,0
+explorer-v1,candidate,4,0,12,ascent,0,0,0,0,0,0,8,0,16,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,10,0,0,ascent,0,10,30,0,0,0,0,0,40,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,8,0,30,ascent,0,0,0,0,0,0,16,0,32,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,52832,0,79282,descent,0,0,0,0,0,0,47644,0,105664,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,0,2831,0,descent,0,0,0,0,3324,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+explorer-v1,candidate,0,2105,0,descent,0,0,0,0,2486,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,237,2831,0,descent,0,0,0,0,3324,537,0,2366,711,Confound,3,237,1200,0,2903,102339,0,0
+explorer-v1,candidate,0,785,0,descent,0,0,0,0,914,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,candidate,222,2105,0,descent,0,222,566,0,2486,465,0,1709,888,Blink,5,0,0,0,2174,111773,0,0
+explorer-v1,candidate,0,2105,0,descent,0,0,0,0,2486,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,6,187,23,descent,0,0,0,0,230,34,12,154,18,Piercing Bolt,7,0,0,0,188,6499,0,0
+explorer-v1,candidate,0,2831,0,descent,0,0,0,0,3324,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,10,785,0,descent,0,10,26,0,914,150,0,590,40,Exchange,9,0,0,0,740,38412,0,0
+explorer-v1,candidate,73,785,0,descent,0,0,0,0,914,60,0,518,292,Cleanse,10,0,0,73,578,32647,0,0
+explorer-v1,candidate,0,187,0,descent,0,0,0,0,230,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,2105,0,descent,0,0,0,0,2486,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,187,0,descent,0,0,0,0,230,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,2831,0,descent,0,0,0,0,3324,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,187,0,descent,0,0,0,0,230,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,156,0,384,ascent,0,0,0,1,0,0,89,0,312,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,0,0,1,0,0,0,0,2,Frostbind,1,1,6,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,10,0,0,ascent,0,0,0,1,0,0,0,0,30,Confound,3,10,47,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,13,ascent,0,0,0,1,0,0,4,0,6,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,10,0,0,ascent,0,10,173,1,0,0,0,0,40,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,0,0,1,0,0,0,0,4,Cleanse,10,0,0,1,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,9,0,0,ascent,0,9,26,1,0,0,0,0,36,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,4,0,20,ascent,0,0,0,1,0,0,8,0,16,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,29060,0,75357,descent,0,0,0,1,0,0,17734,0,58120,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1956,0,descent,0,0,0,1,2349,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1528,0,descent,0,0,0,1,1834,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,748,1956,0,descent,0,0,0,1,2349,343,0,1725,2244,Confound,3,748,3716,0,2068,74237,0,0
+explorer-v1,candidate,0,640,0,descent,0,0,0,1,769,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,candidate,637,1528,0,descent,0,637,1621,1,1834,295,0,1359,2548,Blink,5,0,0,0,1654,87691,0,0
+explorer-v1,candidate,0,1528,0,descent,0,0,0,1,1834,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,18,157,106,descent,0,0,0,1,237,20,33,116,54,Piercing Bolt,7,0,0,0,136,4992,0,0
+explorer-v1,candidate,0,1956,0,descent,0,0,0,1,2349,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,32,640,0,descent,0,32,76,1,769,118,0,443,128,Exchange,9,0,0,0,561,28909,0,0
+explorer-v1,candidate,147,640,0,descent,0,0,0,1,769,41,0,346,588,Cleanse,10,0,0,147,387,21608,0,0
+explorer-v1,candidate,0,157,0,descent,0,0,0,1,237,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1528,0,descent,0,0,0,1,1834,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,157,0,descent,0,0,0,1,237,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1956,0,descent,0,0,0,1,2349,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,157,0,descent,0,0,0,1,237,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,168,0,480,ascent,0,0,0,2,0,0,16,0,336,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,0,0,2,0,0,0,0,4,Frostbind,1,2,10,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,2,3,2,0,0,0,0,4,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,0,0,2,0,0,0,0,3,Confound,3,1,4,0,0,0,0,0
+explorer-v1,candidate,207,0,0,ascent,0,0,0,2,0,0,0,0,414,Sense Traps,4,0,0,0,0,0,0,7
+explorer-v1,candidate,4,0,0,ascent,0,4,10,2,0,0,0,0,16,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,6,ascent,0,0,0,2,0,0,1,0,3,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,22,0,0,ascent,0,22,506,2,0,0,0,0,88,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Cleanse,10,0,0,0,0,0,0,0
+explorer-v1,candidate,4,0,30,ascent,0,0,0,2,0,0,2,0,16,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,21,0,0,ascent,0,21,63,2,0,0,0,0,84,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,13,0,77,ascent,0,0,0,2,0,0,11,0,52,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,20547,0,58687,descent,0,0,0,2,0,0,2214,0,41094,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1224,0,descent,0,0,0,2,1607,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1096,0,descent,0,0,0,2,1421,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,1955,1224,0,descent,0,0,0,2,1607,321,0,1252,5865,Confound,3,1955,9779,0,1573,54582,0,0
+explorer-v1,candidate,0,555,0,descent,0,0,0,2,719,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,candidate,1396,1096,0,descent,0,1396,3586,2,1421,306,0,953,5584,Blink,5,0,0,0,1259,62580,0,0
+explorer-v1,candidate,0,1096,0,descent,0,0,0,2,1421,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,19,121,141,descent,0,0,0,2,209,28,7,113,57,Piercing Bolt,7,0,0,0,141,4999,0,0
+explorer-v1,candidate,0,1224,0,descent,0,0,0,2,1607,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,27,555,0,descent,0,27,64,2,719,96,0,291,108,Exchange,9,0,0,0,387,19377,0,0
+explorer-v1,candidate,216,555,0,descent,0,0,0,2,719,172,0,795,864,Cleanse,10,0,0,216,967,51864,0,0
+explorer-v1,candidate,0,121,0,descent,0,0,0,2,209,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1096,0,descent,0,0,0,2,1421,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,121,0,descent,0,0,0,2,209,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1224,0,descent,0,0,0,2,1607,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,121,0,descent,0,0,0,2,209,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,205,0,593,ascent,0,0,0,3,0,0,18,0,410,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,1,1,3,0,0,0,0,2,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,8,0,0,ascent,0,0,0,3,0,0,0,0,24,Confound,3,8,39,0,0,0,0,0
+explorer-v1,candidate,240,0,0,ascent,0,0,0,3,0,0,0,0,480,Sense Traps,4,0,0,0,0,0,0,10
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,5,ascent,0,0,0,3,0,0,1,0,3,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,17,0,0,ascent,0,17,352,3,0,0,0,0,68,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Cleanse,10,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,10,ascent,0,0,0,3,0,0,0,0,4,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,23,0,0,ascent,0,23,67,3,0,0,0,0,92,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,14,0,100,ascent,0,0,0,3,0,0,5,0,56,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,19057,0,54674,descent,0,0,0,3,0,0,1968,0,38114,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,0,586,0,descent,0,0,0,3,965,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+explorer-v1,candidate,0,880,0,descent,0,0,0,3,1280,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,1967,586,0,descent,0,0,0,3,965,134,0,498,5901,Confound,3,1966,9847,0,632,21824,0,0
+explorer-v1,candidate,0,847,0,descent,0,0,0,3,1148,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+explorer-v1,candidate,743,880,0,descent,0,743,1924,3,1280,164,0,612,2972,Blink,5,0,0,0,776,39707,0,0
+explorer-v1,candidate,0,880,0,descent,0,0,0,3,1280,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,22,240,169,descent,0,0,0,3,499,42,6,143,66,Piercing Bolt,7,0,0,0,185,6306,0,0
+explorer-v1,candidate,0,586,0,descent,0,0,0,3,965,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,19,847,0,descent,0,19,40,3,1148,89,0,301,76,Exchange,9,0,0,0,390,19509,0,0
+explorer-v1,candidate,209,847,0,descent,0,0,0,3,1148,115,0,622,836,Cleanse,10,0,0,209,737,39744,0,0
+explorer-v1,candidate,0,240,0,descent,0,0,0,3,499,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,880,0,descent,0,0,0,3,1280,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,240,0,descent,0,0,0,3,499,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,586,0,descent,0,0,0,3,965,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,240,0,descent,0,0,0,3,499,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,45,0,128,ascent,0,0,0,4,0,0,5,0,90,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,3,0,0,ascent,0,0,0,4,0,0,0,0,6,Frostbind,1,3,16,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,10,0,0,ascent,0,0,0,4,0,0,0,0,30,Confound,3,10,46,0,0,0,0,0
+explorer-v1,candidate,275,0,0,ascent,0,0,0,4,0,0,0,0,550,Sense Traps,4,0,0,0,0,0,0,23
+explorer-v1,candidate,10,0,0,ascent,0,10,27,4,0,0,0,0,40,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,4,8,4,0,0,0,0,8,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,16,ascent,0,0,0,4,0,0,0,0,6,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,23,0,0,ascent,0,23,609,4,0,0,0,0,92,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,6,0,0,ascent,0,0,0,4,0,0,0,0,24,Cleanse,10,0,0,6,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,9,0,60,ascent,0,0,0,4,0,0,5,0,36,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,4675,0,13228,descent,0,0,0,4,0,0,629,0,9350,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,0,22,0,descent,0,0,0,4,0,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+explorer-v1,candidate,0,49,0,descent,0,0,0,4,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,1142,22,0,descent,0,0,0,4,0,45,0,102,3426,Confound,3,1142,5722,0,147,4651,0,0
+explorer-v1,candidate,2379,34,0,descent,0,0,0,4,0,149,0,499,4758,Sense Traps,4,0,0,0,648,21955,0,148
+explorer-v1,candidate,637,49,0,descent,0,637,1650,4,0,31,0,79,2548,Blink,5,0,0,0,110,5186,0,0
+explorer-v1,candidate,67,49,0,descent,0,122,257,4,0,615,0,1522,268,Shockwave,6,0,0,0,2137,102793,0,0
+explorer-v1,candidate,9,15,70,descent,0,0,0,4,0,8,4,30,27,Piercing Bolt,7,0,0,0,38,1364,0,0
+explorer-v1,candidate,0,22,0,descent,0,0,0,4,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,5,34,0,descent,0,5,10,4,0,12,0,35,20,Exchange,9,0,0,0,47,2388,0,0
+explorer-v1,candidate,233,34,0,descent,0,0,0,4,0,27,0,116,932,Cleanse,10,0,0,233,143,7525,0,0
+explorer-v1,candidate,0,15,0,descent,0,0,0,4,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,49,0,descent,0,0,0,4,0,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,15,0,descent,0,0,0,4,0,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,22,0,descent,0,0,0,4,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,15,0,descent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,261,0,786,ascent,0,0,0,5,0,0,13,0,522,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,3,0,0,ascent,0,0,0,5,0,0,0,0,6,Frostbind,1,3,18,0,0,0,0,0
+explorer-v1,candidate,6,0,0,ascent,0,6,9,5,0,0,0,0,12,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,12,0,0,ascent,0,0,0,5,0,0,0,0,36,Confound,3,12,61,0,0,0,0,0
+explorer-v1,candidate,330,0,0,ascent,0,0,0,5,0,0,0,0,660,Sense Traps,4,0,0,0,0,0,0,25
+explorer-v1,candidate,1,0,0,ascent,0,1,1,5,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,6,14,5,0,0,0,0,8,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,16,0,0,ascent,0,16,563,5,0,0,0,0,64,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,2,5,5,0,0,0,0,8,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,4,0,0,ascent,0,0,0,5,0,0,0,0,16,Cleanse,10,0,0,4,0,0,0,0
+explorer-v1,candidate,2,0,14,ascent,0,0,0,5,0,0,0,0,8,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,37,0,0,ascent,0,37,107,5,0,0,0,0,148,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,14,0,99,ascent,0,0,0,5,0,0,3,0,56,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,21694,0,62950,descent,0,0,0,5,0,0,1666,0,43388,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,15,1225,0,descent,0,0,0,5,1643,50,0,534,30,Frostbind,1,15,75,0,584,22290,0,0
+explorer-v1,candidate,58,1222,0,descent,0,50,72,5,1614,103,0,594,116,Repulsion,2,0,0,0,697,25537,0,0
+explorer-v1,candidate,2161,1225,0,descent,0,0,0,5,1643,56,0,304,6483,Confound,3,2161,10804,0,360,13033,0,0
+explorer-v1,candidate,3016,773,0,descent,0,0,0,5,1117,23,0,281,6032,Sense Traps,4,0,0,0,304,11661,0,227
+explorer-v1,candidate,379,1222,0,descent,0,379,945,5,1614,58,0,286,1516,Blink,5,0,0,0,344,18359,0,0
+explorer-v1,candidate,102,1222,0,descent,0,186,420,5,1614,94,0,550,408,Shockwave,6,0,0,0,644,35251,0,0
+explorer-v1,candidate,55,118,426,descent,0,0,0,5,417,5,13,53,165,Piercing Bolt,7,0,0,0,58,2182,0,0
+explorer-v1,candidate,190,1225,0,descent,0,190,4879,5,1643,209,0,939,760,Banish,8,0,0,0,1148,60972,0,0
+explorer-v1,candidate,47,773,0,descent,0,47,108,5,1117,42,0,167,188,Exchange,9,0,0,0,209,10923,0,0
+explorer-v1,candidate,193,773,0,descent,0,0,0,5,1117,54,0,329,772,Cleanse,10,0,0,193,383,20888,0,0
+explorer-v1,candidate,0,118,0,descent,0,0,0,5,417,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1222,0,descent,0,0,0,5,1614,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,118,0,descent,0,0,0,5,417,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1225,0,descent,0,0,0,5,1643,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,118,0,descent,0,0,0,5,417,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,196,0,572,ascent,0,0,0,6,0,0,2,0,392,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,8,0,0,ascent,0,0,0,6,0,0,0,0,16,Frostbind,1,8,40,0,0,0,0,0
+explorer-v1,candidate,4,0,0,ascent,0,4,6,6,0,0,0,0,8,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,3,0,0,ascent,0,0,0,6,0,0,0,0,9,Confound,3,3,16,0,0,0,0,0
+explorer-v1,candidate,331,0,0,ascent,0,0,0,6,0,0,0,0,662,Sense Traps,4,0,0,0,0,0,0,20
+explorer-v1,candidate,2,0,0,ascent,0,2,4,6,0,0,0,0,8,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,3,0,0,ascent,0,7,14,6,0,0,0,0,12,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,8,ascent,0,0,0,6,0,0,0,0,3,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,17,0,0,ascent,0,17,420,6,0,0,0,0,68,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,9,0,0,ascent,0,0,0,6,0,0,0,0,36,Cleanse,10,0,0,9,0,0,0,0
+explorer-v1,candidate,1,0,11,ascent,0,0,0,6,0,0,0,0,4,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,18,0,0,ascent,0,18,52,6,0,0,0,0,72,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,24,0,163,ascent,0,0,0,6,0,0,9,0,96,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,20521,0,58517,descent,0,0,0,6,0,0,2178,0,41042,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,87,1089,0,descent,0,0,0,6,1436,72,0,525,174,Frostbind,1,87,434,0,597,22161,0,0
+explorer-v1,candidate,233,925,0,descent,0,192,264,6,1330,39,0,406,466,Repulsion,2,0,0,0,445,16853,0,0
+explorer-v1,candidate,2751,1089,0,descent,0,0,0,6,1436,38,0,218,8253,Confound,3,2750,13800,0,256,9235,0,0
+explorer-v1,candidate,4919,637,0,descent,0,0,0,6,931,61,0,454,9838,Sense Traps,4,0,0,0,515,19120,0,347
+explorer-v1,candidate,507,925,0,descent,0,507,1314,6,1330,86,0,327,2028,Blink,5,0,0,0,413,21651,0,0
+explorer-v1,candidate,170,925,0,descent,0,304,664,6,1330,100,0,528,680,Shockwave,6,0,0,0,628,34044,0,0
+explorer-v1,candidate,61,267,465,descent,0,0,0,6,439,22,20,147,183,Piercing Bolt,7,0,0,0,169,6176,0,0
+explorer-v1,candidate,938,1089,0,descent,0,938,23597,6,1436,141,0,792,3752,Banish,8,0,0,0,933,50679,0,0
+explorer-v1,candidate,52,637,0,descent,0,52,112,6,931,39,0,182,208,Exchange,9,0,0,0,221,11956,0,0
+explorer-v1,candidate,180,637,0,descent,0,0,0,6,931,57,0,378,720,Cleanse,10,0,0,180,435,23868,0,0
+explorer-v1,candidate,0,267,0,descent,0,0,0,6,439,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,0,925,0,descent,0,0,0,6,1330,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,0,267,0,descent,0,0,0,6,439,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,1089,0,descent,0,0,0,6,1436,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,267,0,descent,0,0,0,6,439,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,216,0,628,ascent,0,0,0,7,0,0,17,0,432,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,0,0,7,0,0,0,0,4,Frostbind,1,2,12,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,9,0,0,ascent,0,0,0,7,0,0,0,0,27,Confound,3,9,44,0,0,0,0,0
+explorer-v1,candidate,352,0,0,ascent,0,0,0,7,0,0,0,0,704,Sense Traps,4,0,0,0,0,0,0,22
+explorer-v1,candidate,1,0,0,ascent,0,1,3,7,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,2,6,7,0,0,0,0,4,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,4,0,31,ascent,0,0,0,7,0,0,1,0,12,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,13,0,0,ascent,0,13,329,7,0,0,0,0,52,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,1,2,7,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,6,0,0,ascent,0,0,0,7,0,0,0,0,24,Cleanse,10,0,0,6,0,0,0,0
+explorer-v1,candidate,2,0,20,ascent,0,0,0,7,0,0,0,0,8,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,15,0,0,ascent,0,15,44,7,0,0,0,0,60,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,24,0,168,ascent,0,0,0,7,0,0,10,0,96,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,16486,0,47304,descent,0,0,0,7,0,0,1812,0,32972,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,158,505,0,descent,0,0,0,7,729,9,0,140,316,Frostbind,1,158,790,0,149,5817,0,0
+explorer-v1,candidate,223,673,0,descent,0,183,261,7,1078,2,0,120,446,Repulsion,2,0,0,0,122,4838,0,0
+explorer-v1,candidate,1783,505,0,descent,0,0,0,7,729,9,0,88,5349,Confound,3,1783,8991,0,97,3614,0,0
+explorer-v1,candidate,5319,670,0,descent,0,0,0,7,1013,18,0,210,10638,Sense Traps,4,0,0,0,228,8718,0,365
+explorer-v1,candidate,283,673,0,descent,0,283,736,7,1078,18,0,113,1132,Blink,5,0,0,0,131,7269,0,0
+explorer-v1,candidate,190,673,0,descent,0,284,606,7,1078,41,0,268,760,Shockwave,6,0,0,0,309,17039,0,0
+explorer-v1,candidate,43,436,333,descent,0,0,0,7,861,17,19,145,129,Piercing Bolt,7,0,0,0,162,6051,0,0
+explorer-v1,candidate,967,505,0,descent,0,967,24015,7,729,38,0,223,3868,Banish,8,0,0,0,261,14313,0,0
+explorer-v1,candidate,22,670,0,descent,0,22,46,7,1013,33,0,180,88,Exchange,9,0,0,0,213,11573,0,0
+explorer-v1,candidate,160,670,0,descent,0,0,0,7,1013,44,0,263,640,Cleanse,10,0,0,160,307,16883,0,0
+explorer-v1,candidate,0,436,0,descent,0,0,0,7,861,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,44,673,0,descent,0,44,129,7,1078,42,0,258,176,Phase Step,12,0,0,0,300,16441,0,0
+explorer-v1,candidate,0,436,0,descent,0,0,0,7,861,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,505,0,descent,0,0,0,7,729,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,436,0,descent,0,0,0,7,861,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,230,0,676,ascent,0,0,0,8,0,0,18,0,460,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,7,0,0,ascent,0,0,0,8,0,0,0,0,14,Frostbind,1,7,31,0,0,0,0,0
+explorer-v1,candidate,11,0,0,ascent,0,10,15,8,0,0,0,0,22,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,75,0,0,ascent,0,0,0,8,0,0,0,0,225,Confound,3,75,375,0,0,0,0,0
+explorer-v1,candidate,357,0,0,ascent,0,0,0,8,0,0,0,0,714,Sense Traps,4,0,0,0,0,0,0,25
+explorer-v1,candidate,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,2,3,8,0,0,0,0,4,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,13,0,0,ascent,0,13,290,8,0,0,0,0,52,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,1,2,8,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,140,0,0,ascent,0,0,0,8,0,0,0,0,560,Cleanse,10,0,0,140,0,0,0,0
+explorer-v1,candidate,1,0,9,ascent,0,0,0,8,0,0,0,0,4,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,15,0,0,ascent,0,15,44,8,0,0,0,0,60,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,29,0,217,ascent,0,0,0,8,0,0,6,0,116,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,17,0,0,ascent,17,0,0,8,0,0,0,0,68,Slumber,14,0,0,0,0,0,59,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,16908,0,49002,descent,0,0,0,8,0,0,1229,0,33816,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,385,509,0,descent,0,0,0,8,754,73,0,346,770,Frostbind,1,384,1936,0,419,15108,0,0
+explorer-v1,candidate,261,673,0,descent,0,209,296,8,936,11,0,129,522,Repulsion,2,0,0,0,140,5388,0,0
+explorer-v1,candidate,8608,509,0,descent,0,0,0,8,754,21,0,106,25824,Confound,3,8608,43113,0,127,4453,0,0
+explorer-v1,candidate,6379,536,0,descent,0,0,0,8,806,73,0,407,12758,Sense Traps,4,0,0,0,480,17388,0,463
+explorer-v1,candidate,316,673,0,descent,0,316,818,8,936,20,0,111,1264,Blink,5,0,0,0,131,7020,0,0
+explorer-v1,candidate,173,673,0,descent,0,328,719,8,936,74,0,372,692,Shockwave,6,0,0,0,446,23704,0,0
+explorer-v1,candidate,75,515,586,descent,0,0,0,8,819,26,20,210,225,Piercing Bolt,7,0,0,0,236,8767,0,0
+explorer-v1,candidate,1211,509,0,descent,0,1211,29482,8,754,73,0,349,4844,Banish,8,0,0,0,422,22208,0,0
+explorer-v1,candidate,30,536,0,descent,0,30,62,8,806,41,0,219,120,Exchange,9,0,0,0,260,13966,0,0
+explorer-v1,candidate,2724,536,0,descent,0,0,0,8,806,59,0,320,10896,Cleanse,10,0,0,2724,379,20593,0,0
+explorer-v1,candidate,0,515,0,descent,0,0,0,8,819,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,393,673,0,descent,0,393,1150,8,936,169,0,696,1572,Phase Step,12,0,0,0,865,45427,0,0
+explorer-v1,candidate,74,515,513,descent,0,0,0,8,819,65,18,230,296,Chain Lightning,13,0,0,0,295,15278,0,0
+explorer-v1,candidate,108,509,0,descent,108,0,0,8,754,17,0,113,432,Slumber,14,0,0,0,130,7129,374,0
+explorer-v1,candidate,0,515,0,descent,0,0,0,8,819,6,0,80,0,Blood Bolt,15,0,0,0,86,5018,0,0
+explorer-v1,candidate,115,0,332,ascent,0,0,0,9,0,0,12,0,230,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,12,0,0,ascent,0,0,0,9,0,0,0,0,24,Frostbind,1,12,59,0,0,0,0,0
+explorer-v1,candidate,2,0,0,ascent,0,1,1,9,0,0,0,0,4,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,18,0,0,ascent,0,0,0,9,0,0,0,0,54,Confound,3,18,86,0,0,0,0,0
+explorer-v1,candidate,384,0,0,ascent,0,0,0,9,0,0,0,0,768,Sense Traps,4,0,0,0,0,0,0,33
+explorer-v1,candidate,1,0,0,ascent,0,1,2,9,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,6,ascent,0,0,0,9,0,0,1,0,3,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,16,0,0,ascent,0,16,272,9,0,0,0,0,64,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,1,2,9,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,6,0,0,ascent,0,0,0,9,0,0,0,0,24,Cleanse,10,0,0,6,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,20,0,0,ascent,0,20,57,9,0,0,0,0,80,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,18,0,129,ascent,0,0,0,9,0,0,7,0,72,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,7431,0,20898,descent,0,0,0,9,0,0,889,0,14862,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,179,371,0,descent,0,0,0,9,578,2,0,74,358,Frostbind,1,179,896,0,76,2987,0,0
+explorer-v1,candidate,226,487,0,descent,0,186,263,9,777,4,0,76,452,Repulsion,2,0,0,0,80,3133,0,0
+explorer-v1,candidate,1174,371,0,descent,0,0,0,9,578,4,0,53,3522,Confound,3,1174,5893,0,57,2169,0,0
+explorer-v1,candidate,6871,400,0,descent,0,0,0,9,718,5,0,122,13742,Sense Traps,4,0,0,0,127,4957,0,530
+explorer-v1,candidate,122,487,0,descent,0,122,322,9,777,5,0,80,488,Blink,5,0,0,0,85,4919,0,0
+explorer-v1,candidate,58,487,0,descent,0,108,222,9,777,20,0,180,232,Shockwave,6,0,0,0,200,11215,0,0
+explorer-v1,candidate,41,425,314,descent,0,0,0,9,719,8,16,108,123,Piercing Bolt,7,0,0,0,116,4519,0,0
+explorer-v1,candidate,979,371,0,descent,0,979,22936,9,578,25,0,121,3916,Banish,8,0,0,0,146,7779,0,0
+explorer-v1,candidate,32,400,0,descent,0,32,70,9,718,8,0,81,128,Exchange,9,0,0,0,89,5042,0,0
+explorer-v1,candidate,136,400,0,descent,0,0,0,9,718,18,0,151,544,Cleanse,10,0,0,136,169,9388,0,0
+explorer-v1,candidate,0,425,0,descent,0,0,0,9,719,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,378,487,0,descent,0,376,1088,9,777,13,0,174,1512,Phase Step,12,0,0,0,187,10873,0,0
+explorer-v1,candidate,61,425,422,descent,0,0,0,9,719,15,25,128,244,Chain Lightning,13,0,0,0,143,8102,0,0
+explorer-v1,candidate,0,371,0,descent,0,0,0,9,578,8,0,58,0,Slumber,14,0,0,0,66,3733,0,0
+explorer-v1,candidate,0,425,0,descent,0,0,0,9,719,8,0,49,0,Blood Bolt,15,0,0,0,57,3210,0,0
+explorer-v1,candidate,239,0,721,ascent,0,0,0,10,0,0,8,0,478,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,38,0,0,ascent,0,0,0,10,0,0,0,0,76,Frostbind,1,38,187,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,0,0,10,0,0,0,0,2,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,160,0,0,ascent,0,0,0,10,0,0,0,0,480,Confound,3,160,808,0,0,0,0,0
+explorer-v1,candidate,354,0,0,ascent,0,0,0,10,0,0,0,0,708,Sense Traps,4,0,0,0,0,0,0,26
+explorer-v1,candidate,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,3,6,10,0,0,0,0,4,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,31,0,0,ascent,0,31,924,10,0,0,0,0,124,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,245,0,0,ascent,0,0,0,10,0,0,0,0,980,Cleanse,10,0,0,245,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,18,0,0,ascent,0,18,52,10,0,0,0,0,72,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,25,0,185,ascent,0,0,0,10,0,0,4,0,100,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,26,0,0,ascent,26,0,0,10,0,0,0,0,104,Slumber,14,0,0,0,0,0,95,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,10,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,14222,0,41511,descent,0,0,0,10,0,0,1031,0,28444,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1250,377,0,descent,0,0,0,10,526,15,0,153,2500,Frostbind,1,1249,6288,0,168,6313,0,0
+explorer-v1,candidate,531,466,0,descent,0,441,641,10,706,44,0,221,1062,Repulsion,2,0,0,0,265,9544,0,0
+explorer-v1,candidate,13478,377,0,descent,0,0,0,10,526,10,0,65,40434,Confound,3,13478,67439,0,75,2726,0,0
+explorer-v1,candidate,5545,383,0,descent,0,0,0,10,635,58,0,264,11090,Sense Traps,4,0,0,0,322,11374,0,377
+explorer-v1,candidate,467,466,0,descent,0,467,1186,10,706,23,0,108,1868,Blink,5,0,0,0,131,6983,0,0
+explorer-v1,candidate,145,466,0,descent,0,268,573,10,706,41,0,191,580,Shockwave,6,0,0,0,232,12251,0,0
+explorer-v1,candidate,54,373,417,descent,0,0,0,10,609,21,10,150,162,Piercing Bolt,7,0,0,0,171,6302,0,0
+explorer-v1,candidate,1711,377,0,descent,0,1711,40722,10,526,30,0,197,6844,Banish,8,0,0,0,227,12431,0,0
+explorer-v1,candidate,26,383,0,descent,0,26,56,10,635,31,0,145,104,Exchange,9,0,0,0,176,9572,0,0
+explorer-v1,candidate,4761,383,0,descent,0,0,0,10,635,31,0,198,19044,Cleanse,10,0,0,4761,229,12476,0,0
+explorer-v1,candidate,0,373,0,descent,0,0,0,10,609,38,0,201,0,Fireburst,11,0,0,0,239,12730,0,0
+explorer-v1,candidate,1439,466,0,descent,0,1427,4173,10,706,72,0,322,5756,Phase Step,12,0,0,0,394,20795,0,0
+explorer-v1,candidate,185,373,1373,descent,0,0,0,10,609,88,33,330,740,Chain Lightning,13,0,0,0,418,21746,0,0
+explorer-v1,candidate,673,377,0,descent,673,0,0,10,526,43,0,161,2692,Slumber,14,0,0,0,204,10572,2358,0
+explorer-v1,candidate,15,373,107,descent,0,0,0,10,609,1,0,33,30,Blood Bolt,15,0,0,0,34,2015,0,0
+explorer-v1,candidate,224,0,652,ascent,0,0,0,11,0,0,5,0,448,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,63,0,0,ascent,0,0,0,11,0,0,0,0,126,Frostbind,1,63,305,0,0,0,0,0
+explorer-v1,candidate,9,0,0,ascent,0,9,12,11,0,0,0,0,18,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,201,0,0,ascent,0,0,0,11,0,0,0,0,603,Confound,3,201,1003,0,0,0,0,0
+explorer-v1,candidate,347,0,0,ascent,0,0,0,11,0,0,0,0,694,Sense Traps,4,0,0,0,0,0,0,28
+explorer-v1,candidate,4,0,0,ascent,0,4,10,11,0,0,0,0,16,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,9,0,0,ascent,0,20,40,11,0,0,0,0,36,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,5,ascent,0,0,0,11,0,0,1,0,3,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,72,0,0,ascent,0,72,1774,11,0,0,0,0,288,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,1,0,0,ascent,0,1,3,11,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,132,0,0,ascent,0,0,0,11,0,0,0,0,528,Cleanse,10,0,0,132,0,0,0,0
+explorer-v1,candidate,3,0,28,ascent,0,0,0,11,0,0,1,0,12,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,20,0,0,ascent,0,20,59,11,0,0,0,0,80,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,49,0,373,ascent,0,0,0,11,0,0,8,0,196,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,27,0,0,ascent,27,0,0,11,0,0,0,0,108,Slumber,14,0,0,0,0,0,92,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,11,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,9286,0,27306,descent,0,0,0,11,0,0,503,0,18572,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1264,171,0,descent,0,0,0,11,207,4,0,25,2528,Frostbind,1,1263,6308,0,29,1062,0,0
+explorer-v1,candidate,598,244,0,descent,0,518,731,11,357,3,0,24,1196,Repulsion,2,0,0,0,27,990,0,0
+explorer-v1,candidate,8787,171,0,descent,0,0,0,11,207,1,0,10,26361,Confound,3,8786,43948,0,11,419,0,0
+explorer-v1,candidate,4139,249,0,descent,0,0,0,11,475,4,0,54,8278,Sense Traps,4,0,0,0,58,2257,0,317
+explorer-v1,candidate,318,244,0,descent,0,318,806,11,357,7,0,27,1272,Blink,5,0,0,0,34,1751,0,0
+explorer-v1,candidate,200,244,0,descent,0,310,669,11,357,10,0,37,800,Shockwave,6,0,0,0,47,2486,0,0
+explorer-v1,candidate,42,484,335,descent,0,0,0,11,842,13,4,60,126,Piercing Bolt,7,0,0,0,73,2606,0,0
+explorer-v1,candidate,1839,171,0,descent,0,1838,44447,11,207,6,0,35,7356,Banish,8,0,0,0,41,2298,0,0
+explorer-v1,candidate,32,249,0,descent,0,32,70,11,475,6,0,33,128,Exchange,9,0,0,0,39,2054,0,0
+explorer-v1,candidate,1803,249,0,descent,0,0,0,11,475,9,0,50,7212,Cleanse,10,0,0,1803,59,3177,0,0
+explorer-v1,candidate,4,484,31,descent,0,0,0,11,842,8,0,71,16,Fireburst,11,0,0,0,79,4557,0,0
+explorer-v1,candidate,1481,244,0,descent,0,1478,4332,11,357,7,0,51,5924,Phase Step,12,0,0,0,58,3341,0,0
+explorer-v1,candidate,177,484,1300,descent,0,0,0,11,842,20,21,97,708,Chain Lightning,13,0,0,0,117,6347,0,0
+explorer-v1,candidate,472,171,0,descent,472,0,0,11,207,3,0,24,1888,Slumber,14,0,0,0,27,1515,1640,0
+explorer-v1,candidate,2,484,14,descent,0,0,0,11,842,1,0,18,4,Blood Bolt,15,0,0,0,19,1116,0,0
+explorer-v1,candidate,233,0,706,ascent,0,0,0,12,0,0,3,0,466,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,112,0,0,ascent,0,0,0,12,0,0,0,0,224,Frostbind,1,112,557,0,0,0,0,0
+explorer-v1,candidate,31,0,0,ascent,0,28,38,12,0,0,0,0,62,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,426,0,0,ascent,0,0,0,12,0,0,0,0,1278,Confound,3,426,2149,0,0,0,0,0
+explorer-v1,candidate,335,0,0,ascent,0,0,0,12,0,0,0,0,670,Sense Traps,4,0,0,0,0,0,0,27
+explorer-v1,candidate,3,0,0,ascent,0,3,8,12,0,0,0,0,12,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,6,0,0,ascent,0,14,25,12,0,0,0,0,24,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,3,0,24,ascent,0,0,0,12,0,0,0,0,9,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,99,0,0,ascent,0,99,2040,12,0,0,0,0,396,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,12,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,149,0,0,ascent,0,0,0,12,0,0,0,0,596,Cleanse,10,0,0,149,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,12,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,69,0,0,ascent,0,69,200,12,0,0,0,0,276,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,17,0,128,ascent,0,0,0,12,0,0,2,0,68,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,40,0,0,ascent,40,0,0,12,0,0,0,0,160,Slumber,14,0,0,0,0,0,142,0
+explorer-v1,candidate,1,0,7,ascent,0,0,0,12,0,0,0,0,2,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,6741,0,19796,descent,0,0,0,12,0,0,334,0,13482,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1162,142,0,descent,0,0,0,12,156,7,0,52,2324,Frostbind,1,1161,5810,0,59,2225,0,0
+explorer-v1,candidate,421,183,0,descent,0,373,547,12,290,11,0,70,842,Repulsion,2,0,0,0,81,2888,0,0
+explorer-v1,candidate,7204,142,0,descent,0,0,0,12,156,2,0,22,21612,Confound,3,7204,36005,0,24,923,0,0
+explorer-v1,candidate,3222,227,0,descent,0,0,0,12,398,18,0,117,6444,Sense Traps,4,0,0,0,135,5024,0,218
+explorer-v1,candidate,780,183,0,descent,0,780,1899,12,290,11,0,47,3120,Blink,5,0,0,0,58,3069,0,0
+explorer-v1,candidate,121,183,0,descent,0,200,425,12,290,21,0,75,484,Shockwave,6,0,0,0,96,5026,0,0
+explorer-v1,candidate,38,407,302,descent,0,0,0,12,627,28,2,152,114,Piercing Bolt,7,0,0,0,180,6587,0,0
+explorer-v1,candidate,1291,142,0,descent,0,1291,31920,12,156,20,0,63,5164,Banish,8,0,0,0,83,4086,0,0
+explorer-v1,candidate,21,227,0,descent,0,21,50,12,398,21,0,86,84,Exchange,9,0,0,0,107,5604,0,0
+explorer-v1,candidate,1893,227,0,descent,0,0,0,12,398,19,0,92,7572,Cleanse,10,0,0,1893,111,5996,0,0
+explorer-v1,candidate,5,407,46,descent,0,0,0,12,627,54,0,214,20,Fireburst,11,0,0,0,268,14014,0,0
+explorer-v1,candidate,1841,183,0,descent,0,1839,5347,12,290,16,0,115,7364,Phase Step,12,0,0,0,131,7263,0,0
+explorer-v1,candidate,188,407,1413,descent,0,0,0,12,627,50,24,263,752,Chain Lightning,13,0,0,0,313,16928,0,0
+explorer-v1,candidate,683,142,0,descent,683,0,0,12,156,10,0,53,2732,Slumber,14,0,0,0,63,3397,2385,0
+explorer-v1,candidate,8,407,59,descent,0,0,0,12,627,8,0,62,16,Blood Bolt,15,0,0,0,70,3873,0,0
+explorer-v1,candidate,375,0,1118,ascent,0,0,0,13,0,0,17,0,750,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,189,0,0,ascent,0,0,0,13,0,0,0,0,378,Frostbind,1,189,971,0,0,0,0,0
+explorer-v1,candidate,37,0,0,ascent,0,31,44,13,0,0,0,0,74,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,612,0,0,ascent,0,0,0,13,0,0,0,0,1836,Confound,3,612,3086,0,0,0,0,0
+explorer-v1,candidate,323,0,0,ascent,0,0,0,13,0,0,0,0,646,Sense Traps,4,0,0,0,0,0,0,20
+explorer-v1,candidate,22,0,0,ascent,0,22,53,13,0,0,0,0,88,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,7,0,0,ascent,0,10,16,13,0,0,0,0,28,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,13,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,159,0,0,ascent,0,159,3650,13,0,0,0,0,636,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,0,0,0,ascent,0,0,0,13,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,205,0,0,ascent,0,0,0,13,0,0,0,0,820,Cleanse,10,0,0,205,0,0,0,0
+explorer-v1,candidate,3,0,28,ascent,0,0,0,13,0,0,0,0,12,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,108,0,0,ascent,0,108,320,13,0,0,0,0,432,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,44,0,336,ascent,0,0,0,13,0,0,6,0,176,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,68,0,0,ascent,68,0,0,13,0,0,0,0,272,Slumber,14,0,0,0,0,0,243,0
+explorer-v1,candidate,3,0,23,ascent,0,0,0,13,0,0,0,0,6,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,4633,0,13510,descent,0,0,0,13,0,0,233,0,9266,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1302,63,0,descent,0,0,0,13,97,2,0,11,2604,Frostbind,1,1302,6490,0,13,457,0,0
+explorer-v1,candidate,381,119,0,descent,0,333,482,13,211,1,0,17,762,Repulsion,2,0,0,0,18,686,0,0
+explorer-v1,candidate,6023,63,0,descent,0,0,0,13,97,0,0,8,18069,Confound,3,6021,30090,0,8,320,0,0
+explorer-v1,candidate,1753,120,0,descent,0,0,0,13,223,2,0,19,3506,Sense Traps,4,0,0,0,21,789,0,108
+explorer-v1,candidate,729,119,0,descent,0,729,1787,13,211,0,0,7,2916,Blink,5,0,0,0,7,420,0,0
+explorer-v1,candidate,101,119,0,descent,0,169,369,13,211,8,0,26,404,Shockwave,6,0,0,0,34,1716,0,0
+explorer-v1,candidate,20,240,155,descent,0,0,0,13,384,3,3,30,60,Piercing Bolt,7,0,0,0,33,1235,0,0
+explorer-v1,candidate,924,63,0,descent,0,923,22048,13,97,3,0,17,3696,Banish,8,0,0,0,20,1081,0,0
+explorer-v1,candidate,26,120,0,descent,0,26,59,13,223,2,0,14,104,Exchange,9,0,0,0,16,896,0,0
+explorer-v1,candidate,1165,120,0,descent,0,0,0,13,223,3,0,14,4660,Cleanse,10,0,0,1165,17,951,0,0
+explorer-v1,candidate,8,240,78,descent,0,0,0,13,384,7,0,38,32,Fireburst,11,0,0,0,45,2407,0,0
+explorer-v1,candidate,1628,119,0,descent,0,1625,4734,13,211,7,0,21,6512,Phase Step,12,0,0,0,28,1408,0,0
+explorer-v1,candidate,144,240,1045,descent,0,0,0,13,384,29,13,57,576,Chain Lightning,13,0,0,0,86,4028,0,0
+explorer-v1,candidate,625,63,0,descent,625,0,0,13,97,3,0,9,2500,Slumber,14,0,0,0,12,608,2194,0
+explorer-v1,candidate,8,240,62,descent,0,0,0,13,384,0,0,10,16,Blood Bolt,15,0,0,0,10,600,0,0
+explorer-v1,candidate,590,0,1748,ascent,0,0,0,14,0,0,28,0,1180,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,390,0,0,ascent,0,0,0,14,0,0,0,0,780,Frostbind,1,390,1963,0,0,0,0,0
+explorer-v1,candidate,58,0,0,ascent,0,45,61,14,0,0,0,0,116,Repulsion,2,0,0,0,0,0,0,0
+explorer-v1,candidate,1115,0,0,ascent,0,0,0,14,0,0,0,0,3345,Confound,3,1115,5614,0,0,0,0,0
+explorer-v1,candidate,376,0,0,ascent,0,0,0,14,0,0,0,0,752,Sense Traps,4,0,0,0,0,0,0,27
+explorer-v1,candidate,36,0,0,ascent,0,36,88,14,0,0,0,0,144,Blink,5,0,0,0,0,0,0,0
+explorer-v1,candidate,10,0,0,ascent,0,24,54,14,0,0,0,0,40,Shockwave,6,0,0,0,0,0,0,0
+explorer-v1,candidate,4,0,29,ascent,0,0,0,14,0,0,0,0,12,Piercing Bolt,7,0,0,0,0,0,0,0
+explorer-v1,candidate,147,0,0,ascent,0,147,3552,14,0,0,0,0,588,Banish,8,0,0,0,0,0,0,0
+explorer-v1,candidate,3,0,0,ascent,0,3,6,14,0,0,0,0,12,Exchange,9,0,0,0,0,0,0,0
+explorer-v1,candidate,373,0,0,ascent,0,0,0,14,0,0,0,0,1492,Cleanse,10,0,0,373,0,0,0,0
+explorer-v1,candidate,2,0,19,ascent,0,0,0,14,0,0,0,0,8,Fireburst,11,0,0,0,0,0,0,0
+explorer-v1,candidate,231,0,0,ascent,0,231,672,14,0,0,0,0,924,Phase Step,12,0,0,0,0,0,0,0
+explorer-v1,candidate,48,0,359,ascent,0,0,0,14,0,0,1,0,192,Chain Lightning,13,0,0,0,0,0,0,0
+explorer-v1,candidate,165,0,0,ascent,165,0,0,14,0,0,0,0,660,Slumber,14,0,0,0,0,0,588,0
+explorer-v1,candidate,2,0,15,ascent,0,0,0,14,0,0,0,0,4,Blood Bolt,15,0,0,0,0,0,0,0
+explorer-v1,candidate,2223,0,6569,descent,0,0,0,14,0,0,125,0,4446,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,1018,40,0,descent,0,0,0,14,52,3,0,15,2036,Frostbind,1,1017,5107,0,18,653,0,0
+explorer-v1,candidate,187,61,0,descent,0,161,236,14,108,2,0,18,374,Repulsion,2,0,0,0,20,751,0,0
+explorer-v1,candidate,3882,40,0,descent,0,0,0,14,52,0,0,4,11646,Confound,3,3881,19423,0,4,160,0,0
+explorer-v1,candidate,882,75,0,descent,0,0,0,14,124,4,0,28,1764,Sense Traps,4,0,0,0,32,1147,0,52
+explorer-v1,candidate,389,61,0,descent,0,389,1013,14,108,7,0,14,1556,Blink,5,0,0,0,21,967,0,0
+explorer-v1,candidate,49,61,0,descent,0,84,182,14,108,9,0,14,196,Shockwave,6,0,0,0,23,963,0,0
+explorer-v1,candidate,16,119,120,descent,0,0,0,14,192,10,1,52,48,Piercing Bolt,7,0,0,0,62,2294,0,0
+explorer-v1,candidate,508,40,0,descent,0,508,12321,14,52,6,0,15,2032,Banish,8,0,0,0,21,1015,0,0
+explorer-v1,candidate,4,75,0,descent,0,4,8,14,124,4,0,31,16,Exchange,9,0,0,0,35,1962,0,0
+explorer-v1,candidate,846,75,0,descent,0,0,0,14,124,14,0,32,3384,Cleanse,10,0,0,846,46,2228,0,0
+explorer-v1,candidate,6,119,52,descent,0,0,0,14,192,16,0,90,24,Fireburst,11,0,0,0,106,5744,0,0
+explorer-v1,candidate,903,61,0,descent,0,897,2600,14,108,8,0,38,3612,Phase Step,12,0,0,0,46,2520,0,0
+explorer-v1,candidate,149,119,1102,descent,0,0,0,14,192,22,14,94,596,Chain Lightning,13,0,0,0,116,6056,0,0
+explorer-v1,candidate,540,40,0,descent,540,0,0,14,52,3,0,8,2160,Slumber,14,0,0,0,11,516,1872,0
+explorer-v1,candidate,4,119,30,descent,0,0,0,14,192,4,0,29,8,Blood Bolt,15,0,0,0,33,1843,0,0
+explorer-v1,candidate,1741,0,5068,descent,0,0,0,15,0,0,79,0,3482,Magic Dart,0,0,0,0,0,0,0,0
+explorer-v1,candidate,876,27,0,descent,0,0,0,15,23,0,0,4,1752,Frostbind,1,876,4364,0,4,160,0,0
+explorer-v1,candidate,162,46,0,descent,0,137,200,15,42,0,0,6,324,Repulsion,2,0,0,0,6,240,0,0
+explorer-v1,candidate,4409,27,0,descent,0,0,0,15,23,0,0,3,13227,Confound,3,4408,22032,0,3,120,0,0
+explorer-v1,candidate,824,42,0,descent,0,0,0,15,63,5,0,11,1648,Sense Traps,4,0,0,0,16,527,0,48
+explorer-v1,candidate,135,46,0,descent,0,135,334,15,42,1,0,8,540,Blink,5,0,0,0,9,500,0,0
+explorer-v1,candidate,31,46,0,descent,0,59,115,15,42,8,0,13,124,Shockwave,6,0,0,0,21,1022,0,0
+explorer-v1,candidate,9,105,62,descent,0,0,0,15,96,3,3,21,27,Piercing Bolt,7,0,0,0,24,862,0,0
+explorer-v1,candidate,418,27,0,descent,0,418,10410,15,23,0,0,4,1672,Banish,8,0,0,0,4,240,0,0
+explorer-v1,candidate,18,42,0,descent,0,18,37,15,63,0,0,6,72,Exchange,9,0,0,0,6,360,0,0
+explorer-v1,candidate,1487,42,0,descent,0,0,0,15,63,1,0,11,5948,Cleanse,10,0,0,1487,12,662,0,0
+explorer-v1,candidate,8,105,71,descent,0,0,0,15,96,3,1,24,32,Fireburst,11,0,0,0,27,1524,0,0
+explorer-v1,candidate,300,46,0,descent,0,299,860,15,42,2,0,12,1200,Phase Step,12,0,0,0,14,736,0,0
+explorer-v1,candidate,126,105,909,descent,0,0,0,15,96,4,21,30,504,Chain Lightning,13,0,0,0,34,1877,0,0
+explorer-v1,candidate,467,27,0,descent,467,0,0,15,23,0,0,3,1868,Slumber,14,0,0,0,3,180,1626,0
+explorer-v1,candidate,20,105,135,descent,0,0,0,15,96,1,2,15,40,Blood Bolt,15,0,0,0,16,905,0,0
+omniscient-v2,control,14446,0,22347,ascent,0,0,0,0,0,0,12853,0,28892,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,0,ascent,0,1,1,0,0,0,0,0,3,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Confound,3,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,0,ascent,0,6,12,0,0,0,0,0,10,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,3,0,13,ascent,0,0,0,0,0,0,5,0,15,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,40,0,0,ascent,0,0,0,0,0,0,0,0,200,Cleanse,10,0,0,40,0,0,0,0
+omniscient-v2,control,5,0,14,ascent,0,0,0,0,0,0,10,0,30,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,12,0,36,ascent,0,0,0,0,0,0,24,0,72,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,63654,0,96898,descent,0,0,0,0,0,0,56973,0,127308,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,31,1395,0,descent,0,0,0,0,1644,48,0,1340,93,Frostbind,1,31,152,0,1388,54343,0,0
+omniscient-v2,control,24,1518,0,descent,0,18,25,0,1668,44,0,1474,72,Repulsion,2,0,0,0,1518,59711,0,0
+omniscient-v2,control,29,1400,0,descent,0,0,0,0,1637,62,0,1370,87,Confound,3,29,149,0,1432,55849,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,1634,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,1,173,0,descent,0,1,3,0,177,9,0,161,4,Blink,5,0,0,0,170,9886,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,175,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,168,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,182,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,0,146,0,descent,0,0,0,0,155,5,0,124,0,Exchange,9,0,0,0,129,10113,0,0
+omniscient-v2,control,2,134,0,descent,0,0,0,0,136,8,0,128,10,Cleanse,10,0,0,2,136,7911,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,65,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,5,111,0,descent,0,5,15,0,117,6,0,105,25,Phase Step,12,0,0,0,111,6460,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,68,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,0,105,0,descent,0,0,0,0,120,5,0,97,0,Slumber,14,0,0,0,102,5871,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,0,115,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,15640,0,41318,ascent,0,0,0,1,0,0,9339,0,31280,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,0,ascent,0,0,0,1,0,0,0,0,6,Frostbind,1,2,11,0,0,0,0,0
+omniscient-v2,control,10,0,0,ascent,0,10,13,1,0,0,0,0,30,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,0,ascent,0,0,0,1,0,0,0,0,3,Confound,3,1,4,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,0,ascent,0,1,3,1,0,0,0,0,4,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,3,0,0,ascent,0,9,23,1,0,0,0,0,15,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,26,ascent,0,0,0,1,0,0,8,0,25,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,48,0,0,ascent,0,0,0,1,0,0,0,0,240,Cleanse,10,0,0,48,0,0,0,0
+omniscient-v2,control,7,0,46,ascent,0,0,0,1,0,0,12,0,42,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,0,ascent,0,1,3,1,0,0,0,0,5,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,16,0,102,ascent,0,0,0,1,0,0,30,0,96,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,62953,0,164416,descent,0,0,0,1,0,0,37892,0,125906,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,29,864,0,descent,0,0,0,1,1421,50,0,840,87,Frostbind,1,29,147,0,890,34302,0,0
+omniscient-v2,control,33,1093,0,descent,0,30,44,1,1472,71,0,1087,99,Repulsion,2,0,0,0,1158,44669,0,0
+omniscient-v2,control,46,945,0,descent,0,0,0,1,1465,66,0,944,138,Confound,3,46,229,0,1010,38790,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,1501,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,0,215,0,descent,0,0,0,1,218,11,0,187,0,Blink,5,0,0,0,198,11441,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,256,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,229,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,228,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,2,198,0,descent,0,2,4,1,209,16,0,188,10,Exchange,9,0,0,0,204,15526,0,0
+omniscient-v2,control,2,226,0,descent,0,0,0,1,234,10,0,199,10,Cleanse,10,0,0,2,209,12303,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,70,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,7,156,0,descent,0,7,18,1,166,13,0,137,35,Phase Step,12,0,0,0,150,8505,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,77,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,0,97,0,descent,0,0,0,1,165,11,0,85,0,Slumber,14,0,0,0,96,5477,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,1,135,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,15387,0,45603,ascent,0,0,0,2,0,0,870,0,30774,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,9,0,0,ascent,0,0,0,2,0,0,0,0,27,Frostbind,1,9,51,0,0,0,0,0
+omniscient-v2,control,23,0,0,ascent,0,23,29,2,0,0,0,0,69,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,10,0,0,ascent,0,0,0,2,0,0,0,0,30,Confound,3,10,53,0,0,0,0,0
+omniscient-v2,control,51,0,0,ascent,0,0,0,2,0,0,0,0,153,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,9,0,0,ascent,0,9,23,2,0,0,0,0,36,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,18,0,0,ascent,0,48,117,2,0,0,0,0,90,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,8,0,59,ascent,0,0,0,2,0,0,0,0,40,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,3,0,0,ascent,0,3,94,2,0,0,0,0,15,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,0,ascent,0,2,5,2,0,0,0,0,10,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,70,0,0,ascent,0,0,0,2,0,0,0,0,350,Cleanse,10,0,0,70,0,0,0,0
+omniscient-v2,control,9,0,76,ascent,0,0,0,2,0,0,5,0,54,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,0,ascent,0,5,13,2,0,0,0,0,25,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,11,0,74,ascent,0,0,0,2,0,0,1,0,66,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,4,0,0,2,0,0,0,0,20,Slumber,14,0,0,0,0,0,15,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,61229,0,181527,descent,0,0,0,2,0,0,2700,0,122458,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,404,606,0,descent,0,0,0,2,1285,98,0,562,1212,Frostbind,1,404,2011,0,660,23976,0,0
+omniscient-v2,control,172,821,0,descent,0,157,227,2,1365,125,0,785,516,Repulsion,2,0,0,0,910,33213,0,0
+omniscient-v2,control,511,583,0,descent,0,0,0,2,1281,85,0,566,1533,Confound,3,511,2536,0,651,23767,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,1331,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,4,267,0,descent,0,4,11,2,278,53,0,273,16,Blink,5,0,0,0,326,17472,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,288,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,258,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,271,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,3,209,0,descent,0,3,8,2,246,36,0,212,15,Exchange,9,0,0,0,248,18005,0,0
+omniscient-v2,control,20,284,0,descent,0,0,0,2,297,56,0,288,100,Cleanse,10,0,0,20,344,18358,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,89,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,47,142,0,descent,0,47,137,2,166,31,0,147,235,Phase Step,12,0,0,0,178,9472,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,115,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,15,95,0,descent,15,0,0,2,197,21,0,88,75,Slumber,14,0,0,0,109,5651,51,0
+omniscient-v2,control,0,0,0,descent,0,0,0,2,194,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,21999,0,65024,ascent,0,0,0,3,0,0,1529,0,43998,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,47,0,0,ascent,0,0,0,3,0,0,0,0,141,Frostbind,1,47,232,0,0,0,0,0
+omniscient-v2,control,17,0,0,ascent,0,17,23,3,0,0,0,0,51,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,74,0,0,ascent,0,0,0,3,0,0,0,0,222,Confound,3,74,350,0,0,0,0,0
+omniscient-v2,control,179,0,0,ascent,0,0,0,3,0,0,0,0,537,Sense Traps,4,0,0,0,0,0,0,5
+omniscient-v2,control,7,0,0,ascent,0,7,16,3,0,0,0,0,28,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,26,0,0,ascent,0,60,134,3,0,0,0,0,130,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,23,0,176,ascent,0,0,0,3,0,0,11,0,115,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,4,64,3,0,0,0,0,20,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,4,8,3,0,0,0,0,20,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,82,0,0,ascent,0,0,0,3,0,0,0,0,410,Cleanse,10,0,0,82,0,0,0,0
+omniscient-v2,control,21,0,187,ascent,0,0,0,3,0,0,5,0,126,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,11,0,0,ascent,0,11,33,3,0,0,0,0,55,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,35,0,253,ascent,0,0,0,3,0,0,3,0,210,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,18,0,0,ascent,18,0,0,3,0,0,0,0,90,Slumber,14,0,0,0,0,0,65,0
+omniscient-v2,control,1,0,5,ascent,0,0,0,3,0,0,1,0,3,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,66537,0,197958,descent,0,0,0,3,0,0,2658,0,133074,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,527,382,0,descent,0,0,0,3,1140,68,0,380,1581,Frostbind,1,527,2656,0,448,16209,0,0
+omniscient-v2,control,151,621,0,descent,0,135,182,3,1309,95,0,594,453,Repulsion,2,0,0,0,689,25020,0,0
+omniscient-v2,control,630,381,0,descent,0,0,0,3,1097,67,0,380,1890,Confound,3,630,3166,0,447,16123,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,1243,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,7,298,0,descent,0,7,19,3,331,52,0,283,28,Blink,5,0,0,0,335,17861,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,317,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,337,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,344,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,3,250,0,descent,0,3,6,3,335,50,0,224,15,Exchange,9,0,0,0,274,19053,0,0
+omniscient-v2,control,27,270,0,descent,0,0,0,3,303,40,0,249,135,Cleanse,10,0,0,27,289,15749,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,123,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,32,153,0,descent,0,32,93,3,194,32,0,138,160,Phase Step,12,0,0,0,170,8852,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,123,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,37,59,0,descent,37,0,0,3,187,7,0,54,185,Slumber,14,0,0,0,61,3419,128,0
+omniscient-v2,control,0,0,0,descent,0,0,0,3,201,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,3689,0,10996,ascent,0,0,0,4,0,0,67,0,7378,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,8,0,0,ascent,0,0,0,4,0,0,0,0,24,Frostbind,1,8,41,0,0,0,0,0
+omniscient-v2,control,41,0,0,ascent,0,37,49,4,0,0,0,0,123,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,18,0,0,ascent,0,0,0,4,0,0,0,0,54,Confound,3,18,86,0,0,0,0,0
+omniscient-v2,control,44,0,0,ascent,0,0,0,4,0,0,0,0,132,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,control,22,0,0,ascent,0,22,67,4,0,0,0,0,88,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,67,0,0,ascent,0,160,366,4,0,0,0,0,335,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,7,0,60,ascent,0,0,0,4,0,0,0,0,35,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,20,0,0,ascent,0,20,494,4,0,0,0,0,100,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,0,ascent,0,1,2,4,0,0,0,0,5,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,124,0,0,ascent,0,0,0,4,0,0,0,0,620,Cleanse,10,0,0,124,0,0,0,0
+omniscient-v2,control,2,0,15,ascent,0,0,0,4,0,0,0,0,12,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,29,0,0,ascent,0,29,81,4,0,0,0,0,145,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,25,ascent,0,0,0,4,0,0,2,0,24,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,9,0,0,ascent,9,0,0,4,0,0,0,0,45,Slumber,14,0,0,0,0,0,29,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,16648,0,49334,descent,0,0,0,4,0,0,871,0,33296,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,151,0,0,descent,0,0,0,4,0,13,0,23,453,Frostbind,1,151,758,0,36,1081,0,0
+omniscient-v2,control,166,2,0,descent,0,138,189,4,0,16,0,39,498,Repulsion,2,0,0,0,55,1804,0,0
+omniscient-v2,control,189,0,0,descent,0,0,0,4,0,14,0,29,567,Confound,3,189,957,0,43,1395,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,34,1,0,descent,0,34,100,4,0,16,0,33,136,Blink,5,0,0,0,49,2368,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,4,4,0,descent,0,4,8,4,0,10,0,29,20,Exchange,9,0,0,0,39,2492,0,0
+omniscient-v2,control,58,6,0,descent,0,0,0,4,0,20,0,39,290,Cleanse,10,0,0,58,59,2711,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,37,0,0,descent,0,37,104,4,0,7,0,19,185,Phase Step,12,0,0,0,26,1274,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,12,0,0,descent,12,0,0,4,0,4,0,4,60,Slumber,14,0,0,0,8,285,44,0
+omniscient-v2,control,0,0,0,descent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,15476,0,46231,ascent,0,0,0,5,0,0,166,0,30952,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,51,0,0,ascent,0,0,0,5,0,0,0,0,153,Frostbind,1,51,258,0,0,0,0,0
+omniscient-v2,control,69,0,0,ascent,0,69,92,5,0,0,0,0,207,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,88,0,0,ascent,0,0,0,5,0,0,0,0,264,Confound,3,88,436,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,0,0,5,0,0,0,0,12,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,control,15,0,0,ascent,0,15,41,5,0,0,0,0,60,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,46,0,0,ascent,0,115,263,5,0,0,0,0,230,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,15,ascent,0,0,0,5,0,0,0,0,10,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,11,0,0,ascent,0,11,307,5,0,0,0,0,55,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,4,8,5,0,0,0,0,20,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,118,0,0,ascent,0,0,0,5,0,0,0,0,590,Cleanse,10,0,0,118,0,0,0,0
+omniscient-v2,control,1,0,9,ascent,0,0,0,5,0,0,0,0,6,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,14,0,0,ascent,0,14,41,5,0,0,0,0,70,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,7,0,48,ascent,0,0,0,5,0,0,1,0,42,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,11,0,0,ascent,11,0,0,5,0,0,0,0,55,Slumber,14,0,0,0,0,0,39,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,76248,0,226455,descent,0,0,0,5,0,0,2996,0,152496,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,527,470,0,descent,0,0,0,5,920,44,0,420,1581,Frostbind,1,527,2630,0,464,17522,0,0
+omniscient-v2,control,157,523,0,descent,0,141,181,5,1014,37,0,478,471,Repulsion,2,0,0,0,515,19744,0,0
+omniscient-v2,control,609,504,0,descent,0,0,0,5,902,55,0,425,1827,Confound,3,609,2989,0,480,17845,0,0
+omniscient-v2,control,732,770,0,descent,0,0,0,5,1000,70,0,641,2196,Sense Traps,4,0,0,0,711,26706,0,42
+omniscient-v2,control,23,375,0,descent,0,23,62,5,448,46,0,331,92,Blink,5,0,0,0,377,20933,0,0
+omniscient-v2,control,6,436,0,descent,0,14,29,5,479,44,0,376,30,Shockwave,6,0,0,0,420,23639,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,5,421,0,0,0,0,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,2,399,0,descent,0,2,61,5,423,61,0,336,10,Banish,8,0,0,0,397,21531,0,0
+omniscient-v2,control,14,248,0,descent,0,14,29,5,437,31,0,208,70,Exchange,9,0,0,0,239,17554,0,0
+omniscient-v2,control,32,367,0,descent,0,0,0,5,439,48,0,317,160,Cleanse,10,0,0,32,365,20297,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,5,147,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,15,178,0,descent,0,15,45,5,265,19,0,158,75,Phase Step,12,0,0,0,177,9854,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,5,164,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,30,65,0,descent,30,0,0,5,261,5,0,53,150,Slumber,14,0,0,0,58,3250,106,0
+omniscient-v2,control,0,0,0,descent,0,0,0,5,299,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,15263,0,45751,ascent,0,0,0,6,0,0,176,0,30526,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,94,0,0,ascent,0,0,0,6,0,0,0,0,282,Frostbind,1,94,462,0,0,0,0,0
+omniscient-v2,control,86,0,0,ascent,0,86,121,6,0,0,0,0,258,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,107,0,0,ascent,0,0,0,6,0,0,0,0,321,Confound,3,107,518,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,0,0,6,0,0,0,0,12,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,22,0,0,ascent,0,22,56,6,0,0,0,0,88,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,60,0,0,ascent,0,151,333,6,0,0,0,0,300,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,17,ascent,0,0,0,6,0,0,0,0,10,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,10,0,0,ascent,0,10,143,6,0,0,0,0,50,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,7,0,0,ascent,0,7,14,6,0,0,0,0,35,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,107,0,0,ascent,0,0,0,6,0,0,0,0,535,Cleanse,10,0,0,107,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,22,0,0,ascent,0,22,64,6,0,0,0,0,110,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,16,ascent,0,0,0,6,0,0,0,0,12,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,12,0,0,ascent,12,0,0,6,0,0,0,0,60,Slumber,14,0,0,0,0,0,42,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,67474,0,200263,descent,0,0,0,6,0,0,2504,0,134948,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,693,401,0,descent,0,0,0,6,796,36,0,375,2079,Frostbind,1,693,3443,0,411,15722,0,0
+omniscient-v2,control,157,375,0,descent,0,148,201,6,878,28,0,358,471,Repulsion,2,0,0,0,386,14791,0,0
+omniscient-v2,control,756,398,0,descent,0,0,0,6,805,46,0,359,2268,Confound,3,756,3808,0,405,15097,0,0
+omniscient-v2,control,1247,610,0,descent,0,0,0,6,854,61,0,595,3741,Sense Traps,4,0,0,0,656,24941,0,86
+omniscient-v2,control,33,379,0,descent,0,33,97,6,479,38,0,346,132,Blink,5,0,0,0,384,21609,0,0
+omniscient-v2,control,15,464,0,descent,0,34,71,6,517,68,0,437,75,Shockwave,6,0,0,0,505,27888,0,0
+omniscient-v2,control,1,181,8,descent,0,0,0,6,505,11,0,151,5,Piercing Bolt,7,0,0,0,162,9347,0,0
+omniscient-v2,control,19,432,0,descent,0,19,482,6,479,59,0,410,95,Banish,8,0,0,0,469,26016,0,0
+omniscient-v2,control,22,208,0,descent,0,22,47,6,408,26,0,176,110,Exchange,9,0,0,0,202,14775,0,0
+omniscient-v2,control,40,366,0,descent,0,0,0,6,448,44,0,351,200,Cleanse,10,0,0,40,395,22083,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,6,169,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,30,193,0,descent,0,30,89,6,302,24,0,179,150,Phase Step,12,0,0,0,203,11315,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,6,175,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,46,70,0,descent,46,0,0,6,318,8,0,64,230,Slumber,14,0,0,0,72,3952,157,0
+omniscient-v2,control,0,0,0,descent,0,0,0,6,330,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,14761,0,44036,ascent,0,0,0,7,0,0,324,0,29522,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,47,0,0,ascent,0,0,0,7,0,0,0,0,141,Frostbind,1,47,231,0,0,0,0,0
+omniscient-v2,control,83,0,0,ascent,0,83,107,7,0,0,0,0,249,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,78,0,0,ascent,0,0,0,7,0,0,0,0,234,Confound,3,78,387,0,0,0,0,0
+omniscient-v2,control,3,0,0,ascent,0,0,0,7,0,0,0,0,9,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,9,0,0,ascent,0,9,23,7,0,0,0,0,36,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,40,0,0,ascent,0,106,232,7,0,0,0,0,200,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,44,ascent,0,0,0,7,0,0,1,0,25,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,7,0,0,ascent,0,7,159,7,0,0,0,0,35,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,0,ascent,0,5,10,7,0,0,0,0,25,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,107,0,0,ascent,0,0,0,7,0,0,0,0,535,Cleanse,10,0,0,107,0,0,0,0
+omniscient-v2,control,4,0,35,ascent,0,0,0,7,0,0,0,0,24,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,36,0,0,ascent,0,36,104,7,0,0,0,0,180,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,42,ascent,0,0,0,7,0,0,0,0,30,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,14,0,0,ascent,14,0,0,7,0,0,0,0,70,Slumber,14,0,0,0,0,0,48,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,64915,0,191362,descent,0,0,0,7,0,0,3606,0,129830,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,420,292,0,descent,0,0,0,7,674,28,0,261,1260,Frostbind,1,420,2122,0,289,10914,0,0
+omniscient-v2,control,143,292,0,descent,0,140,194,7,751,20,0,266,429,Repulsion,2,0,0,0,286,10986,0,0
+omniscient-v2,control,555,290,0,descent,0,0,0,7,688,31,0,261,1665,Confound,3,555,2747,0,292,10990,0,0
+omniscient-v2,control,1266,462,0,descent,0,0,0,7,741,27,0,409,3798,Sense Traps,4,0,0,0,436,16838,0,97
+omniscient-v2,control,28,372,0,descent,0,28,76,7,548,52,0,326,112,Blink,5,0,0,0,378,20909,0,0
+omniscient-v2,control,21,465,0,descent,0,52,106,7,578,50,0,398,105,Shockwave,6,0,0,0,448,24906,0,0
+omniscient-v2,control,13,144,107,descent,0,0,0,7,523,13,3,116,65,Piercing Bolt,7,0,0,0,129,7309,0,0
+omniscient-v2,control,19,479,0,descent,0,19,478,7,562,48,0,433,95,Banish,8,0,0,0,481,27026,0,0
+omniscient-v2,control,28,215,0,descent,0,28,64,7,488,22,0,187,140,Exchange,9,0,0,0,209,15774,0,0
+omniscient-v2,control,68,407,0,descent,0,0,0,7,573,40,0,370,340,Cleanse,10,0,0,68,410,23030,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,7,176,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,26,261,0,descent,0,26,78,7,321,18,0,239,130,Phase Step,12,0,0,0,257,14868,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,7,203,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,39,62,0,descent,39,0,0,7,355,6,0,50,195,Slumber,14,0,0,0,56,3186,131,0
+omniscient-v2,control,0,0,0,descent,0,0,0,7,337,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,14971,0,44820,ascent,0,0,0,8,0,0,157,0,29942,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,125,0,0,ascent,0,0,0,8,0,0,0,0,375,Frostbind,1,125,630,0,0,0,0,0
+omniscient-v2,control,80,0,0,ascent,0,80,108,8,0,0,0,0,240,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,175,0,0,ascent,0,0,0,8,0,0,0,0,525,Confound,3,175,863,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,0,0,8,0,0,0,0,12,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,control,25,0,0,ascent,0,25,69,8,0,0,0,0,100,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,39,0,0,ascent,0,104,230,8,0,0,0,0,195,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,39,ascent,0,0,0,8,0,0,0,0,25,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,15,0,0,ascent,0,15,327,8,0,0,0,0,75,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,15,0,0,ascent,0,15,31,8,0,0,0,0,75,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,588,0,0,ascent,0,0,0,8,0,0,0,0,2940,Cleanse,10,0,0,588,0,0,0,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,56,0,0,ascent,0,56,162,8,0,0,0,0,280,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,30,ascent,0,0,0,8,0,0,1,0,24,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,36,0,0,ascent,36,0,0,8,0,0,0,0,180,Slumber,14,0,0,0,0,0,126,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,8,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,66070,0,196396,descent,0,0,0,8,0,0,2029,0,132140,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,1152,223,0,descent,0,0,0,8,551,20,0,201,3456,Frostbind,1,1152,5744,0,221,8396,0,0
+omniscient-v2,control,214,244,0,descent,0,197,273,8,619,19,0,216,642,Repulsion,2,0,0,0,235,8880,0,0
+omniscient-v2,control,1466,238,0,descent,0,0,0,8,568,18,0,217,4398,Confound,3,1466,7326,0,235,8984,0,0
+omniscient-v2,control,1457,376,0,descent,0,0,0,8,623,34,0,318,4371,Sense Traps,4,0,0,0,352,13211,0,87
+omniscient-v2,control,31,401,0,descent,0,31,84,8,588,53,0,365,124,Blink,5,0,0,0,418,22990,0,0
+omniscient-v2,control,38,478,0,descent,0,86,200,8,597,51,0,443,190,Shockwave,6,0,0,0,494,27694,0,0
+omniscient-v2,control,21,144,165,descent,0,0,0,8,608,11,1,126,105,Piercing Bolt,7,0,0,0,137,7819,0,0
+omniscient-v2,control,27,475,0,descent,0,27,564,8,625,56,0,440,135,Banish,8,0,0,0,496,27680,0,0
+omniscient-v2,control,24,184,0,descent,0,24,52,8,558,15,0,147,120,Exchange,9,0,0,0,162,12168,0,0
+omniscient-v2,control,402,407,0,descent,0,0,0,8,611,55,0,366,2010,Cleanse,10,0,0,402,421,23171,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,8,192,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,38,307,0,descent,0,38,112,8,397,33,0,272,190,Phase Step,12,0,0,0,305,17119,0,0
+omniscient-v2,control,18,145,138,descent,0,0,0,8,232,12,1,119,108,Chain Lightning,13,0,0,0,131,9934,0,0
+omniscient-v2,control,116,265,0,descent,116,0,0,8,424,25,0,196,580,Slumber,14,0,0,0,221,12245,401,0
+omniscient-v2,control,1,231,6,descent,0,0,0,8,419,18,1,184,3,Blood Bolt,15,0,0,0,202,11458,0,0
+omniscient-v2,control,14386,0,43048,ascent,0,0,0,9,0,0,162,0,28772,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,68,0,0,ascent,0,0,0,9,0,0,0,0,204,Frostbind,1,68,339,0,0,0,0,0
+omniscient-v2,control,72,0,0,ascent,0,72,92,9,0,0,0,0,216,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,98,0,0,ascent,0,0,0,9,0,0,0,0,294,Confound,3,98,487,0,0,0,0,0
+omniscient-v2,control,2,0,0,ascent,0,0,0,9,0,0,0,0,6,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,12,0,0,ascent,0,12,31,9,0,0,0,0,48,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,11,0,0,ascent,0,28,63,9,0,0,0,0,55,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,10,ascent,0,0,0,9,0,0,0,0,5,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,14,0,0,ascent,0,14,360,9,0,0,0,0,70,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,4,0,0,ascent,0,4,8,9,0,0,0,0,20,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,104,0,0,ascent,0,0,0,9,0,0,0,0,520,Cleanse,10,0,0,104,0,0,0,0
+omniscient-v2,control,1,0,9,ascent,0,0,0,9,0,0,0,0,6,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,53,0,0,ascent,0,53,154,9,0,0,0,0,265,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,1,0,8,ascent,0,0,0,9,0,0,0,0,6,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,12,0,0,ascent,12,0,0,9,0,0,0,0,60,Slumber,14,0,0,0,0,0,43,0
+omniscient-v2,control,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,63313,0,188330,descent,0,0,0,9,0,0,1541,0,126626,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,389,132,0,descent,0,0,0,9,434,9,0,103,1167,Frostbind,1,389,1955,0,112,4207,0,0
+omniscient-v2,control,136,151,0,descent,0,129,168,9,448,8,0,136,408,Repulsion,2,0,0,0,144,5546,0,0
+omniscient-v2,control,527,161,0,descent,0,0,0,9,453,8,0,131,1581,Confound,3,527,2651,0,139,5370,0,0
+omniscient-v2,control,1331,261,0,descent,0,0,0,9,513,9,0,217,3993,Sense Traps,4,0,0,0,226,8861,0,82
+omniscient-v2,control,17,370,0,descent,0,17,44,9,697,23,0,309,68,Blink,5,0,0,0,332,19013,0,0
+omniscient-v2,control,19,450,0,descent,0,38,78,9,684,29,0,387,95,Shockwave,6,0,0,0,416,23720,0,0
+omniscient-v2,control,9,95,71,descent,0,0,0,9,602,6,1,80,45,Piercing Bolt,7,0,0,0,86,4872,0,0
+omniscient-v2,control,27,476,0,descent,0,27,783,9,651,20,0,425,135,Banish,8,0,0,0,445,25878,0,0
+omniscient-v2,control,14,151,0,descent,0,14,29,9,602,9,0,118,70,Exchange,9,0,0,0,127,9709,0,0
+omniscient-v2,control,86,380,0,descent,0,0,0,9,641,21,0,337,430,Cleanse,10,0,0,86,358,20545,0,0
+omniscient-v2,control,0,0,0,descent,0,0,0,9,209,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,28,258,0,descent,0,28,81,9,400,15,0,231,140,Phase Step,12,0,0,0,246,14185,0,0
+omniscient-v2,control,13,118,101,descent,0,0,0,9,229,2,0,88,78,Chain Lightning,13,0,0,0,90,7057,0,0
+omniscient-v2,control,42,210,0,descent,42,0,0,9,425,18,0,160,210,Slumber,14,0,0,0,178,10007,145,0
+omniscient-v2,control,0,188,0,descent,0,0,0,9,441,5,0,148,0,Blood Bolt,15,0,0,0,153,8932,0,0
+omniscient-v2,control,14412,0,42899,ascent,0,0,0,10,0,0,255,0,28824,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,227,0,0,ascent,0,0,0,10,0,0,0,0,681,Frostbind,1,227,1136,0,0,0,0,0
+omniscient-v2,control,104,0,0,ascent,0,102,140,10,0,0,0,0,312,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,273,0,0,ascent,0,0,0,10,0,0,0,0,819,Confound,3,273,1345,0,0,0,0,0
+omniscient-v2,control,1,0,0,ascent,0,0,0,10,0,0,0,0,3,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,21,0,0,ascent,0,21,57,10,0,0,0,0,84,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,51,0,0,ascent,0,134,297,10,0,0,0,0,255,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,16,ascent,0,0,0,10,0,0,0,0,10,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,30,0,0,ascent,0,30,725,10,0,0,0,0,150,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,14,0,0,ascent,0,14,32,10,0,0,0,0,70,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,978,0,0,ascent,0,0,0,10,0,0,0,0,4890,Cleanse,10,0,0,978,0,0,0,0
+omniscient-v2,control,2,0,19,ascent,0,0,0,10,0,0,0,0,12,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,98,0,0,ascent,0,98,290,10,0,0,0,0,490,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,5,0,37,ascent,0,0,0,10,0,0,0,0,30,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,34,0,0,ascent,34,0,0,10,0,0,0,0,170,Slumber,14,0,0,0,0,0,117,0
+omniscient-v2,control,3,0,16,ascent,0,0,0,10,0,0,3,0,9,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,63676,0,188949,descent,0,0,0,10,0,0,1920,0,127352,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,1531,143,0,descent,0,0,0,10,356,9,0,120,4593,Frostbind,1,1531,7658,0,129,4979,0,0
+omniscient-v2,control,303,134,0,descent,0,277,380,10,343,5,0,107,909,Repulsion,2,0,0,0,112,4405,0,0
+omniscient-v2,control,2083,113,0,descent,0,0,0,10,350,10,0,98,6249,Confound,3,2083,10362,0,108,4066,0,0
+omniscient-v2,control,1329,209,0,descent,0,0,0,10,373,15,0,170,3987,Sense Traps,4,0,0,0,185,6988,0,86
+omniscient-v2,control,47,424,0,descent,0,47,136,10,730,55,0,357,188,Blink,5,0,0,0,412,22815,0,0
+omniscient-v2,control,52,421,0,descent,0,123,280,10,678,42,0,385,260,Shockwave,6,0,0,0,427,24135,0,0
+omniscient-v2,control,31,130,236,descent,0,0,0,10,693,13,4,103,155,Piercing Bolt,7,0,0,0,116,6463,0,0
+omniscient-v2,control,80,481,0,descent,0,80,1992,10,736,61,0,401,400,Banish,8,0,0,0,462,25500,0,0
+omniscient-v2,control,29,168,0,descent,0,29,66,10,691,25,0,122,145,Exchange,9,0,0,0,147,10633,0,0
+omniscient-v2,control,1238,370,0,descent,0,0,0,10,660,43,0,328,6190,Cleanse,10,0,0,1238,371,20771,0,0
+omniscient-v2,control,5,124,56,descent,0,0,0,10,213,14,1,93,30,Fireburst,11,0,0,0,107,7877,0,0
+omniscient-v2,control,102,279,0,descent,0,102,296,10,440,35,0,222,510,Phase Step,12,0,0,0,257,14220,0,0
+omniscient-v2,control,48,154,355,descent,0,0,0,10,236,17,3,113,288,Chain Lightning,13,0,0,0,130,9466,0,0
+omniscient-v2,control,222,251,0,descent,222,0,0,10,475,20,0,223,1110,Slumber,14,0,0,0,243,13712,767,0
+omniscient-v2,control,2,255,10,descent,0,0,0,10,454,19,2,203,6,Blood Bolt,15,0,0,0,222,12708,0,0
+omniscient-v2,control,14391,0,42969,ascent,0,0,0,11,0,0,204,0,28782,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,277,0,0,ascent,0,0,0,11,0,0,0,0,831,Frostbind,1,277,1373,0,0,0,0,0
+omniscient-v2,control,119,0,0,ascent,0,118,163,11,0,0,0,0,357,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,332,0,0,ascent,0,0,0,11,0,0,0,0,996,Confound,3,332,1651,0,0,0,0,0
+omniscient-v2,control,5,0,0,ascent,0,0,0,11,0,0,0,0,15,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,24,0,0,ascent,0,24,70,11,0,0,0,0,96,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,54,0,0,ascent,0,124,291,11,0,0,0,0,270,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,2,0,14,ascent,0,0,0,11,0,0,0,0,10,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,62,0,0,ascent,0,62,1452,11,0,0,0,0,310,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,15,0,0,ascent,0,15,31,11,0,0,0,0,75,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,563,0,0,ascent,0,0,0,11,0,0,0,0,2815,Cleanse,10,0,0,563,0,0,0,0
+omniscient-v2,control,1,0,10,ascent,0,0,0,11,0,0,0,0,6,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,139,0,0,ascent,0,139,406,11,0,0,0,0,695,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,7,0,52,ascent,0,0,0,11,0,0,0,0,42,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,44,0,0,ascent,44,0,0,11,0,0,0,0,220,Slumber,14,0,0,0,0,0,155,0
+omniscient-v2,control,1,0,5,ascent,0,0,0,11,0,0,1,0,3,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,63166,0,188340,descent,0,0,0,11,0,0,934,0,126332,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,1343,72,0,descent,0,0,0,11,206,5,0,52,4029,Frostbind,1,1343,6720,0,57,2210,0,0
+omniscient-v2,control,414,73,0,descent,0,366,521,11,221,9,0,55,1242,Repulsion,2,0,0,0,64,2346,0,0
+omniscient-v2,control,1701,58,0,descent,0,0,0,11,196,4,0,45,5103,Confound,3,1701,8528,0,49,1910,0,0
+omniscient-v2,control,1277,137,0,descent,0,0,0,11,237,8,0,115,3831,Sense Traps,4,0,0,0,123,4744,0,106
+omniscient-v2,control,54,373,0,descent,0,54,147,11,750,25,0,292,216,Blink,5,0,0,0,317,18086,0,0
+omniscient-v2,control,86,411,0,descent,0,201,448,11,693,36,0,312,430,Shockwave,6,0,0,0,348,19530,0,0
+omniscient-v2,control,53,89,422,descent,0,0,0,11,672,10,5,73,265,Piercing Bolt,7,0,0,0,83,4602,0,0
+omniscient-v2,control,169,506,0,descent,0,169,3689,11,769,46,0,391,845,Banish,8,0,0,0,437,24596,0,0
+omniscient-v2,control,26,180,0,descent,0,26,55,11,685,8,0,126,130,Exchange,9,0,0,0,134,10296,0,0
+omniscient-v2,control,912,373,0,descent,0,0,0,11,714,37,0,290,4560,Cleanse,10,0,0,912,327,18306,0,0
+omniscient-v2,control,21,131,183,descent,0,0,0,11,214,7,3,91,126,Fireburst,11,0,0,0,98,7481,0,0
+omniscient-v2,control,217,298,0,descent,0,217,632,11,457,34,0,240,1085,Phase Step,12,0,0,0,274,15260,0,0
+omniscient-v2,control,65,142,480,descent,0,0,0,11,255,16,3,101,390,Chain Lightning,13,0,0,0,117,8672,0,0
+omniscient-v2,control,186,260,0,descent,186,0,0,11,463,25,0,172,930,Slumber,14,0,0,0,197,10915,655,0
+omniscient-v2,control,7,294,37,descent,0,0,0,11,515,26,7,197,21,Blood Bolt,15,0,0,0,223,12360,0,0
+omniscient-v2,control,14305,0,42733,ascent,0,0,0,12,0,0,246,0,28610,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,526,0,0,ascent,0,0,0,12,0,0,0,0,1578,Frostbind,1,526,2606,0,0,0,0,0
+omniscient-v2,control,125,0,0,ascent,0,114,155,12,0,0,0,0,375,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,696,0,0,ascent,0,0,0,12,0,0,0,0,2088,Confound,3,696,3469,0,0,0,0,0
+omniscient-v2,control,2,0,0,ascent,0,0,0,12,0,0,0,0,6,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,control,23,0,0,ascent,0,23,67,12,0,0,0,0,92,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,44,0,0,ascent,0,112,249,12,0,0,0,0,220,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,3,0,25,ascent,0,0,0,12,0,0,0,0,15,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,92,0,0,ascent,0,92,2350,12,0,0,0,0,460,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,11,0,0,ascent,0,11,23,12,0,0,0,0,55,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,700,0,0,ascent,0,0,0,12,0,0,0,0,3500,Cleanse,10,0,0,700,0,0,0,0
+omniscient-v2,control,1,0,7,ascent,0,0,0,12,0,0,0,0,6,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,210,0,0,ascent,0,210,615,12,0,0,0,0,1050,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,7,0,48,ascent,0,0,0,12,0,0,1,0,42,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,154,0,0,ascent,154,0,0,12,0,0,0,0,770,Slumber,14,0,0,0,0,0,546,0
+omniscient-v2,control,5,0,29,ascent,0,0,0,12,0,0,5,0,15,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,59179,0,176334,descent,0,0,0,12,0,0,919,0,118358,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,2240,51,0,descent,0,0,0,12,112,10,0,31,6720,Frostbind,1,2240,11225,0,41,1373,0,0
+omniscient-v2,control,366,37,0,descent,0,328,463,12,96,11,0,27,1098,Repulsion,2,0,0,0,38,1284,0,0
+omniscient-v2,control,2917,40,0,descent,0,0,0,12,107,2,0,30,8751,Confound,3,2917,14507,0,32,1236,0,0
+omniscient-v2,control,968,73,0,descent,0,0,0,12,129,7,0,52,2904,Sense Traps,4,0,0,0,59,2204,0,65
+omniscient-v2,control,32,392,0,descent,0,32,91,12,840,33,0,299,128,Blink,5,0,0,0,332,18813,0,0
+omniscient-v2,control,69,405,0,descent,0,162,361,12,755,57,0,323,345,Shockwave,6,0,0,0,380,20643,0,0
+omniscient-v2,control,52,91,407,descent,0,0,0,12,703,10,12,63,260,Piercing Bolt,7,0,0,0,73,3987,0,0
+omniscient-v2,control,151,451,0,descent,0,151,3694,12,827,52,0,360,755,Banish,8,0,0,0,412,22653,0,0
+omniscient-v2,control,29,145,0,descent,0,29,67,12,732,16,0,86,145,Exchange,9,0,0,0,102,7348,0,0
+omniscient-v2,control,1298,392,0,descent,0,0,0,12,791,40,0,308,6490,Cleanse,10,0,0,1298,348,19446,0,0
+omniscient-v2,control,19,137,179,descent,0,0,0,12,255,16,0,88,114,Fireburst,11,0,0,0,104,7595,0,0
+omniscient-v2,control,202,279,0,descent,0,202,592,12,511,28,0,221,1010,Phase Step,12,0,0,0,249,13921,0,0
+omniscient-v2,control,60,163,446,descent,0,0,0,12,278,13,4,113,360,Chain Lightning,13,0,0,0,126,9299,0,0
+omniscient-v2,control,469,282,0,descent,469,0,0,12,499,30,0,191,2345,Slumber,14,0,0,0,221,12257,1641,0
+omniscient-v2,control,26,265,146,descent,0,0,0,12,490,20,26,194,78,Blood Bolt,15,0,0,0,214,12112,0,0
+omniscient-v2,control,14662,0,43510,ascent,0,0,0,13,0,0,367,0,29324,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,860,0,0,ascent,0,0,0,13,0,0,0,0,2580,Frostbind,1,860,4303,0,0,0,0,0
+omniscient-v2,control,197,0,0,ascent,0,181,256,13,0,0,0,0,591,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,1055,0,0,ascent,0,0,0,13,0,0,0,0,3165,Confound,3,1055,5251,0,0,0,0,0
+omniscient-v2,control,5,0,0,ascent,0,0,0,13,0,0,0,0,15,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,control,41,0,0,ascent,0,41,108,13,0,0,0,0,164,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,56,0,0,ascent,0,127,289,13,0,0,0,0,280,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,9,0,66,ascent,0,0,0,13,0,0,2,0,45,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,154,0,0,ascent,0,154,3719,13,0,0,0,0,770,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,24,0,0,ascent,0,24,53,13,0,0,0,0,120,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,660,0,0,ascent,0,0,0,13,0,0,0,0,3300,Cleanse,10,0,0,660,0,0,0,0
+omniscient-v2,control,4,0,39,ascent,0,0,0,13,0,0,0,0,24,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,323,0,0,ascent,0,323,936,13,0,0,0,0,1615,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,8,0,57,ascent,0,0,0,13,0,0,1,0,48,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,197,0,0,ascent,197,0,0,13,0,0,0,0,985,Slumber,14,0,0,0,0,0,689,0
+omniscient-v2,control,12,0,69,ascent,0,0,0,13,0,0,12,0,36,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,54195,0,161487,descent,0,0,0,13,0,0,966,0,108390,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,2813,6,0,descent,0,0,0,13,0,1,0,10,8439,Frostbind,1,2813,14117,0,11,439,0,0
+omniscient-v2,control,452,6,0,descent,0,394,563,13,0,1,0,8,1356,Repulsion,2,0,0,0,9,338,0,0
+omniscient-v2,control,3765,7,0,descent,0,0,0,13,0,0,0,5,11295,Confound,3,3765,18842,0,5,200,0,0
+omniscient-v2,control,778,7,0,descent,0,0,0,13,0,1,0,9,2334,Sense Traps,4,0,0,0,10,383,0,52
+omniscient-v2,control,71,354,0,descent,0,71,183,13,779,63,0,247,284,Blink,5,0,0,0,310,16262,0,0
+omniscient-v2,control,90,357,0,descent,0,210,468,13,739,47,0,262,450,Shockwave,6,0,0,0,309,16804,0,0
+omniscient-v2,control,81,117,647,descent,0,0,0,13,754,20,5,89,405,Piercing Bolt,7,0,0,0,109,5786,0,0
+omniscient-v2,control,332,397,0,descent,0,332,7924,13,793,77,0,292,1660,Banish,8,0,0,0,369,19184,0,0
+omniscient-v2,control,39,144,0,descent,0,39,88,13,731,18,0,70,195,Exchange,9,0,0,0,88,6117,0,0
+omniscient-v2,control,1345,355,0,descent,0,0,0,13,756,51,0,252,6725,Cleanse,10,0,0,1345,303,16433,0,0
+omniscient-v2,control,20,164,195,descent,0,0,0,13,269,17,0,86,120,Fireburst,11,0,0,0,103,7491,0,0
+omniscient-v2,control,398,260,0,descent,0,398,1160,13,492,31,0,179,1990,Phase Step,12,0,0,0,210,11384,0,0
+omniscient-v2,control,79,169,594,descent,0,0,0,13,286,26,3,111,474,Chain Lightning,13,0,0,0,137,9604,0,0
+omniscient-v2,control,630,300,0,descent,630,0,0,13,529,37,0,196,3150,Slumber,14,0,0,0,233,12704,2210,0
+omniscient-v2,control,45,295,253,descent,0,0,0,13,511,20,45,196,135,Blood Bolt,15,0,0,0,216,12227,0,0
+omniscient-v2,control,19524,0,58259,ascent,0,0,0,14,0,0,386,0,39048,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,1754,0,0,ascent,0,0,0,14,0,0,0,0,5262,Frostbind,1,1754,8760,0,0,0,0,0
+omniscient-v2,control,222,0,0,ascent,0,193,267,14,0,0,0,0,666,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,control,2131,0,0,ascent,0,0,0,14,0,0,0,0,6393,Confound,3,2131,10636,0,0,0,0,0
+omniscient-v2,control,22,0,0,ascent,0,0,0,14,0,0,0,0,66,Sense Traps,4,0,0,0,0,0,0,3
+omniscient-v2,control,46,0,0,ascent,0,46,134,14,0,0,0,0,184,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,control,77,0,0,ascent,0,181,408,14,0,0,0,0,385,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,control,13,0,106,ascent,0,0,0,14,0,0,1,0,65,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,control,159,0,0,ascent,0,159,3917,14,0,0,0,0,795,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,control,12,0,0,ascent,0,12,27,14,0,0,0,0,60,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,control,1176,0,0,ascent,0,0,0,14,0,0,0,0,5880,Cleanse,10,0,0,1176,0,0,0,0
+omniscient-v2,control,5,0,47,ascent,0,0,0,14,0,0,0,0,30,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,control,395,0,0,ascent,0,395,1152,14,0,0,0,0,1975,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,control,17,0,127,ascent,0,0,0,14,0,0,0,0,102,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,control,427,0,0,ascent,427,0,0,14,0,0,0,0,2135,Slumber,14,0,0,0,0,0,1499,0
+omniscient-v2,control,14,0,77,ascent,0,0,0,14,0,0,14,0,42,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,control,48807,0,144906,descent,0,0,0,14,0,0,1071,0,97614,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,3531,1,0,descent,0,0,0,14,0,0,0,3,10593,Frostbind,1,3531,17616,0,3,120,0,0
+omniscient-v2,control,406,1,0,descent,0,374,542,14,0,0,0,3,1218,Repulsion,2,0,0,0,3,120,0,0
+omniscient-v2,control,4676,3,0,descent,0,0,0,14,0,0,0,1,14028,Confound,3,4676,23328,0,1,40,0,0
+omniscient-v2,control,488,4,0,descent,0,0,0,14,0,0,0,5,1464,Sense Traps,4,0,0,0,5,200,0,37
+omniscient-v2,control,47,260,0,descent,0,47,130,14,697,40,0,203,188,Blink,5,0,0,0,243,13154,0,0
+omniscient-v2,control,69,325,0,descent,0,160,345,14,701,35,0,256,345,Shockwave,6,0,0,0,291,16062,0,0
+omniscient-v2,control,57,80,446,descent,0,0,0,14,648,10,5,56,285,Piercing Bolt,7,0,0,0,66,3450,0,0
+omniscient-v2,control,482,378,0,descent,0,482,11698,14,784,58,0,256,2410,Banish,8,0,0,0,314,16521,0,0
+omniscient-v2,control,46,119,0,descent,0,46,107,14,712,4,0,60,230,Exchange,9,0,0,0,64,4993,0,0
+omniscient-v2,control,1726,289,0,descent,0,0,0,14,703,43,0,205,8630,Cleanse,10,0,0,1726,248,13150,0,0
+omniscient-v2,control,20,137,186,descent,0,0,0,14,224,12,1,85,120,Fireburst,11,0,0,0,97,7137,0,0
+omniscient-v2,control,570,233,0,descent,0,570,1656,14,414,44,0,150,2850,Phase Step,12,0,0,0,194,9773,0,0
+omniscient-v2,control,91,173,671,descent,0,0,0,14,277,22,2,123,546,Chain Lightning,13,0,0,0,145,10413,0,0
+omniscient-v2,control,918,319,0,descent,918,0,0,14,500,33,0,181,4590,Slumber,14,0,0,0,214,11826,3222,0
+omniscient-v2,control,58,263,329,descent,0,0,0,14,451,25,58,156,174,Blood Bolt,15,0,0,0,181,9955,0,0
+omniscient-v2,control,45204,0,134665,descent,0,0,0,15,0,0,1067,0,90408,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,control,4913,3,0,descent,0,0,0,15,0,0,0,1,14739,Frostbind,1,4913,24495,0,1,40,0,0
+omniscient-v2,control,301,1,0,descent,0,269,380,15,0,0,0,4,903,Repulsion,2,0,0,0,4,160,0,0
+omniscient-v2,control,7934,2,0,descent,0,0,0,15,0,0,0,0,23802,Confound,3,7934,39700,0,0,0,0,0
+omniscient-v2,control,302,6,0,descent,0,0,0,15,0,0,0,2,906,Sense Traps,4,0,0,0,2,80,0,19
+omniscient-v2,control,45,223,0,descent,0,45,132,15,611,29,0,193,180,Blink,5,0,0,0,222,12349,0,0
+omniscient-v2,control,58,228,0,descent,0,141,307,15,571,26,0,177,290,Shockwave,6,0,0,0,203,11165,0,0
+omniscient-v2,control,43,68,338,descent,0,0,0,15,561,9,5,43,215,Piercing Bolt,7,0,0,0,52,2732,0,0
+omniscient-v2,control,197,276,0,descent,0,197,5086,15,643,29,0,222,985,Banish,8,0,0,0,251,13995,0,0
+omniscient-v2,control,18,97,0,descent,0,18,37,15,599,6,0,62,90,Exchange,9,0,0,0,68,5147,0,0
+omniscient-v2,control,3882,220,0,descent,0,0,0,15,574,28,0,188,19410,Cleanse,10,0,0,3882,216,11871,0,0
+omniscient-v2,control,30,129,266,descent,0,0,0,15,180,10,0,93,180,Fireburst,11,0,0,0,103,7783,0,0
+omniscient-v2,control,296,183,0,descent,0,296,862,15,350,22,0,151,1480,Phase Step,12,0,0,0,173,9526,0,0
+omniscient-v2,control,81,125,607,descent,0,0,0,15,193,10,2,85,486,Chain Lightning,13,0,0,0,95,7160,0,0
+omniscient-v2,control,1915,226,0,descent,1915,0,0,15,400,19,0,170,9575,Slumber,14,0,0,0,189,10683,6700,0
+omniscient-v2,control,94,202,523,descent,0,0,0,15,405,19,94,150,282,Blood Bolt,15,0,0,0,169,9426,0,0
+omniscient-v2,candidate,12351,0,19023,ascent,0,0,0,0,0,0,11011,0,24702,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,0,0,0,0,0,0,0,0,6,Frostbind,1,3,14,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Confound,3,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,32,0,114,ascent,0,0,0,0,0,0,63,0,96,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,1,0,0,ascent,0,1,17,0,0,0,0,0,4,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,1,0,0,ascent,0,1,2,0,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,64,0,0,ascent,0,0,0,0,0,0,0,0,256,Cleanse,10,0,0,64,0,0,0,0
+omniscient-v2,candidate,104,0,350,ascent,0,0,0,0,0,0,210,0,416,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,2,0,0,ascent,0,2,6,0,0,0,0,0,8,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,174,0,594,ascent,0,0,0,0,0,0,348,0,696,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,0,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,62737,0,95180,descent,0,0,0,0,0,0,56166,0,125474,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,3274,0,descent,0,0,0,0,3324,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2445,0,descent,0,0,0,0,2486,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,72,3274,0,descent,0,0,0,0,3324,104,0,3125,216,Confound,3,72,360,0,3229,126831,0,0
+omniscient-v2,candidate,0,902,0,descent,0,0,0,0,914,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,4,2445,0,descent,0,4,11,0,2486,101,0,2328,16,Blink,5,0,0,0,2429,142330,0,0
+omniscient-v2,candidate,0,2445,0,descent,0,0,0,0,2486,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,4,203,14,descent,0,0,0,0,230,6,8,174,12,Piercing Bolt,7,0,0,0,180,7061,0,0
+omniscient-v2,candidate,0,3274,0,descent,0,0,0,0,3324,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,2,902,0,descent,0,2,4,0,914,30,0,764,8,Exchange,9,0,0,0,794,46565,0,0
+omniscient-v2,candidate,8,902,0,descent,0,0,0,0,914,10,0,695,32,Cleanse,10,0,0,8,705,41971,0,0
+omniscient-v2,candidate,0,203,0,descent,0,0,0,0,230,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2445,0,descent,0,0,0,0,2486,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,203,0,descent,0,0,0,0,230,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,3274,0,descent,0,0,0,0,3324,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,203,0,descent,0,0,0,0,230,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,13514,0,35612,ascent,0,0,0,1,0,0,7941,0,27028,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,0,0,0,1,0,0,0,0,6,Frostbind,1,3,16,0,0,0,0,0
+omniscient-v2,candidate,6,0,0,ascent,0,6,9,1,0,0,0,0,12,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,1,0,0,ascent,0,0,0,1,0,0,0,0,3,Confound,3,1,4,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,7,0,0,ascent,0,19,41,1,0,0,0,0,28,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,44,0,278,ascent,0,0,0,1,0,0,85,0,132,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,1,0,0,ascent,0,1,2,1,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,83,0,0,ascent,0,0,0,1,0,0,0,0,332,Cleanse,10,0,0,83,0,0,0,0
+omniscient-v2,candidate,59,0,388,ascent,0,0,0,1,0,0,112,0,236,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,1,0,0,ascent,0,1,3,1,0,0,0,0,4,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,153,0,935,ascent,0,0,0,1,0,0,269,0,612,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,1,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,60196,0,159211,descent,0,0,0,1,0,0,35648,0,120392,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2202,0,descent,0,0,0,1,2256,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1759,0,descent,0,0,0,1,1777,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,88,2202,0,descent,0,0,0,1,2256,91,0,1951,264,Confound,3,88,425,0,2042,79518,0,0
+omniscient-v2,candidate,0,758,0,descent,0,0,0,1,766,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,10,1759,0,descent,0,10,26,1,1777,98,0,1540,40,Blink,5,0,0,0,1638,95021,0,0
+omniscient-v2,candidate,0,1759,0,descent,0,0,0,1,1777,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,20,182,112,descent,0,0,0,1,236,6,36,119,60,Piercing Bolt,7,0,0,0,125,4878,0,0
+omniscient-v2,candidate,0,2202,0,descent,0,0,0,1,2256,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,5,758,0,descent,0,5,11,1,766,40,0,507,20,Exchange,9,0,0,0,547,31312,0,0
+omniscient-v2,candidate,14,758,0,descent,0,0,0,1,766,17,0,380,56,Cleanse,10,0,0,14,397,23451,0,0
+omniscient-v2,candidate,0,182,0,descent,0,0,0,1,236,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1759,0,descent,0,0,0,1,1777,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,182,0,descent,0,0,0,1,236,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2202,0,descent,0,0,0,1,2256,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,182,0,descent,0,0,0,1,236,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,13455,0,39761,ascent,0,0,0,2,0,0,730,0,26910,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,6,0,0,ascent,0,0,0,2,0,0,0,0,12,Frostbind,1,6,31,0,0,0,0,0
+omniscient-v2,candidate,18,0,0,ascent,0,18,23,2,0,0,0,0,36,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,21,0,0,ascent,0,0,0,2,0,0,0,0,63,Confound,3,21,106,0,0,0,0,0
+omniscient-v2,candidate,120,0,0,ascent,0,0,0,2,0,0,0,0,240,Sense Traps,4,0,0,0,0,0,0,12
+omniscient-v2,candidate,2,0,0,ascent,0,2,7,2,0,0,0,0,8,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,23,0,0,ascent,0,55,123,2,0,0,0,0,92,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,70,0,501,ascent,0,0,0,2,0,0,28,0,210,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,122,0,0,ascent,0,0,0,2,0,0,0,0,488,Cleanse,10,0,0,122,0,0,0,0
+omniscient-v2,candidate,115,0,954,ascent,0,0,0,2,0,0,51,0,460,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,2,0,0,ascent,0,2,6,2,0,0,0,0,8,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,246,0,1702,ascent,0,0,0,2,0,0,99,0,984,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,3,0,0,2,0,0,0,0,12,Slumber,14,0,0,0,0,0,12,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,2,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,58809,0,174147,descent,0,0,0,2,0,0,2471,0,117618,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1419,0,descent,0,0,0,2,1912,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1319,0,descent,0,0,0,2,1569,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,1483,1419,0,descent,0,0,0,2,1912,212,0,1671,4449,Confound,3,1483,7384,0,1883,70225,0,0
+omniscient-v2,candidate,0,707,0,descent,0,0,0,2,749,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,59,1319,0,descent,0,59,168,2,1569,192,0,1241,236,Blink,5,0,0,0,1433,78850,0,0
+omniscient-v2,candidate,0,1319,0,descent,0,0,0,2,1569,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,68,151,484,descent,0,0,0,2,221,18,33,162,204,Piercing Bolt,7,0,0,0,180,6745,0,0
+omniscient-v2,candidate,0,1419,0,descent,0,0,0,2,1912,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,35,707,0,descent,0,35,72,2,749,54,0,358,140,Exchange,9,0,0,0,412,22558,0,0
+omniscient-v2,candidate,79,707,0,descent,0,0,0,2,749,168,0,1204,316,Cleanse,10,0,0,79,1372,76474,0,0
+omniscient-v2,candidate,0,151,0,descent,0,0,0,2,221,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1319,0,descent,0,0,0,2,1569,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,151,0,descent,0,0,0,2,221,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1419,0,descent,0,0,0,2,1912,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,151,0,descent,0,0,0,2,221,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,19567,0,57682,ascent,0,0,0,3,0,0,1431,0,39134,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,20,0,0,ascent,0,0,0,3,0,0,0,0,40,Frostbind,1,20,103,0,0,0,0,0
+omniscient-v2,candidate,21,0,0,ascent,0,21,27,3,0,0,0,0,42,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,108,0,0,ascent,0,0,0,3,0,0,0,0,324,Confound,3,108,534,0,0,0,0,0
+omniscient-v2,candidate,273,0,0,ascent,0,0,0,3,0,0,0,0,546,Sense Traps,4,0,0,0,0,0,0,10
+omniscient-v2,candidate,5,0,0,ascent,0,5,13,3,0,0,0,0,20,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,41,0,0,ascent,0,107,243,3,0,0,0,0,164,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,86,0,613,ascent,0,0,0,3,0,0,39,0,258,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,0,3,75,3,0,0,0,0,12,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,2,0,0,ascent,0,2,4,3,0,0,0,0,8,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,142,0,0,ascent,0,0,0,3,0,0,0,0,568,Cleanse,10,0,0,142,0,0,0,0
+omniscient-v2,candidate,186,0,1544,ascent,0,0,0,3,0,0,76,0,744,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,13,0,0,ascent,0,13,38,3,0,0,0,0,52,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,447,0,3149,ascent,0,0,0,3,0,0,154,0,1788,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,9,0,0,ascent,9,0,0,3,0,0,0,0,36,Slumber,14,0,0,0,0,0,32,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,3,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,64752,0,192420,descent,0,0,0,3,0,0,2329,0,129504,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,645,0,descent,0,0,0,3,1828,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1043,0,descent,0,0,0,3,2011,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,2063,645,0,descent,0,0,0,3,1828,73,0,611,6189,Confound,3,2063,10296,0,684,25595,0,0
+omniscient-v2,candidate,0,1172,0,descent,0,0,0,3,1454,0,0,0,0,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,85,1043,0,descent,0,85,235,3,2011,130,0,770,340,Blink,5,0,0,0,900,48606,0,0
+omniscient-v2,candidate,0,1043,0,descent,0,0,0,3,2011,0,0,0,0,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,84,290,612,descent,0,0,0,3,589,19,28,197,252,Piercing Bolt,7,0,0,0,216,8216,0,0
+omniscient-v2,candidate,0,645,0,descent,0,0,0,3,1828,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,28,1172,0,descent,0,28,61,3,1454,71,0,399,112,Exchange,9,0,0,0,470,25266,0,0
+omniscient-v2,candidate,123,1172,0,descent,0,0,0,3,1454,103,0,1049,492,Cleanse,10,0,0,123,1152,65253,0,0
+omniscient-v2,candidate,0,290,0,descent,0,0,0,3,589,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1043,0,descent,0,0,0,3,2011,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,290,0,descent,0,0,0,3,589,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,645,0,descent,0,0,0,3,1828,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,290,0,descent,0,0,0,3,589,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,1981,0,5912,ascent,0,0,0,4,0,0,32,0,3962,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,17,0,0,ascent,0,0,0,4,0,0,0,0,34,Frostbind,1,17,82,0,0,0,0,0
+omniscient-v2,candidate,19,0,0,ascent,0,17,22,4,0,0,0,0,38,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,11,0,0,ascent,0,0,0,4,0,0,0,0,33,Confound,3,11,55,0,0,0,0,0
+omniscient-v2,candidate,101,0,0,ascent,0,0,0,4,0,0,0,0,202,Sense Traps,4,0,0,0,0,0,0,11
+omniscient-v2,candidate,19,0,0,ascent,0,19,50,4,0,0,0,0,76,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,137,0,0,ascent,0,355,806,4,0,0,0,0,548,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,32,0,247,ascent,0,0,0,4,0,0,9,0,96,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,9,0,0,ascent,0,9,240,4,0,0,0,0,36,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,1,0,0,ascent,0,1,2,4,0,0,0,0,4,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,225,0,0,ascent,0,0,0,4,0,0,0,0,900,Cleanse,10,0,0,225,0,0,0,0
+omniscient-v2,candidate,14,0,126,ascent,0,0,0,4,0,0,2,0,56,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,13,0,0,ascent,0,13,37,4,0,0,0,0,52,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,64,0,472,ascent,0,0,0,4,0,0,9,0,256,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,14743,0,43697,descent,0,0,0,4,0,0,703,0,29486,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,descent,0,0,0,4,0,0,0,0,0,Frostbind,1,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,84,0,descent,0,0,0,4,0,0,0,0,0,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,428,0,0,descent,0,0,0,4,0,37,0,132,1284,Confound,3,428,2139,0,169,5854,0,0
+omniscient-v2,candidate,652,9,0,descent,0,0,0,4,0,49,0,245,1304,Sense Traps,4,0,0,0,294,10716,0,37
+omniscient-v2,candidate,224,84,0,descent,0,224,638,4,0,12,0,42,896,Blink,5,0,0,0,54,2772,0,0
+omniscient-v2,candidate,54,84,0,descent,0,120,262,4,0,247,0,771,216,Shockwave,6,0,0,0,1018,51388,0,0
+omniscient-v2,candidate,51,16,399,descent,0,0,0,4,0,26,8,69,153,Piercing Bolt,7,0,0,0,95,3207,0,0
+omniscient-v2,candidate,0,0,0,descent,0,0,0,4,0,0,0,0,0,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,11,9,0,descent,0,11,22,4,0,10,0,29,44,Exchange,9,0,0,0,39,1999,0,0
+omniscient-v2,candidate,265,9,0,descent,0,0,0,4,0,43,0,161,1060,Cleanse,10,0,0,265,204,10518,0,0
+omniscient-v2,candidate,0,16,0,descent,0,0,0,4,0,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,84,0,descent,0,0,0,4,0,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,16,0,descent,0,0,0,4,0,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,0,0,descent,0,0,0,4,0,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,16,0,descent,0,0,0,4,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,13506,0,40436,ascent,0,0,0,5,0,0,129,0,27012,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,63,0,0,ascent,0,0,0,5,0,0,0,0,126,Frostbind,1,63,315,0,0,0,0,0
+omniscient-v2,candidate,52,0,0,ascent,0,51,63,5,0,0,0,0,104,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,127,0,0,ascent,0,0,0,5,0,0,0,0,381,Confound,3,127,647,0,0,0,0,0
+omniscient-v2,candidate,17,0,0,ascent,0,0,0,5,0,0,0,0,34,Sense Traps,4,0,0,0,0,0,0,3
+omniscient-v2,candidate,11,0,0,ascent,0,11,31,5,0,0,0,0,44,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,92,0,0,ascent,0,228,519,5,0,0,0,0,368,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,72,0,557,ascent,0,0,0,5,0,0,13,0,216,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,0,3,35,5,0,0,0,0,12,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,10,0,0,ascent,0,10,21,5,0,0,0,0,40,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,216,0,0,ascent,0,0,0,5,0,0,0,0,864,Cleanse,10,0,0,216,0,0,0,0
+omniscient-v2,candidate,42,0,377,ascent,0,0,0,5,0,0,1,0,168,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,21,0,0,ascent,0,21,62,5,0,0,0,0,84,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,93,0,682,ascent,0,0,0,5,0,0,14,0,372,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,7,0,0,ascent,7,0,0,5,0,0,0,0,28,Slumber,14,0,0,0,0,0,22,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,5,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,76091,0,226238,descent,0,0,0,5,0,0,2853,0,152182,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,85,2301,0,descent,0,0,0,5,2307,23,0,907,170,Frostbind,1,85,442,0,930,36788,0,0
+omniscient-v2,candidate,44,2301,0,descent,0,33,46,5,2259,32,0,967,88,Repulsion,2,0,0,0,999,39172,0,0
+omniscient-v2,candidate,2263,2301,0,descent,0,0,0,5,2307,51,0,489,6789,Confound,3,2263,11333,0,540,20474,0,0
+omniscient-v2,candidate,1516,1389,0,descent,0,0,0,5,1523,46,0,771,3032,Sense Traps,4,0,0,0,817,31776,0,119
+omniscient-v2,candidate,194,2301,0,descent,0,194,514,5,2259,49,0,440,776,Blink,5,0,0,0,489,27834,0,0
+omniscient-v2,candidate,85,2301,0,descent,0,165,352,5,2259,176,0,1493,340,Shockwave,6,0,0,0,1669,93867,0,0
+omniscient-v2,candidate,204,136,1573,descent,0,0,0,5,553,7,50,63,612,Piercing Bolt,7,0,0,0,70,2651,0,0
+omniscient-v2,candidate,26,2301,0,descent,0,26,765,5,2307,134,0,1519,104,Banish,8,0,0,0,1653,94943,0,0
+omniscient-v2,candidate,72,1389,0,descent,0,72,169,5,1523,27,0,265,288,Exchange,9,0,0,0,292,16616,0,0
+omniscient-v2,candidate,254,1389,0,descent,0,0,0,5,1523,52,0,707,1016,Cleanse,10,0,0,254,759,43987,0,0
+omniscient-v2,candidate,0,136,0,descent,0,0,0,5,553,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2301,0,descent,0,0,0,5,2259,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,136,0,descent,0,0,0,5,553,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2301,0,descent,0,0,0,5,2307,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,136,0,descent,0,0,0,5,553,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,13641,0,40735,ascent,0,0,0,6,0,0,135,0,27282,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,80,0,0,ascent,0,0,0,6,0,0,0,0,160,Frostbind,1,80,385,0,0,0,0,0
+omniscient-v2,candidate,50,0,0,ascent,0,44,59,6,0,0,0,0,100,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,200,0,0,ascent,0,0,0,6,0,0,0,0,600,Confound,3,200,1008,0,0,0,0,0
+omniscient-v2,candidate,12,0,0,ascent,0,0,0,6,0,0,0,0,24,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,5,0,0,ascent,0,5,17,6,0,0,0,0,20,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,69,0,0,ascent,0,175,403,6,0,0,0,0,276,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,42,0,328,ascent,0,0,0,6,0,0,9,0,126,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,10,0,0,ascent,0,10,268,6,0,0,0,0,40,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,2,0,0,ascent,0,2,4,6,0,0,0,0,8,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,185,0,0,ascent,0,0,0,6,0,0,0,0,740,Cleanse,10,0,0,185,0,0,0,0
+omniscient-v2,candidate,39,0,345,ascent,0,0,0,6,0,0,4,0,156,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,34,0,0,ascent,0,34,99,6,0,0,0,0,136,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,117,0,856,ascent,0,0,0,6,0,0,9,0,468,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,10,0,0,ascent,10,0,0,6,0,0,0,0,40,Slumber,14,0,0,0,0,0,37,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,6,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,70650,0,209873,descent,0,0,0,6,0,0,2871,0,141300,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,308,2001,0,descent,0,0,0,6,2067,34,0,963,616,Frostbind,1,308,1538,0,997,39249,0,0
+omniscient-v2,candidate,190,2046,0,descent,0,157,219,6,1913,34,0,790,380,Repulsion,2,0,0,0,824,32326,0,0
+omniscient-v2,candidate,2502,2001,0,descent,0,0,0,6,2067,30,0,379,7506,Confound,3,2502,12540,0,409,15660,0,0
+omniscient-v2,candidate,2595,1334,0,descent,0,0,0,6,1368,35,0,801,5190,Sense Traps,4,0,0,0,836,32763,0,167
+omniscient-v2,candidate,144,2046,0,descent,0,144,412,6,1913,63,0,680,576,Blink,5,0,0,0,743,42709,0,0
+omniscient-v2,candidate,148,2046,0,descent,0,318,686,6,1913,126,0,1459,592,Shockwave,6,0,0,0,1585,90681,0,0
+omniscient-v2,candidate,174,411,1321,descent,0,0,0,6,567,22,53,306,522,Piercing Bolt,7,0,0,0,328,12549,0,0
+omniscient-v2,candidate,114,2001,0,descent,0,114,2750,6,2067,158,0,1738,456,Banish,8,0,0,0,1896,108233,0,0
+omniscient-v2,candidate,103,1334,0,descent,0,103,231,6,1368,36,0,450,412,Exchange,9,0,0,0,486,27877,0,0
+omniscient-v2,candidate,231,1334,0,descent,0,0,0,6,1368,64,0,784,924,Cleanse,10,0,0,231,848,48826,0,0
+omniscient-v2,candidate,0,411,0,descent,0,0,0,6,567,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2046,0,descent,0,0,0,6,1913,0,0,0,0,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,411,0,descent,0,0,0,6,567,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,2001,0,descent,0,0,0,6,2067,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,411,0,descent,0,0,0,6,567,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,12680,0,37977,ascent,0,0,0,7,0,0,250,0,25360,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,61,0,0,ascent,0,0,0,7,0,0,0,0,122,Frostbind,1,61,300,0,0,0,0,0
+omniscient-v2,candidate,54,0,0,ascent,0,52,69,7,0,0,0,0,108,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,145,0,0,ascent,0,0,0,7,0,0,0,0,435,Confound,3,145,733,0,0,0,0,0
+omniscient-v2,candidate,14,0,0,ascent,0,0,0,7,0,0,0,0,28,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,8,0,0,ascent,0,8,24,7,0,0,0,0,32,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,49,0,0,ascent,0,126,281,7,0,0,0,0,196,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,57,0,450,ascent,0,0,0,7,0,0,12,0,171,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,18,0,0,ascent,0,18,451,7,0,0,0,0,72,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,7,0,0,ascent,0,7,15,7,0,0,0,0,28,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,169,0,0,ascent,0,0,0,7,0,0,0,0,676,Cleanse,10,0,0,169,0,0,0,0
+omniscient-v2,candidate,37,0,315,ascent,0,0,0,7,0,0,2,0,148,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,39,0,0,ascent,0,39,113,7,0,0,0,0,156,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,91,0,669,ascent,0,0,0,7,0,0,15,0,364,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,6,0,0,ascent,6,0,0,7,0,0,0,0,24,Slumber,14,0,0,0,0,0,24,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,7,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,68527,0,201558,descent,0,0,0,7,0,0,4257,0,137054,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,286,1136,0,descent,0,0,0,7,1171,6,0,210,572,Frostbind,1,286,1417,0,216,8488,0,0
+omniscient-v2,candidate,130,1668,0,descent,0,117,161,7,1676,10,0,186,260,Repulsion,2,0,0,0,196,7625,0,0
+omniscient-v2,candidate,1584,1136,0,descent,0,0,0,7,1171,5,0,142,4752,Confound,3,1584,7852,0,147,5750,0,0
+omniscient-v2,candidate,2176,1606,0,descent,0,0,0,7,1576,11,0,363,4352,Sense Traps,4,0,0,0,374,14804,0,153
+omniscient-v2,candidate,96,1668,0,descent,0,96,263,7,1676,15,0,171,384,Blink,5,0,0,0,186,10633,0,0
+omniscient-v2,candidate,222,1668,0,descent,0,503,1113,7,1676,62,0,709,888,Shockwave,6,0,0,0,771,44218,0,0
+omniscient-v2,candidate,249,899,1903,descent,0,0,0,7,1369,25,102,352,747,Piercing Bolt,7,0,0,0,377,14560,0,0
+omniscient-v2,candidate,114,1136,0,descent,0,114,2909,7,1171,43,0,457,456,Banish,8,0,0,0,500,28610,0,0
+omniscient-v2,candidate,61,1606,0,descent,0,61,135,7,1576,19,0,309,244,Exchange,9,0,0,0,328,19059,0,0
+omniscient-v2,candidate,253,1606,0,descent,0,0,0,7,1576,50,0,518,1012,Cleanse,10,0,0,253,568,32466,0,0
+omniscient-v2,candidate,0,899,0,descent,0,0,0,7,1369,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,25,1668,0,descent,0,25,74,7,1676,30,0,504,100,Phase Step,12,0,0,0,534,31049,0,0
+omniscient-v2,candidate,0,899,0,descent,0,0,0,7,1369,0,0,0,0,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,1136,0,descent,0,0,0,7,1171,0,0,0,0,Slumber,14,0,0,0,0,0,0,0
+omniscient-v2,candidate,0,899,0,descent,0,0,0,7,1369,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,12612,0,37915,ascent,0,0,0,8,0,0,113,0,25224,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,144,0,0,ascent,0,0,0,8,0,0,0,0,288,Frostbind,1,144,720,0,0,0,0,0
+omniscient-v2,candidate,72,0,0,ascent,0,65,90,8,0,0,0,0,144,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,370,0,0,ascent,0,0,0,8,0,0,0,0,1110,Confound,3,370,1841,0,0,0,0,0
+omniscient-v2,candidate,8,0,0,ascent,0,0,0,8,0,0,0,0,16,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,5,0,0,ascent,0,5,15,8,0,0,0,0,20,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,74,0,0,ascent,0,189,407,8,0,0,0,0,296,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,44,0,347,ascent,0,0,0,8,0,0,7,0,132,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,21,0,0,ascent,0,21,441,8,0,0,0,0,84,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,8,0,0,ascent,0,8,17,8,0,0,0,0,32,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,1100,0,0,ascent,0,0,0,8,0,0,0,0,4400,Cleanse,10,0,0,1100,0,0,0,0
+omniscient-v2,candidate,32,0,283,ascent,0,0,0,8,0,0,2,0,128,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,68,0,0,ascent,0,68,195,8,0,0,0,0,272,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,96,0,705,ascent,0,0,0,8,0,0,10,0,384,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,20,0,0,ascent,20,0,0,8,0,0,0,0,80,Slumber,14,0,0,0,0,0,69,0
+omniscient-v2,candidate,1,0,5,ascent,0,0,0,8,0,0,1,0,2,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,79339,0,235634,descent,0,0,0,8,0,0,2987,0,158678,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,861,1524,0,descent,0,0,0,8,1248,22,0,453,1722,Frostbind,1,861,4292,0,475,18579,0,0
+omniscient-v2,candidate,254,2007,0,descent,0,227,316,8,1519,11,0,213,508,Repulsion,2,0,0,0,224,8733,0,0
+omniscient-v2,candidate,4645,1524,0,descent,0,0,0,8,1248,13,0,178,13935,Confound,3,4645,23104,0,191,7370,0,0
+omniscient-v2,candidate,4281,1556,0,descent,0,0,0,8,1352,91,0,930,8562,Sense Traps,4,0,0,0,1021,38929,0,266
+omniscient-v2,candidate,87,2007,0,descent,0,87,238,8,1519,13,0,190,348,Blink,5,0,0,0,203,11771,0,0
+omniscient-v2,candidate,217,2007,0,descent,0,476,1049,8,1519,125,0,1089,868,Shockwave,6,0,0,0,1214,68915,0,0
+omniscient-v2,candidate,530,1325,4077,descent,0,0,0,8,1284,28,156,554,1590,Piercing Bolt,7,0,0,0,582,22730,0,0
+omniscient-v2,candidate,163,1524,0,descent,0,163,3693,8,1248,107,0,898,652,Banish,8,0,0,0,1005,57110,0,0
+omniscient-v2,candidate,38,1556,0,descent,0,38,78,8,1352,30,0,293,152,Exchange,9,0,0,0,323,18427,0,0
+omniscient-v2,candidate,2345,1556,0,descent,0,0,0,8,1352,94,0,720,9380,Cleanse,10,0,0,2345,814,45730,0,0
+omniscient-v2,candidate,0,1325,0,descent,0,0,0,8,1284,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,91,2007,0,descent,0,91,264,8,1519,132,0,1339,364,Phase Step,12,0,0,0,1471,83810,0,0
+omniscient-v2,candidate,296,1325,2083,descent,0,0,0,8,1284,63,81,685,1184,Chain Lightning,13,0,0,0,748,42922,0,0
+omniscient-v2,candidate,56,1524,0,descent,56,0,0,8,1248,12,0,159,224,Slumber,14,0,0,0,171,9869,204,0
+omniscient-v2,candidate,4,1325,21,descent,0,0,0,8,1284,13,4,138,8,Blood Bolt,15,0,0,0,151,8740,0,0
+omniscient-v2,candidate,12197,0,36541,ascent,0,0,0,9,0,0,107,0,24394,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,102,0,0,ascent,0,0,0,9,0,0,0,0,204,Frostbind,1,102,511,0,0,0,0,0
+omniscient-v2,candidate,67,0,0,ascent,0,64,92,9,0,0,0,0,134,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,156,0,0,ascent,0,0,0,9,0,0,0,0,468,Confound,3,156,778,0,0,0,0,0
+omniscient-v2,candidate,13,0,0,ascent,0,0,0,9,0,0,0,0,26,Sense Traps,4,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,0,3,9,9,0,0,0,0,12,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,25,0,0,ascent,0,60,125,9,0,0,0,0,100,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,23,0,186,ascent,0,0,0,9,0,0,3,0,69,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,34,0,0,ascent,0,34,860,9,0,0,0,0,136,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,3,0,0,ascent,0,3,6,9,0,0,0,0,12,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,179,0,0,ascent,0,0,0,9,0,0,0,0,716,Cleanse,10,0,0,179,0,0,0,0
+omniscient-v2,candidate,18,0,155,ascent,0,0,0,9,0,0,0,0,72,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,94,0,0,ascent,0,94,272,9,0,0,0,0,376,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,46,0,328,ascent,0,0,0,9,0,0,7,0,184,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,4,0,0,ascent,4,0,0,9,0,0,0,0,16,Slumber,14,0,0,0,0,0,13,0
+omniscient-v2,candidate,0,0,0,ascent,0,0,0,9,0,0,0,0,0,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,74695,0,222041,descent,0,0,0,9,0,0,2454,0,149390,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,343,1283,0,descent,0,0,0,9,1141,3,0,123,686,Frostbind,1,343,1718,0,126,4975,0,0
+omniscient-v2,candidate,153,1683,0,descent,0,140,204,9,1365,3,0,81,306,Repulsion,2,0,0,0,84,3278,0,0
+omniscient-v2,candidate,1380,1283,0,descent,0,0,0,9,1141,2,0,77,4140,Confound,3,1380,6928,0,79,3095,0,0
+omniscient-v2,candidate,3126,1304,0,descent,0,0,0,9,1261,4,0,230,6252,Sense Traps,4,0,0,0,234,9261,0,244
+omniscient-v2,candidate,42,1683,0,descent,0,42,117,9,1365,1,0,73,168,Blink,5,0,0,0,74,4428,0,0
+omniscient-v2,candidate,88,1683,0,descent,0,187,422,9,1365,7,0,362,352,Shockwave,6,0,0,0,369,21948,0,0
+omniscient-v2,candidate,256,1313,1937,descent,0,0,0,9,1205,5,81,186,768,Piercing Bolt,7,0,0,0,191,7519,0,0
+omniscient-v2,candidate,94,1283,0,descent,0,94,2193,9,1141,9,0,267,376,Banish,8,0,0,0,276,16248,0,0
+omniscient-v2,candidate,27,1304,0,descent,0,27,59,9,1261,2,0,136,108,Exchange,9,0,0,0,138,8175,0,0
+omniscient-v2,candidate,270,1304,0,descent,0,0,0,9,1261,11,0,273,1080,Cleanse,10,0,0,270,284,16732,0,0
+omniscient-v2,candidate,0,1313,0,descent,0,0,0,9,1205,0,0,0,0,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,105,1683,0,descent,0,105,309,9,1365,4,0,297,420,Phase Step,12,0,0,0,301,17881,0,0
+omniscient-v2,candidate,261,1313,1861,descent,0,0,0,9,1205,11,82,328,1044,Chain Lightning,13,0,0,0,339,19933,0,0
+omniscient-v2,candidate,34,1283,0,descent,34,0,0,9,1141,1,0,82,136,Slumber,14,0,0,0,83,4948,114,0
+omniscient-v2,candidate,2,1313,11,descent,0,0,0,9,1205,1,2,84,4,Blood Bolt,15,0,0,0,85,5099,0,0
+omniscient-v2,candidate,11249,0,33456,ascent,0,0,0,10,0,0,147,0,22498,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,300,0,0,ascent,0,0,0,10,0,0,0,0,600,Frostbind,1,300,1506,0,0,0,0,0
+omniscient-v2,candidate,125,0,0,ascent,0,114,152,10,0,0,0,0,250,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,462,0,0,ascent,0,0,0,10,0,0,0,0,1386,Confound,3,462,2333,0,0,0,0,0
+omniscient-v2,candidate,12,0,0,ascent,0,0,0,10,0,0,0,0,24,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,5,0,0,ascent,0,5,12,10,0,0,0,0,20,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,61,0,0,ascent,0,149,327,10,0,0,0,0,244,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,44,0,330,ascent,0,0,0,10,0,0,7,0,132,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,66,0,0,ascent,0,66,1624,10,0,0,0,0,264,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,8,0,0,ascent,0,8,17,10,0,0,0,0,32,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,1857,0,0,ascent,0,0,0,10,0,0,0,0,7428,Cleanse,10,0,0,1857,0,0,0,0
+omniscient-v2,candidate,34,0,301,ascent,0,0,0,10,0,0,1,0,136,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,168,0,0,ascent,0,168,493,10,0,0,0,0,672,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,91,0,674,ascent,0,0,0,10,0,0,8,0,364,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,15,0,0,ascent,15,0,0,10,0,0,0,0,60,Slumber,14,0,0,0,0,0,53,0
+omniscient-v2,candidate,3,0,15,ascent,0,0,0,10,0,0,3,0,6,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,71256,0,211166,descent,0,0,0,10,0,0,2517,0,142512,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,1163,1359,0,descent,0,0,0,10,1065,14,0,255,2326,Frostbind,1,1163,5778,0,269,10426,0,0
+omniscient-v2,candidate,348,1738,0,descent,0,308,421,10,1288,19,0,245,696,Repulsion,2,0,0,0,264,10195,0,0
+omniscient-v2,candidate,5045,1359,0,descent,0,0,0,10,1065,10,0,144,15135,Confound,3,5045,25248,0,154,5909,0,0
+omniscient-v2,candidate,3927,1412,0,descent,0,0,0,10,1198,73,0,651,7854,Sense Traps,4,0,0,0,724,27495,0,254
+omniscient-v2,candidate,66,1738,0,descent,0,66,177,10,1288,23,0,202,264,Blink,5,0,0,0,225,12744,0,0
+omniscient-v2,candidate,175,1738,0,descent,0,431,949,10,1288,87,0,619,700,Shockwave,6,0,0,0,706,39202,0,0
+omniscient-v2,candidate,537,1366,4156,descent,0,0,0,10,1086,45,120,364,1611,Piercing Bolt,7,0,0,0,409,15490,0,0
+omniscient-v2,candidate,320,1359,0,descent,0,320,7679,10,1065,98,0,642,1280,Banish,8,0,0,0,740,41529,0,0
+omniscient-v2,candidate,58,1412,0,descent,0,58,133,10,1198,33,0,244,232,Exchange,9,0,0,0,277,15571,0,0
+omniscient-v2,candidate,5348,1412,0,descent,0,0,0,10,1198,68,0,500,21392,Cleanse,10,0,0,5348,568,31824,0,0
+omniscient-v2,candidate,52,1366,441,descent,0,0,0,10,1086,63,6,450,208,Fireburst,11,0,0,0,513,28689,0,0
+omniscient-v2,candidate,354,1738,0,descent,0,354,1037,10,1288,125,0,925,1416,Phase Step,12,0,0,0,1050,59053,0,0
+omniscient-v2,candidate,1016,1366,7371,descent,0,0,0,10,1086,141,190,1184,4064,Chain Lightning,13,0,0,0,1325,75154,0,0
+omniscient-v2,candidate,210,1359,0,descent,210,0,0,10,1065,25,0,202,840,Slumber,14,0,0,0,227,12925,733,0
+omniscient-v2,candidate,18,1366,100,descent,0,0,0,10,1086,2,18,46,36,Blood Bolt,15,0,0,0,48,2795,0,0
+omniscient-v2,candidate,11557,0,34494,ascent,0,0,0,11,0,0,89,0,23114,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,324,0,0,ascent,0,0,0,11,0,0,0,0,648,Frostbind,1,324,1619,0,0,0,0,0
+omniscient-v2,candidate,187,0,0,ascent,0,163,228,11,0,0,0,0,374,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,582,0,0,ascent,0,0,0,11,0,0,0,0,1746,Confound,3,582,2917,0,0,0,0,0
+omniscient-v2,candidate,10,0,0,ascent,0,0,0,11,0,0,0,0,20,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,9,0,0,ascent,0,9,22,11,0,0,0,0,36,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,87,0,0,ascent,0,218,482,11,0,0,0,0,348,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,64,0,485,ascent,0,0,0,11,0,0,8,0,192,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,82,0,0,ascent,0,82,1764,11,0,0,0,0,328,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,16,0,0,ascent,0,16,35,11,0,0,0,0,64,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,991,0,0,ascent,0,0,0,11,0,0,0,0,3964,Cleanse,10,0,0,991,0,0,0,0
+omniscient-v2,candidate,40,0,352,ascent,0,0,0,11,0,0,1,0,160,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,250,0,0,ascent,0,250,733,11,0,0,0,0,1000,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,103,0,772,ascent,0,0,0,11,0,0,9,0,412,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,17,0,0,ascent,17,0,0,11,0,0,0,0,68,Slumber,14,0,0,0,0,0,57,0
+omniscient-v2,candidate,3,0,18,ascent,0,0,0,11,0,0,3,0,6,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,62870,0,187541,descent,0,0,0,11,0,0,981,0,125740,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,988,822,0,descent,0,0,0,11,487,0,0,52,1976,Frostbind,1,988,4943,0,52,2080,0,0
+omniscient-v2,candidate,456,1254,0,descent,0,393,569,11,834,1,0,61,912,Repulsion,2,0,0,0,62,2448,0,0
+omniscient-v2,candidate,3650,822,0,descent,0,0,0,11,487,7,0,33,10950,Confound,3,3650,18186,0,40,1425,0,0
+omniscient-v2,candidate,2509,1236,0,descent,0,0,0,11,1122,8,0,142,5018,Sense Traps,4,0,0,0,150,5827,0,199
+omniscient-v2,candidate,60,1254,0,descent,0,60,162,11,834,6,0,31,240,Blink,5,0,0,0,37,2049,0,0
+omniscient-v2,candidate,153,1254,0,descent,0,368,814,11,834,13,0,140,612,Shockwave,6,0,0,0,153,8831,0,0
+omniscient-v2,candidate,514,2006,3994,descent,0,0,0,11,1765,7,85,173,1542,Piercing Bolt,7,0,0,0,180,7031,0,0
+omniscient-v2,candidate,462,822,0,descent,0,462,11416,11,487,7,0,87,1848,Banish,8,0,0,0,94,5380,0,0
+omniscient-v2,candidate,58,1236,0,descent,0,58,124,11,1122,5,0,79,232,Exchange,9,0,0,0,84,4875,0,0
+omniscient-v2,candidate,2960,1236,0,descent,0,0,0,11,1122,17,0,147,11840,Cleanse,10,0,0,2960,164,9145,0,0
+omniscient-v2,candidate,92,2006,813,descent,0,0,0,11,1765,19,7,241,368,Fireburst,11,0,0,0,260,15156,0,0
+omniscient-v2,candidate,662,1254,0,descent,0,662,1932,11,834,12,0,139,2648,Phase Step,12,0,0,0,151,8668,0,0
+omniscient-v2,candidate,877,2006,6442,descent,0,0,0,11,1765,34,96,408,3508,Chain Lightning,13,0,0,0,442,25489,0,0
+omniscient-v2,candidate,132,822,0,descent,132,0,0,11,487,2,0,42,528,Slumber,14,0,0,0,44,2580,465,0
+omniscient-v2,candidate,12,2006,67,descent,0,0,0,11,1765,1,12,46,24,Blood Bolt,15,0,0,0,47,2767,0,0
+omniscient-v2,candidate,11147,0,33266,ascent,0,0,0,12,0,0,116,0,22294,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,621,0,0,ascent,0,0,0,12,0,0,0,0,1242,Frostbind,1,621,3101,0,0,0,0,0
+omniscient-v2,candidate,231,0,0,ascent,0,207,290,12,0,0,0,0,462,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,1119,0,0,ascent,0,0,0,12,0,0,0,0,3357,Confound,3,1119,5609,0,0,0,0,0
+omniscient-v2,candidate,33,0,0,ascent,0,0,0,12,0,0,0,0,66,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,7,0,0,ascent,0,7,21,12,0,0,0,0,28,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,57,0,0,ascent,0,142,327,12,0,0,0,0,228,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,64,0,514,ascent,0,0,0,12,0,0,7,0,192,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,138,0,0,ascent,0,138,3427,12,0,0,0,0,552,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,11,0,0,ascent,0,11,29,12,0,0,0,0,44,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,1287,0,0,ascent,0,0,0,12,0,0,0,0,5148,Cleanse,10,0,0,1287,0,0,0,0
+omniscient-v2,candidate,23,0,201,ascent,0,0,0,12,0,0,3,0,92,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,379,0,0,ascent,0,379,1104,12,0,0,0,0,1516,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,82,0,600,ascent,0,0,0,12,0,0,4,0,328,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,47,0,0,ascent,47,0,0,12,0,0,0,0,188,Slumber,14,0,0,0,0,0,164,0
+omniscient-v2,candidate,4,0,23,ascent,0,0,0,12,0,0,4,0,8,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,61549,0,183584,descent,0,0,0,12,0,0,1041,0,123098,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,1697,745,0,descent,0,0,0,12,457,6,0,122,3394,Frostbind,1,1697,8502,0,128,4973,0,0
+omniscient-v2,candidate,410,1137,0,descent,0,366,524,12,793,21,0,208,820,Repulsion,2,0,0,0,229,8721,0,0
+omniscient-v2,candidate,6353,745,0,descent,0,0,0,12,457,7,0,44,19059,Confound,3,6353,31693,0,51,1963,0,0
+omniscient-v2,candidate,2778,1039,0,descent,0,0,0,12,954,53,0,426,5556,Sense Traps,4,0,0,0,479,17971,0,191
+omniscient-v2,candidate,24,1137,0,descent,0,24,68,12,793,11,0,114,96,Blink,5,0,0,0,125,7071,0,0
+omniscient-v2,candidate,124,1137,0,descent,0,275,597,12,793,44,0,356,496,Shockwave,6,0,0,0,400,22408,0,0
+omniscient-v2,candidate,486,2168,3745,descent,0,0,0,12,1504,54,73,543,1458,Piercing Bolt,7,0,0,0,597,22791,0,0
+omniscient-v2,candidate,479,745,0,descent,0,479,11332,12,457,58,0,311,1916,Banish,8,0,0,0,369,20171,0,0
+omniscient-v2,candidate,50,1039,0,descent,0,50,113,12,954,18,0,189,200,Exchange,9,0,0,0,207,11773,0,0
+omniscient-v2,candidate,3763,1039,0,descent,0,0,0,12,954,45,0,359,15052,Cleanse,10,0,0,3763,404,22810,0,0
+omniscient-v2,candidate,207,2168,1841,descent,0,0,0,12,1504,136,14,1038,828,Fireburst,11,0,0,0,1174,66043,0,0
+omniscient-v2,candidate,617,1137,0,descent,0,617,1800,12,793,79,0,419,2468,Phase Step,12,0,0,0,498,27096,0,0
+omniscient-v2,candidate,1419,2168,10435,descent,0,0,0,12,1504,187,138,1370,5676,Chain Lightning,13,0,0,0,1557,86356,0,0
+omniscient-v2,candidate,356,745,0,descent,356,0,0,12,457,21,0,78,1424,Slumber,14,0,0,0,99,5101,1257,0
+omniscient-v2,candidate,20,2168,110,descent,0,0,0,12,1504,9,20,113,40,Blood Bolt,15,0,0,0,122,7015,0,0
+omniscient-v2,candidate,11074,0,33040,ascent,0,0,0,13,0,0,150,0,22148,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,1026,0,0,ascent,0,0,0,13,0,0,0,0,2052,Frostbind,1,1026,5136,0,0,0,0,0
+omniscient-v2,candidate,346,0,0,ascent,0,289,417,13,0,0,0,0,692,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,1704,0,0,ascent,0,0,0,13,0,0,0,0,5112,Confound,3,1704,8516,0,0,0,0,0
+omniscient-v2,candidate,14,0,0,ascent,0,0,0,13,0,0,0,0,28,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,14,0,0,ascent,0,14,40,13,0,0,0,0,56,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,86,0,0,ascent,0,206,455,13,0,0,0,0,344,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,96,0,745,ascent,0,0,0,13,0,0,11,0,288,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,208,0,0,ascent,0,208,4998,13,0,0,0,0,832,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,14,0,0,ascent,0,14,34,13,0,0,0,0,56,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,1248,0,0,ascent,0,0,0,13,0,0,0,0,4992,Cleanse,10,0,0,1248,0,0,0,0
+omniscient-v2,candidate,20,0,193,ascent,0,0,0,13,0,0,0,0,80,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,488,0,0,ascent,0,488,1411,13,0,0,0,0,1952,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,126,0,951,ascent,0,0,0,13,0,0,10,0,504,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,74,0,0,ascent,74,0,0,13,0,0,0,0,296,Slumber,14,0,0,0,0,0,260,0
+omniscient-v2,candidate,11,0,60,ascent,0,0,0,13,0,0,11,0,22,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,51386,0,153085,descent,0,0,0,13,0,0,849,0,102772,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,2426,622,0,descent,0,0,0,13,465,2,0,31,4852,Frostbind,1,2426,12221,0,33,1282,0,0
+omniscient-v2,candidate,634,937,0,descent,0,542,772,13,761,4,0,50,1268,Repulsion,2,0,0,0,54,2088,0,0
+omniscient-v2,candidate,7559,622,0,descent,0,0,0,13,465,1,0,12,22677,Confound,3,7559,37777,0,13,508,0,0
+omniscient-v2,candidate,1727,905,0,descent,0,0,0,13,911,10,0,95,3454,Sense Traps,4,0,0,0,105,3928,0,117
+omniscient-v2,candidate,39,937,0,descent,0,39,104,13,761,4,0,30,156,Blink,5,0,0,0,34,1871,0,0
+omniscient-v2,candidate,185,937,0,descent,0,425,945,13,761,14,0,91,740,Shockwave,6,0,0,0,105,5833,0,0
+omniscient-v2,candidate,552,1702,4343,descent,0,0,0,13,1228,17,75,128,1656,Piercing Bolt,7,0,0,0,145,5418,0,0
+omniscient-v2,candidate,852,622,0,descent,0,852,21080,13,465,7,0,52,3408,Banish,8,0,0,0,59,3287,0,0
+omniscient-v2,candidate,81,905,0,descent,0,81,184,13,911,8,0,74,324,Exchange,9,0,0,0,82,4768,0,0
+omniscient-v2,candidate,3065,905,0,descent,0,0,0,13,911,9,0,81,12260,Cleanse,10,0,0,3065,90,5195,0,0
+omniscient-v2,candidate,181,1702,1623,descent,0,0,0,13,1228,13,13,196,724,Fireburst,11,0,0,0,209,12112,0,0
+omniscient-v2,candidate,999,937,0,descent,0,999,2901,13,761,8,0,85,3996,Phase Step,12,0,0,0,93,5242,0,0
+omniscient-v2,candidate,1326,1702,9815,descent,0,0,0,13,1228,43,101,294,5304,Chain Lightning,13,0,0,0,337,18764,0,0
+omniscient-v2,candidate,373,622,0,descent,373,0,0,13,465,1,0,19,1492,Slumber,14,0,0,0,20,1174,1306,0
+omniscient-v2,candidate,40,1702,221,descent,0,0,0,13,1228,1,40,44,80,Blood Bolt,15,0,0,0,45,2653,0,0
+omniscient-v2,candidate,15144,0,45093,ascent,0,0,0,14,0,0,185,0,30288,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,1608,0,0,ascent,0,0,0,14,0,0,0,0,3216,Frostbind,1,1608,8077,0,0,0,0,0
+omniscient-v2,candidate,332,0,0,ascent,0,269,368,14,0,0,0,0,664,Repulsion,2,0,0,0,0,0,0,0
+omniscient-v2,candidate,3516,0,0,ascent,0,0,0,14,0,0,0,0,10548,Confound,3,3516,17594,0,0,0,0,0
+omniscient-v2,candidate,36,0,0,ascent,0,0,0,14,0,0,0,0,72,Sense Traps,4,0,0,0,0,0,0,1
+omniscient-v2,candidate,14,0,0,ascent,0,14,42,14,0,0,0,0,56,Blink,5,0,0,0,0,0,0,0
+omniscient-v2,candidate,90,0,0,ascent,0,227,519,14,0,0,0,0,360,Shockwave,6,0,0,0,0,0,0,0
+omniscient-v2,candidate,108,0,835,ascent,0,0,0,14,0,0,9,0,324,Piercing Bolt,7,0,0,0,0,0,0,0
+omniscient-v2,candidate,249,0,0,ascent,0,249,6250,14,0,0,0,0,996,Banish,8,0,0,0,0,0,0,0
+omniscient-v2,candidate,19,0,0,ascent,0,19,40,14,0,0,0,0,76,Exchange,9,0,0,0,0,0,0,0
+omniscient-v2,candidate,2235,0,0,ascent,0,0,0,14,0,0,0,0,8940,Cleanse,10,0,0,2235,0,0,0,0
+omniscient-v2,candidate,33,0,297,ascent,0,0,0,14,0,0,2,0,132,Fireburst,11,0,0,0,0,0,0,0
+omniscient-v2,candidate,547,0,0,ascent,0,547,1599,14,0,0,0,0,2188,Phase Step,12,0,0,0,0,0,0,0
+omniscient-v2,candidate,222,0,1626,ascent,0,0,0,14,0,0,12,0,888,Chain Lightning,13,0,0,0,0,0,0,0
+omniscient-v2,candidate,169,0,0,ascent,169,0,0,14,0,0,0,0,676,Slumber,14,0,0,0,0,0,596,0
+omniscient-v2,candidate,14,0,76,ascent,0,0,0,14,0,0,14,0,28,Blood Bolt,15,0,0,0,0,0,0,0
+omniscient-v2,candidate,46693,0,139095,descent,0,0,0,14,0,0,973,0,93386,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,3048,543,0,descent,0,0,0,14,419,15,0,99,6096,Frostbind,1,3048,15197,0,114,4197,0,0
+omniscient-v2,candidate,637,807,0,descent,0,515,731,14,626,16,0,119,1274,Repulsion,2,0,0,0,135,5067,0,0
+omniscient-v2,candidate,8797,543,0,descent,0,0,0,14,419,2,0,41,26391,Confound,3,8797,43877,0,43,1676,0,0
+omniscient-v2,candidate,1688,817,0,descent,0,0,0,14,728,34,0,305,3376,Sense Traps,4,0,0,0,339,12777,0,115
+omniscient-v2,candidate,19,807,0,descent,0,19,49,14,626,8,0,56,76,Blink,5,0,0,0,64,3550,0,0
+omniscient-v2,candidate,123,807,0,descent,0,283,630,14,626,37,0,197,492,Shockwave,6,0,0,0,234,12811,0,0
+omniscient-v2,candidate,494,1591,3851,descent,0,0,0,14,1029,75,76,559,1482,Piercing Bolt,7,0,0,0,634,23810,0,0
+omniscient-v2,candidate,1023,543,0,descent,0,1023,24917,14,419,29,0,163,4092,Banish,8,0,0,0,192,10555,0,0
+omniscient-v2,candidate,80,817,0,descent,0,80,176,14,728,19,0,142,320,Exchange,9,0,0,0,161,9042,0,0
+omniscient-v2,candidate,3936,817,0,descent,0,0,0,14,728,35,0,226,15744,Cleanse,10,0,0,3936,261,14531,0,0
+omniscient-v2,candidate,213,1591,1856,descent,0,0,0,14,1029,171,20,1089,852,Fireburst,11,0,0,0,1260,69524,0,0
+omniscient-v2,candidate,1102,807,0,descent,0,1102,3215,14,626,36,0,295,4408,Phase Step,12,0,0,0,331,18548,0,0
+omniscient-v2,candidate,1604,1591,11804,descent,0,0,0,14,1029,122,120,807,6416,Chain Lightning,13,0,0,0,929,51442,0,0
+omniscient-v2,candidate,467,543,0,descent,467,0,0,14,419,5,0,57,1868,Slumber,14,0,0,0,62,3507,1631,0
+omniscient-v2,candidate,58,1591,330,descent,0,0,0,14,1029,18,58,119,116,Blood Bolt,15,0,0,0,137,7565,0,0
+omniscient-v2,candidate,41667,0,124200,descent,0,0,0,15,0,0,979,0,83334,Magic Dart,0,0,0,0,0,0,0,0
+omniscient-v2,candidate,4412,459,0,descent,0,0,0,15,309,0,0,26,8824,Frostbind,1,4412,22076,0,26,1040,0,0
+omniscient-v2,candidate,500,686,0,descent,0,432,612,15,460,1,0,46,1000,Repulsion,2,0,0,0,47,1859,0,0
+omniscient-v2,candidate,13435,459,0,descent,0,0,0,15,309,0,0,10,40305,Confound,3,13435,67256,0,10,400,0,0
+omniscient-v2,candidate,953,675,0,descent,0,0,0,15,585,3,0,73,1906,Sense Traps,4,0,0,0,76,2987,0,69
+omniscient-v2,candidate,9,686,0,descent,0,9,23,15,460,1,0,19,36,Blink,5,0,0,0,20,1185,0,0
+omniscient-v2,candidate,89,686,0,descent,0,203,447,15,460,9,0,64,356,Shockwave,6,0,0,0,73,4131,0,0
+omniscient-v2,candidate,254,1206,1973,descent,0,0,0,15,786,10,36,114,762,Piercing Bolt,7,0,0,0,124,4726,0,0
+omniscient-v2,candidate,308,459,0,descent,0,308,7726,15,309,5,0,37,1232,Banish,8,0,0,0,42,2370,0,0
+omniscient-v2,candidate,34,675,0,descent,0,34,77,15,585,4,0,56,136,Exchange,9,0,0,0,60,3455,0,0
+omniscient-v2,candidate,7599,675,0,descent,0,0,0,15,585,5,0,72,30396,Cleanse,10,0,0,7599,77,4483,0,0
+omniscient-v2,candidate,376,1206,3371,descent,0,0,0,15,786,17,35,198,1504,Fireburst,11,0,0,0,215,12374,0,0
+omniscient-v2,candidate,515,686,0,descent,0,515,1493,15,460,2,0,73,2060,Phase Step,12,0,0,0,75,4455,0,0
+omniscient-v2,candidate,1102,1206,8079,descent,0,0,0,15,786,20,124,226,4408,Chain Lightning,13,0,0,0,246,14135,0,0
+omniscient-v2,candidate,685,459,0,descent,685,0,0,15,309,1,0,20,2740,Slumber,14,0,0,0,21,1215,2413,0
+omniscient-v2,candidate,74,1206,418,descent,0,0,0,15,786,8,74,48,148,Blood Bolt,15,0,0,0,56,3106,0,0

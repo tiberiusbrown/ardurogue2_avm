@@ -2,6 +2,7 @@
 #include "game_internal.hpp"
 #include "world.hpp"
 #include "spells.hpp"
+#include "spell_preferences.hpp"
 #include "sim_hooks.hpp"
 #include <algorithm>
 #include <cstdlib>
@@ -53,7 +54,7 @@ Action planned_lightning() {
     return best;
 }
 Action plan_magic() {
-    auto available=[](uint8_t s) { return (game.known_spells & spell_bit(s)) && game.mana>=spell_cost(s); };
+    auto available=[](uint8_t s) { return (game.known_spells & spell_bit(s)) && game.mana>=active_spell_cost(s); };
     int nearby=0,adjacent=0,escapes=0;
     for(const auto& m:game.monsters) if(m.type) {
         if(square_contains(game.player,m.pos,1)) ++adjacent;
@@ -63,9 +64,11 @@ Action plan_magic() {
         if(!blocked(p.x,p.y) && monster_at(p)==NONE && !feature_is_trap(observed_feature_at(game,p))) ++escapes;
     }
     bool urgent=(game.hp*3<player_max_hp() && nearby) || adjacent>=3;
+    bool fast_mana=game.amulet_slot<INVENTORY && game.inventory[game.amulet_slot].type==AMULET_MEDITATION && !item_is_cursed(game.inventory[game.amulet_slot]);
+    bool slow_mana=game.amulet_slot<INVENTORY && game.inventory[game.amulet_slot].type==AMULET_MEDITATION && item_is_cursed(game.inventory[game.amulet_slot]);
     uint8_t reserve=0;
     for(uint8_t s : {uint8_t(BLINK),uint8_t(SHOCKWAVE),uint8_t(BANISH),uint8_t(EXCHANGE)})
-        if(game.known_spells & spell_bit(s)) reserve=std::max(reserve,spell_cost(s));
+        if(game.known_spells & spell_bit(s)) reserve=std::max(reserve,active_spell_cost(s));
     if(available(CLEANSE) && (game.blindness || (nearby && (game.confused || game.slowed)))) return cast(CLEANSE);
     if(urgent && available(SHOCKWAVE) && adjacent>=2) return cast(SHOCKWAVE);
     if(urgent && available(EXCHANGE)) for(uint8_t i=0;i<MONSTERS;++i) if(exchange_target(i) && distance(game.player,game.monsters[i].pos)>=2) {
@@ -102,10 +105,10 @@ Action plan_magic() {
            feature_is_trap(observed_feature_at(game,pushed)) && feature_type(observed_feature_at(game,pushed))!=FEATURE_SUMMONING_TRAP) return cast(REPULSION,d);
         if(available(FIREBURST) && (player_fire_effect()>0 || ray.steps>=2)) {
             int cluster=0; for(const auto& n:game.monsters) if(n.type && n.type!=DRAGON && square_contains(ray.end,n.pos,1)) ++cluster;
-            if(cluster>=2 && (urgent || game.mana>=spell_cost(FIREBURST)+reserve)) return cast(FIREBURST,d);
+            if(cluster>=2 && (urgent || game.mana>=active_spell_cost(FIREBURST)+reserve)) return cast(FIREBURST,d);
         }
         if(available(CHAIN_LIGHTNING) && lightning_target(ray.end,uint16_t(1u<<ray.monster))!=NONE &&
-           (urgent || game.mana>=spell_cost(CHAIN_LIGHTNING)+reserve)) return cast(CHAIN_LIGHTNING,d);
+           (urgent || game.mana>=active_spell_cost(CHAIN_LIGHTNING)+reserve)) return cast(CHAIN_LIGHTNING,d);
         if(available(SLUMBER) && ray.steps<=4 && !m.stun &&
            (urgent || (ray.steps<=2 && monster_strength(m.type)>=player_strength()+2))) return cast(SLUMBER,d);
         int incoming=0; for(const auto& n:game.monsters) if(n.type && !n.stun && square_contains(game.player,n.pos,2)) incoming+=monster_strength(n.type)+2;
@@ -116,7 +119,7 @@ Action plan_magic() {
         if(available(PIERCING_BOLT) && ray.steps<5) {
             auto second=scan_ray(ray.end,dxs[d],dys[d],5-ray.steps);
             if(second.monster!=NONE && player_can_see_monster(second.monster) && can_see(second.end) &&
-               (urgent || game.mana>=spell_cost(PIERCING_BOLT)+std::max<uint8_t>(2,reserve))) return cast(PIERCING_BOLT,d);
+               (urgent || game.mana>=active_spell_cost(PIERCING_BOLT)+std::max<uint8_t>(slow_mana ? 3 : fast_mana ? 1 : 2,reserve))) return cast(PIERCING_BOLT,d);
         }
         if(ray.steps<=2 && (urgent || monster_strength(m.type)>=player_strength()+2)) {
             if(available(CONFOUND) && !monster_effect(m,MON_CONFUSED) && !m.stun) return cast(CONFOUND,d);
@@ -124,7 +127,7 @@ Action plan_magic() {
             if(urgent && available(REPULSION)) return cast(REPULSION,d);
         }
         if(available(MAGIC_DART) && (ray.steps>=2 || (urgent && m.hp<=4)) &&
-           (urgent || game.mana>=spell_cost(MAGIC_DART)+std::max<uint8_t>(2,reserve))) return cast(MAGIC_DART,d);
+           (urgent || game.mana>=active_spell_cost(MAGIC_DART)+std::max<uint8_t>(slow_mana ? 3 : fast_mana ? 1 : 2,reserve))) return cast(MAGIC_DART,d);
     }
     return {};
 }
@@ -188,6 +191,7 @@ int equipment_score(Item i) {
     case AMULET_PHOENIX_HEART: return 185;
     case AMULET_HEART_OF_GIANT: return 190;
     case AMULET_WISDOM: return 60;
+    case AMULET_MEDITATION: return game.known_spells & ~spell_bit(MAGIC_DART) ? 75 : 45;
     case AMULET_REGENERATION: return 40;
     case AMULET_CONSERVATION: return 35;
     default: return 0;
@@ -239,8 +243,7 @@ bool upgrade(Item i) {
 }
 int value(Item i) {
     if(i.type==SPELLBOOK) {
-        if(i.info>=SPELL_COUNT || (game.known_spells & spell_bit(i.info))) return 0;
-        return i.info==BLINK || i.info==SHOCKWAVE || i.info==BANISH || i.info==PHASE_STEP || i.info==SLUMBER ? 180 : i.info==SENSE_TRAPS ? 75 : 120;
+        return remaining_book_value(i.info, game.known_spells, game.floor, best_bow()!=NONE,legacy_spell_rules());
     }
     if(i.type == YENDOR_AMULET) return 10000;
     if(is_bow(i.type)) {
@@ -280,6 +283,7 @@ int value(Item i) {
     }
     switch(i.type) {
     case FOOD: return quantity(FOOD) >= 8 ? 0 : (game.hunger < 60 ? 180 : 70);
+    case POTION_MANA_RESTORATION: return 120;
     case POTION_EXTRA_HEALING: return 220;
     case POTION_RESTORE_VITALITY: return game.vamp_drain || game.weakened ? 160 : 70;
     case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: return 100;
@@ -309,6 +313,7 @@ int value(Item i) {
     }
 }
 int acquisition_value(Item i) {
+    if(i.type==POTION_MANA_RESTORATION && quantity(POTION_MANA_RESTORATION)>=3) return 0;
     if(i.type==SPELLBOOK) for(const auto& owned:game.inventory)
         if(owned.type==SPELLBOOK && owned.info==i.info) return 0;
     return value(i);
@@ -717,36 +722,48 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
         if(d <= 5 && can_see(m.pos)) ++threats;
         if(d == 1 && (adjacent < 0 || m.hp < game.monsters[adjacent].hp)) adjacent = i;
     }
+    if(game.known_spells && game.hp>=15 && game.mana*3<=player_max_mana() && find(POTION_MANA_RESTORATION)>=0 &&
+       (threats || (game.has_amulet && game.known_spells & (spell_bit(BLINK)|spell_bit(PHASE_STEP)|spell_bit(BANISH)))))
+        return use(find(POTION_MANA_RESTORATION),"restore casting and escape mana");
     Action magic=plan_magic(); if(magic.kind==ActionKind::Cast || magic.kind==ActionKind::Wand) return magic;
     if(!threats && game.floor>=2 && context.turns>=sense_until && game.mana==player_max_mana() &&
        (game.known_spells & spell_bit(SENSE_TRAPS))) {
         bool known=false; for(const auto& f:observed_features(game)) if(feature_is_trap(f.id) && distance(f.pos,game.player)<=4) known=true;
         if(!known) { sense_until=context.turns+96; return cast(SENSE_TRAPS); }
     }
-    if(!game.blindness && !game.confused && game.hp*4>=player_max_hp()*3 && context.turns>=study_defer_until) {
+    if(!game.blindness && !game.confused && game.hp*4>=player_max_hp()*3 && context.turns>=study_defer_until && study_budget_available(game.known_spells,game.floor)) {
         bool safe=true; for(const auto& m:game.monsters) if(m.type && distance(m.pos,game.player)<10) safe=false;
         int exits=0; for(int d=0;d<4;++d) { Position p{uint8_t(game.player.x+dxs[d]),uint8_t(game.player.y+dys[d])};
             if(!blocked(p.x,p.y) && !feature_is_trap(observed_feature_at(game,p))) ++exits;
         }
         Item light=game.offhand_slot<INVENTORY ? game.inventory[game.offhand_slot] : Item{};
+        int best_book=-1, best_priority=79;
+        for(uint8_t s=0;s<inventory_capacity();++s) if(game.inventory[s].type==SPELLBOOK) {
+            uint8_t spell=preferred_book_spell(game.inventory[s].info,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules());
+            int priority=study_priority(spell,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules());
+            if(priority>best_priority) { best_book=s; best_priority=priority; }
+        }
         for(uint8_t s=0;s<INVENTORY && safe && exits>=2;++s) {
+            if(s!=best_book) continue;
             Item book=game.inventory[s];
-            if(book.type!=SPELLBOOK || book.info>=SPELL_COUNT || (game.known_spells & spell_bit(book.info))) continue;
-            bool fuel=light.type==GLOWING_ORB || (is_fueled_light(light.type) && light.info*fuel_denominator(light.type)>=spell_study_turns(book.info)+24);
+            if(book.type!=SPELLBOOK || game.has_amulet) continue;
+            uint8_t spell=preferred_book_spell(book.info,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules());
+            if(spell==NONE || study_priority(spell,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules())<80) continue;
+            bool fuel=light.type==GLOWING_ORB || (is_fueled_light(light.type) && light.info*fuel_denominator(light.type)>=active_study_turns(spell)+24);
             if((!fuel || player_light_radius()<2) && !item_is_cursed(light)) {
                 for(uint8_t l=0;l<inventory_capacity();++l) {
                     const Item& candidate=game.inventory[l];
                     if(l!=game.offhand_slot && (candidate.type==GLOWING_ORB ||
-                       (is_fueled_light(candidate.type) && candidate.info*fuel_denominator(candidate.type)>=spell_study_turns(book.info)+24)))
+                       (is_fueled_light(candidate.type) && candidate.info*fuel_denominator(candidate.type)>=active_study_turns(spell)+24)))
                         return use(l,"light for spellbook study");
                 }
             }
             if(fuel && !feature_is_trap(observed_feature_at(game,game.player))) {
-                if(game.hunger>=study_food_required(book.info)) {
-                    previous_study=book.info; return use(s,"study unknown spellbook");
+                if(game.hunger>=active_study_food_required(spell)) {
+                    previous_study=spell; return use(s,"study selected spellbook spell",spell);
                 }
                 int food=find(FOOD);
-                if(food>=0) return use(food,"prepare food for spellbook study");
+                if(food>=0 && quantity(FOOD)>=2) return use(food,"prepare food for spellbook study");
             }
         }
     }

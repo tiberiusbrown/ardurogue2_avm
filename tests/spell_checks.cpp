@@ -29,51 +29,51 @@ void monster(uint8_t index,Position pos,uint8_t type=GOBLIN,uint8_t hp=100) {
     game.monsters[index]={pos,type,hp,15,{0,0},0};
 }
 void book(uint8_t spell) {
-    game.known_spells=spell_bit(MAGIC_DART); game.inventory[2]={SPELLBOOK,spell};
+    game.known_spells=spell_bit(MAGIC_DART); game.inventory[2]={SPELLBOOK,spellbook_for_spell(spell)};
 }
 void learning() {
     for(uint8_t spell : {uint8_t(FROSTBIND),uint8_t(BLINK),uint8_t(EXCHANGE)}) {
-        arena(); book(spell); game.mana=0;
-        require(use_inventory(2) && studying() && game.turns==0,"study initiation consumed a turn");
+        arena(); book(spell); game.known_spells |= spellbook_mask(spellbook_for_spell(spell)) & ~spell_bit(spell); uint16_t initial=game.known_spells; game.mana=0;
+        require(use_inventory(2,spell) && studying() && game.turns==0,"study initiation consumed a turn");
         uint8_t duration=spell_study_turns(spell);
         for(uint8_t turn=1;turn<=duration;++turn) {
             require(advance_study(),"study turn rejected");
             require(game.turns==turn,"study skipped ordinary turns");
             require(game.mana==turn/16,"study omitted mana regeneration");
-            if(turn<duration) require(studying() && session.study_progress==turn && game.inventory[2].type==SPELLBOOK && game.known_spells==1,"premature learning/book consumption");
+            if(turn<duration) require(studying() && session.study_progress==turn && game.inventory[2].type==SPELLBOOK && game.known_spells==initial,"premature learning/book consumption");
         }
-        require(!studying() && game.inventory[2].type==NO_ITEM && game.known_spells==(1|spell_bit(spell)),"completion corrupted spell bitmask");
+        require(!studying() && game.inventory[2].type==NO_ITEM && game.known_spells==(initial|spell_bit(spell)),"completion corrupted spell bitmask");
         require(game.hunger==255-duration/3,"study applied extra hunger cost");
-        game.inventory[2]={SPELLBOOK,spell}; uint16_t rng=game.random_state;
-        require(!begin_study(2) && game.turns==duration && game.random_state==rng,"duplicate study spent resources");
+        game.inventory[2]={SPELLBOOK,spellbook_for_spell(spell)}; uint16_t rng=game.random_state;
+        require(!begin_study(2,spell) && game.turns==duration && game.random_state==rng,"duplicate study spent resources");
     }
     arena(); book(EXCHANGE); game.hunger=study_food_required(EXCHANGE)-1;
-    require(!begin_study(2) && !game.turns,"study accepted inadequate food reserve");
-    arena(); book(FROSTBIND); require(begin_study(2),"study fixture");
+    require(!begin_study(2,EXCHANGE) && !game.turns,"study accepted inadequate food reserve");
+    arena(); book(FROSTBIND); require(begin_study(2,FROSTBIND),"study fixture");
     for(uint8_t i=0;i<10;++i) advance_study();
     Game before=game;
     require(!use_inventory(2) && !cast_spell(MAGIC_DART,1,0) && !drop_inventory(2),"concurrent study action accepted");
     move_player(1,0); action(); wait_search();
     require(!std::memcmp(&before,&game,sizeof game),"ordinary action during study");
     cancel_study(); require(game.inventory[2].type==SPELLBOOK && game.known_spells==1 && !session.study_progress,"cancel taught spell or lost book");
-    require(begin_study(2) && session.study_progress==0,"partial study resumed");
+    require(begin_study(2,FROSTBIND) && session.study_progress==0,"partial study resumed");
     game.hunger=STUDY_HUNGRY-1; advance_study();
     require(!studying() && game.inventory[2].type==SPELLBOOK,"hungry study continued");
-    arena(); book(FROSTBIND); begin_study(2); game.see_invisible=1; advance_study();
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND); game.see_invisible=1; advance_study();
     require(!studying() && feature_status_text().find("potion sight fades")!=std::string::npos && feature_status_text().find("lose your concentration")!=std::string::npos,"expiration interruption suppressed gameplay message");
-    arena(); book(FROSTBIND); begin_study(2);
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND);
     for(uint8_t i=0;i<39;++i) advance_study();
     game.haste=1; advance_study();
     require(game.turns==40 && !studying() && game.inventory[2].type==SPELLBOOK && game.known_spells==1,"final-turn interruption lost precedence");
-    arena(); book(FROSTBIND); begin_study(2); status_number(7); advance_study();
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND); status_number(7); advance_study();
     require(!studying(),"number-only gameplay output did not interrupt");
-    arena(); book(FROSTBIND); begin_study(2); monster(0,{21,15}); game.monsters[0].stun=0; game.speed=monster_speed(GOBLIN);
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND); monster(0,{21,15}); game.monsters[0].stun=0; game.speed=monster_speed(GOBLIN);
     advance_study(); require(!studying(),"ordinary attack/miss did not interrupt");
-    arena(); book(FROSTBIND); begin_study(2); game.player.x++; advance_study();
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND); game.player.x++; advance_study();
     require(!studying() && game.known_spells==1,"displaced reading continued");
-    arena(); book(FROSTBIND); begin_study(2); game.hp=1; game.hunger=0; game.turns=3; advance_study();
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND); game.hp=1; game.hunger=0; game.turns=3; advance_study();
     require(session.ended && !studying() && game.inventory[2].type==SPELLBOOK,"death retained study");
-    arena(); book(FROSTBIND); begin_study(2); game.magic=SAVE_MAGIC; game.version=SAVE_VERSION; game.valid=1; game.mana=3;
+    arena(); book(FROSTBIND); begin_study(2,FROSTBIND); game.magic=SAVE_MAGIC; game.version=SAVE_VERSION; game.valid=1; game.mana=3;
     require(restore_startup_save(true) && !studying() && game.inventory[2].type==SPELLBOOK && game.mana==3 && game.known_spells==1,"save lifecycle lost magic or book");
     game.version=SAVE_VERSION-1; require(!restore_startup_save(true) && !game.known_spells,"incompatible save accepted");
 }
@@ -165,48 +165,60 @@ void casting() {
     require(!game.blindness && game.confused && game.slowed,"Cleanse cleared more than one condition");
     game.mana=16; cast_spell(CLEANSE); require(!game.confused && game.slowed,"Cleanse priority");
     game.mana=16; cast_spell(CLEANSE); require(!game.slowed,"Cleanse omitted slowing");
-    game.mana=16; cast_spell(CLEANSE); require(game.mana==11 && game.turns==4,"empty Cleanse resource rule");
+    game.mana=16; cast_spell(CLEANSE); require(game.mana==16-spell_cost(CLEANSE) && game.turns==4,"empty Cleanse resource rule");
 }
 void books_and_generation() {
-    arena();
-    Item named{SPELLBOOK,EXCHANGE};
-    require(sizeof(Item)==2 && !is_stackable(SPELLBOOK) && item_is_identified(named) &&
-            !item_is_cursed(named) && item_value(named)==EXCHANGE,
-            "spellbook instance flags or stacking");
-    unsigned generated_spells[SPELL_COUNT]={};
-    unsigned eligible=0,books=0,early_books=0,early_advanced=0,late_advanced=0,late_books=0;
-    for(unsigned seed=1;seed<=1024;++seed) for(uint8_t floor=0;floor<FLOORS;++floor) {
-        arena(); game.run_seed=uint16_t(seed); game.floor=floor;
+    arena(); game.known_spells=1;
+    require(valid_spellbooks() && !spellbook_mask(255) && spellbook_for_spell(MAGIC_DART)==NONE,"book coverage/invalid IDs");
+    const char* names[]={"Book of Control","Book of Displacement","Book of Survival","Book of Destruction"};
+    for(uint8_t b=0;b<BOOK_COUNT;++b) require(!std::strcmp(spellbook_name(b),names[b]),"public book names");
+    for(uint8_t s=1;s<SPELL_COUNT;++s) {
+        unsigned count=0; for(uint8_t b=0;b<BOOK_COUNT;++b) count+=bool(spellbook_mask(b)&spell_bit(s));
+        require(count==1,"learnable spell has multiple/no books");
+    }
+    unsigned counts[4][BOOK_COUNT]={}, attempts[4]={};
+    const uint8_t floors[]={0,3,7,11};
+    const unsigned weights[4][BOOK_COUNT]={{50,35,12,3},{35,35,22,8},{20,30,30,20},{10,20,30,40}};
+    for(unsigned seed=1;seed<=65535;++seed) for(uint8_t band=0;band<4;++band) {
+        arena(); game.known_spells=1; game.run_seed=uint16_t(seed); game.floor=floors[band];
+        game.ground[0]={{1,1},make_equipment(LONG_SWORD,0)};
+        uint16_t rng=game.random_state; generate_spellbooks();
+        require(game.random_state==rng && game.ground[0].pos==Position{1,1},"book generation changed RNG/location");
+        if(game.ground[0].item.type==SPELLBOOK) { ++attempts[band]; ++counts[band][game.ground[0].item.info]; }
+    }
+    for(uint8_t band=0;band<4;++band) {
+        require(attempts[band]>3500 && attempts[band]<4300,"first slot book replacement chance");
+        for(uint8_t b=0;b<BOOK_COUNT;++b) {
+            double expected=attempts[band]*weights[band][b]/100.0;
+            double difference=counts[band][b]-expected;
+            require(difference*difference<36*expected,"book depth frequencies outside six sigma");
+        }
+    }
+    for(unsigned seed=1;seed<=2048;++seed) {
+        arena(); game.known_spells=1; game.run_seed=uint16_t(seed);
         game.ground[0]={{1,1},{FOOD,1}}; game.ground[1]={{2,1},{ARROWS,3}};
         game.ground[2]={{3,1},{TORCH,50}}; game.ground[3]={{4,1},make_equipment(STORMBRINGER,0)};
         for(uint8_t slot=4;slot<GROUND_ITEMS;++slot) game.ground[slot]={{uint8_t(slot+1),1},make_equipment(LONG_SWORD,0)};
-        Game before=game; generate_spellbooks();
-        require(game.random_state==before.random_state &&
-                !std::memcmp(game.ground,before.ground,4*sizeof(GroundItem)),
-                "spellbook generation changed gameplay RNG, supplies or artifacts");
-        for(uint8_t slot=4;slot<GROUND_ITEMS;++slot) {
-            const auto& item=game.ground[slot];
-            require(item.pos==before.ground[slot].pos,"spellbook generation moved loot");
-            if(floor==4) { require(item.item.type==LONG_SWORD,"all-phantom floor gained books"); continue; }
-            ++eligible;
-            if(item.item.type!=SPELLBOOK) continue;
-            ++books; ++generated_spells[item.item.info]; require(item.item.info>MAGIC_DART && item.item.info<SPELL_COUNT,"generated invalid/starting spellbook");
-            if(floor==0) { ++early_books; early_advanced+=item.item.info>=BLINK; }
-            if(floor==15) { ++late_books; late_advanced+=item.item.info>=BLINK; }
+        Game before=game; generate_spellbooks(); uint8_t seen=0;
+        require(!std::memcmp(game.ground,before.ground,4*sizeof(GroundItem)),"book displaced essential supply/artifact");
+        for(const auto& g:game.ground) if(g.item.type==SPELLBOOK) {
+            require(g.item.info<BOOK_COUNT && !(seen & (1u<<g.item.info)),"duplicate book on floor"); seen|=uint8_t(1u<<g.item.info);
         }
-        if(floor==15) {
-            game=before; game.has_amulet=1; Game ascending=game; generate_spellbooks();
-            require(!std::memcmp(&game,&ascending,sizeof game),"ascent generated fresh spellbooks");
+        for(uint8_t b=0;b<BOOK_COUNT;++b) {
+            game=before; game.inventory[1]={SPELLBOOK,b}; generate_spellbooks();
+            for(const auto& g:game.ground) require(g.item.type!=SPELLBOOK || g.item.info!=b,"carried duplicate generated");
+            game=before; game.known_spells|=spellbook_mask(b); generate_spellbooks();
+            for(const auto& g:game.ground) require(g.item.type!=SPELLBOOK || g.item.info!=b,"completed book generated");
         }
+        game=before; game.has_amulet=1; Game ascent=game; generate_spellbooks(); require(!std::memcmp(&game,&ascent,sizeof game),"ascent generated books");
+        game=before; game.floor=4; Game phantom=game; generate_spellbooks(); require(!std::memcmp(&game,&phantom,sizeof game),"phantom floor generated books");
     }
-    for(uint8_t s=1;s<SPELL_COUNT;++s) require(generated_spells[s]>0,"spell missing from weighted book pools");
-    require(books*100>eligible*5 && books*100<eligible*7 &&
-            early_advanced*100>early_books*15 && early_advanced*100<early_books*25 &&
-            late_advanced==late_books,"spellbook replacement rate or depth weighting");
 }
 }
 extern void check_magic_expansion();
+extern void check_book_mana();
 void check_spells() {
+    check_book_mana();
     check_magic_expansion();
     start_new(123); require(game.mana==6 && game.known_spells==1 && player_max_mana()==6,"starting magic");
     arena();

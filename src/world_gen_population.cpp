@@ -89,6 +89,8 @@ static uint8_t floor_wand_type(uint16_t& seed)
 static uint8_t floor_amulet_type(uint16_t& seed)
 {
     uint8_t chance = floor_roll(seed, 17);
+    uint16_t meditation_seed = static_cast<uint16_t>(seed ^ 0x953bu);
+    if(floor_equipment_roll(meditation_seed, 100) < BALANCE_VALUE("meditation-percent", 8)) return AMULET_MEDITATION;
     if(chance == 16) return AMULET_BRILLIANCE;
     if(chance == 8) return AMULET_VAMPIRE;
     return static_cast<uint8_t>(AMULET_FIRST + chance % (AMULET_WISDOM - AMULET_FIRST + 1));
@@ -113,6 +115,8 @@ static uint8_t floor_potion_type(uint16_t& seed)
     uint16_t sight_seed = static_cast<uint16_t>(seed ^ 0x53e9u);
     uint8_t sight_roll = floor_roll(sight_seed, 100);
     uint8_t chance = floor_roll(seed, 22);
+    uint16_t mana_seed = static_cast<uint16_t>(seed ^ 0xd137u);
+    if(floor_equipment_roll(mana_seed, 100) < BALANCE_VALUE("mana-potion-percent", 8)) return POTION_MANA_RESTORATION;
     uint8_t sight_percent = BALANCE_VALUE("sight-percent", SEE_INVISIBLE_POTION_PERCENT);
     if(game.floor >= 2 && game.floor <= 4)
         sight_percent = BALANCE_VALUE("sight-early-percent", SEE_INVISIBLE_EARLY_PERCENT);

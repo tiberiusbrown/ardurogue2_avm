@@ -5,6 +5,7 @@
 #include "inventory_view.hpp"
 
 namespace rogue {
+void render_spellbook(uint8_t book, const SpellbookView& view, uint8_t selection, uint8_t top);
 
 // Frame indices in the shared 4x4 item sprite sheet.
 uint8_t item_icon(uint8_t type);

@@ -72,7 +72,7 @@ void determinism() {
     constexpr uint16_t escape_seed = 24;
     Options o;
     auto baseline=std::make_shared<RuleExperiment>();
-    for(const char* rule:{"balance:magic=0","balance:ground=16","balance:inventory=16","balance:sight-percent=0",
+    for(const char* rule:{"balance:magic=0","balance:mana-potion-percent=0","balance:meditation-percent=0","balance:ground=16","balance:inventory=16","balance:sight-percent=0",
             "balance:sight-early-percent=0","balance:natural-regen-interval=0",
             "balance:healing-min-quarters=1","balance:healing-random-quarters=2",
             "balance:phantom-strength=6","balance:phantom-dexterity=4","balance:phantom-health=12",
@@ -500,7 +500,7 @@ void experiments() {
 }
 int main() {
     try {
-        static_assert(offsetof(Game,see_invisible)==813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==31,"native saved layout changed");
+        static_assert(offsetof(Game,see_invisible)==814 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION==32,"native saved layout changed");
         check_magic_expansion_telemetry(); monster_trap_slot_reuse(); monster_trap_forced_holy_reuse(); monster_trap_telemetry(); check_v2_policy(); balance_controls(); determinism(); entry_state_report(); sacrifice_accounting(); policy_regressions(); path_and_dispatch(); hooks(); wand_identity(); consumable_policy_and_telemetry(); safety(); competence(); experiments();
         std::cout << "simulator checks passed\n"; return 0;
     } catch(const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }

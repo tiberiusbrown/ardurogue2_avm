@@ -96,7 +96,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  offsetof(Game, see_invisible) == 813 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
+                  offsetof(Game, see_invisible) == 814 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -184,9 +184,9 @@ void check_floor_generation_snapshots()
     // change without changing generated terrain, occupants, or RNG behavior.
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
-        // Descent includes isolated spellbook replacement; ascent stays identical.
-        {0x71c327b6u, 0x091ec48cu}, {0x1453d9eeu, 0xc3c40c3bu},
-        {0x3db48893u, 0x5fe53bf0u}, {0xc5adb11du, 0x41e15138u}
+        // Descent includes themed books and mana loot; ascent stays identical.
+        {0xf6d14743u, 0x091ec48cu}, {0x1ed33ba6u, 0xc3c40c3bu},
+        {0x50436fcau, 0x5fe53bf0u}, {0xa7d2c623u, 0x41e15138u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)

@@ -48,23 +48,23 @@ Arrows use all eight info bits as unsigned quantity
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 31 stores one active floor in an 844-byte AVM `Game`. Generation
+Save version 32 stores one active floor in an 845-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 30 and older saves are incompatible; no migration is attempted.
+Version 31 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
 subtypes with independent enchantment and curse rolls. The former attack and
 cached defense fields store strength and magic resistance.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed
-instead of storing mapping arrays. Eight bytes track discoveries across 63
+instead of storing mapping arrays. Nine bytes track discoveries across 65
 identifiable types. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
 
-The eighteen potions include healing, strength, dexterity, experience,
+The nineteen potions include healing, strength, dexterity, experience,
 invisibility, harming, poison, confusion, paralysis, slowing, blindness,
 See Invisible, Extra Healing, Restore Vitality, Haste, Levitation, Fire Resistance,
-and Fire. Every new run assigns each type a different color. Potions of the same type keep that
+Fire, and Mana Restoration. Every new run assigns each type a different color. Potions of the same type keep that
 color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
 can increase strength. Strength potions cap permanent base STR at 12; strength
@@ -78,11 +78,14 @@ randomly assigns unknown scroll descriptions, and scrolls of the same type
 stack in inventory.
 
 Every character starts with Magic Dart and 6/6 MP. Learn fifteen other spells from
-explicitly named, nonstacking spellbooks through 40–80 ordinary turns of study.
+four fixed themed, nonstacking spellbooks through 40–80 ordinary turns of study.
 Prepare food and light, choose a quiet location, and press B to cancel between
 animated study updates. Any gameplay message interrupts learning and keeps the
 book. **CAST SPELL** is in the scrolling action menu; the HUD shows MP. Mana
-regenerates every 16 nonstarving turns. See the complete roster, targeting,
+regenerates silently every 16 nonstarving turns, or every 8 with Meditation
+(every 32 when cursed). Mana Restoration potions recover 50–100% of maximum MP.
+Use Item opens a book member menu; each spell requires separate study and a
+book remains until all its spells are learned. HP amulet regeneration is silent. See the complete roster, targeting,
 controls and validation in [the magic guide](docs/SPELLS.md).
 
 The six additional scrolls hold nearby visible monsters, discover traps, summon
@@ -456,12 +459,12 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
-The AVM build uses an 844-byte saved layout and two-byte items, eight-byte
+The AVM build uses an 845-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. The magic build has a complete
-247-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM
+249-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM
 stack. Future changes must continue checking the linker report. Rendering
 reuses transient row scratch outside the saved layout and preserves explored
-terrain separately from current sight. See the [magic expansion report](docs/MAGIC-EXPANSION-RESULTS.md)
+terrain separately from current sight. See the [themed-book report](docs/MULTI-SPELL-BOOKS-RESULTS.md)
 for RAM, flash, final-ELF benchmarks and paired balance validation.
 
 
@@ -469,5 +472,5 @@ The learned magic roster now contains sixteen spells. Fireburst, Phase Step,
 Chain Lightning, Slumber and Blood Bolt append IDs 11–15; the original eleven
 retain their costs and mechanics. Blood Bolt explicitly costs 3 MP and 3 current
 HP and can kill its caster. The [spell guide](docs/SPELLS.md) contains all exact
-effects, study durations and generation weights. Save version 31 rejects older
-raw item IDs after inserting Wand of Lightning; the saved Game remains 844 bytes.
+effects, study durations and generation weights. Save version 32 rejects older
+raw item IDs after adding mana potions and Meditation; the saved Game is 845 bytes.

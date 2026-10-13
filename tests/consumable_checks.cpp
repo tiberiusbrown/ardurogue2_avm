@@ -201,9 +201,9 @@ void check_new_consumables() {
         arena(uint16_t(seed));
         uint8_t count=0;
         for(auto group:{POTION_FIRST,SCROLL_FIRST,RING_FIRST,AMULET_FIRST,WAND_FIRST}) {
-            bool seen[18]={}; auto size=is_potion(group)?POTION_COUNT:is_scroll(group)?SCROLL_COUNT:is_ring(group)?RING_COUNT:is_amulet(group)?AMULET_COUNT:WAND_COUNT;
+            bool seen[POTION_COUNT]={}; auto size=is_potion(group)?POTION_COUNT:is_scroll(group)?SCROLL_COUNT:is_ring(group)?RING_COUNT:is_amulet(group)?AMULET_COUNT:WAND_COUNT;
             for(uint8_t i=0;i<size;++i) { auto t=uint8_t(group+i); auto a=item_appearance(t); require(a<size && !seen[a],"appearance collision/overrun"); seen[a]=true; identify_type(t); require(item_type_identified(t),"expanded identification"); ++count; }
         }
-        require(count==63 && !(game.identified_items[7]&0x80),"63-type identification bounds");
+        require(count==65 && !(game.identified_items[8]&0xfe),"63-type identification bounds");
     }
 }

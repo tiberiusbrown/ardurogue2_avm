@@ -213,6 +213,6 @@ void check_lighting_offhand() {
         if(is_potion(type) || is_ring(type) || is_amulet(type) || is_scroll(type) || is_wand(type)) {
             identify_type(type); check(item_type_identified(type), "identification bit indexing");
         }
-    check((game.identified_items[7] & 0x80) == 0, "knowledge overrun");
+    check((game.identified_items[8] & 0xfe) == 0, "knowledge overrun");
     check(!is_artifact(RING_ILLUMINATION) && !is_artifact(AMULET_BRILLIANCE), "new jewelry became artifact");
 }

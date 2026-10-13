@@ -33,7 +33,7 @@ int identity_group(ItemCategory c) {
 }
 SeenItem describe(Item i, bool detailed) {
     SeenItem s; s.category=category(i.type);
-    if(i.type==SPELLBOOK && detailed) { s.type=SPELLBOOK; s.spell=i.info; s.individual=true; s.quantity=1; return s; }
+    if(i.type==SPELLBOOK && detailed) { s.type=SPELLBOOK; s.book=i.info; s.individual=true; s.quantity=1; return s; }
     if(s.category==ItemCategory::None || !detailed) return s; // Empty slots carry no details; sprites communicate category only.
     bool shuffled=is_potion(i.type)||is_scroll(i.type)||is_ring(i.type)||is_amulet(i.type)||is_wand(i.type);
     s.type=shuffled && !item_type_identified(i.type) ? uint8_t(NO_ITEM) : i.type;
@@ -63,6 +63,7 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     ExplorerObservation o;
     o.actions=actions; o.turns=turns; o.player=pos(game.player); o.floor=game.floor;
     o.known_spells=game.known_spells; o.mana=game.mana; o.max_mana=player_max_mana();
+    o.legacy_spell_rules=legacy_spell_rules();
     o.studying=studying(); o.study_spell=session.study_spell; o.study_progress=session.study_progress;
     o.hp=game.hp; o.max_hp=player_max_hp(); o.level=game.level; o.xp=game.xp;
     o.strength=game.strength; o.dexterity=game.dexterity; o.speed=game.speed; o.hunger=game.hunger;

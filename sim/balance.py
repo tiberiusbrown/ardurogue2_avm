@@ -61,7 +61,7 @@ def read_manifest(directory):
     if m["telemetry_schema_version"] not in (6, 7, 8, 9, SCHEMA):
         raise ValueError(f"incompatible telemetry schema: {path}")
     for name, digest in m.get("output_csv_sha256", {}).items():
-        if name not in {s + ".csv" for s in (*STREAMS, "exploration", "spells")} or sha256(Path(directory) / name) != digest:
+        if name not in {s + ".csv" for s in (*STREAMS, "exploration", "spells", "magic")} or sha256(Path(directory) / name) != digest:
             raise ValueError(f"output hash mismatch: {name}")
     return m
 
@@ -78,6 +78,8 @@ def seal_manifest(directory, executable=None, spec=None):
     m["output_csv_sha256"] = {s + ".csv": sha256(directory / (s + ".csv")) for s in STREAMS}
     if (directory / "exploration.csv").is_file():
         m["output_csv_sha256"]["exploration.csv"] = sha256(directory / "exploration.csv")
+    if (directory / "magic.csv").is_file():
+        m["output_csv_sha256"]["magic.csv"] = sha256(directory / "magic.csv")
     if (directory / "spells.csv").is_file():
         m["output_csv_sha256"]["spells.csv"] = sha256(directory / "spells.csv")
     if spec is not None:

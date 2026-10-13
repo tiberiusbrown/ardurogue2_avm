@@ -123,12 +123,12 @@ bool artifacts_enabled() {
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
-        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE","EXTRA_HEALING","RESTORE_VITALITY","HASTE","LEVITATION","FIRE_RESISTANCE","FIRE",
+        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE","EXTRA_HEALING","RESTORE_VITALITY","HASTE","LEVITATION","FIRE_RESISTANCE","FIRE","MANA_RESTORATION",
         "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","STORMBRINGER","GLASS_SWORD","HAMMER_OF_RUIN","CHAIN_MAIL","LEATHER_ARMOR",
         "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","CANDLE","TORCH","LANTERN","GLOWING_ORB","BUCKLER","ROUND_SHIELD","TOWER_SHIELD","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
         "RING_SUSTENANCE","RING_INVISIBILITY","RING_REPRISAL","RING_HUNT","RING_ILLUMINATION","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
-        "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT","AMULET_BRILLIANCE",
+        "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT","AMULET_BRILLIANCE","AMULET_MEDITATION",
         "SCROLL_IDENTIFY","SCROLL_ENCHANT","SCROLL_REMOVE_CURSE","SCROLL_TELEPORT","SCROLL_MAPPING",
         "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","SCROLL_HOLD_MONSTER","SCROLL_DETECT_TRAPS","SCROLL_SUMMONING","SCROLL_MASS_TELEPORT","SCROLL_FIRE","SCROLL_DETECT_OBJECTS","WAND_FORCE",
         "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH","WAND_LIGHTNING","SPELLBOOK"};
@@ -298,6 +298,7 @@ void Collector::enter_floor() {
     for(auto slot:{g.ring_slots[0],g.ring_slots[1]})
         if(slot<rogue::INVENTORY && g.inventory[slot].type==rogue::RING_INVISIBILITY)
             f.entry_ring_invisibility=true;
+    f.magic.entry_known=g.known_spells;
     f.entry_speed_amulet=g.amulet_slot<rogue::INVENTORY &&
         g.inventory[g.amulet_slot].type==rogue::AMULET_SPEED;
     f.entry_invisible=rogue::player_is_invisible();
@@ -320,7 +321,12 @@ void Collector::enter_floor() {
         const auto& i=g.ground[s];
         ground_wands[s]=rogue::is_wand(i.item.type) ? new_wand() : 0;
         if(i.item.type) data.items[i.item.type].generated += units(i.item);
-        if(i.item.type==rogue::SPELLBOOK && i.item.info<rogue::SPELL_COUNT) ++data.spells[i.item.info].generated;
+        if(i.item.type==rogue::SPELLBOOK) {
+            ++data.floors.back().magic.books_generated;
+            for(uint8_t s=1;s<rogue::SPELL_COUNT;++s) if(rogue::spellbook_mask(i.item.info) & rogue::spell_bit(s)) {
+                ++data.spells[s].generated; ++data.floors.back().magic.spells[s].generated;
+            }
+        }
         if(rogue::is_ammo(i.item.type)) {
             ++data.ranged.bundles; data.ranged.generated += units(i.item);
             ++data.floors.back().arrow_bundles; data.floors.back().arrow_generated += units(i.item);
@@ -478,6 +484,38 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(k==EventKind::MonsterChanged || k==EventKind::FeatureSpawn || k==EventKind::MonsterSummoned) aware[index]=false;
     }
     if(trace) trace_event(*trace,k,index,type,amount);
+    if(enabled && !data.floors.empty()) {
+        auto& m=data.floors.back().magic;
+        m.exit_known=rogue::game.known_spells;
+        if(type<rogue::SPELL_COUNT) {
+            auto& spell=m.spells[type];
+            switch(k) {
+            case EventKind::StudyStarted: ++spell.studied; has_studied=true; last_study_turn=data.turns; break;
+            case EventKind::StudyTurn: ++spell.study_turns; last_study_turn=data.turns; break;
+            case EventKind::SpellLearned: ++spell.learned; break;
+            case EventKind::StudyInterrupted: ++spell.interrupted; died_during_study=!rogue::game.hp; break;
+            case EventKind::SpellCast: ++spell.casts; spell.mana_spent+=amount; break;
+            default: break;
+            }
+        }
+        if(k==EventKind::Pickup && type==rogue::SPELLBOOK) {
+            ++m.books_collected;
+            for(uint8_t spell=1;spell<rogue::SPELL_COUNT;++spell)
+                if(rogue::spellbook_mask(detail)&rogue::spell_bit(spell)) ++m.spells[spell].collected;
+        }
+        // Successful final study supplies its inventory slot. Destruction uses NONE.
+        if(k==EventKind::Consumed && type==rogue::SPELLBOOK && index<rogue::INVENTORY) ++m.books_completed;
+        if(k==EventKind::ManaRegenerated) {
+            ++m.mana_regenerated;
+            if(rogue::game.amulet_slot<rogue::INVENTORY && rogue::game.inventory[rogue::game.amulet_slot].type==rogue::AMULET_MEDITATION) ++m.meditation_mp;
+        }
+        if(k==EventKind::ManaRestored) m.mana_restored+=amount;
+        if(k==EventKind::AmuletHealthRegenerated) m.amulet_hp+=amount;
+        if(k==EventKind::Finished && type==rogue::DEATH && has_studied && data.turns<=last_study_turn+16) {
+            if(died_during_study) ++m.study_deaths;
+            else ++m.shortly_after_study_deaths;
+        }
+    }
     if(k == EventKind::FloorEntered) { enter_floor(); return; }
     if(k == EventKind::FloorExited) { close_floor(true); return; }
     if(k == EventKind::Finished && type == rogue::DEATH && rogue::game.blindness) ++data.blind_deaths;
@@ -570,10 +608,22 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(f) { auto& v=f->items[cause_type]; (detail ? v.chained_damage : v.direct_damage)+=amount; }
         } break;
     case EventKind::SpellDisabled:
-        ++data.spells[type].disabled; data.spells[type].stun_turns+=amount; break;
+        ++data.spells[type].disabled; data.spells[type].stun_turns+=amount;
+        if(f) { ++f->magic.spells[type].disabled; f->magic.spells[type].stun_turns+=amount; } break;
+    case EventKind::SpellStatus:
+        ++data.spells[type].status_targets; data.spells[type].status_turns+=amount;
+        if(f) { ++f->magic.spells[type].status_targets; f->magic.spells[type].status_turns+=amount; } break;
+    case EventKind::TrapRevealed:
+        data.spells[type].traps_revealed+=amount;
+        if(f) f->magic.spells[type].traps_revealed+=amount; break;
+    case EventKind::StatusCleared:
+        data.spells[type].statuses_cleared+=amount;
+        if(f) f->magic.spells[type].statuses_cleared+=amount; break;
     case EventKind::HealthSacrificed: data.spells[type].hp_paid+=amount; break;
     case EventKind::BloodDeath: ++data.spells[type].self_deaths; break;
     case EventKind::ManaRegenerated: ++data.mana_regenerated; break;
+    case EventKind::ManaRestored: data.mana_restored+=amount; break;
+    case EventKind::AmuletHealthRegenerated: data.amulet_hp_regenerated+=amount; break;
     case EventKind::StudyStarted: ++data.spells[type].studied; break;
     case EventKind::StudyTurn: ++data.spells[type].study_turns; break;
     case EventKind::SpellLearned: ++data.spells[type].learned; break;
@@ -588,6 +638,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::SpellDisplacement:
         if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) {
             auto& s=data.spells[cause_type]; s.displaced+=amount!=0; s.displacement_tiles+=amount; s.multi_tile_pushes+=amount>=2;
+            if(f) { auto& v=f->magic.spells[cause_type]; v.displaced+=amount!=0; v.displacement_tiles+=amount; v.multi_tile_pushes+=amount>=2; }
         } break;
     case EventKind::ItemIdentified:
         ++data.items[type].identified; if(f) ++f->items[type].identified; break;
@@ -648,7 +699,10 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     case EventKind::PlayerDamage: if(f) f->damage_taken += amount; break;
     case EventKind::PlayerAttack: ++data.monsters[type].player_attacks; engage(); break;
     case EventKind::MonsterDamage:
-        if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) data.spells[cause_type].damage+=amount;
+        if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) {
+            data.spells[cause_type].damage+=amount;
+            if(f) f->magic.spells[cause_type].damage+=amount;
+        }
         if(cause==Cause::Item && cause_type<=rogue::SPELLBOOK) {
             data.items[cause_type].damage+=amount;
             if(f) f->items[cause_type].damage+=amount;
@@ -658,7 +712,10 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(detail) { engage(); if(f) f->damage_dealt += amount; }
         break;
     case EventKind::MonsterKilled:
-        if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) ++data.spells[cause_type].kills;
+        if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) {
+            ++data.spells[cause_type].kills;
+            if(f) ++f->magic.spells[cause_type].kills;
+        }
         if(cause==Cause::Item && cause_type<=rogue::SPELLBOOK) {
             ++data.items[cause_type].kills;
             if(f) ++f->items[cause_type].kills;
@@ -674,7 +731,8 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(detail == uint8_t(Special::Fire)) ++data.monsters[type].fire;
         break;
     case EventKind::GeneratedItem:
-        if(type==rogue::SPELLBOOK && index<rogue::GROUND_ITEMS && rogue::game.ground[index].item.info<rogue::SPELL_COUNT) ++data.spells[rogue::game.ground[index].item.info].generated;
+        if(type==rogue::SPELLBOOK && index<rogue::GROUND_ITEMS) for(uint8_t s=1;s<rogue::SPELL_COUNT;++s)
+            if(rogue::spellbook_mask(rogue::game.ground[index].item.info) & rogue::spell_bit(s)) ++data.spells[s].generated;
         data.items[type].generated += amount;
         if(index < rogue::GROUND_ITEMS) {
             observed_items[index] = false;
@@ -682,7 +740,8 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         }
         break;
     case EventKind::Pickup:
-        if(type==rogue::SPELLBOOK && detail<rogue::SPELL_COUNT) ++data.spells[detail].collected;
+        if(type==rogue::SPELLBOOK) for(uint8_t s=1;s<rogue::SPELL_COUNT;++s)
+            if(rogue::spellbook_mask(detail) & rogue::spell_bit(s)) ++data.spells[s].collected;
         data.items[type].picked_up += amount; if(f) f->pickups += amount;
         if(rogue::is_ammo(type)) {
             data.ranged.picked += amount; if(f) f->arrow_picked += amount;
@@ -883,14 +942,29 @@ void write_features(std::ostream& o, const RunMetrics& r) {
     }
 }
 void write_spells_header(std::ostream& o) {
-    o<<"seed,effective_seed,agent,spell,generated,collected,studied,study_turns,learned,interrupted,message_interruptions,hunger_interruptions,canceled,casts,mana_spent,damage,kills,displaced,displacement_tiles,multi_tile_pushes,mana_regenerated,direct_damage,chained_damage,disabled,stun_turns,hp_paid,self_deaths\n";
+    o<<"seed,effective_seed,agent,spell,generated,collected,studied,study_turns,learned,interrupted,message_interruptions,hunger_interruptions,canceled,casts,mana_spent,damage,kills,displaced,displacement_tiles,multi_tile_pushes,mana_regenerated,direct_damage,chained_damage,disabled,stun_turns,hp_paid,self_deaths,status_targets,status_turns,traps_revealed,statuses_cleared\n";
 }
 void write_spells(std::ostream& o,const RunMetrics& r) {
     for(unsigned i=0;i<rogue::SPELL_COUNT;++i) {
         const auto& s=r.spells[i]; key(o,r);
         o<<','<<i<<','<<s.generated<<','<<s.collected<<','<<s.studied<<','<<s.study_turns<<','<<s.learned<<','<<s.interrupted
          <<','<<s.message_interruptions<<','<<s.hunger_interruptions<<','<<s.canceled<<','<<s.casts<<','<<s.mana_spent<<','<<s.damage<<','<<s.kills
-         <<','<<s.displaced<<','<<s.displacement_tiles<<','<<s.multi_tile_pushes<<','<<(i==0 ? r.mana_regenerated : 0)<<','<<s.direct_damage<<','<<s.chained_damage<<','<<s.disabled<<','<<s.stun_turns<<','<<s.hp_paid<<','<<s.self_deaths<<'\n';
+         <<','<<s.displaced<<','<<s.displacement_tiles<<','<<s.multi_tile_pushes<<','<<(i==0 ? r.mana_regenerated : 0)<<','<<s.direct_damage<<','<<s.chained_damage<<','<<s.disabled<<','<<s.stun_turns<<','<<s.hp_paid<<','<<s.self_deaths<<','<<s.status_targets<<','<<s.status_turns<<','<<s.traps_revealed<<','<<s.statuses_cleared<<'\n';
+    }
+}
+void write_magic_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,spell,generated,collected,studied,study_turns,learned,interrupted,casts,mana_spent,entry_known,exit_known,books_generated,books_collected,books_completed,mana_regenerated,mana_restored,meditation_mp,amulet_hp,study_deaths,shortly_after_study_deaths,damage,kills,displaced,displacement_tiles,disabled,stun_turns,status_targets,status_turns,traps_revealed,statuses_cleared\n";
+}
+void write_magic(std::ostream& o,const RunMetrics& r) {
+    for(const auto& f:r.floors) for(uint8_t spell=0;spell<rogue::SPELL_COUNT;++spell) {
+        visit_key(o,r,f); const auto& m=f.magic; const auto& s=m.spells[spell];
+        o<<','<<int(spell)<<','<<s.generated<<','<<s.collected<<','<<s.studied<<','<<s.study_turns<<','<<s.learned<<','<<s.interrupted<<','<<s.casts<<','<<s.mana_spent
+         <<','<<m.entry_known<<','<<m.exit_known;
+        if(spell==0) o<<','<<m.books_generated<<','<<m.books_collected<<','<<m.books_completed<<','<<m.mana_regenerated<<','<<m.mana_restored<<','<<m.meditation_mp<<','<<m.amulet_hp<<','<<m.study_deaths<<','<<m.shortly_after_study_deaths;
+        else o<<",0,0,0,0,0,0,0,0,0";
+        o<<','<<s.damage<<','<<s.kills<<','<<s.displaced<<','<<s.displacement_tiles<<','<<s.disabled<<','<<s.stun_turns
+         <<','<<s.status_targets<<','<<s.status_turns<<','<<s.traps_revealed<<','<<s.statuses_cleared;
+        o<<'\n';
     }
 }
 const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
@@ -903,5 +977,6 @@ const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
     {"features.csv",write_features_header,write_features},
     {"encounters.csv",write_encounters_header,write_encounters},
     {"milestones.csv",write_milestones_header,write_milestones},
-    {"spells.csv",write_spells_header,write_spells}}};
+    {"spells.csv",write_spells_header,write_spells},
+    {"magic.csv",write_magic_header,write_magic}}};
 }

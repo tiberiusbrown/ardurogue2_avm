@@ -361,6 +361,9 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                             ui.mode = WAND_DIRECTION;
                         else
                             pending = INPUT_WAND_IMMEDIATE;
+                    } else if(type == SPELLBOOK) {
+                        target = choose_book_spell(slot);
+                        if(target == NONE) { status_clear(); break; }
                     } else if(type == SCROLL_IDENTIFY)
                         target = choose_item(F("Identify which item?"), nullptr);
                     else if(type == SCROLL_ENCHANT)
@@ -474,6 +477,33 @@ uint8_t choose_item(const char AVM_PROGMEM* prompt_text,
                            ItemTypeFilter item_type_filter)
 {
     return choose_item_modal(prompt_text, item_type_filter);
+}
+
+__attribute__((noinline)) uint8_t choose_book_spell(uint8_t slot)
+{
+    if(slot >= INVENTORY || game.inventory[slot].type != SPELLBOOK) return NONE;
+    uint8_t book = game.inventory[slot].info;
+    SpellbookView view{spellbook_mask(book), game.known_spells};
+    uint8_t selection = view.move(NONE, 1), top = 0;
+    if(selection == NONE) return NONE;
+    for(;;) {
+        InventoryView::keep_row_visible(view.position(selection), view.count(), top);
+        render_spellbook(book, view, selection, top);
+        avm_display(false);
+        for(;;) {
+            avm_idle();
+            uint8_t buttons = avm_buttons();
+            uint8_t edges = static_cast<uint8_t>(buttons & ~ui.previous_buttons);
+            ui.previous_buttons = buttons;
+            uint8_t direction = directional_press(buttons, edges);
+            if(edges & AVM_BUTTON_B) return NONE;
+            if(edges & AVM_BUTTON_A) return selection;
+            if(direction == AVM_BUTTON_U || direction == AVM_BUTTON_D) {
+                selection = view.move(selection, direction == AVM_BUTTON_U ? -1 : 1);
+                break;
+            }
+        }
+    }
 }
 
 bool yesno(const char AVM_PROGMEM* prompt_text)

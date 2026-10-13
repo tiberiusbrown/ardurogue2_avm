@@ -10,6 +10,7 @@ add_executable(game_native
     sight_checks.cpp
     recovery_checks.cpp
     spell_checks.cpp
+    book_mana_checks.cpp
     magic_expansion_checks.cpp
     consumable_checks.cpp
     awareness_checks.cpp

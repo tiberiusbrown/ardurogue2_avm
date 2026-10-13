@@ -27,17 +27,17 @@ void wand(WandModifier modifier=WAND_NORMAL,uint8_t charges=3) {
 }
 void metadata_and_learning() {
     static_assert(SPELL_COUNT==16 && spell_bit(BLOOD_BOLT)==0x8000 && sizeof(Game::known_spells)==2 && sizeof(Item)==2);
-    const uint8_t costs[]={2,3,3,3,3,4,5,5,5,5,5,6,5,6,5,3};
-    const uint8_t turns[]={40,40,40,40,40,60,60,60,60,80,60,80,60,80,60,60};
+    const uint8_t costs[]={2,2,2,3,2,4,4,3,4,4,4,4,4,4,4,2};
+    const uint8_t turns[]={40,40,40,40,40,60,60,40,60,60,60,60,60,60,60,60};
     for(uint8_t s=0;s<SPELL_COUNT;++s) {
         require(spell_cost(s)==costs[s] && spell_study_turns(s)==turns[s] &&
                 spell_hp_cost(s)==(s==BLOOD_BOLT ? 3 : 0),"explicit spell metadata changed");
         require(std::strcmp(spell_name(s),"Unknown") && std::strcmp(spell_description(s),"Unknown spell."),"missing spell text");
         if(!expansion_spell(s)) continue;
-        arena(); game.known_spells=1; game.inventory[0]={SPELLBOOK,s};
-        require(begin_study(0),"new spellbook cannot be studied");
+        arena(); game.known_spells=1; game.inventory[0]={SPELLBOOK,spellbook_for_spell(s)};
+        require(begin_study(0,s),"new spellbook cannot be studied");
         for(unsigned t=0;t<turns[s];++t) require(advance_study(),"new spell study turn rejected");
-        require(game.known_spells==(1|spell_bit(s)) && !game.inventory[0].type && !studying() && game.turns==turns[s],"new spellbook learning lifecycle");
+        require(game.known_spells==(1|spell_bit(s)) && game.inventory[0].type==SPELLBOOK && !studying() && game.turns==turns[s],"new spellbook learning lifecycle");
         arena(); Game before=game;
         require(!cast_spell(s,2,0) && !std::memcmp(&before,&game,sizeof game),"invalid direction spent resources");
         game.mana=costs[s]-1; before=game;
@@ -51,7 +51,7 @@ void fireburst() {
     for(uint16_t seed=1;seed<=64;++seed) {
         arena(seed); monster(0,{22,15}); monster(1,{23,16}); monster(2,{24,15}); monster(3,{22,14},100,DRAGON);
         cast_spell(FIREBURST,1,0);
-        require(game.mana==10 && game.turns==1 && game.monsters[0].hp>=94 && game.monsters[0].hp<=97 &&
+        require(game.mana==12 && game.turns==1 && game.monsters[0].hp>=94 && game.monsters[0].hp<=97 &&
                 game.monsters[1].hp>=94 && game.monsters[1].hp<=97 && game.monsters[2].hp==100 && game.monsters[3].hp==100 && game.hp==200,"Fireburst area/range/immunity");
     }
     arena(); wall({23,15}); monster(0,{22,16}); cast_spell(FIREBURST,1,0);
@@ -60,7 +60,7 @@ void fireburst() {
     arena(); monster(0,{21,15}); game.fire_resistance=10; cast_spell(FIREBURST,1,0); require(game.hp==200,"Fireburst player fire immunity");
     arena(); monster(0,{22,15},1); monster(1,{23,16},1); cast_spell(FIREBURST,1,0);
     require(!game.monsters[0].type && !game.monsters[1].type && game.score && game.xp,"Fireburst kill rewards");
-    arena(); cast_spell(FIREBURST,1,0); require(game.turns==1 && game.mana==10,"empty Fireburst cost");
+    arena(); cast_spell(FIREBURST,1,0); require(game.turns==1 && game.mana==12,"empty Fireburst cost");
 }
 void phase() {
     arena(); monster(0,{21,15}); monster(1,{22,15});
@@ -70,7 +70,7 @@ void phase() {
             game.monsters[0].pos==Position{21,15} && game.monsters[1].pos==Position{22,15},"Phase Step intervening monsters/traps");
     arena(); monster(0,{23,15}); cast_spell(PHASE_STEP,1,0); require(game.player==Position{22,15},"Phase Step occupied preferred landing fallback");
     arena(); wall({23,15}); cast_spell(PHASE_STEP,1,0); require(game.player==Position{22,15},"Phase Step wall fallback");
-    arena(); wall({22,15}); cast_spell(PHASE_STEP,1,0); require(game.player==Position{20,15} && game.mana==11 && game.turns==1,"Phase Step crossed blocked path or failed cost");
+    arena(); wall({22,15}); cast_spell(PHASE_STEP,1,0); require(game.player==Position{20,15} && game.mana==12 && game.turns==1,"Phase Step crossed blocked path or failed cost");
     arena(); game.doors[0]={{21,15}}; game.door_count=1; cast_spell(PHASE_STEP,1,0); require(game.player==Position{20,15},"Phase Step crossed closed door");
     for(uint8_t x : {uint8_t(0),uint8_t(1),uint8_t(2),uint8_t(3)}) {
         arena(); game.player={x,15}; cast_spell(PHASE_STEP,-1,0);
@@ -83,7 +83,7 @@ void phase() {
     arena(); game.down={23,15}; cast_spell(PHASE_STEP,1,0); require(game.floor==0 && game.player==game.down,"forced landing descended stairs automatically");
     arena(); game.features[0]={{23,15},FEATURE_TELEPORT_TRAP}; cast_spell(PHASE_STEP,1,0); require(game.player!=Position{23,15},"Phase Step teleport trap ignored");
     arena(); game.hp=1; game.features[0]={{23,15},FEATURE_SPIKE_TRAP}; cast_spell(PHASE_STEP,1,0);
-    require(session.ended && !game.hp && !game.turns && game.mana==11,"Phase Step fatal landing processed enemy turn");
+    require(session.ended && !game.hp && !game.turns && game.mana==12,"Phase Step fatal landing processed enemy turn");
 }
 void lightning() {
     for(uint16_t seed=1;seed<=64;++seed) {
@@ -107,7 +107,7 @@ void lightning() {
     arena(); monster(0,{22,15}); monster(1,{23,16},100,MIMIC); game.monsters[1].state|=MON_AGGRO; cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp<100,"lightning skipped revealed mimic");
     arena(); monster(0,{22,15}); monster(1,{23,16}); game.blindness=10; cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp==100,"lightning ignored blindness");
     arena(); monster(0,{25,15}); monster(1,{26,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp==100,"lightning secondary outside actual light");
-    arena(); monster(0,{21,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[0].hp==100 && game.mana==10 && game.turns==1,"empty ray created arc");
+    arena(); monster(0,{21,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[0].hp==100 && game.mana==12 && game.turns==1,"empty ray created arc");
     arena(); wall({23,15}); require(!line_of_effect({22,15},{23,16}),"jump cut a blocked diagonal corner");
 }
 void slumber_and_blood() {
@@ -121,18 +121,18 @@ void slumber_and_blood() {
     }
     require(three && four,"Slumber did not roll exact 3-4 range");
     arena(); monster(0,{21,15}); game.speed=monster_speed(GOBLIN); game.monsters[0].stun=6; cast_spell(SLUMBER,1,0); require(game.monsters[0].stun==5,"Slumber stacked or reduced existing stun");
-    arena(); monster(0,{25,15}); cast_spell(SLUMBER,1,0); require(game.monsters[0].stun==15 && game.mana==11,"Slumber range four/miss");
+    arena(); monster(0,{25,15}); cast_spell(SLUMBER,1,0); require(game.monsters[0].stun==15 && game.mana==12,"Slumber range four/miss");
     for(uint16_t seed=1;seed<=64;++seed) {
         arena(seed); monster(0,{22,15}); game.magic_resistance=255; game.fire_resistance=10;
         game.inventory[1]=make_equipment(TITAN_PLATE,3); game.armor_slot=1;
         cast_spell(BLOOD_BOLT,1,0);
-        require(game.hp==197 && game.mana==13 && game.monsters[0].hp>=91 && game.monsters[0].hp<=94,"Blood Bolt range/cost bypassed mitigation");
+        require(game.hp==197 && game.mana==16-spell_cost(BLOOD_BOLT) && game.monsters[0].hp>=91 && game.monsters[0].hp<=94,"Blood Bolt range/cost bypassed mitigation");
     }
-    arena(); wall({21,15}); cast_spell(BLOOD_BOLT,1,0); require(game.hp==197 && game.mana==13 && game.turns==1,"Blood Bolt blocked cost");
+    arena(); wall({21,15}); cast_spell(BLOOD_BOLT,1,0); require(game.hp==197 && game.mana==16-spell_cost(BLOOD_BOLT) && game.turns==1,"Blood Bolt blocked cost");
     arena(); monster(0,{22,15},1); cast_spell(BLOOD_BOLT,1,0); require(game.hp==197 && game.score && !game.monsters[0].type,"Blood Bolt refunded sacrifice on kill");
     for(uint8_t hp=1;hp<=3;++hp) {
         arena(); game.hp=hp; monster(0,{22,15}); cast_spell(BLOOD_BOLT,1,0);
-        require(session.ended && !game.hp && !game.turns && game.mana==13 && game.monsters[0].hp==100,"fatal Blood Bolt emitted bolt/enemy turn");
+        require(session.ended && !game.hp && !game.turns && game.mana==16-spell_cost(BLOOD_BOLT) && game.monsters[0].hp==100,"fatal Blood Bolt emitted bolt/enemy turn");
     }
     arena(); game.hp=4; cast_spell(BLOOD_BOLT,1,0); require(game.hp==1 && game.turns==1,"low HP Blood Bolt incorrectly forbidden");
     arena(); game.hp=3; game.inventory[1]={AMULET_PHOENIX_HEART,1}; game.amulet_slot=1; monster(0,{22,15}); cast_spell(BLOOD_BOLT,1,0);

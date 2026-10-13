@@ -5,7 +5,7 @@
 #include <stdint.h>
 namespace sim {
 enum class EventKind {
-    ManaRegenerated, StudyStarted, StudyTurn, StudyInterrupted, SpellLearned, SpellCast, SpellDisplacement, LightningDamage, SpellDisabled, HealthSacrificed, BloodDeath,
+    ManaRegenerated, ManaRestored, AmuletHealthRegenerated, StudyStarted, StudyTurn, StudyInterrupted, SpellLearned, SpellCast, SpellDisplacement, LightningDamage, SpellDisabled, SpellStatus, TrapRevealed, StatusCleared, HealthSacrificed, BloodDeath,
     ItemIdentified, InventoryFull, SeeInvisibleExpired, PlayerEffectExpired, FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
     Special, GeneratedItem, Pickup, Dropped, Discarded, Equipped,

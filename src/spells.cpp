@@ -8,12 +8,32 @@
 #include "sim_hooks.hpp"
 
 namespace rogue {
+#if defined(ARDUROGUE2_SIM)
+bool legacy_spell_rules() { return BALANCE_VALUE("legacy-spell-rules", 0); }
+uint8_t active_spell_cost(uint8_t spell) { return spell_cost(spell, legacy_spell_rules()); }
+uint8_t active_study_turns(uint8_t spell) { return spell_study_turns(spell, legacy_spell_rules()); }
+uint8_t active_study_food_required(uint8_t spell) { return study_food_required(spell, legacy_spell_rules()); }
+#endif
 uint8_t player_max_mana() {
     uint8_t maximum = 6 + game.level / 3;
     return maximum > 16 ? 16 : maximum;
 }
+uint8_t mana_regeneration_interval() {
+    if(game.amulet_slot < INVENTORY && game.inventory[game.amulet_slot].type == AMULET_MEDITATION)
+        return item_is_cursed(game.inventory[game.amulet_slot]) ? 32 : 8;
+    return 16;
+}
+uint8_t mana_restoration_amount(uint8_t maximum) {
+    if(!maximum) return 0;
+    uint8_t minimum = maximum / 2 + (maximum & 1);
+    uint8_t range = maximum - minimum + 1;
+    // next_random produces 1..65535. Reject the incomplete final bucket.
+    uint16_t limit = 65535u - 65535u % range, draw;
+    do { draw = next_random(game.random_state) - 1u; } while(draw >= limit);
+    return static_cast<uint8_t>(minimum + draw % range);
+}
 void regenerate_mana() {
-    if(!(game.turns & 15) && game.hunger && !session.ended && game.mana < player_max_mana()) {
+    if(!(game.turns & (mana_regeneration_interval() - 1)) && game.hunger && game.hp && !session.ended && game.mana < player_max_mana()) {
         ++game.mana;
         SIM_EVENT(sim::EventKind::ManaRegenerated);
     }
@@ -21,13 +41,11 @@ void regenerate_mana() {
 static bool can_read() {
     return !session.ended && game.hp && !game.paralyzed && !game.blindness && !game.confused;
 }
-bool begin_study(uint8_t slot) {
+bool begin_study(uint8_t slot, uint8_t spell) {
     if(studying() || slot >= INVENTORY || game.inventory[slot].type != SPELLBOOK ||
-       game.inventory[slot].info >= SPELL_COUNT) return false;
-    uint8_t spell = game.inventory[slot].info;
+       !(unknown_book_spells(game.inventory[slot].info, game.known_spells) & spell_bit(spell))) return false;
     if(!can_read()) { status(F("You cannot study now.")); return false; }
-    if(game.known_spells & spell_bit(spell)) { status(F("You already know this spell.")); return false; }
-    if(game.hunger < study_food_required(spell)) { status(F("You need to eat before studying.")); return false; }
+    if(game.hunger < active_study_food_required(spell)) { status(F("You need to eat before studying.")); return false; }
     status(F("You begin studying."));
     session.study_slot = slot; session.study_spell = spell;
     session.study_progress = 0; session.study_floor = game.floor;
@@ -52,18 +70,21 @@ __attribute__((noinline)) bool advance_study() {
     if(session.study_message || !can_read() || game.hunger < STUDY_HUNGRY ||
        game.floor != session.study_floor || game.player != session.study_origin ||
        game.inventory[session.study_slot].type != SPELLBOOK ||
-       game.inventory[session.study_slot].info != session.study_spell) {
+       !(unknown_book_spells(game.inventory[session.study_slot].info, game.known_spells) & spell_bit(session.study_spell))) {
         cancel_study(); return true;
     }
-    if(session.study_progress == spell_study_turns(session.study_spell)) {
+    if(session.study_progress == active_study_turns(session.study_spell)) {
         uint8_t spell = session.study_spell, slot = session.study_slot;
         session.study_slot = session.study_spell = NONE;
         session.study_progress = 0;
         game.known_spells |= spell_bit(spell);
-        game.inventory[slot] = {};
-        if(session.repeat_slot == slot) session.repeat_slot = NONE;
+        bool completed = !unknown_book_spells(game.inventory[slot].info, game.known_spells);
+        if(completed) {
+            game.inventory[slot] = {};
+            if(session.repeat_slot == slot) session.repeat_slot = NONE;
+        }
         SIM_EVENT(sim::EventKind::SpellLearned, slot, spell);
-        SIM_EVENT(sim::EventKind::Consumed, slot, SPELLBOOK);
+        if(completed) SIM_EVENT(sim::EventKind::Consumed, slot, SPELLBOOK);
         status(F("You learn")); status(spell_name(spell), '!');
     }
     return true;
@@ -110,6 +131,9 @@ __attribute__((noinline)) static void blink() {
         if(!roll(++count)) destination = pos;
     }
     if(!count) { status(F("There is nowhere to blink.")); return; }
+    SIM_EVENT(sim::EventKind::SpellDisplacement,NONE,BLINK,
+        (destination.x > game.player.x ? destination.x-game.player.x : game.player.x-destination.x) +
+        (destination.y > game.player.y ? destination.y-game.player.y : game.player.y-destination.y));
     game.player = destination; session.forced_entry = true;
     status(F("You blink!"));
 }
@@ -228,12 +252,17 @@ __attribute__((noinline)) static void spell_ray(uint8_t spell, int8_t dx, int8_t
         }
         case FROSTBIND: case CONFOUND:
             set_monster_effect(game.monsters[hit], spell == FROSTBIND ? MON_SLOWED : MON_CONFUSED, 4 + roll(3));
+            SIM_EVENT(sim::EventKind::SpellStatus,hit,spell,monster_effect(game.monsters[hit],spell == FROSTBIND ? MON_SLOWED : MON_CONFUSED));
             monster_status(game.monsters[hit], spell == FROSTBIND ? F("slows down!") : F("looks confused!")); break;
         case REPULSION:
             monster_status(game.monsters[hit], F("is pushed back!")); knockback_monster(hit, dx, dy, 1 + roll(2)); break;
         case BANISH:
             monster_status(game.monsters[hit], F("vanishes!"));
-            if(!teleport_monster(hit, false)) status(F("Nothing happens.")); break;
+            if(!teleport_monster(hit, false)) status(F("Nothing happens."));
+            else SIM_EVENT(sim::EventKind::SpellDisplacement,hit,BANISH,
+                (game.monsters[hit].pos.x > ray_state.origin.x ? game.monsters[hit].pos.x-ray_state.origin.x : ray_state.origin.x-game.monsters[hit].pos.x) +
+                (game.monsters[hit].pos.y > ray_state.origin.y ? game.monsters[hit].pos.y-ray_state.origin.y : ray_state.origin.y-game.monsters[hit].pos.y));
+            break;
         default: break;
         }
     } while(spell == PIERCING_BOLT && ray_state.hits < 2 && ray_state.remaining && !session.ended);
@@ -241,6 +270,9 @@ __attribute__((noinline)) static void spell_ray(uint8_t spell, int8_t dx, int8_t
 __attribute__((noinline)) static void exchange(uint8_t target) {
     Position origin=game.player;
     game.player=game.monsters[target].pos; game.monsters[target].pos=origin;
+    SIM_EVENT(sim::EventKind::SpellDisplacement,target,EXCHANGE,
+        (game.player.x > origin.x ? game.player.x-origin.x : origin.x-game.player.x) +
+        (game.player.y > origin.y ? game.player.y-origin.y : origin.y-game.player.y));
     game.monsters[target].state|=MON_AGGRO;
     status(F("You exchange places!"));
     activate_monster_trap(target);
@@ -253,11 +285,13 @@ __attribute__((noinline)) static void sense_traps() {
         if(feature_is_trap(f.id) && feature_is_hidden(f.id) &&
            in_light_radius(int16_t(f.pos.x)-game.player.x,int16_t(f.pos.y)-game.player.y,4)) {
             reveal_feature(i); explore(f.pos); found=true;
+            SIM_EVENT(sim::EventKind::TrapRevealed,i,SENSE_TRAPS,1);
         }
     }
     status(found ? F("Nearby traps appear on your map.") : F("No hidden traps nearby."));
 }
 __attribute__((noinline)) static void cleanse() {
+    if(game.blindness || game.confused || game.slowed) SIM_EVENT(sim::EventKind::StatusCleared,NONE,CLEANSE,1);
     if(game.blindness) { game.blindness=0; status(F("Your sight clears.")); }
     else if(game.confused) { game.confused=0; status(F("Your thoughts clear.")); }
     else if(game.slowed) { game.slowed=0; status(F("Your movement clears.")); }
@@ -268,9 +302,9 @@ __attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, u
        !(game.known_spells & spell_bit(spell))) return false;
     if(spell_directional(spell) && !((dx == 0 && (dy == -1 || dy == 1)) || (dy == 0 && (dx == -1 || dx == 1)))) return false;
     if(spell == EXCHANGE && !exchange_target(target)) { status(F("No visible target in range.")); return false; }
-    if(game.mana < spell_cost(spell)) { status(F("Not enough mana.")); return false; }
-    game.mana -= spell_cost(spell);
-    SIM_EVENT(sim::EventKind::SpellCast, target, spell, spell_cost(spell));
+    if(game.mana < active_spell_cost(spell)) { status(F("Not enough mana.")); return false; }
+    game.mana -= active_spell_cost(spell);
+    SIM_EVENT(sim::EventKind::SpellCast, target, spell, active_spell_cost(spell));
     {
 #if defined(ARDUROGUE2_SIM)
         sim::DamageScope source(sim::Cause::Spell, spell);
@@ -297,6 +331,7 @@ __attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, u
     return true;
 }
 
+#if defined(ARDUROGUE2_SIM)
 // Explicit weighted pools share the metadata; no ordinal category tests.
 static uint8_t book_from_pool(uint16_t draw,bool basic,bool expanded) {
     uint8_t total=0;
@@ -315,19 +350,36 @@ static uint8_t book_from_pool(uint16_t draw,bool basic,bool expanded) {
     }
     return FROSTBIND;
 }
+#endif
 void generate_spellbooks() {
     if(game.has_amulet || game.floor == 4 || !BALANCE_VALUE("magic", 1)) return;
     uint16_t seed = static_cast<uint16_t>(game.run_seed ^ ((game.floor + 1u) * 0x6badu));
+    uint8_t unavailable = 0;
+    for(uint8_t book = 0; book < BOOK_COUNT; ++book)
+        if(!unknown_book_spells(book, game.known_spells)) unavailable |= uint8_t(1u << book);
+    for(const Item& item : game.inventory)
+        if(item.type == SPELLBOOK && item.info < BOOK_COUNT) unavailable |= uint8_t(1u << item.info);
+    for(const GroundItem& ground : game.ground)
+        if(ground.item.type == SPELLBOOK && ground.item.info < BOOK_COUNT) unavailable |= uint8_t(1u << ground.item.info);
     for(GroundItem& ground : game.ground) {
         uint8_t type = ground.item.type;
-        if(!type || is_artifact(type) || type == YENDOR_AMULET || type == FOOD || is_ammo(type) || is_light(type)) continue;
+        if(!type || type == SPELLBOOK || is_artifact(type) || type == YENDOR_AMULET || type == FOOD || is_ammo(type) || is_light(type)) continue;
         if(next_random(seed) % 100 >= BALANCE_VALUE("spellbook-percent", 6)) continue;
-        bool expanded=BALANCE_VALUE("expanded-spells",1);
-        uint8_t simple = book_from_pool(next_random(seed),true,expanded);
-        uint8_t advanced = book_from_pool(next_random(seed),false,expanded);
-        uint8_t depth = game.floor + BALANCE_VALUE("spellbook-depth-bias", 3);
-        uint8_t spell = next_random(seed) % 16 >= depth ? simple : advanced;
-        ground.item = {SPELLBOOK, spell};
+#if defined(ARDUROGUE2_SIM)
+        if(!BALANCE_VALUE("multi-spell-books", 1)) {
+            bool expanded=BALANCE_VALUE("expanded-spells",1);
+            uint8_t simple = book_from_pool(next_random(seed),true,expanded);
+            uint8_t advanced = book_from_pool(next_random(seed),false,expanded);
+            uint8_t depth = game.floor + BALANCE_VALUE("spellbook-depth-bias", 3);
+            uint8_t spell = next_random(seed) % 16 >= depth ? simple : advanced;
+            ground.item = {SPELLBOOK, uint8_t(0x80 | spell)};
+            continue;
+        }
+#endif
+        uint8_t book = book_for_roll(game.floor, next_random(seed) % 100);
+        if(unavailable & (1u << book)) continue; // No retry: retain ordinary loot and depth odds.
+        unavailable |= uint8_t(1u << book);
+        ground.item = {SPELLBOOK, book};
     }
 }
 }

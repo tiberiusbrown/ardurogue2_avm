@@ -6,13 +6,14 @@ agent-policy change is part of this framework. See [README.md](README.md) for
 simulator mechanics and [BALANCE_RESULTS.md](BALANCE_RESULTS.md) for the milestone
 demonstrations. Raw outputs belong in ignored `build/`.
 
-Magic adds `spells.csv` (sidecar schema 1), sealed alongside core streams.
+Magic adds `spells.csv` (sidecar schema 2), sealed alongside core streams.
 `balance:magic=0` disables initial Magic Dart and restores original ordinary loot
 at spellbook slots. `balance:spellbook-percent=0` restores that same-slot loot while
 retaining initial Dart. Both arms use one candidate executable and matching policy
 hashes. Book draws are isolated; subsequent gameplay RNG may diverge naturally.
 Replacement percentages 0–100 and `balance:spellbook-depth-bias=0..16` support
-exploratory tuning; production defaults are 6% and a three-floor bias. Magic validation uses
+exploratory tuning; production uses 6% attempts and fixed themed depth weights. The three-floor
+bias applies only to the host legacy-book comparator. Magic validation uses
 60,000 actions in both arms because traced legitimate ascents exceeded 20,000;
 simulator failures are never deaths. See [the magic report](../docs/SPELLS-RESULTS.md).
 
@@ -705,3 +706,25 @@ Report practical paired escape differences, floor survival, death causes and
 spell-specific learning/use; exploratory comparisons receive BH-adjusted q-values.
 Raw data, executable manifests, specifications and trace audits belong in ignored
 `build/magic-expansion/`. See [the report](../docs/MAGIC-EXPANSION-RESULTS.md).
+
+## Themed book and mana controls (2026-10-13)
+
+Production uses `multi-spell-books=1`, `mana-potion-percent=8`,
+`meditation-percent=8`, `silent-regeneration=1`, and `spellbook-percent=6`.
+A same-executable previous-system comparison sets the first four to zero; it
+keeps Magic Dart, existing spell costs/effects/durations and the maintained agent
+policy identical in both arms. Legacy comparison books use host-only IDs
+`0x80|spell`; production rejects those IDs. `spellbook-depth-bias` applies only
+to that legacy pool. No gameplay RNG is resynchronized after divergence.
+
+`magic.csv` sidecar schema 2 records per-visit/per-spell generation exposure,
+collection, study attempts/turns/learning/interruptions, casts and MP expenditure.
+The spell-0 row holds visit book transactions/completions, MP ticks, potion MP,
+Meditation MP ticks, HP amulet healing, study-window deaths and known-mask entry/
+exit snapshots. Member exposures are not book counts; pickups include repicks.
+The existing `spells.csv` keeps per-character totals. Both streams are sealed.
+Floor/item/light streams provide survival, equipped turns, food/consumable
+availability and lighting/fuel use. None of this collector state is exposed to
+Explorer. See [the report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).
+
+The public host control `balance:legacy-spell-rules=1` restores pre-tuning MP costs and 40/60/80-turn studies. The default is 0. Observation protocol 9 supplies this public rule profile without exposing hidden game state. Use it with the four multi-spell comparison controls to retain the previous gameplay comparator. Agents rank spells across carried books and limit learned additions to `2 + floor / 2` before further study (zero-based floor). `spells.csv` and `magic.csv` schema 2 expose damage, displacement, stun, slow/confusion, reveal and cleanse effects; assigned durations are not realized enemy turns prevented. See [the implementation report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).

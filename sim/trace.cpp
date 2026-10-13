@@ -14,7 +14,7 @@ void trace_explorer(std::ostream& out,const ExplorerObservation& o,const Surviva
     out<<" pack=";
     for(size_t s=0;s<o.inventory.size();++s) {
         auto& i=o.inventory[s]; if(i.category==ItemCategory::None) continue;
-        out<<s<<':'<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<i.individual<<':'<<i.cursed<<':'<<int(i.enchant)<<':'<<int(i.modifier)<<':'<<int(i.spell)<<';';
+        out<<s<<':'<<int(i.category)<<':'<<int(i.type)<<':'<<int(i.appearance)<<':'<<int(i.quantity)<<':'<<i.individual<<':'<<i.cursed<<':'<<int(i.enchant)<<':'<<int(i.modifier)<<':'<<int(i.book)<<';';
     }
     out<<" mana="<<int(o.mana)<<'/'<<int(o.max_mana)<<" spells="<<o.known_spells<<" study="<<int(o.study_spell)<<':'<<int(o.study_progress);
     out<<" sight=";
@@ -75,6 +75,9 @@ void trace_event(std::ostream& out, EventKind kind, uint8_t, uint8_t type, uint1
     case EventKind::LightningDamage: out<<"  lightning damage="<<amount<<'\n'; break;
     case EventKind::HealthSacrificed: out<<"  HP paid="<<amount<<'\n'; break;
     case EventKind::SpellDisabled: out<<"  Slumber stun="<<amount<<'\n'; break;
+    case EventKind::SpellStatus: out<<"  spell="<<int(type)<<" assigned status turns="<<amount<<'\n'; break;
+    case EventKind::TrapRevealed: out<<"  traps revealed="<<amount<<'\n'; break;
+    case EventKind::StatusCleared: out<<"  conditions cleansed="<<amount<<'\n'; break;
     case EventKind::BloodDeath: out<<"  lethal health sacrifice\n"; break;
     case EventKind::SpellCast: out<<"  spell="<<int(type)<<" MP spent="<<amount<<'\n'; break;
     case EventKind::StudyStarted: out<<"  study started="<<int(type)<<'\n'; break;

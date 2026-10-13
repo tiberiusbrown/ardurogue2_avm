@@ -20,7 +20,8 @@ struct SpellMetrics {
     uint64_t generated=0, collected=0, studied=0, study_turns=0, learned=0, interrupted=0,
         message_interruptions=0, hunger_interruptions=0, canceled=0, casts=0, mana_spent=0, damage=0, kills=0,
         displaced=0, displacement_tiles=0, multi_tile_pushes=0,
-        direct_damage=0, chained_damage=0, disabled=0, stun_turns=0, hp_paid=0, self_deaths=0;
+        direct_damage=0, chained_damage=0, disabled=0, stun_turns=0, hp_paid=0, self_deaths=0,
+        status_targets=0, status_turns=0, traps_revealed=0, statuses_cleared=0;
 };
 struct MonsterMetrics {
     uint64_t generated=0, encountered=0, engaged=0, killed=0,
@@ -66,7 +67,15 @@ struct ExplorationMetrics {
     std::array<uint64_t,7> alert_light{};
     int64_t first_contact=-1;
 };
+struct MagicMetrics {
+    std::array<SpellMetrics,rogue::SPELL_COUNT> spells{};
+    uint64_t books_generated=0, books_collected=0, books_completed=0,
+        mana_regenerated=0, mana_restored=0, meditation_mp=0, amulet_hp=0,
+        study_deaths=0, shortly_after_study_deaths=0;
+    uint16_t entry_known=0, exit_known=0;
+};
 struct FloorMetrics {
+    MagicMetrics magic;
     ExplorationMetrics exploration;
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     int floor=0, visit=0;
@@ -95,7 +104,7 @@ struct RunMetrics {
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
     RangedMetrics ranged;
     std::array<SpellMetrics,rogue::SPELL_COUNT> spells{};
-    uint64_t mana_regenerated=0;
+    uint64_t mana_regenerated=0, mana_restored=0, amulet_hp_regenerated=0;
     std::array<uint64_t,7> light_turns{};
     uint64_t fuel_exhaustions=0, blind_turns=0, blind_deaths=0, shield_turns=0, offhand_light_turns=0;
     uint16_t seed=0, effective_seed=0;
@@ -180,6 +189,8 @@ struct Collector {
     uint64_t generation_gap=0, acquisition_gap=0;
     uint8_t last_weapon=rogue::NO_ITEM;
     int closed_ranged_visit=0;
+    uint64_t last_study_turn=0;
+    bool has_studied=false, died_during_study=false;
     bool enabled=true;
     std::ostream* trace=nullptr;
     std::array<bool, rogue::GROUND_ITEMS> reached{};
@@ -229,7 +240,7 @@ struct CsvStream {
     void (*rows)(std::ostream&, const RunMetrics&);
 };
 inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=10;
-inline constexpr size_t CSV_STREAM_COUNT=12;
+inline constexpr size_t CSV_STREAM_COUNT=13;
 inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=2;
 void write_encounters_header(std::ostream&);
 void write_encounters(std::ostream&,const RunMetrics&);

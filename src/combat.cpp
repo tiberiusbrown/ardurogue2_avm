@@ -782,7 +782,10 @@ __attribute__((noinline)) static void age_player_effects()
     if(amulet_bonus(AMULET_REGENERATION) > 0 &&
        game.hp < player_max_hp() && roll(20) == 0) {
         heal_player(1);
-        status(F("Your amulet restores a little health."));
+        SIM_EVENT(sim::EventKind::AmuletHealthRegenerated);
+#if defined(ARDUROGUE2_SIM)
+        if(!BALANCE_VALUE("silent-regeneration", 1)) status(F("Your amulet restores a little health."));
+#endif
     }
     // The clock persists across stairs and save/resume. Full health and
     // starvation forfeit this tick; recovery consumes no random draw.
@@ -1001,9 +1004,9 @@ void move_player(int8_t dx, int8_t dy)
 void apply_monster_potion(uint8_t type, uint8_t index)
 {
     if(index >= MONSTERS || !game.monsters[index].type) return;
-    // Sight is solely a player effect: even aggression/attack telemetry is unchanged.
+    // Player-only potions leave even aggression/attack telemetry unchanged.
     if(type == POTION_SEE_INVISIBLE || type == POTION_LEVITATION ||
-       type == POTION_FIRE_RESISTANCE) { status(F("It has no effect.")); return; }
+       type == POTION_FIRE_RESISTANCE || type == POTION_MANA_RESTORATION) { status(F("It has no effect.")); return; }
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
