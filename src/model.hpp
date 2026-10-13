@@ -22,12 +22,6 @@ constexpr uint8_t clamp_light_radius(uint8_t radius)
 {
     return radius > MAX_LIGHT_RADIUS ? MAX_LIGHT_RADIUS : radius;
 }
-constexpr bool in_light_radius(int16_t dx, int16_t dy, uint8_t radius)
-{
-    return dx >= -static_cast<int16_t>(radius) && dx <= radius &&
-           dy >= -static_cast<int16_t>(radius) && dy <= radius &&
-           dx * dx + dy * dy <= radius * radius;
-}
 constexpr uint8_t FLOORS = 16;
 constexpr uint8_t DOORS = 11;
 constexpr uint8_t MONSTERS = 12;

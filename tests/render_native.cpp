@@ -538,7 +538,7 @@ static void capture_loading_text(int16_t x, int16_t y, const char* text)
 {
     if(!std::strcmp(text, "Generating..."))
         loading_text_in_pane = x >= 0 && x + 4 * std::strlen(text) <= 64 && y < 64;
-    if(x == 67 && y == 7 && text[0] == 'D') loading_stats_visible = true;
+    if(x == 67 && y == 5 && text[0] == 'D') loading_stats_visible = true;
 }
 
 static bool check_generation_loading()
@@ -803,14 +803,14 @@ int main()
         return 1;
     }
     // Baseline snapshots cover viewport clipping, rooms, corridors and doors.
-    // Hashes include exploration changes and the current generated loot.
+    // Hashes include the biased light circle, exploration and generated loot.
     const Position positions[] = {
         {0, 0}, {63, 0}, {0, 31}, {63, 31}, {10, 10}, {32, 16}
     };
     const uint32_t expected[] = {
         0xc0b79398u, 0xc7113a38u, 0x473d2b98u, 0x8bbf3a38u,
-        0x11bd4269u, 0xf8a13c3bu, 0xfeecdac0u, 0x7ead9f78u,
-        0xd7cf2942u, 0xeb751e9cu, 0xf0f1ec57u
+        0x139ce769u, 0x8390f0d9u, 0x12aebd80u, 0x7e79f8d6u,
+        0xc23ea060u, 0xfda6b738u, 0xf0f1ec57u
     };
     bool failed = false;
     for(unsigned i = 0; i < sizeof expected / sizeof expected[0]; ++i) {

@@ -459,6 +459,10 @@ that it matches its generator and compares the shared rays against the existing
 ray implementation and world visibility. Regenerate it with Python after changing
 the generator.
 
+Light circles use a half-tile radius bias: radius one covers all eight adjacent
+tiles, and larger radii have wider edges at their cardinal extremes. Radius zero
+still shows only the player's tile; walls and closed doors still block rays.
+
 The AVM build uses an 845-byte saved layout and two-byte items, eight-byte
 monsters, and four-byte ground items. The magic build has a complete
 249-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM

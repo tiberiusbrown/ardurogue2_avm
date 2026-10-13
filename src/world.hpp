@@ -29,6 +29,14 @@ constexpr bool square_contains(Position center, Position pos, uint8_t radius)
 }
 constexpr uint8_t wand_fire_radius(bool powerful) { return powerful ? 2 : 1; }
 void make_floor();
+constexpr bool in_light_radius(int16_t dx, int16_t dy, uint8_t radius)
+{
+    // A half-tile bias rounds out the edge and includes radius-one diagonals.
+    // Squared integer distances let us omit the 0.25 in (radius + 0.5)^2.
+    return dx >= -static_cast<int16_t>(radius) && dx <= radius &&
+           dy >= -static_cast<int16_t>(radius) && dy <= radius &&
+           dx * dx + dy * dy <= radius * (radius + 1);
+}
 bool can_see(Position pos);
 // Supercover geometry, independent of room visibility and monster occupancy.
 bool line_of_effect(Position from, Position to);

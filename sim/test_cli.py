@@ -21,8 +21,8 @@ def main():
         "natural-regen-interval=0","healing-min-quarters=1","healing-random-quarters=2",
         "phantom-strength=6","phantom-dexterity=4","phantom-health=12",
         "late-strength-percent=100","late-health-percent=100") for part in ("--intervention","balance:"+rule))
-    quiet = invoke("--seed", "24",*baseline)
-    traced = invoke("--seed", "0x18", "--trace",*baseline)
+    quiet = invoke("--seed", "138",*baseline)
+    traced = invoke("--seed", "0x8a", "--trace",*baseline)
     assert quiet.stdout == traced.stdout
     assert "killed LORD" in traced.stderr and "picked up YENDOR_AMULET" in traced.stderr
     assert "result=escaped" in traced.stderr
@@ -46,7 +46,7 @@ def main():
     serial=invoke("--seeds","0:8")
     parallel=invoke("--seeds","0:8","--jobs","3")
     assert (serial.stdout,serial.stderr)==(parallel.stdout,parallel.stderr)
-    assert invoke("--seed","24","--jobs","8","--trace",*baseline).stdout==quiet.stdout
+    assert invoke("--seed","138","--jobs","8","--trace",*baseline).stdout==quiet.stdout
     limited=invoke("--seeds","1:5","--max-actions","1","--no-telemetry")
     assert limited.stdout==invoke("--seeds","1:5","--jobs","3","--max-actions","1","--no-telemetry").stdout
     with tempfile.TemporaryDirectory(prefix="ardurogue2-sim-cli-") as scratch:

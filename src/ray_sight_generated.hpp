@@ -24,6 +24,16 @@ __attribute__((noinline)) void ray_sight(
         sight[8] |= 0x0100;
         if(!(opaque[8] & 0x0100)) {
             sight[9] |= 0x0200;
+            if(!(opaque[9] & 0x0100)) {
+                if(!(opaque[10] & 0x0200)) {
+                    sight[11] |= 0x0400;
+                }
+            }
+            if(!(opaque[8] & 0x0200)) {
+                if(!(opaque[9] & 0x0400)) {
+                    sight[10] |= 0x0800;
+                }
+            }
             if(!(opaque[9] & 0x0200)) {
                 sight[10] |= 0x0400;
             }
@@ -53,6 +63,11 @@ __attribute__((noinline)) void ray_sight(
             sight[9] |= 0x0080;
             if(!(opaque[9] & 0x0080)) {
                 sight[10] |= 0x0100;
+                if(!(opaque[10] & 0x0080)) {
+                    if(!(opaque[11] & 0x0100)) {
+                        sight[12] |= 0x0100;
+                    }
+                }
                 if(!(opaque[10] & 0x0100)) {
                     sight[11] |= 0x0100;
                 }
@@ -68,6 +83,16 @@ __attribute__((noinline)) void ray_sight(
             }
             if(!(opaque[9] & 0x0040)) {
                 sight[10] |= 0x0040;
+                if(!(opaque[10] & 0x0080)) {
+                    if(!(opaque[11] & 0x0080)) {
+                        sight[12] |= 0x0080;
+                    }
+                }
+                if(!(opaque[10] & 0x0020)) {
+                    if(!(opaque[11] & 0x0020)) {
+                        sight[12] |= 0x0020;
+                    }
+                }
                 if(!(opaque[10] & 0x0040)) {
                     sight[11] |= 0x0040;
                     if(!(opaque[11] & 0x0040)) {
@@ -86,6 +111,11 @@ __attribute__((noinline)) void ray_sight(
             sight[9] |= 0x0020;
             if(!(opaque[9] & 0x0020)) {
                 sight[10] |= 0x0010;
+                if(!(opaque[10] & 0x0020)) {
+                    if(!(opaque[11] & 0x0010)) {
+                        sight[12] |= 0x0010;
+                    }
+                }
                 if(!(opaque[10] & 0x0010)) {
                     sight[11] |= 0x0010;
                 }
@@ -105,8 +135,18 @@ __attribute__((noinline)) void ray_sight(
         }
         if(!(opaque[8] & 0x0010)) {
             sight[9] |= 0x0008;
+            if(!(opaque[9] & 0x0010)) {
+                if(!(opaque[10] & 0x0008)) {
+                    sight[11] |= 0x0004;
+                }
+            }
             if(!(opaque[9] & 0x0008)) {
                 sight[10] |= 0x0004;
+            }
+            if(!(opaque[8] & 0x0008)) {
+                if(!(opaque[9] & 0x0004)) {
+                    sight[10] |= 0x0002;
+                }
             }
         }
         if(!(opaque[7] & 0x0010)) {
@@ -127,6 +167,11 @@ __attribute__((noinline)) void ray_sight(
             sight[7] |= 0x0200;
             if(!(opaque[7] & 0x0200)) {
                 sight[8] |= 0x0400;
+                if(!(opaque[7] & 0x0400)) {
+                    if(!(opaque[8] & 0x0800)) {
+                        sight[8] |= 0x1000;
+                    }
+                }
                 if(!(opaque[8] & 0x0400)) {
                     sight[8] |= 0x0800;
                 }
@@ -142,10 +187,20 @@ __attribute__((noinline)) void ray_sight(
             }
             if(!(opaque[6] & 0x0200)) {
                 sight[6] |= 0x0400;
+                if(!(opaque[7] & 0x0400)) {
+                    if(!(opaque[7] & 0x0800)) {
+                        sight[7] |= 0x1000;
+                    }
+                }
                 if(!(opaque[6] & 0x0400)) {
                     sight[6] |= 0x0800;
                     if(!(opaque[6] & 0x0800)) {
                         sight[6] |= 0x1000;
+                    }
+                }
+                if(!(opaque[5] & 0x0400)) {
+                    if(!(opaque[5] & 0x0800)) {
+                        sight[5] |= 0x1000;
                     }
                 }
             }
@@ -160,6 +215,11 @@ __attribute__((noinline)) void ray_sight(
             sight[5] |= 0x0200;
             if(!(opaque[5] & 0x0200)) {
                 sight[4] |= 0x0400;
+                if(!(opaque[5] & 0x0400)) {
+                    if(!(opaque[4] & 0x0800)) {
+                        sight[4] |= 0x1000;
+                    }
+                }
                 if(!(opaque[4] & 0x0400)) {
                     sight[4] |= 0x0800;
                 }
@@ -177,6 +237,11 @@ __attribute__((noinline)) void ray_sight(
                 if(!(opaque[8] & 0x0004)) {
                     sight[8] |= 0x0002;
                 }
+                if(!(opaque[7] & 0x0004)) {
+                    if(!(opaque[8] & 0x0002)) {
+                        sight[8] |= 0x0001;
+                    }
+                }
             }
         }
         if(!(opaque[6] & 0x0010)) {
@@ -187,19 +252,29 @@ __attribute__((noinline)) void ray_sight(
                     sight[7] |= 0x0002;
                 }
             }
+            if(!(opaque[5] & 0x0008)) {
+                sight[5] |= 0x0004;
+                if(!(opaque[5] & 0x0004)) {
+                    sight[5] |= 0x0002;
+                }
+            }
             if(!(opaque[6] & 0x0008)) {
                 sight[6] |= 0x0004;
+                if(!(opaque[7] & 0x0004)) {
+                    if(!(opaque[7] & 0x0002)) {
+                        sight[7] |= 0x0001;
+                    }
+                }
                 if(!(opaque[6] & 0x0004)) {
                     sight[6] |= 0x0002;
                     if(!(opaque[6] & 0x0002)) {
                         sight[6] |= 0x0001;
                     }
                 }
-            }
-            if(!(opaque[5] & 0x0008)) {
-                sight[5] |= 0x0004;
                 if(!(opaque[5] & 0x0004)) {
-                    sight[5] |= 0x0002;
+                    if(!(opaque[5] & 0x0002)) {
+                        sight[5] |= 0x0001;
+                    }
                 }
             }
         }
@@ -209,6 +284,11 @@ __attribute__((noinline)) void ray_sight(
                 sight[4] |= 0x0004;
                 if(!(opaque[4] & 0x0004)) {
                     sight[4] |= 0x0002;
+                }
+                if(!(opaque[5] & 0x0004)) {
+                    if(!(opaque[4] & 0x0002)) {
+                        sight[4] |= 0x0001;
+                    }
                 }
             }
         }
@@ -226,8 +306,18 @@ __attribute__((noinline)) void ray_sight(
         }
         if(!(opaque[4] & 0x0100)) {
             sight[3] |= 0x0200;
+            if(!(opaque[4] & 0x0200)) {
+                if(!(opaque[3] & 0x0400)) {
+                    sight[2] |= 0x0800;
+                }
+            }
             if(!(opaque[3] & 0x0200)) {
                 sight[2] |= 0x0400;
+            }
+            if(!(opaque[3] & 0x0100)) {
+                if(!(opaque[2] & 0x0200)) {
+                    sight[1] |= 0x0400;
+                }
             }
         }
         if(!(opaque[4] & 0x0080)) {
@@ -251,18 +341,28 @@ __attribute__((noinline)) void ray_sight(
                 }
             }
         }
-        if(!(opaque[4] & 0x0010)) {
-            sight[3] |= 0x0008;
-            if(!(opaque[3] & 0x0008)) {
-                sight[2] |= 0x0004;
-            }
-        }
         if(!(opaque[4] & 0x0020)) {
             sight[3] |= 0x0010;
             if(!(opaque[3] & 0x0010)) {
                 sight[2] |= 0x0008;
                 if(!(opaque[2] & 0x0010)) {
                     sight[1] |= 0x0008;
+                }
+            }
+        }
+        if(!(opaque[4] & 0x0010)) {
+            sight[3] |= 0x0008;
+            if(!(opaque[3] & 0x0008)) {
+                sight[2] |= 0x0004;
+            }
+            if(!(opaque[4] & 0x0008)) {
+                if(!(opaque[3] & 0x0004)) {
+                    sight[2] |= 0x0002;
+                }
+            }
+            if(!(opaque[3] & 0x0010)) {
+                if(!(opaque[2] & 0x0008)) {
+                    sight[1] |= 0x0004;
                 }
             }
         }
@@ -276,14 +376,10 @@ __attribute__((noinline)) void ray_sight(
                 if(!(opaque[2] & 0x0100)) {
                     sight[1] |= 0x0100;
                 }
-            }
-        }
-        if(!(opaque[4] & 0x0020)) {
-            sight[3] |= 0x0020;
-            if(!(opaque[3] & 0x0020)) {
-                sight[2] |= 0x0010;
-                if(!(opaque[2] & 0x0010)) {
-                    sight[1] |= 0x0010;
+                if(!(opaque[2] & 0x0080)) {
+                    if(!(opaque[1] & 0x0100)) {
+                        sight[0] |= 0x0100;
+                    }
                 }
             }
         }
@@ -303,10 +399,34 @@ __attribute__((noinline)) void ray_sight(
             }
             if(!(opaque[3] & 0x0040)) {
                 sight[2] |= 0x0040;
+                if(!(opaque[2] & 0x0080)) {
+                    if(!(opaque[1] & 0x0080)) {
+                        sight[0] |= 0x0080;
+                    }
+                }
                 if(!(opaque[2] & 0x0040)) {
                     sight[1] |= 0x0040;
                     if(!(opaque[1] & 0x0040)) {
                         sight[0] |= 0x0040;
+                    }
+                }
+                if(!(opaque[2] & 0x0020)) {
+                    if(!(opaque[1] & 0x0020)) {
+                        sight[0] |= 0x0020;
+                    }
+                }
+            }
+        }
+        if(!(opaque[4] & 0x0020)) {
+            sight[3] |= 0x0020;
+            if(!(opaque[3] & 0x0020)) {
+                sight[2] |= 0x0010;
+                if(!(opaque[2] & 0x0010)) {
+                    sight[1] |= 0x0010;
+                }
+                if(!(opaque[2] & 0x0020)) {
+                    if(!(opaque[1] & 0x0010)) {
+                        sight[0] |= 0x0010;
                     }
                 }
             }

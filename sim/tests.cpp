@@ -69,7 +69,7 @@ void balance_controls() {
 void determinism() {
     OmniscientAgent a;
     std::ostringstream first,second,without;
-    constexpr uint16_t escape_seed = 24;
+    constexpr uint16_t escape_seed = 138;
     Options o;
     auto baseline=std::make_shared<RuleExperiment>();
     for(const char* rule:{"balance:magic=0","balance:mana-potion-percent=0","balance:meditation-percent=0","balance:ground=16","balance:inventory=16","balance:sight-percent=0",
@@ -88,7 +88,7 @@ void determinism() {
     check(r1.actions==disabled.actions && r1.turns==disabled.turns && r1.score==disabled.score &&
         r1.result==disabled.result && r1.action_hash==disabled.action_hash &&
         std::memcmp(&final,&game,sizeof game)==0,"telemetry collection changed gameplay/RNG");
-    check(r1.result=="escaped" && r1.has_yendor && r1.final_floor==0,"escape regression seed 24 failed");
+    check(r1.result=="escaped" && r1.has_yendor && r1.final_floor==0,"escape regression seed 138 failed");
     check(r1.monsters[LORD].killed==1 && r1.items[YENDOR_AMULET].picked_up==1,"escape skipped Lord/Yendor");
     check(r1.floors.size()==31 && r1.floors_exited==31,"round trip lacks complete floor visits");
     uint64_t actions=0,turns=0;

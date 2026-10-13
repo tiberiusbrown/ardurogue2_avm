@@ -417,7 +417,8 @@ void check_shared_rays()
         for(uint8_t y = 0; y < 13; ++y) {
             require(!(sight[y] & ~0x1fffu), "shared ray output exceeds viewport");
             for(uint8_t x = 0; x < 13; ++x)
-                require((bool(sight[y] & (1u << x)) && in_light_radius(x - 6, y - 6, player_light_radius())) == ray_visible(x, y, opaque),
+                require(bool(sight[y] & (1u << x)) ==
+                        (in_light_radius(x - 6, y - 6, MAX_LIGHT_RADIUS) && ray_unblocked(x, y, opaque)),
                         "shared ray differs for a blocker pattern");
         }
     }
@@ -427,16 +428,18 @@ void check_light_masks()
 {
     require(player_light_radius() <= 6, "player light radius exceeds viewport");
     for(uint8_t radius = 0; radius <= 6; ++radius) {
-        unsigned count = 0;
+        unsigned count = 0, extreme_count = 0;
         for(uint8_t sy = 0; sy < 13; ++sy) {
             uint16_t mask = light_mask(radius, sy);
             require(!(mask & ~0x1fffu), "light mask extends beyond viewport");
             for(uint8_t sx = 0; sx < 13; ++sx) {
                 int dx = sx - 6, dy = sy - 6;
-                bool expected = dx * dx + dy * dy <= radius * radius;
+                bool expected = dx * dx + dy * dy <= (radius + 0.5) * (radius + 0.5);
                 bool actual = (mask & (1u << sx)) != 0;
-                require(actual == expected, "light mask differs from reference circle");
+                require(actual == expected && in_light_radius(dx, dy, radius) == expected,
+                        "light radius differs from biased reference circle");
                 count += actual;
+                extreme_count += actual && (std::abs(dx) == radius || std::abs(dy) == radius);
             }
             require(light_mask(7, sy) == light_mask(6, sy) &&
                     light_mask(255, sy) == light_mask(6, sy),
@@ -445,8 +448,9 @@ void check_light_masks()
         if(radius == 0)
             require(count == 1 && light_mask(0, 6) == (1u << 6),
                     "radius zero does not show only the center");
-        if(radius == 1) require(count == 5, "radius one circle changed");
-        if(radius == 6) require(count == 113, "default circle changed");
+        if(radius) require(extreme_count > 4, "light radius has only cardinal extremes");
+        if(radius == 1) require(count == 9, "radius one misses adjacent diagonals");
+        if(radius == 6) require(count == 137, "maximum biased circle changed");
     }
     require(light_mask(6, 13) == 0 && light_mask(6, 255) == 0,
             "invalid light mask row is not empty");
@@ -488,17 +492,20 @@ void check_circular_light_radius()
     for(uint8_t sy = 0; sy < 13; ++sy)
         for(uint8_t sx = 0; sx < 13; ++sx) {
             int dx = sx - 6, dy = sy - 6;
-            bool expected = dx * dx + dy * dy <= 36;
+            bool expected = dx * dx + dy * dy <= 6.5 * 6.5;
             require(ray_visible(sx, sy, opaque) == expected &&
                     can_see({static_cast<uint8_t>(20 + dx),
                              static_cast<uint8_t>(15 + dy)}) == expected,
-                    "default visibility differs from previous circle");
+                    "maximum visibility differs from biased circle");
         }
     require(ray_visible(12, 6, opaque) && can_see({26, 15}),
             "cardinal tile at the light radius is hidden");
     require(ray_visible(11, 9, opaque) && can_see({25, 18}),
             "diagonal tile inside the light radius is hidden");
-    require(!ray_visible(12, 7, opaque) && !can_see({26, 16}),
+    require(ray_visible(12, 7, opaque) && can_see({26, 16}) &&
+            ray_visible(12, 8, opaque) && can_see({26, 17}),
+            "tiles beside the cardinal light extreme are hidden");
+    require(!ray_visible(12, 9, opaque) && !can_see({26, 18}),
             "tile outside the light radius is visible");
     require(!ray_visible(11, 11, opaque) && !can_see({25, 20}),
             "diagonal tile outside the light radius is visible");

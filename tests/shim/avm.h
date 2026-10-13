@@ -36,6 +36,12 @@ inline AvmTextCursor avm_draw_textf_P(int16_t x, int16_t y, const char* format,
     if(avm_test_text_hook) avm_test_text_hook(x, y, text);
     return {static_cast<int16_t>(x + strlen(text) * 4)};
 }
+template<typename... Args>
+inline AvmTextCursor avm_draw_textf(int16_t x, int16_t y, const char* format,
+                                  Args... args)
+{
+    return avm_draw_textf_P(x, y, format, args...);
+}
 #if defined(AVM_TEST_LOADING)
 extern unsigned avm_test_displays;
 extern uint16_t avm_test_millis;

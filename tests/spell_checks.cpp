@@ -149,11 +149,14 @@ void casting() {
     require(session.ended && !game.hp && game.mana==12 && !session.forced_entry,"Blink fatal trap resolution");
     arena(); std::memset(game.walls,255,sizeof game.walls); carve(20,15); uint16_t rng=game.random_state;
     cast_spell(BLINK); require(game.player==Position{20,15} && game.mana==12 && game.turns==1 && game.random_state==rng,"failed Blink unbounded/extra RNG");
+    arena(); std::memset(game.walls,255,sizeof game.walls); carve(20,15); carve(23,16);
+    cast_spell(BLINK); require(game.player==Position{20,15},"light bias extended Blink range");
     arena(); monster(0,{22,15},PHANTOM); require(!exchange_target(0),"Exchange saw invisible phantom");
     game.see_invisible=10; require(exchange_target(0),"Exchange ignored potion sight");
     game.blindness=1; require(!exchange_target(0),"Exchange ignored blindness"); game.blindness=0;
     wall({21,15}); require(!exchange_target(0),"Exchange ignored LOS");
     arena(); monster(0,{24,15}); require(!exchange_target(0),"Exchange exceeded radius");
+    arena(); monster(0,{23,16}); require(can_see(game.monsters[0].pos) && !exchange_target(0),"light bias extended Exchange range");
     arena(); monster(0,{22,15}); require(cast_spell(EXCHANGE,0,0,0) && game.player==Position{22,15} && game.monsters[0].pos==Position{20,15},"Exchange swap");
     arena(); monster(0,{22,15},GOBLIN,1); game.hp=1; game.features[0]={{20,15},FEATURE_SPIKE_TRAP}; game.features[1]={{22,15},FEATURE_SPIKE_TRAP};
     cast_spell(EXCHANGE,0,0,0); require(!game.monsters[0].type && session.ended && !game.hp && !game.turns,"Exchange lethal destination resolution");

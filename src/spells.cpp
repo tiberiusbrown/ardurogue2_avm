@@ -8,6 +8,11 @@
 #include "sim_hooks.hpp"
 
 namespace rogue {
+// Spell ranges keep their exact circles independently of the light-radius bias.
+static constexpr bool in_spell_radius(int16_t dx, int16_t dy, uint8_t radius)
+{
+    return dx * dx + dy * dy <= radius * radius;
+}
 #if defined(ARDUROGUE2_SIM)
 bool legacy_spell_rules() { return BALANCE_VALUE("legacy-spell-rules", 0); }
 uint8_t active_spell_cost(uint8_t spell) { return spell_cost(spell, legacy_spell_rules()); }
@@ -92,7 +97,7 @@ __attribute__((noinline)) bool advance_study() {
 
 bool exchange_target(uint8_t index) {
     return index < MONSTERS && player_can_see_monster(index) &&
-        in_light_radius(int16_t(game.monsters[index].pos.x) - game.player.x,
+        in_spell_radius(int16_t(game.monsters[index].pos.x) - game.player.x,
                         int16_t(game.monsters[index].pos.y) - game.player.y, 3) &&
         can_see(game.monsters[index].pos);
 }
@@ -124,7 +129,7 @@ __attribute__((noinline)) static void blink() {
     Position destination = game.player;
     uint8_t count = 0;
     for(int8_t dy = -3; dy <= 3; ++dy) for(int8_t dx = -3; dx <= 3; ++dx) {
-        if((!dx && !dy) || !in_light_radius(dx, dy, 3)) continue;
+        if((!dx && !dy) || !in_spell_radius(dx, dy, 3)) continue;
         int16_t x = int16_t(game.player.x) + dx, y = int16_t(game.player.y) + dy;
         Position pos{static_cast<uint8_t>(x), static_cast<uint8_t>(y)};
         if(blocked(x, y) || monster_at(pos) != NONE) continue;
@@ -283,7 +288,7 @@ __attribute__((noinline)) static void sense_traps() {
     for(uint8_t i=0;i<MAP_FEATURES;++i) {
         const MapFeature& f=game.features[i];
         if(feature_is_trap(f.id) && feature_is_hidden(f.id) &&
-           in_light_radius(int16_t(f.pos.x)-game.player.x,int16_t(f.pos.y)-game.player.y,4)) {
+           in_spell_radius(int16_t(f.pos.x)-game.player.x,int16_t(f.pos.y)-game.player.y,4)) {
             reveal_feature(i); explore(f.pos); found=true;
             SIM_EVENT(sim::EventKind::TrapRevealed,i,SENSE_TRAPS,1);
         }

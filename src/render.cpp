@@ -607,10 +607,9 @@ __attribute__((noinline)) static void render_dungeon_view()
 
 __attribute__((noinline)) static void render_stats()
 {
-    avm_draw_textf_P(67, 7, F("D%u LV%u"), game.floor + 1, game.level);
-    avm_draw_textf_P(67, 15, F("HP%u/%u"), game.hp, player_max_hp());
-    avm_draw_textf_P(67, 22, game.see_invisible ? F("MP%u/%u L%u S") : F("MP%u/%u L%u"),
-                       game.mana, player_max_mana(), player_light_radius());
+    avm_draw_textf_P(67, 5, F("D%u LV%u"), game.floor + 1, game.level);
+    avm_draw_textf_P(67, 13, F("HP: %u/%u"), game.hp, player_max_hp());
+    avm_draw_textf_P(67, 20, F("MP: %u/%u"), game.mana, player_max_mana());
 }
 
 __attribute__((noinline)) void render_play()
@@ -778,7 +777,7 @@ __attribute__((noinline)) void render_spellbook(uint8_t book, const SpellbookVie
                                                uint8_t selection, uint8_t top)
 {
     avm_draw_filled_rect_black(0, 0, 128, 64);
-    avm_draw_text_P(1, 7, spellbook_name(book));
+    avm_draw_text(1, 7, spellbook_name(book));
     avm_draw_filled_rect_white(1, 9, 127, 1);
     for(uint8_t row = 0; row < INVENTORY_VISIBLE_ROWS; ++row) {
         uint8_t spell = view.entry_at(static_cast<uint8_t>(top + row));
@@ -790,8 +789,8 @@ __attribute__((noinline)) void render_spellbook(uint8_t book, const SpellbookVie
             avm_set_text_mode(AVM_TEXT_BLACK_TRANSPARENT);
         }
         avm_draw_text_P(8, y, spell_name(spell));
-        if(known) avm_draw_text_P(98, y, F("Known"));
-        else avm_draw_textf_P(108, y, F("%ut"), spell_study_turns(spell));
+        if(known) avm_draw_text(98, y, F("Known"));
+        else avm_draw_textf(108, y, F("%ut"), spell_study_turns(spell));
         avm_set_text_mode(AVM_TEXT_OVERWRITE);
     }
 }
@@ -800,13 +799,13 @@ __attribute__((noinline)) static void render_direction_prompt()
 {
     render_play();
     status_clear();
-    avm_draw_text_P(66, 30, ui.mode == WAND_DIRECTION
+    avm_draw_text(66, 30, ui.mode == WAND_DIRECTION
         ? F("Use wand?") : ui.mode == SPELL_DIRECTION ? F("Cast spell?") : F("Throw/Shoot?"));
     if(ui.mode == SPELL_DIRECTION && spell_hp_cost(ui.selection))
-        avm_draw_text_P(66, 35, F("Costs 3 HP!"));
-    avm_draw_text_P(66, 42, F("D-pad:"));
-    avm_draw_text_P(66, 49, F("Direction"));
-    avm_draw_text_P(66, 63, F("B: Back"));
+        avm_draw_text(66, 35, F("Costs 3 HP!"));
+    avm_draw_text(66, 42, F("D-pad:"));
+    avm_draw_text(66, 49, F("Direction"));
+    avm_draw_text(66, 63, F("B: Back"));
 }
 
 __attribute__((noinline)) static void render_spells()

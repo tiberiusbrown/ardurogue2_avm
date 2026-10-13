@@ -106,7 +106,8 @@ void lightning() {
     arena(); monster(0,{22,15}); monster(1,{23,16},100,MIMIC); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp<100 && (game.monsters[1].state&MON_AGGRO),"lightning failed to strike and reveal disguised mimic");
     arena(); monster(0,{22,15}); monster(1,{23,16},100,MIMIC); game.monsters[1].state|=MON_AGGRO; cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp<100,"lightning skipped revealed mimic");
     arena(); monster(0,{22,15}); monster(1,{23,16}); game.blindness=10; cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp==100,"lightning ignored blindness");
-    arena(); monster(0,{25,15}); monster(1,{26,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp==100,"lightning secondary outside actual light");
+    arena(); monster(0,{25,15}); monster(1,{26,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp<100,"lightning missed secondary inside biased light");
+    arena(); monster(0,{26,15}); monster(1,{27,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[1].hp==100,"lightning secondary outside actual light");
     arena(); monster(0,{21,16}); cast_spell(CHAIN_LIGHTNING,1,0); require(game.monsters[0].hp==100 && game.mana==12 && game.turns==1,"empty ray created arc");
     arena(); wall({23,15}); require(!line_of_effect({22,15},{23,16}),"jump cut a blocked diagonal corner");
 }
