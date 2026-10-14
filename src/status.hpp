@@ -12,6 +12,7 @@ void format_item(Item item, char (&buffer)[ITEM_TEXT_CAPACITY]);
 void draw_item_text(int16_t x, int16_t y, Item item);
 void reset_status_position();
 uint8_t status_baseline();
+bool status_has_message();
 // One-shot modifiers survive empty input and leading spaces.
 void status_suffix(char c);
 void status_capitalize();

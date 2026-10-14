@@ -124,7 +124,7 @@ void validate(Metrics& m)
     for(uint8_t i = game.door_count; i < DOORS; ++i)
         require(game.doors[i].pos == Position{0, 0}, "unused door has scratch state");
     unsigned monsters = 0, lords = 0, nearest = 99999;
-    for(uint8_t i = 0; i < MONSTERS; ++i) {
+    for(uint8_t i = 0; i < HOSTILE_MONSTERS; ++i) {
         const Monster& mon = game.monsters[i];
         if(!mon.type) continue;
         ++monsters;
@@ -145,7 +145,7 @@ void validate(Metrics& m)
             require((mon.state >> MIMIC_APPEARANCE_SHIFT) < MIMIC_APPEARANCE_COUNT &&
                 (mon.state & ~MIMIC_APPEARANCE_MASK) == 0, "invalid mimic appearance");
     }
-    require(monsters == MONSTERS, "population dropped an encounter");
+    require(monsters == HOSTILE_MONSTERS, "population dropped an encounter");
     require(lords == unsigned(!game.has_amulet && game.floor == FLOORS - 1), "missing/extra Lord");
     unsigned items = 0;
     for(uint8_t i = 0; i < GROUND_ITEMS; ++i) {
@@ -188,7 +188,7 @@ void check_stream_isolation()
         choose_stairs(floor_seed(STAIRS));
         populate_monsters(encounter); populate_items(supplies, gear);
         require(std::memcmp(original.walls, game.walls, sizeof game.walls) != 0, "RNG isolation fixture has identical layouts");
-        for(unsigned i = 0; i < MONSTERS; ++i)
+        for(unsigned i = 0; i < HOSTILE_MONSTERS; ++i)
             require(original.monsters[i].type == game.monsters[i].type &&
                 original.monsters[i].state == game.monsters[i].state, "layout changed encounter random sequence");
         for(unsigned i = 0; i < GROUND_ITEMS; ++i)

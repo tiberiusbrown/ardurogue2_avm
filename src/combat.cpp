@@ -1,4 +1,5 @@
 #include "spells.hpp"
+#include "companions.hpp"
 #include "game.hpp"
 #include "features.hpp"
 #include "game_internal.hpp"
@@ -47,12 +48,18 @@ static const MonsterInfo PROGMEM monster_table[] = {
          MON_OPENER | MON_SEE_INVIS, later_stat(10, LATE_STRENGTH_PERCENT), 6, 6, 3, later_stat(24, LATE_HEALTH_PERCENT), 35}, // angel
     {MON_MEAN | MON_REGENS | MON_POISON | MON_CONFUSE_HIT |
          MON_PARALYZE_HIT | MON_SEE_INVIS, later_stat(16, LATE_STRENGTH_PERCENT), 6, 8, 7, later_stat(112, LATE_HEALTH_PERCENT), 90} // Lord
+    ,{MON_SEE_INVIS, 4, 5, 3, 1, 14, 0}, // hound
+    {MON_POISON, 4, 4, 4, 1, 18, 0}, // spider
+    {MON_SEE_INVIS, 3, 4, 4, 0, 10, 0}, // wisp
+    {MON_OPENER, 7, 3, 7, 5, 36, 0} // golem
 };
+
+static_assert(sizeof(monster_table) == MONSTER_TYPES * sizeof(MonsterInfo), "monster roster/table disagree");
 
 MonsterInfo monster_info(uint8_t type)
 {
     MonsterInfo info = {};
-    if(type <= LORD)
+    if(type < MONSTER_TYPES)
         memcpy_P(&info, &monster_table[type], sizeof(info));
 #if defined(ARDUROGUE2_SIM)
     info.strength = monster_strength(type); info.dexterity = monster_dexterity(type);
@@ -61,17 +68,20 @@ MonsterInfo monster_info(uint8_t type)
     return info;
 }
 
+// Require a compact flash read. Otherwise LTO turns individual flag tests into
+// separate 32-bit species masks and expensive variable shifts.
 uint16_t monster_flags(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].flags : 0;
+    const volatile uint16_t PROGMEM* flags = &monster_table[type < MONSTER_TYPES ? type : 0].flags;
+    return *flags;
 }
 
 uint8_t monster_strength(uint8_t type)
 {
-    uint8_t value = type <= LORD ? monster_table[type].strength : 0;
+    uint8_t value = type < MONSTER_TYPES ? monster_table[type].strength : 0;
     if(type == PHANTOM) return BALANCE_VALUE("phantom-strength", PHANTOM_STRENGTH);
 #if defined(ARDUROGUE2_SIM)
-    if(type >= ORC) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-strength-percent", LATE_STRENGTH_PERCENT) + 99) / 100);
+    if(type >= ORC && type <= LORD) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-strength-percent", LATE_STRENGTH_PERCENT) + 99) / 100);
     if(game.has_amulet) value = static_cast<uint8_t>((value * BALANCE_VALUE("ascent-strength-percent", 100) + 99) / 100);
 #endif
     return value;
@@ -79,41 +89,41 @@ uint8_t monster_strength(uint8_t type)
 
 uint8_t monster_dexterity(uint8_t type)
 {
-    uint8_t value = type <= LORD ? monster_table[type].dexterity : 0;
+    uint8_t value = type < MONSTER_TYPES ? monster_table[type].dexterity : 0;
     if(type == PHANTOM) return BALANCE_VALUE("phantom-dexterity", PHANTOM_DEXTERITY);
 #if defined(ARDUROGUE2_SIM)
-    if(type >= ORC) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-dexterity-percent", 100) + 99) / 100);
+    if(type >= ORC && type <= LORD) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-dexterity-percent", 100) + 99) / 100);
 #endif
     return value;
 }
 
 uint8_t monster_speed(uint8_t type)
 {
-    uint8_t value = type <= LORD ? monster_table[type].speed : 0;
+    uint8_t value = type < MONSTER_TYPES ? monster_table[type].speed : 0;
     if(type == PHANTOM) return BALANCE_VALUE("phantom-speed", value);
     return value;
 }
 
 uint8_t monster_armor(uint8_t type)
 {
-    uint8_t value = type <= LORD ? monster_table[type].armor : 0;
+    uint8_t value = type < MONSTER_TYPES ? monster_table[type].armor : 0;
     if(type == PHANTOM) return BALANCE_VALUE("phantom-armor", value);
     return value;
 }
 
 uint8_t monster_health(uint8_t type)
 {
-    uint8_t value = type <= LORD ? monster_table[type].health : 0;
+    uint8_t value = type < MONSTER_TYPES ? monster_table[type].health : 0;
     if(type == PHANTOM) return BALANCE_VALUE("phantom-health", PHANTOM_HEALTH);
 #if defined(ARDUROGUE2_SIM)
-    if(type >= ORC) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-health-percent", LATE_HEALTH_PERCENT) + 99) / 100);
+    if(type >= ORC && type <= LORD) value = static_cast<uint8_t>((value * BALANCE_VALUE("late-health-percent", LATE_HEALTH_PERCENT) + 99) / 100);
 #endif
     return value;
 }
 
 uint8_t monster_xp(uint8_t type)
 {
-    return type <= LORD ? monster_table[type].xp : 0;
+    return type < MONSTER_TYPES ? monster_table[type].xp : 0;
 }
 
 uint8_t monster_effect(const Monster& monster, MonsterEffect effect)
@@ -150,6 +160,7 @@ void monster_status(const Monster& monster,
 
 __attribute__((noinline)) static void age_monster_effects(Monster& monster)
 {
+    if(!monster.effects[0] && !(monster.effects[1] & 0x0f)) return;
     for(uint8_t i = MON_CONFUSED; i <= MON_INVISIBLE; ++i) {
         auto effect = static_cast<MonsterEffect>(i);
         uint8_t duration = monster_effect(monster, effect);
@@ -185,18 +196,17 @@ static uint8_t distance(Position a, Position b)
 
 uint8_t monster_at(Position pos)
 {
-    for(uint8_t i = 0; i < MONSTERS; ++i)
-        if(game.monsters[i].type && game.monsters[i].pos == pos)
+    uint16_t key;
+    __builtin_memcpy(&key, &pos, sizeof key);
+    for(uint8_t i = 0; i < MONSTERS; ++i) {
+        uint16_t cell;
+        __builtin_memcpy(&cell, &game.monsters[i].pos, sizeof cell);
+        if(cell == key && game.monsters[i].type)
             return i;
+    }
     return NONE;
 }
 
-static bool can_monster_move(uint8_t x, uint8_t y, uint8_t door)
-{
-    if(wall_at(x, y) || (door != NONE && !door_open(door))) return false;
-    Position pos = {x, y};
-    return pos != game.player && monster_at(pos) == NONE;
-}
 
 void hurt_player(uint8_t damage)
 {
@@ -313,8 +323,16 @@ static void leave_yendor(const Monster& monster)
 
 void damage_monster(uint8_t index, uint8_t damage, bool player_attack)
 {
+    if(index >= MONSTERS) return;
     Monster& target = game.monsters[index];
     if(!target.type) return;
+    if(friendly_slot(index)) {
+        SIM_EVENT(sim::EventKind::PetDamage, index, game.monsters[index].type, damage < game.monsters[index].hp ? damage : game.monsters[index].hp, player_attack);
+        if(game.monsters[index].type && damage >= game.monsters[index].hp) {
+            SIM_EVENT(sim::EventKind::PetDied, index, game.monsters[index].type);
+            monster_status(game.monsters[index], F("dies!"));
+        }
+    }
     SIM_EVENT(sim::EventKind::MonsterDamage, index, target.type,
               damage < target.hp ? damage : target.hp, player_attack);
     if(player_attack) target.state |= MON_AGGRO;
@@ -378,8 +396,17 @@ __attribute__((noinline)) static bool fire_line_clear(const Monster& monster)
     return ray.steps == range && ray.monster == NONE && !ray.blocker;
 }
 
+__attribute__((always_inline)) static inline uint8_t monster_step(Monster& monster, Position next, uint8_t door, uint16_t flags, bool attack) {
+    if(wall_at(next.x,next.y) || (door!=NONE && !door_open(door)) || next==game.player) return 0;
+    uint8_t occupant=monster_at(next);
+    if(friendly_slot(occupant) && attack && (!monster_effect(game.monsters[occupant],MON_INVISIBLE) || (flags & MON_SEE_INVIS)))
+        return static_cast<uint8_t>(16+occupant);
+    if(occupant==NONE) { monster.pos=next; return 3; }
+    return 0;
+}
+
 // Movement's coordinate and door temporaries are not live during fire animation.
-__attribute__((noinline)) static bool move_monster(
+__attribute__((noinline)) static uint8_t move_monster(
     Monster& monster, uint16_t flags, bool afraid, bool confused,
     bool pursuing, uint8_t range)
 {
@@ -410,11 +437,12 @@ __attribute__((noinline)) static bool move_monster(
         open_door(ydoor);
         return false;
     }
-    if(dx && can_monster_move(nx, monster.pos.y, xdoor))
-        { monster.pos.x = nx; return true; }
-    else if(dy && can_monster_move(monster.pos.x, ny, ydoor))
-        { monster.pos.y = ny; return true; }
-    return false;
+    if(dx) {
+        uint8_t action=monster_step(monster,{nx,monster.pos.y},xdoor,flags,pursuing && !afraid && !confused);
+        if(action) return action;
+    }
+    if(dy) return monster_step(monster,{monster.pos.x,ny},ydoor,flags,pursuing && !afraid && !confused);
+    return 0;
 }
 
 __attribute__((noinline)) static uint8_t force_monster_path(
@@ -433,6 +461,7 @@ __attribute__((noinline)) bool force_monster_move(uint8_t index, int8_t dx, int8
     Position origin = target.pos;
     monster_status(target, F("is blasted back!"));
     uint8_t collision = force_monster_path(index, dx, dy, powerful);
+    delay_pet_recall(index);
     uint8_t stun = powerful ? 8 : 4;
     if(collision < MONSTERS) {
         monster_status(target, F("crashes into"));
@@ -605,6 +634,7 @@ __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
     Monster& monster = game.monsters[index];
     if(!monster.type)
         return false;
+    if(friendly_slot(index)) return pet_action(index);
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope damage_source(sim::Cause::Monster, monster.type);
 #endif
@@ -635,6 +665,9 @@ __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
         if(!afraid && pursuing && !confused && (flags & MON_FIRE_BREATH) &&
            fire_line_clear(monster) && roll(3) == 0) {
             return 2;
+        } else if(!afraid && pursuing && !confused && (flags & MON_FIRE_BREATH) &&
+                  pet_fire_target(index) != NONE && !roll(3)) {
+            return static_cast<uint8_t>(48 + pet_fire_target(index));
         } else if(range == 1 && pursuing && !confused && !afraid) {
             return 4;
         } else if(afraid || confused || (pursuing && range <= 8) ||
@@ -642,7 +675,7 @@ __attribute__((noinline)) static uint8_t advance_monster_action(uint8_t index)
                   roll(4) == 0) {
             // Passive bats try one random direction each turn, as in ArduRogue.
             // Movement rejects occupied tiles, including the player's tile.
-            if(move_monster(monster, flags, afraid, confused, pursuing, range)) return 3;
+            return move_monster(monster, flags, afraid, confused, pursuing, range);
         }
     }
     return 0;
@@ -652,14 +685,13 @@ __attribute__((noinline)) static void finish_monster_turn(uint8_t index)
 {
     Monster& monster = game.monsters[index];
     if(!monster.type) return;
-    uint8_t maximum = monster_health(monster.type);
-    if((monster_flags(monster.type) & MON_REGENS) && monster.hp < maximum &&
-       roll(8) == 0) {
+    uint8_t maximum = (monster.type == TROLL || monster.type == LORD) ? monster_health(monster.type) : 0;
+    if(monster.hp < maximum && roll(8) == 0) {
         uint16_t healed = static_cast<uint16_t>(monster.hp) + 3;
         monster.hp = healed > maximum ? maximum :
             static_cast<uint8_t>(healed);
     }
-    age_monster_effects(monster);
+    if(monster.effects[0] || (monster.effects[1] & 0x0f)) age_monster_effects(monster);
 }
 
 // Unwind movement/status temporaries before a turn-free player attack. This
@@ -678,11 +710,15 @@ __attribute__((noinline)) static void retaliate_ring(uint8_t index, uint8_t slot
         status(F("Your cursed ring bites you!"));
     } else attack_monster(index);
 }
-__attribute__((noinline)) static void retaliate_monster(uint8_t index)
+__attribute__((noinline)) static bool retaliate_monster(uint8_t index)
 {
-    if(session.ended || !game.hp) return;
+    if(session.ended || !game.hp) return false;
+    bool equipped = (game.ring_slots[0] < INVENTORY && game.inventory[game.ring_slots[0]].type == RING_REPRISAL) ||
+                    (game.ring_slots[1] < INVENTORY && game.inventory[game.ring_slots[1]].type == RING_REPRISAL);
+    if(!equipped) return false;
     retaliate_ring(index, game.ring_slots[0]);
     if(!session.ended) retaliate_ring(index, game.ring_slots[1]);
+    return true;
 }
 
 // Only monsters present when the turn began are eligible. Clear killed slots
@@ -697,43 +733,48 @@ __attribute__((noinline)) static uint16_t living_monsters()
 static void enemy_turn(uint8_t player_speed)
 {
     uint16_t eligible = living_monsters();
-    for(uint8_t i = 0; i < MONSTERS && !session.ended; ++i) {
-        if(!(eligible & (1u << i)) || !game.monsters[i].type) continue;
+    uint16_t actor_bit = 1;
+    for(uint8_t i = 0; i < MONSTERS && !session.ended; ++i, actor_bit <<= 1) {
+        if(!(eligible & actor_bit) || !game.monsters[i].type) continue;
         uint8_t speed = monster_speed(game.monsters[i].type);
         if(monster_effect(game.monsters[i], MON_SLOWED)) speed = static_cast<uint8_t>(speed * 2);
         if(!speed) speed = 1;
+        if(friendly_slot(i)) begin_pet_turn(i);
         uint8_t budget = player_speed;
-        while(budget >= speed && !session.ended && (eligible & (1u << i)) && game.monsters[i].type) {
+        while(budget >= speed && !session.ended && (eligible & actor_bit) && game.monsters[i].type) {
             uint8_t action = advance_monster_action(i);
-            if(action == 3) activate_monster_trap(i);
+            if(action >= 48) { creature_fire(i, static_cast<uint8_t>(action & 15)); eligible &= living_monsters(); }
+            else if(action >= 16) { creature_attack(i, static_cast<uint8_t>(action & 15), action >= 32); if(!game.monsters[action & 15].type) eligible &= static_cast<uint16_t>(~(1u << (action & 15))); }
+            else if(action == 3) activate_monster_trap(i);
             else if(action == 2) { monster_fire(i); eligible &= living_monsters(); }
             else if(action == 4) {
-                if(monster_melee(i)) retaliate_monster(i);
-                eligible &= living_monsters();
+                if(monster_melee(i) && retaliate_monster(i)) eligible &= living_monsters();
             }
-            if(!game.monsters[i].type) eligible &= static_cast<uint16_t>(~(1u << i));
+            if(!game.monsters[i].type) eligible &= static_cast<uint16_t>(~actor_bit);
             if(session.forced_entry) {
                 resolve_forced_entry();
                 eligible &= living_monsters();
             }
-            if(eligible & (1u << i)) finish_monster_turn(i);
+            if(eligible & actor_bit) finish_monster_turn(i);
             budget = static_cast<uint8_t>(budget - speed);
         }
-        if(budget && !session.ended && (eligible & (1u << i)) && game.monsters[i].type && roll(speed) < budget) {
+        if(budget && !session.ended && (eligible & actor_bit) && game.monsters[i].type && roll(speed) < budget) {
             uint8_t action = advance_monster_action(i);
-            if(action == 3) activate_monster_trap(i);
+            if(action >= 48) { creature_fire(i, static_cast<uint8_t>(action & 15)); eligible &= living_monsters(); }
+            else if(action >= 16) { creature_attack(i, static_cast<uint8_t>(action & 15), action >= 32); if(!game.monsters[action & 15].type) eligible &= static_cast<uint16_t>(~(1u << (action & 15))); }
+            else if(action == 3) activate_monster_trap(i);
             else if(action == 2) { monster_fire(i); eligible &= living_monsters(); }
             else if(action == 4) {
-                if(monster_melee(i)) retaliate_monster(i);
-                eligible &= living_monsters();
+                if(monster_melee(i) && retaliate_monster(i)) eligible &= living_monsters();
             }
-            if(!game.monsters[i].type) eligible &= static_cast<uint16_t>(~(1u << i));
+            if(!game.monsters[i].type) eligible &= static_cast<uint16_t>(~actor_bit);
             if(session.forced_entry) {
                 resolve_forced_entry();
                 eligible &= living_monsters();
             }
-            if(eligible & (1u << i)) finish_monster_turn(i);
+            if(eligible & actor_bit) finish_monster_turn(i);
         }
+        if(friendly_slot(i)) end_pet_turn();
     }
 }
 
@@ -826,17 +867,25 @@ void end_turn()
         hurt_player(1);
         if(session.ended) return;
     }
+    age_pet_leashes();
+    begin_door_lookup();
+    begin_feature_lookup();
     enemy_turn(player_speed);
+    recover_pets();
+    end_feature_lookup();
+    end_door_lookup();
+    session.pet_trail = game.player;
     age_player_effects();
     regenerate_mana();
 }
 
 void defeat_monster(uint8_t index)
 {
+    if(index >= MONSTERS || !game.monsters[index].type) return;
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::MonsterKilled, index, target.type);
     leave_yendor(target);
-    bool summoned = (target.state & MON_SUMMONED) != 0;
+    bool summoned = friendly_slot(index) || (target.state & MON_SUMMONED) != 0;
     uint8_t xp = summoned ? 0 : monster_xp(target.type);
     if(!summoned) game.score += static_cast<uint16_t>(5 + xp * 3);
     status(F("You defeat"));
@@ -967,6 +1016,12 @@ __attribute__((noinline)) static bool apply_move(int8_t dx, int8_t dy)
     }
     uint8_t monster = monster_at(destination);
     if(monster != NONE) {
+        if(friendly_slot(monster)) {
+            game.monsters[monster].pos = game.player;
+            game.player = destination;
+            activate_monster_trap(monster);
+            return !session.ended;
+        }
         attack_monster(monster);
         return !session.ended;
     }
@@ -980,6 +1035,7 @@ void begin_player_move(int8_t dx, int8_t dy)
     if(session.pending_move || session.ended) return;
     Position origin = game.player;
     if(!apply_move(dx, dy)) return;
+    if(game.player != origin) session.pet_trail = origin;
     bool forced = session.forced_entry;
     resolve_forced_entry();
     session.pending_feature = NONE;
@@ -1007,6 +1063,7 @@ void apply_monster_potion(uint8_t type, uint8_t index)
     // Player-only potions leave even aggression/attack telemetry unchanged.
     if(type == POTION_SEE_INVISIBLE || type == POTION_LEVITATION ||
        type == POTION_FIRE_RESISTANCE || type == POTION_MANA_RESTORATION) { status(F("It has no effect.")); return; }
+    if(type == POTION_FRIENDSHIP) { tame_monster(index, TamingMethod::Potion); return; }
     Monster& target = game.monsters[index];
     SIM_EVENT(sim::EventKind::PlayerAttack, index, target.type);
     target.state |= MON_AGGRO;
@@ -1053,14 +1110,8 @@ void apply_monster_potion(uint8_t type, uint8_t index)
         uint8_t base = static_cast<uint8_t>(maximum / 8 + 1);
         uint8_t damage = static_cast<uint8_t>(base + roll(base * 2));
         if(damage > 10) damage = 10;
-        SIM_EVENT(sim::EventKind::MonsterDamage, index, target.type,
-                  damage < target.hp ? damage : target.hp, true);
-        if(damage >= target.hp)
-            defeat_monster(index);
-        else {
-            target.hp = static_cast<uint8_t>(target.hp - damage);
-            monster_status(target, F("is hurt!"));
-        }
+        damage_monster(index, damage, true);
+        if(target.type) monster_status(target, F("is hurt!"));
         break;
     }
     case POTION_POISON:

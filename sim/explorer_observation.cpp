@@ -76,7 +76,7 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     if(session.object_detection) for(const auto& g:game.ground)
         if(g.item.type && g.pos.x<MAP_W && g.pos.y<MAP_H) o.detected_objects.set(cell(g.pos));
     o.inventory_capacity=inventory_capacity();
-    static_assert(INVENTORY <= 20 && GROUND_ITEMS + MONSTERS <= 36, "observation capacity");
+    static_assert(INVENTORY <= 20 && GROUND_ITEMS + MONSTERS <= 40 && MONSTERS <= 16, "observation capacity");
     o.radius=player_light_radius(); o.yendor=game.has_amulet; o.pending_pickups=session.pending_pickups;
     o.equipped={game.weapon_slot,game.armor_slot,game.offhand_slot,game.amulet_slot,game.ring_slots[0],game.ring_slots[1]};
     for(int s=0;s<INVENTORY;++s) o.inventory[s]=describe(game.inventory[s],true);
@@ -117,7 +117,7 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     std::bitset<EXPLORER_CELLS> covered;
     for(uint8_t i=0;i<MONSTERS;++i) {
         const auto& m=game.monsters[i];
-        if(m.type && player_can_see_monster(i) && o.visible[cell(m.pos)] && m.pos!=game.player)
+        if(m.type && m.pos.x<MAP_W && m.pos.y<MAP_H && player_can_see_monster(i) && o.visible[cell(m.pos)] && m.pos!=game.player)
             covered.set(cell(m.pos));
     }
     for(uint8_t i=0;i<GROUND_ITEMS;++i) {
@@ -130,15 +130,23 @@ ExplorerObservation observe_explorer(uint64_t actions, uint64_t turns) {
     }
     for(uint8_t i=0;i<MONSTERS;++i) {
         const auto& m=game.monsters[i];
-        if(!m.type || !player_can_see_monster(i) || !o.visible[cell(m.pos)]) continue;
+        if(!m.type || m.pos.x>=MAP_W || m.pos.y>=MAP_H || !player_can_see_monster(i) || !o.visible[cell(m.pos)]) continue;
         if(m.type==MIMIC && !(m.state&MON_AGGRO)) {
             auto& s=o.ground[o.ground_count++]; s.pos=pos(m.pos);
             constexpr ItemCategory disguises[]={ItemCategory::Scroll,ItemCategory::Potion,ItemCategory::Amulet,ItemCategory::Ring,ItemCategory::Wand};
             s.item.category=disguises[mimic_appearance(m)];
         } else {
             auto info=monster_info(m.type); auto& s=o.monsters[o.monster_count++];
-            s={pos(m.pos),m.type,info.strength,info.speed,info.armor,info.flags,i};
+            s={pos(m.pos),m.type,info.strength,info.speed,info.armor,info.flags,i,friendly_slot(i)};
         }
+    }
+    for(uint8_t i=HOSTILE_MONSTERS;i<MONSTERS;++i) if(game.monsters[i].type) {
+        const auto& m=game.monsters[i];
+        // The screen prints active conditions, not their remaining clocks.
+        o.companions[o.companion_count++]={m.type,m.hp,monster_health(m.type),uint8_t(m.stun!=0),
+            {uint8_t((monster_effect(m,MON_CONFUSED)!=0) | ((monster_effect(m,MON_SLOWED)!=0)<<4)),
+             uint8_t((monster_effect(m,MON_INVISIBLE)!=0) | ((monster_effect(m,MON_WEAKENED)!=0)<<4))},
+            uint8_t(m.state & (MON_BLINDED|MON_AFRAID)),i,bool(m.state&MON_SUMMONED)};
     }
     explorer_message_observation(o);
     if(o.reported_attacker) {

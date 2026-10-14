@@ -24,6 +24,49 @@ const Field<FeatureMetrics> feature_fields[] = {
     {"monster_activated",&FeatureMetrics::monster_activated},{"monster_damage",&FeatureMetrics::monster_damage},
     {"monster_killed",&FeatureMetrics::monster_killed},{"monster_teleported",&FeatureMetrics::monster_teleported},
     {"monster_status",&FeatureMetrics::monster_status},{"monster_spawned",&FeatureMetrics::monster_spawned}};
+const Field<PetMetrics> pet_fields[] = {
+    {"base_xp", &PetMetrics::base_xp},
+    {"scroll_attempts", &PetMetrics::scroll_attempts},
+    {"scroll_successes", &PetMetrics::scroll_successes},
+    {"potion_attempts", &PetMetrics::potion_attempts},
+    {"potion_successes", &PetMetrics::potion_successes},
+    {"wand_attempts", &PetMetrics::wand_attempts},
+    {"wand_successes", &PetMetrics::wand_successes},
+    {"interceptions", &PetMetrics::interceptions},
+    {"chain_hits", &PetMetrics::chain_hits},
+    {"friendly_effects", &PetMetrics::friendly_effects},
+
+    {"acquired_spell", &PetMetrics::acquired_spell},
+    {"acquired_scroll", &PetMetrics::acquired_scroll},
+    {"acquired_potion", &PetMetrics::acquired_potion},
+    {"acquired_wand", &PetMetrics::acquired_wand},
+    {"acquired_altar", &PetMetrics::acquired_altar},
+    {"tame_attempts", &PetMetrics::tame_attempts},
+    {"tame_successes", &PetMetrics::tame_successes},
+    {"attacks", &PetMetrics::attacks},
+    {"hits", &PetMetrics::hits},
+    {"damage", &PetMetrics::damage},
+    {"kills", &PetMetrics::kills},
+    {"xp", &PetMetrics::xp},
+    {"control_events", &PetMetrics::control_events},
+    {"control_turns", &PetMetrics::control_turns},
+    {"damage_absorbed", &PetMetrics::damage_absorbed},
+    {"friendly_damage", &PetMetrics::friendly_damage},
+    {"deaths", &PetMetrics::deaths},
+    {"hostile_deaths", &PetMetrics::hostile_deaths},
+    {"player_deaths", &PetMetrics::player_deaths},
+    {"trap_deaths", &PetMetrics::trap_deaths},
+    {"other_deaths", &PetMetrics::other_deaths},
+    {"dismissals", &PetMetrics::dismissals},
+    {"lifetime_turns", &PetMetrics::lifetime_turns},
+    {"recalls", &PetMetrics::recalls},
+    {"recall_distance", &PetMetrics::recall_distance},
+    {"visible_recalls", &PetMetrics::visible_recalls},
+    {"regenerated", &PetMetrics::regenerated},
+    {"active_turns", &PetMetrics::active_turns},
+    {"entry_count", &PetMetrics::entry_count},
+    {"exit_count", &PetMetrics::exit_count},
+    {"study_interruptions", &PetMetrics::study_interruptions}};
 const Field<ItemMetrics> item_fields[] = {
     {"generated",&ItemMetrics::generated},{"reached",&ItemMetrics::reached},
     {"picked_up",&ItemMetrics::picked_up},{"used",&ItemMetrics::used},{"consumed",&ItemMetrics::consumed},
@@ -123,22 +166,22 @@ bool artifacts_enabled() {
 const char* item_name(uint8_t type) {
     // Stable schema-2 labels, independent of renamed C++ enum identifiers.
     static const char* names[] = {"NO_ITEM","FOOD","ARROWS","HEALING","CONFUSION","POISON","HARMING",
-        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE","EXTRA_HEALING","RESTORE_VITALITY","HASTE","LEVITATION","FIRE_RESISTANCE","FIRE","MANA_RESTORATION",
+        "STRENGTH","DEXTERITY","PARALYSIS","SLOWING","EXPERIENCE","INVISIBILITY","BLINDNESS","SEE_INVISIBLE","EXTRA_HEALING","RESTORE_VITALITY","HASTE","LEVITATION","FIRE_RESISTANCE","FIRE","MANA_RESTORATION","FRIENDSHIP",
         "LONG_SWORD","DAGGER","SPEAR","MACE","TWO_HANDED_SWORD","SHORT_BOW","LONG_BOW","STORMBRINGER","GLASS_SWORD","HAMMER_OF_RUIN","CHAIN_MAIL","LEATHER_ARMOR",
         "RING_MAIL","SCALE_MAIL","SPLINT_MAIL","PLATE_MAIL","DRAGONHIDE","TITAN_PLATE","CANDLE","TORCH","LANTERN","GLOWING_ORB","BUCKLER","ROUND_SHIELD","TOWER_SHIELD","YENDOR_AMULET","RING_SEE_INVISIBLE",
         "RING_STRENGTH","RING_DEXTERITY","RING_PROTECTION","RING_FIRE_IMMUNITY","RING_ATTACK",
         "RING_SUSTENANCE","RING_INVISIBILITY","RING_REPRISAL","RING_HUNT","RING_ILLUMINATION","AMULET_SPEED","AMULET_CLARITY","AMULET_CONSERVATION",
         "AMULET_REGENERATION","AMULET_VAMPIRE","AMULET_IRONBLOOD","AMULET_VITALITY","AMULET_WISDOM","AMULET_PHOENIX_HEART","AMULET_HEART_OF_GIANT","AMULET_BRILLIANCE","AMULET_MEDITATION",
         "SCROLL_IDENTIFY","SCROLL_ENCHANT","SCROLL_REMOVE_CURSE","SCROLL_TELEPORT","SCROLL_MAPPING",
-        "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","SCROLL_HOLD_MONSTER","SCROLL_DETECT_TRAPS","SCROLL_SUMMONING","SCROLL_MASS_TELEPORT","SCROLL_FIRE","SCROLL_DETECT_OBJECTS","WAND_FORCE",
-        "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH","WAND_LIGHTNING","SPELLBOOK"};
+        "SCROLL_FEAR","SCROLL_TORMENT","SCROLL_MASS_CONFUSE","SCROLL_MASS_POISON","SCROLL_HOLD_MONSTER","SCROLL_DETECT_TRAPS","SCROLL_SUMMONING","SCROLL_MASS_TELEPORT","SCROLL_FIRE","SCROLL_DETECT_OBJECTS","SCROLL_TAMING","WAND_FORCE",
+        "WAND_TELEPORT","WAND_DIGGING","WAND_FIRE","WAND_STRIKING","WAND_ICE","WAND_POLYMORPH","WAND_LIGHTNING","WAND_DOMINATION","SPELLBOOK"};
     static_assert(sizeof(names)/sizeof(*names) == rogue::SPELLBOOK+1, "item names changed");
     return type <= rogue::SPELLBOOK ? names[type] : "INVALID";
 }
 const char* monster_name(uint8_t type) {
     static const char* names[] = {"NO_MONSTER","BAT","SNAKE","RATTLESNAKE","ZOMBIE","GOBLIN",
-        "PHANTOM","ORC","TARANTULA","HOBGOBLIN","MIMIC","INCUBUS","TROLL","GRIFFIN","DRAGON","ANGEL","LORD"};
-    return type <= rogue::LORD ? names[type] : "INVALID";
+        "PHANTOM","ORC","TARANTULA","HOBGOBLIN","MIMIC","INCUBUS","TROLL","GRIFFIN","DRAGON","ANGEL","LORD","HOUND","SPIDER","WISP","GOLEM"};
+    return type < rogue::MONSTER_TYPES ? names[type] : "INVALID";
 }
 size_t Collector::new_wand() {
     wand_flags.push_back(0); return wand_flags.size()-1;
@@ -238,7 +281,9 @@ void Collector::enter_floor() {
     ++data.floors_entered;
     data.deepest = std::max(data.deepest,int(g.floor));
     reached.fill(false); encountered.fill(false); engaged.fill(false); aware.fill(false); feature_entries.fill(0);
-    FloorMetrics f; f.floor = g.floor; f.visit = data.floors_entered;
+    FloorMetrics f;
+    for(uint8_t i=rogue::HOSTILE_MONSTERS;i<rogue::MONSTERS;++i) if(g.monsters[i].type) ++f.pets[g.monsters[i].type].entry_count;
+    f.floor = g.floor; f.visit = data.floors_entered;
     observed_terrain.reset(); observed_floor.reset(); surveyed_floor.reset(); visited_tiles.reset();
     visibly_observed.fill(false); visible_before.fill(false); observed_items.fill(false);
     observed_position={}; exploration_entry_turn=data.turns; entry_explorer_stats=explorer_stats;
@@ -261,7 +306,7 @@ void Collector::enter_floor() {
         auto objective=g.has_amulet ? g.up : g.floor==15 ? g.monsters[11].pos : g.down;
         if(objective.x<64 && objective.y<32) f.exploration.shortest=dist[objective.y*64+objective.x];
     }
-    for(const auto& m:g.monsters) f.unholy_count += rogue::undead_or_demonic(m.type);
+    for(uint8_t i=0;i<rogue::HOSTILE_MONSTERS;++i) f.unholy_count += rogue::undead_or_demonic(g.monsters[i].type);
     if(enabled) for(uint8_t y=0;y<rogue::MAP_H;++y) for(uint8_t x=0;x<rogue::MAP_W;++x) {
         rogue::Position pos{x,y};
         if(rogue::wall_at(x,y) || pos==g.player || pos==g.up || pos==g.down ||
@@ -291,7 +336,7 @@ void Collector::enter_floor() {
             f.entry_wand_charges+=charges;
             if(i.type==rogue::WAND_LIGHTNING || i.type==rogue::WAND_FIRE || i.type==rogue::WAND_STRIKING || i.type==rogue::WAND_ICE)
                 f.entry_offensive_charges+=charges;
-            if(i.type==rogue::WAND_FORCE || i.type==rogue::WAND_TELEPORT || i.type==rogue::WAND_POLYMORPH)
+            if(i.type==rogue::WAND_FORCE || i.type==rogue::WAND_TELEPORT || i.type==rogue::WAND_POLYMORPH || i.type==rogue::WAND_DOMINATION)
                 f.entry_emergency_charges+=charges;
         }
     }
@@ -333,7 +378,7 @@ void Collector::enter_floor() {
             if(data.ranged.first_generated == 255) data.ranged.first_generated = g.floor;
         }
     }
-    for(const auto& m : g.monsters) if(m.type) ++data.monsters[m.type].generated;
+    for(uint8_t i=0;i<rogue::HOSTILE_MONSTERS;++i) if(g.monsters[i].type) ++data.monsters[g.monsters[i].type].generated;
     for(const auto& feature : g.features) if(feature.id) {
         unsigned t = rogue::feature_type(feature.id)/2;
         ++data.features[t].generated; ++data.floors.back().features[t].generated;
@@ -377,6 +422,8 @@ void Collector::close_floor(bool exited) {
     }
     e.recent_damage=0;
     for(size_t i=0;i<damage_turns.size();++i) if(data.turns<=damage_turns[i]+7) e.recent_damage+=int(damage_amounts[i]);
+    for(auto& p:f.pets) p.exit_count=0;
+    for(uint8_t i=rogue::HOSTILE_MONSTERS;i<rogue::MONSTERS;++i) if(rogue::game.monsters[i].type) ++f.pets[rogue::game.monsters[i].type].exit_count;
     if(exited) { f.exited = true; ++data.floors_exited; }
     close_encounter(exited ? "floor_exit" : data.stuck ? "censored" : "run_end");
     if(exited && !f.ascent && f.floor==0) milestone("floor_1_complete");
@@ -392,7 +439,7 @@ void Collector::observe() {
         if(!reached[i] && g.ground[i].item.type && g.ground[i].pos == g.player) {
             reached[i] = true; data.items[g.ground[i].item.type].reached += units(g.ground[i].item);
         }
-    for(int i = 0; i < rogue::MONSTERS; ++i)
+    for(int i = 0; i < rogue::HOSTILE_MONSTERS; ++i)
         if(!encountered[i] && g.monsters[i].type && rogue::can_see(g.monsters[i].pos)) {
             encountered[i] = true; ++data.monsters[g.monsters[i].type].encountered;
         }
@@ -403,7 +450,7 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
     for(int n=0;n<EXPLORER_CELLS;++n) if(o.terrain[n]!=Terrain::Unknown) { known_features[n]=o.features[n]; known_terrain[n]=o.terrain[n]; }
     auto& e=data.floors.back().exploration;
     combat_action=o.attacked;
-    for(int m=0;m<o.monster_count;++m) if(std::abs(int(o.player.x)-o.monsters[m].pos.x)+std::abs(int(o.player.y)-o.monsters[m].pos.y)<=2) combat_action=true;
+    for(int m=0;m<o.monster_count;++m) if(!o.monsters[m].friendly && std::abs(int(o.player.x)-o.monsters[m].pos.x)+std::abs(int(o.player.y)-o.monsters[m].pos.y)<=2) combat_action=true;
     for(auto& i:o.inventory) if(i.category==ItemCategory::Potion && i.type && !known_potions[i.type]) {
         known_potions.set(i.type); ++e.identified_potions;
     }
@@ -426,8 +473,8 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
     }
     for(int i=0;i<rogue::MONSTERS;++i) {
         const auto& m=rogue::game.monsters[i];
-        visible_before[i]=m.type && o.visible[m.pos.y*64+m.pos.x] && rogue::player_can_see_monster(uint8_t(i)) && !(m.type==rogue::MIMIC && !(m.state&rogue::MON_AGGRO));
-        if(visible_before[i] && !visibly_observed[i]) {
+        visible_before[i]=m.type && m.pos.x<64 && m.pos.y<32 && o.visible[m.pos.y*64+m.pos.x] && rogue::player_can_see_monster(uint8_t(i)) && !(m.type==rogue::MIMIC && !(m.state&rogue::MON_AGGRO));
+        if(i<rogue::HOSTILE_MONSTERS && visible_before[i] && !visibly_observed[i]) {
             visibly_observed[i]=true;
             int d=std::max(std::abs(int(m.pos.x)-o.player.x),std::abs(int(m.pos.y)-o.player.y));
             ++e.monster_distances[std::min(6,d)];
@@ -448,7 +495,7 @@ void Collector::observe_exploration(const ExplorerObservation& o) {
 void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount, uint8_t detail) {
     encounter_event(k,index,type,amount,detail);
     if(enabled && data.agent=="explorer-v1" && !data.floors.empty()) {
-        if((k==EventKind::MonsterAttack || k==EventKind::PlayerAttack) && index<rogue::MONSTERS && !visible_before[index]) {
+        if((k==EventKind::MonsterAttack || k==EventKind::PlayerAttack) && index<rogue::HOSTILE_MONSTERS && !visible_before[index]) {
             begin_invisible(); initially_unseen[index]=true;
         }
         auto& e=data.floors.back().exploration.invisible;
@@ -456,7 +503,7 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
             if(k==EventKind::Turn) ++invisible_duration;
             if(k==EventKind::PlayerDamage) { e.damage+=amount; invisible_damage+=amount; }
             if(k==EventKind::Consumed && (type==rogue::POTION_HEALING || type==rogue::POTION_EXTRA_HEALING || type==rogue::POTION_EXPERIENCE)) e.healing+=amount;
-            if(k==EventKind::MonsterKilled && index<rogue::MONSTERS && initially_unseen[index]) {
+            if(k==EventKind::MonsterKilled && index<rogue::HOSTILE_MONSTERS && initially_unseen[index]) {
                 ++e.kills; ++invisible_kills; initially_unseen[index]=false;
             }
             if((k==EventKind::FeatureActivated || k==EventKind::MonsterTrapActivated) && type==rogue::FEATURE_SUMMONING_TRAP) {
@@ -521,6 +568,8 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
     if(k == EventKind::Finished && type == rogue::DEATH && rogue::game.blindness) ++data.blind_deaths;
     if(k == EventKind::FuelExhausted) { ++data.fuel_exhaustions; return; }
     if(k == EventKind::Turn) {
+        if(enabled && !data.floors.empty()) for(uint8_t i=rogue::HOSTILE_MONSTERS;i<rogue::MONSTERS;++i)
+            if(rogue::game.monsters[i].type) ++data.floors.back().pets[rogue::game.monsters[i].type].active_turns;
         if(enabled && combat_action && !data.floors.empty()) ++data.floors.back().exploration.combat_turns;
         if(enabled && exploring_action && !data.floors.empty()) ++data.floors.back().exploration.exploring_turns;
         ++data.light_turns[rogue::player_light_radius()];
@@ -594,11 +643,63 @@ void Collector::handle(EventKind k, uint8_t index, uint8_t type, uint16_t amount
         if(amount >= rogue::game.hp && !phoenix) feature_metric(cause_type, &FeatureMetrics::deaths, 1);
     }
     auto engage = [&] {
-        if(index < rogue::MONSTERS && !engaged[index]) {
+        if(index < rogue::HOSTILE_MONSTERS && !engaged[index]) {
             engaged[index] = true; ++data.monsters[type].engaged;
             if(!encountered[index]) { encountered[index] = true; ++data.monsters[type].encountered; }
         }
     };
+    if(k==EventKind::ExperienceAwarded) {
+        if(cause==Cause::Pet && cause_type<rogue::MONSTER_TYPES && f) f->pets[cause_type].xp+=amount;
+        return;
+    }
+    if(type<rogue::MONSTER_TYPES && f) {
+        PetMetrics& p=f->pets[type];
+        switch(k) {
+        case EventKind::PetAcquired:
+            if(detail==0) ++p.acquired_spell; else if(detail==1) ++p.acquired_scroll;
+            else if(detail==2) ++p.acquired_potion; else if(detail==3) ++p.acquired_wand; else ++p.acquired_altar;
+            if(rogue::friendly_slot(index)) pet_born[index-rogue::HOSTILE_MONSTERS]=data.turns;
+            return;
+        case EventKind::TamingAttempt:
+            ++p.tame_attempts; p.tame_successes+=amount;
+            if(detail==0) { ++p.scroll_attempts; p.scroll_successes+=amount; }
+            else if(detail==1) { ++p.potion_attempts; p.potion_successes+=amount; }
+            else { ++p.wand_attempts; p.wand_successes+=amount; }
+            return;
+        case EventKind::PetMessage: if(rogue::session.study_slot!=rogue::NONE) study_pet_event=true; return;
+        case EventKind::PetIntercept: if(cause==Cause::Spell) { if(detail) ++p.chain_hits; else ++p.interceptions; } return;
+        case EventKind::PetAttack:
+            if(detail) ++p.attacks;
+            return;
+        case EventKind::PetHit: if(detail) ++p.hits; return;
+        case EventKind::PetDealtDamage: if(detail) p.damage+=amount; return;
+        case EventKind::PetKilled: ++p.kills; p.base_xp+=amount; return;
+        case EventKind::PetControl: if(rogue::friendly_slot(index)) { ++p.control_events; p.control_turns+=amount; } return;
+        case EventKind::PetDamage:
+            p.damage_absorbed+=amount; if(detail) p.friendly_damage+=amount;
+            if(rogue::friendly_slot(index)) pet_death_cause[index-rogue::HOSTILE_MONSTERS]=detail ? 1 : cause==Cause::MonsterTrap ? 2 : cause==Cause::Monster || cause==Cause::Fire ? 0 : 3;
+            return;
+        case EventKind::PetDied: {
+            if(rogue::session.study_slot!=rogue::NONE) study_pet_event=true;
+            ++p.deaths;
+            uint8_t slot=index-rogue::HOSTILE_MONSTERS;
+            p.lifetime_turns+=data.turns-pet_born[slot];
+            uint8_t death=pet_death_cause[slot];
+            if(death==0) ++p.hostile_deaths; else if(death==1) ++p.player_deaths; else if(death==2) ++p.trap_deaths; else ++p.other_deaths;
+            return;
+        }
+        case EventKind::PetDismissed: ++p.dismissals; return;
+        case EventKind::PetRecall: ++p.recalls; p.recall_distance+=amount; p.visible_recalls+=detail; return;
+        case EventKind::PetRegenerated: p.regenerated+=amount; return;
+        default: break;
+        }
+    }
+    if(rogue::friendly_slot(index) && cause==Cause::Spell &&
+       (k==EventKind::SpellStatus || k==EventKind::SpellDisabled || k==EventKind::SpellDisplacement) && f)
+        ++f->pets[rogue::game.monsters[index].type].friendly_effects;
+    if(k==EventKind::StudyStarted) study_pet_event=false;
+    if(k==EventKind::StudyInterrupted && study_pet_event && f) { ++f->pets[0].study_interruptions; study_pet_event=false; }
+    if(rogue::friendly_slot(index) && (k==EventKind::PlayerAttack || k==EventKind::MonsterDamage || k==EventKind::MonsterKilled)) return;
     switch(k) {
     case EventKind::LightningDamage:
         if(cause==Cause::Spell && cause_type<rogue::SPELL_COUNT) {
@@ -918,7 +1019,7 @@ void write_ranged_header(std::ostream& o) {
     o << "seed,effective_seed,agent,bundles,generated,picked,fired,thrown,sacrificed,carried,bow_turns,switches_to,switches_away,first_generated,first_picked,generation_gap,acquisition_gap";
     for(const char* bow:{"short","long"}) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << bow << '_' << field;
     for(int d=0;d<=6;++d) for(const char* field:{"shots","hits","damage","kills"}) o << ",distance" << d << '_' << field;
-    for(int t=1;t<=rogue::LORD;++t) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << monster_name(t) << '_' << field;
+    for(int t=1;t<rogue::MONSTER_TYPES;++t) for(const char* field:{"shots","hits","damage","kills"}) o << ',' << monster_name(t) << '_' << field;
     o << '\n';
 }
 void write_ranged(std::ostream& o,const RunMetrics& r) {
@@ -929,7 +1030,7 @@ void write_ranged(std::ostream& o,const RunMetrics& r) {
     auto shot=[&](const ShotMetrics& s) { o << ',' << s.shots << ',' << s.hits << ',' << s.damage << ',' << s.kills; };
     for(auto s:m.bows) shot(s);
     for(auto s:m.distances) shot(s);
-    for(int t=1;t<=rogue::LORD;++t) shot(m.targets[t]);
+    for(int t=1;t<rogue::MONSTER_TYPES;++t) shot(m.targets[t]);
     o << '\n';
 }
 void write_features_header(std::ostream& o) {
@@ -967,6 +1068,15 @@ void write_magic(std::ostream& o,const RunMetrics& r) {
         o<<'\n';
     }
 }
+void write_pets_header(std::ostream& o) {
+    o<<"seed,effective_seed,agent,visit,floor,direction,monster_type,monster";
+    field_header(o,pet_fields);
+}
+void write_pets(std::ostream& o,const RunMetrics& r) {
+    for(const auto& f:r.floors) for(unsigned t=0;t<rogue::MONSTER_TYPES;++t) if(active(f.pets[t],pet_fields)) {
+        visit_key(o,r,f); o<<','<<t<<','<<monster_name(uint8_t(t)); field_values(o,f.pets[t],pet_fields);
+    }
+}
 const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
     {"runs.csv",write_runs_header,write_run},{"floors.csv",write_floors_header,write_floors},
     {"items.csv",write_items_header,write_items},{"monsters.csv",write_monsters_header,write_monsters},
@@ -978,5 +1088,6 @@ const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams{{
     {"encounters.csv",write_encounters_header,write_encounters},
     {"milestones.csv",write_milestones_header,write_milestones},
     {"spells.csv",write_spells_header,write_spells},
-    {"magic.csv",write_magic_header,write_magic}}};
+    {"magic.csv",write_magic_header,write_magic},
+    {"pets.csv",write_pets_header,write_pets}}};
 }

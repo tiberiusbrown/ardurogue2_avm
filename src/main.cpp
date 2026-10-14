@@ -1,4 +1,5 @@
 #include "spells.hpp"
+#include "companions.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -35,7 +36,11 @@ extern "C" int main()
            (ui.held_direction && !ui.repeat_suppressed &&
             static_cast<int16_t>(avm_millis() -
                ui.next_repeat_ms) >= 0)) {
-            InputAction input = handle_input(buttons);
+            InputAction input = resolve_move_input(handle_input(buttons));
+            if(input == INPUT_DROP || input == INPUT_DISCARD) drop_inventory(ui.selection, input == INPUT_DISCARD);
+            if(input == INPUT_WAIT_SEARCH) wait_search();
+            if(input == INPUT_WAIT) end_turn();
+            if(input == INPUT_DISMISS_PET) dismiss_pet(ui.use_target);
             if(input == INPUT_STUDY_TURN) { status_clear(); advance_study(); }
             if(input >= INPUT_CAST_UP && input <= INPUT_CAST_IMMEDIATE) {
                 int8_t dx = input == INPUT_CAST_RIGHT ? 1 : input == INPUT_CAST_LEFT ? -1 : 0;

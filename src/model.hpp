@@ -24,7 +24,10 @@ constexpr uint8_t clamp_light_radius(uint8_t radius)
 }
 constexpr uint8_t FLOORS = 16;
 constexpr uint8_t DOORS = 11;
-constexpr uint8_t MONSTERS = 12;
+constexpr uint8_t HOSTILE_MONSTERS = 12, PETS = 4;
+constexpr uint8_t MONSTERS = HOSTILE_MONSTERS + PETS;
+constexpr bool friendly_slot(uint8_t slot) { return slot >= HOSTILE_MONSTERS && slot < MONSTERS; }
+static_assert(MONSTERS == 16, "creature masks require exactly sixteen slots");
 constexpr uint8_t GROUND_ITEM_CAPACITY = 20;
 // The simulator reserves the largest screening layout; firmware uses the selected capacity.
 #if defined(ARDUROGUE2_SIM)
@@ -48,7 +51,7 @@ constexpr uint8_t PHANTOM_HEALTH = 10;
 constexpr uint8_t NONE = 0xff;
 constexpr uint8_t SAVE_MAGIC = 0xa7;
 // Room descriptors are generation scratch, no longer part of the saved layout.
-constexpr uint8_t SAVE_VERSION = 32;
+constexpr uint8_t SAVE_VERSION = 33;
 
 enum ItemType : uint8_t {
     NO_ITEM, FOOD,
@@ -63,7 +66,8 @@ enum ItemType : uint8_t {
     POTION_EXTRA_HEALING, POTION_RESTORE_VITALITY, POTION_HASTE,
     POTION_LEVITATION, POTION_FIRE_RESISTANCE, POTION_FIRE,
     POTION_MANA_RESTORATION,
-    POTION_LAST = POTION_MANA_RESTORATION,
+    POTION_FRIENDSHIP,
+    POTION_LAST = POTION_FRIENDSHIP,
     WEAPON_FIRST,
     LONG_SWORD = WEAPON_FIRST, DAGGER, SPEAR, MACE, TWO_HANDED_SWORD, SHORT_BOW, LONG_BOW,
     STORMBRINGER, GLASS_SWORD, HAMMER_OF_RUIN,
@@ -98,11 +102,13 @@ enum ItemType : uint8_t {
     SCROLL_TORMENT, SCROLL_MASS_CONFUSE, SCROLL_MASS_POISON,
     SCROLL_HOLD_MONSTER, SCROLL_DETECT_TRAPS, SCROLL_SUMMONING,
     SCROLL_MASS_TELEPORT, SCROLL_FIRE, SCROLL_DETECT_OBJECTS,
-    SCROLL_LAST = SCROLL_DETECT_OBJECTS,
+    SCROLL_TAMING,
+    SCROLL_LAST = SCROLL_TAMING,
     WAND_FIRST,
     WAND_FORCE = WAND_FIRST, WAND_TELEPORT, WAND_DIGGING, WAND_FIRE,
     WAND_STRIKING, WAND_ICE, WAND_POLYMORPH, WAND_LIGHTNING,
-    WAND_LAST = WAND_LIGHTNING,
+    WAND_DOMINATION,
+    WAND_LAST = WAND_DOMINATION,
     SPELLBOOK
 };
 // Single source for IDs, costs, study, targeting, generation and flash text.
@@ -122,7 +128,11 @@ enum ItemType : uint8_t {
     X(PHASE_STEP, "Phase Step", 4, 0, 60, Direction, Intermediate, 2, "Teleport 3, else 2 tiles. Cross foes, never walls; landing traps activate.") \
     X(CHAIN_LIGHTNING, "Chain Lightning", 4, 0, 60, Direction, Advanced, 1, "Range 5. 3-5 magic damage; one visible nearby arc for 3-4.") \
     X(SLUMBER, "Slumber", 4, 0, 60, Direction, Intermediate, 2, "Range 4. Stun first hit for 3-4 enemy turns.") \
-    X(BLOOD_BOLT, "Blood Bolt", 2, 3, 60, Direction, Intermediate, 2, "Costs 2 MP AND 3 HP, even on a miss. Can kill you. Range 5, 6-9 damage.")
+    X(BLOOD_BOLT, "Blood Bolt", 2, 3, 60, Direction, Intermediate, 2, "Costs 2 MP AND 3 HP, even on a miss. Can kill you. Range 5, 6-9 damage.") \
+    X(SUMMON_HOUND, "Summon Hound", 7, 0, 60, Self, Intermediate, 2, "Summon a persistent fast hound. One per species, four pets total.") \
+    X(SUMMON_SPIDER, "Summon Spider", 8, 0, 60, Self, Intermediate, 2, "Summon a persistent spider with slowing and weakening bites.") \
+    X(SUMMON_WISP, "Summon Wisp", 10, 0, 60, Self, Advanced, 1, "Summon a fragile wisp. Magic attacks within three tiles.") \
+    X(SUMMON_GOLEM, "Summon Golem", 12, 0, 60, Self, Advanced, 1, "Summon a slow armored golem. Sometimes briefly stuns foes.")
 enum class SpellTarget : uint8_t { Self, Direction, Monster };
 enum class SpellCategory : uint8_t { None, Basic, Intermediate, Advanced };
 enum Spell : uint8_t {
@@ -131,7 +141,9 @@ enum Spell : uint8_t {
 #undef SPELL_ENUM
     SPELL_COUNT
 };
-constexpr uint16_t spell_bit(uint8_t spell) { return spell < SPELL_COUNT ? uint16_t(1u << spell) : 0; }
+constexpr uint32_t spell_bit(uint8_t spell) { return spell < SPELL_COUNT ? (uint32_t(1) << spell) : 0; }
+constexpr uint32_t ALL_SPELLS = (uint32_t(1) << SPELL_COUNT) - 1;
+constexpr bool summon_spell(uint8_t spell) { return spell >= SUMMON_HOUND && spell <= SUMMON_GOLEM; }
 struct SpellDefinition { uint8_t mana, health, study; SpellTarget target; SpellCategory category; uint8_t weight; };
 constexpr SpellDefinition spell_definition(uint8_t spell) {
     switch(spell) {
@@ -168,7 +180,7 @@ constexpr bool valid_spell_definitions() {
         if(!spell_cost(s) || !spell_study_turns(s) || (s != MAGIC_DART && !spell_definition(s).weight)) return false;
     return true;
 }
-static_assert(SPELL_COUNT == 16 && SPELL_COUNT <= 16 && MAGIC_DART == 0 && CLEANSE == 10 &&
+static_assert(SPELL_COUNT == 20 && SPELL_COUNT <= 32 && MAGIC_DART == 0 && CLEANSE == 10 &&
               FIREBURST == 11 && BLOOD_BOLT == 15 && spell_bit(BLOOD_BOLT) == 0x8000 &&
               valid_spell_definitions(), "spell definitions/known mask disagree");
 // Hunger is 0..255; ordinary food consumption is at most one unit per turn.
@@ -176,12 +188,13 @@ static_assert(SPELL_COUNT == 16 && SPELL_COUNT <= 16 && MAGIC_DART == 0 && CLEAN
 constexpr uint8_t STUDY_HUNGRY = 60, STUDY_FOOD_MARGIN = 12;
 constexpr uint8_t study_food_required(uint8_t spell, bool legacy = false) { return STUDY_HUNGRY + STUDY_FOOD_MARGIN + spell_study_turns(spell, legacy); }
 
-enum Spellbook : uint8_t { BOOK_CONTROL, BOOK_DISPLACEMENT, BOOK_SURVIVAL, BOOK_DESTRUCTION, BOOK_COUNT };
-constexpr uint16_t spellbook_mask(uint8_t book) {
+enum Spellbook : uint8_t { BOOK_CONTROL, BOOK_DISPLACEMENT, BOOK_SURVIVAL, BOOK_DESTRUCTION, BOOK_COMPANIONS, BOOK_COUNT };
+constexpr uint32_t spellbook_mask(uint8_t book) {
     switch(book) {
     case BOOK_CONTROL: return spell_bit(FROSTBIND) | spell_bit(CONFOUND) | spell_bit(SLUMBER) | spell_bit(BANISH);
     case BOOK_DISPLACEMENT: return spell_bit(REPULSION) | spell_bit(BLINK) | spell_bit(SHOCKWAVE) | spell_bit(PHASE_STEP);
     case BOOK_SURVIVAL: return spell_bit(SENSE_TRAPS) | spell_bit(CLEANSE) | spell_bit(EXCHANGE);
+    case BOOK_COMPANIONS: return spell_bit(SUMMON_HOUND) | spell_bit(SUMMON_SPIDER) | spell_bit(SUMMON_WISP) | spell_bit(SUMMON_GOLEM);
     case BOOK_DESTRUCTION: return spell_bit(PIERCING_BOLT) | spell_bit(BLOOD_BOLT) | spell_bit(FIREBURST) | spell_bit(CHAIN_LIGHTNING);
     default:
 #if defined(ARDUROGUE2_SIM)
@@ -191,8 +204,8 @@ constexpr uint16_t spellbook_mask(uint8_t book) {
         return 0;
     }
 }
-constexpr uint16_t unknown_book_spells(uint8_t book, uint16_t known) {
-    return spellbook_mask(book) & static_cast<uint16_t>(~known);
+constexpr uint32_t unknown_book_spells(uint8_t book, uint32_t known) {
+    return spellbook_mask(book) & ~known;
 }
 constexpr uint8_t spellbook_for_spell(uint8_t spell) {
     for(uint8_t book = 0; book < BOOK_COUNT; ++book)
@@ -207,18 +220,18 @@ constexpr uint8_t book_for_roll(uint8_t floor, uint8_t roll) {
            roll < control + displacement + survival ? BOOK_SURVIVAL : BOOK_DESTRUCTION;
 }
 constexpr bool valid_spellbooks() {
-    uint16_t covered = 0;
+    uint32_t covered = 0;
     for(uint8_t book = 0; book < BOOK_COUNT; ++book) {
-        uint16_t mask = spellbook_mask(book);
+        uint32_t mask = spellbook_mask(book);
         if(mask & (covered | spell_bit(MAGIC_DART))) return false;
         uint8_t count = 0;
         for(uint8_t s = 0; s < SPELL_COUNT; ++s) if(mask & spell_bit(s)) ++count;
         if(count < 3 || count > 4) return false;
         covered |= mask;
     }
-    return covered == static_cast<uint16_t>(0xffffu & ~spell_bit(MAGIC_DART)) && !spellbook_mask(BOOK_COUNT);
+    return covered == (ALL_SPELLS & ~spell_bit(MAGIC_DART)) && !spellbook_mask(BOOK_COUNT);
 }
-static_assert(BOOK_COUNT == 4 && BOOK_COUNT < 8 && SPELL_COUNT == 16 && valid_spellbooks(),
+static_assert(BOOK_COUNT == 5 && BOOK_COUNT < 8 && SPELL_COUNT == 20 && valid_spellbooks(),
               "books must cover each learnable spell exactly once within the known mask");
 constexpr uint8_t MAX_BOW_RANGE = MAX_LIGHT_RADIUS;
 constexpr bool is_ammo(uint8_t type) { return type >= AMMO_FIRST && type <= AMMO_LAST; }
@@ -289,8 +302,43 @@ constexpr bool is_stackable(uint8_t type) { return type == FOOD || is_ammo(type)
 enum MonsterType : uint8_t {
     NO_MONSTER, BAT, SNAKE, RATTLESNAKE, ZOMBIE, GOBLIN,
     PHANTOM, ORC, TARANTULA, HOBGOBLIN, MIMIC, INCUBUS,
-    TROLL, GRIFFIN, DRAGON, ANGEL, LORD
+    TROLL, GRIFFIN, DRAGON, ANGEL, LORD, HOUND, SPIDER, WISP, GOLEM, MONSTER_TYPES
 };
+
+inline const char PROGMEM* monster_name(uint8_t type)
+{
+    switch(type) {
+    case BAT: return F("bat");
+    case SNAKE: return F("snake");
+    case RATTLESNAKE: return F("rattlesnake");
+    case ZOMBIE: return F("zombie");
+    case GOBLIN: return F("goblin");
+    case PHANTOM: return F("phantom");
+    case ORC: return F("orc");
+    case TARANTULA: return F("tarantula");
+    case HOBGOBLIN: return F("hobgoblin");
+    case MIMIC: return F("mimic");
+    case INCUBUS: return F("incubus");
+    case TROLL: return F("troll");
+    case GRIFFIN: return F("griffin");
+    case DRAGON: return F("dragon");
+    case ANGEL: return F("fallen angel");
+    case LORD: return F("Lord of Darkness");
+    case HOUND: return F("hound"); case SPIDER: return F("spider");
+    case WISP: return F("wisp"); case GOLEM: return F("golem");
+    default: return F("foe");
+    }
+}
+
+
+constexpr uint8_t tame_resistance(uint8_t type) {
+    switch(type) {
+    case BAT: case SNAKE: case RATTLESNAKE: case GOBLIN: case ORC:
+    case TARANTULA: case HOBGOBLIN: return 0;
+    case TROLL: case GRIFFIN: return 50;
+    default: return 100;
+    }
+}
 
 enum MonsterFlag : uint16_t {
     MON_MEAN = 1u << 0, MON_NOMOVE = 1u << 1,
@@ -356,9 +404,11 @@ static_assert(sizeof(Monster) == 8, "monster save layout changed");
 constexpr uint8_t MON_AGGRO = 1;
 constexpr uint8_t MON_BLINDED = 0x10;
 static_assert((MON_BLINDED & (MON_AGGRO | 0x0e | 0xc0)) == 0, "blindness overlaps state");
+constexpr uint8_t MON_RECALL_GRACE = 0x20; // Saved displacement grace, used only in friendly slots.
 constexpr uint8_t MON_AFRAID = 0x40;
 constexpr uint8_t MON_SUMMONED = 0x80; // Trap/scroll summons grant neither score nor XP.
 constexpr uint8_t MON_TRAP_SUMMONED = MON_SUMMONED; // Existing trap observers.
+static_assert((MON_RECALL_GRACE & (MON_AGGRO | MON_BLINDED | MON_AFRAID | MON_SUMMONED | 0x0e)) == 0, "recall grace overlaps monster state");
 enum MimicAppearance : uint8_t {
     MIMIC_SCROLL, MIMIC_POTION, MIMIC_AMULET, MIMIC_RING, MIMIC_WAND,
     MIMIC_APPEARANCE_COUNT
@@ -384,6 +434,9 @@ constexpr void set_mimic_appearance(Monster& monster, MimicAppearance appearance
 enum MonsterEffect : uint8_t {
     MON_CONFUSED, MON_SLOWED, MON_INVISIBLE, MON_WEAKENED
 };
+// Natural invisibility belongs only to phantoms. These frequent visibility
+// checks can avoid reading the entire ability word; the table is tested below.
+constexpr bool naturally_invisible(uint8_t type) { return type == PHANTOM; }
 struct Item { uint8_t type, info; };
 constexpr uint8_t ITEM_VALUE_MASK = 0x3f;
 constexpr uint8_t ITEM_CURSED = 0x40;
@@ -552,7 +605,7 @@ struct Game {
     uint8_t see_invisible; // Remaining temporary sight turns; saved across floors/resume.
     uint8_t haste, levitation, fire_resistance; // Zero means inactive; append saved timers.
     uint8_t mana;
-    uint16_t known_spells;
+    uint32_t known_spells;
 };
 
 enum RunResult : uint8_t {
@@ -574,13 +627,16 @@ struct Session {
     uint8_t study_slot = NONE, study_spell = NONE, study_progress = 0, study_floor = 0;
     Position study_origin = {};
     bool study_message = false;
+    Position pet_trail = {NONE, NONE};
+    // Low nibble: failed follow turns; high nibble: displacement grace turns.
+    uint8_t pet_leash[PETS] = {};
 };
 
 extern Game game;
 extern Session session;
 
 #if defined(__AVM__)
-static_assert(sizeof(Game) == 821 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
+static_assert(sizeof(Game) == 855 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "Game saved layout changed");
 #endif
 static_assert(sizeof(Monster) == 8, "monster layout changed");
 static_assert(sizeof(GroundItem) == 4, "ground item layout changed");
@@ -592,29 +648,29 @@ static_assert(offsetof(GroundItem, pos) == 0 &&
               offsetof(GroundItem, item) == 2, "ground save offsets changed");
 static_assert(offsetof(Game, doors) == 512 &&
               offsetof(Game, monsters) == 534 &&
-              offsetof(Game, ground) == 630 &&
-              offsetof(Game, inventory) == 694 + 4 * (GROUND_ITEMS - 16) &&
-              offsetof(Game, player) == 738 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
-              offsetof(Game, up) == 740 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) && offsetof(Game, down) == 742 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
-              offsetof(Game, hp) == 744 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
-              offsetof(Game, strength) == 748 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
-              offsetof(Game, magic_resistance) == 751 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
-              offsetof(Game, identified_items) == 767 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16),
+              offsetof(Game, ground) == 662 &&
+              offsetof(Game, inventory) == 726 + 4 * (GROUND_ITEMS - 16) &&
+              offsetof(Game, player) == 770 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, up) == 772 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) && offsetof(Game, down) == 774 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, hp) == 776 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, strength) == 780 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, magic_resistance) == 783 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16) &&
+              offsetof(Game, identified_items) == 799 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16),
               "game save offsets changed");
-static_assert(offsetof(Game, features) == 776 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features follow expanded knowledge");
+static_assert(offsetof(Game, features) == 808 + 4 * (GROUND_ITEMS - 16) + 2 * (INVENTORY - 16), "features follow expanded knowledge");
 static_assert(offsetof(Game, haste) == offsetof(Game, see_invisible) + 1 &&
               offsetof(Game, fire_resistance) == offsetof(Game, haste) + 2,
               "new timers must append to saved layout");
 #if defined(__AVM__)
 static_assert(offsetof(Game, mana) == offsetof(Game, fire_resistance) + 1 &&
               offsetof(Game, known_spells) == offsetof(Game, mana) + 1,
-              "magic must append exactly three saved bytes");
+              "magic must append exactly five saved bytes");
 #endif
-static_assert(POTION_COUNT == 19 && SCROLL_COUNT == 15 &&
-              RING_COUNT == 11 && AMULET_COUNT == 12 && WAND_COUNT == 8,
+static_assert(POTION_COUNT == 20 && SCROLL_COUNT == 16 &&
+              RING_COUNT == 11 && AMULET_COUNT == 12 && WAND_COUNT == 9,
               "item table counts changed");
 static_assert(sizeof(Game::identified_items) == 9 &&
-              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 65 &&
+              POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT == 68 &&
               POTION_COUNT + SCROLL_COUNT + RING_COUNT + AMULET_COUNT + WAND_COUNT <=
                   sizeof(Game::identified_items) * 8, "identification bitset capacity exceeded");
 

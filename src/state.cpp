@@ -113,12 +113,14 @@ static bool can_detect_monster(const Monster& monster, uint8_t index)
     if(!monster.type || game.blindness)
         return false;
     // A dose supplies reliable sight even while a cursed ring flickers.
-    if(!game.see_invisible && ring_bonus(RING_SEE_INVISIBLE) < 0 &&
+    if(game.see_invisible) return true;
+    int8_t sight = ring_bonus(RING_SEE_INVISIBLE);
+    if(sight < 0 &&
        ((game.turns + index) & 1))
         return false;
-    return (!(monster_flags(monster.type) & MON_NATURAL_INVIS) &&
+    return (!naturally_invisible(monster.type) &&
             !monster_effect(monster, MON_INVISIBLE)) ||
-           ring_bonus(RING_SEE_INVISIBLE) > 0 || game.see_invisible != 0;
+           sight > 0;
 }
 
 bool player_can_see_monster(uint8_t index)
@@ -277,18 +279,10 @@ void identify_item(uint8_t slot)
     identify_type(item.type);
 }
 
-void gain_xp(uint8_t amount)
-{
-    int8_t wisdom = amulet_bonus(AMULET_WISDOM);
-    if(wisdom > 0)
-        amount = static_cast<uint8_t>(amount + (amount + 1) / 2);
-    else if(wisdom < 0)
-        amount = static_cast<uint8_t>((amount + 1) / 2);
-    uint16_t total = static_cast<uint16_t>(game.xp) + amount;
-    while(game.level < 50) {
-        uint16_t threshold = static_cast<uint16_t>(4 + game.level * 3);
-        if(total < threshold)
-            break;
+// Numeric level-up work unwinds before status pagination can render.
+__attribute__((noinline)) static bool advance_level(uint16_t& total) {
+    uint16_t threshold = static_cast<uint16_t>(4 + game.level * 3);
+    if(game.level >= 50 || total < threshold) return false;
         total -= threshold;
         ++game.level;
         game.max_hp = static_cast<uint8_t>(game.max_hp + 3);
@@ -298,8 +292,19 @@ void gain_xp(uint8_t amount)
         game.hp = recovered > player_max_hp() ? player_max_hp() : static_cast<uint8_t>(recovered);
         if(game.level % 4 == 0 && game.magic_resistance < 127)
             ++game.magic_resistance;
-        status(F("You gained a level!"));
-    }
+    return true;
+}
+
+void gain_xp(uint8_t amount)
+{
+    int8_t wisdom = amulet_bonus(AMULET_WISDOM);
+    if(wisdom > 0)
+        amount = static_cast<uint8_t>(amount + (amount + 1) / 2);
+    else if(wisdom < 0)
+        amount = static_cast<uint8_t>((amount + 1) / 2);
+    SIM_EVENT(sim::EventKind::ExperienceAwarded, NONE, 0, amount);
+    uint16_t total = static_cast<uint16_t>(game.xp) + amount;
+    while(advance_level(total)) status(F("You gained a level!"));
     game.xp = static_cast<uint8_t>(total);
 }
 

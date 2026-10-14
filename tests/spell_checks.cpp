@@ -173,7 +173,7 @@ void casting() {
 void books_and_generation() {
     arena(); game.known_spells=1;
     require(valid_spellbooks() && !spellbook_mask(255) && spellbook_for_spell(MAGIC_DART)==NONE,"book coverage/invalid IDs");
-    const char* names[]={"Book of Control","Book of Displacement","Book of Survival","Book of Destruction"};
+    const char* names[]={"Book of Control","Book of Displacement","Book of Survival","Book of Destruction","Book of Companions"};
     for(uint8_t b=0;b<BOOK_COUNT;++b) require(!std::strcmp(spellbook_name(b),names[b]),"public book names");
     for(uint8_t s=1;s<SPELL_COUNT;++s) {
         unsigned count=0; for(uint8_t b=0;b<BOOK_COUNT;++b) count+=bool(spellbook_mask(b)&spell_bit(s));
@@ -183,7 +183,7 @@ void books_and_generation() {
     const uint8_t floors[]={0,3,7,11};
     const unsigned weights[4][BOOK_COUNT]={{50,35,12,3},{35,35,22,8},{20,30,30,20},{10,20,30,40}};
     for(unsigned seed=1;seed<=65535;++seed) for(uint8_t band=0;band<4;++band) {
-        arena(); game.known_spells=1; game.run_seed=uint16_t(seed); game.floor=floors[band];
+        arena(); game.known_spells=1|spellbook_mask(BOOK_COMPANIONS); game.run_seed=uint16_t(seed); game.floor=floors[band];
         game.ground[0]={{1,1},make_equipment(LONG_SWORD,0)};
         uint16_t rng=game.random_state; generate_spellbooks();
         require(game.random_state==rng && game.ground[0].pos==Position{1,1},"book generation changed RNG/location");
@@ -194,7 +194,7 @@ void books_and_generation() {
         for(uint8_t b=0;b<BOOK_COUNT;++b) {
             double expected=attempts[band]*weights[band][b]/100.0;
             double difference=counts[band][b]-expected;
-            require(difference*difference<36*expected,"book depth frequencies outside six sigma");
+            require(expected ? difference*difference<36*expected : counts[band][b]==0,"book depth frequencies outside six sigma");
         }
     }
     for(unsigned seed=1;seed<=2048;++seed) {

@@ -7,7 +7,7 @@ import pandas as pd
 from balance import load_directory, floor_survival, write_json
 
 SPELLS = ("Magic Dart", "Frostbind", "Repulsion", "Confound", "Sense Traps", "Blink",
-          "Shockwave", "Piercing Bolt", "Banish", "Exchange", "Cleanse", "Fireburst", "Phase Step", "Chain Lightning", "Slumber", "Blood Bolt")
+          "Shockwave", "Piercing Bolt", "Banish", "Exchange", "Cleanse", "Fireburst", "Phase Step", "Chain Lightning", "Slumber", "Blood Bolt", "Summon Hound", "Summon Spider", "Summon Wisp", "Summon Golem")
 COUNTERS = ("generated", "collected", "studied", "study_turns", "learned", "interrupted",
             "message_interruptions", "hunger_interruptions", "canceled", "casts", "mana_spent",
             "damage", "kills", "displaced", "displacement_tiles", "multi_tile_pushes", "mana_regenerated",
@@ -16,6 +16,7 @@ COUNTERS = ("generated", "collected", "studied", "study_turns", "learned", "inte
 
 def report(directory, output):
     manifest, tables = load_directory(directory, visits=False)
+    names = SPELLS if manifest["telemetry_schema_version"] >= 11 else SPELLS[:16]
     spells = pd.read_csv(directory / "spells.csv", keep_default_na=False)
     effect_fields = ("status_targets", "status_turns", "traps_revealed", "statuses_cleared")
     effect_counters_available = all(c in spells for c in effect_fields)
@@ -23,9 +24,9 @@ def report(directory, output):
         if column not in spells:
             spells[column] = 0  # Historical schemas did not record these effects.
     runs = tables["runs"]
-    if (len(spells) != len(runs) * len(SPELLS) or
+    if (len(spells) != len(runs) * len(names) or
         spells.duplicated(["effective_seed", "spell"]).any() or
-        set(spells.spell) != set(range(len(SPELLS))) or
+        set(spells.spell) != set(range(len(names))) or
         set(spells.effective_seed) != set(runs.effective_seed) or
         set(spells.agent) != {manifest["agent"]} or
         (spells[list(COUNTERS)] < 0).any().any()):
@@ -45,7 +46,7 @@ def report(directory, output):
         magic = pd.read_csv(magic_path, keep_default_na=False)
         if (magic.duplicated(["effective_seed", "visit", "spell"]).any() or
             set(magic.effective_seed) != set(runs.effective_seed) or
-            not magic.groupby(["effective_seed", "visit"]).size().eq(len(SPELLS)).all() or
+            not magic.groupby(["effective_seed", "visit"]).size().eq(len(names)).all() or
             not magic.groupby("effective_seed").learned.sum().reindex(learned.index).eq(learned).all()):
             raise ValueError("incomplete or inconsistent per-visit magic telemetry")
         completed = magic.groupby("effective_seed").books_completed.sum().reindex(learned.index, fill_value=0)
@@ -77,7 +78,7 @@ def report(directory, output):
             median_bounds=[float(lower.median()), float(upper.median())] if len(lower) else [],
             quartile_bounds=[[float(x) for x in v.quantile([.25, .75])] for v in (lower, upper)] if len(lower) else [])
     totals = spells.groupby("spell")[list(COUNTERS)].sum()
-    totals.insert(0, "name", SPELLS)
+    totals.insert(0, "name", names)
     raw_items = tables["items"]
     lightning = raw_items[raw_items.item == "WAND_LIGHTNING"]
     lightning_diagnostics = {name: int(lightning[name].sum()) for name in
@@ -125,7 +126,7 @@ def report(directory, output):
     if magic_path.is_file():
         fields = [c for c in COUNTERS if c in magic and c != "mana_regenerated"]
         by_floor = magic.groupby(["floor", "direction", "spell"])[fields].sum().reset_index()
-        by_floor.insert(3, "name", by_floor.spell.map(dict(enumerate(SPELLS))))
+        by_floor.insert(3, "name", by_floor.spell.map(dict(enumerate(names))))
         by_floor.to_csv(output / "spells_by_floor.csv", index=False)
         visits = magic[magic.spell.eq(0)].copy()
         for endpoint in ("entry", "exit"):

@@ -6,6 +6,7 @@ enable_testing()
 
 add_executable(game_native
     game_native.cpp
+    companion_checks.cpp
     lighting_checks.cpp
     sight_checks.cpp
     recovery_checks.cpp
@@ -26,6 +27,7 @@ add_executable(game_native
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
+    ../src/companions.cpp
     ../src/spells.cpp
     ../src/items.cpp
     ../src/world.cpp
@@ -37,6 +39,7 @@ target_compile_features(game_native PRIVATE cxx_std_17)
 target_include_directories(game_native PRIVATE ../src)
 
 add_test(NAME game_native COMMAND game_native)
+add_test(NAME companions COMMAND game_native --companions)
 add_test(NAME temporary_sight COMMAND game_native --sight)
 add_test(NAME spells COMMAND game_native --spells)
 add_test(NAME player_recovery COMMAND game_native --recovery)
@@ -63,6 +66,7 @@ add_executable(ui_native
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
+    ../src/companions.cpp
     ../src/spells.cpp
     ../src/items.cpp
     ../src/world.cpp
@@ -81,6 +85,7 @@ add_executable(render_native
     ../src/state.cpp
     ../src/combat.cpp
     ../src/combat_math.cpp
+    ../src/companions.cpp
     ../src/spells.cpp
     ../src/items.cpp
     ../src/world.cpp

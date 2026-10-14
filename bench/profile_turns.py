@@ -28,8 +28,8 @@ INVENTORY_RANGES = (("LONG_SWORD", "HAMMER_OF_RUIN", "WEAPONS"),
                     ("RING_SEE_INVISIBLE", "RING_ILLUMINATION", "RINGS"),
                     ("AMULET_SPEED", "AMULET_MEDITATION", "AMULETS"),
                     ("WAND_FORCE", "WAND_LAST", "WANDS"),
-                    ("POTION_HEALING", "POTION_MANA_RESTORATION", "POTIONS"),
-                    ("SCROLL_IDENTIFY", "SCROLL_DETECT_OBJECTS", "SCROLLS"),
+                    ("POTION_HEALING", "POTION_LAST", "POTIONS"),
+                    ("SCROLL_IDENTIFY", "SCROLL_LAST", "SCROLLS"),
                     ("SPELLBOOK", "SPELLBOOK", "SPELLBOOKS"))
 
 
@@ -122,6 +122,14 @@ def state_fields(case):
         fields["study_slot"]="rogue::session.study_slot"
         fields["monster_x"]="rogue::game.monsters[0].pos.x"
         fields["feature_id"]="rogue::game.features[0].id"
+    if case.name.startswith("pets_"):
+        for i in range(12,16):
+            for field in ("type","hp"):
+                fields[f"pet_{field}_{i}"]=f"rogue::game.monsters[{i}].{field}"
+            for axis in ("x","y"):
+                fields[f"pet_{axis}_{i}"]=f"rogue::game.monsters[{i}].pos.{axis}"
+        fields["mana"]="rogue::game.mana"
+        fields["study_slot"]="rogue::session.study_slot"
     if case.name == "scroll_traps":
         fields["feature_id"] = "rogue::game.features[0].id"
     if case.name.startswith("visibility_trap_"):
@@ -136,7 +144,7 @@ def state_fields(case):
     if case.name == "pickup_food":
         fields["food"] = "rogue::game.inventory[0].type == rogue::ItemType::FOOD"
     if case.name == "equip_cursed_amulet":
-        index = "(POTION_MANA_RESTORATION - POTION_HEALING + 1 + SCROLL_DETECT_OBJECTS - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
+        index = "(POTION_LAST - POTION_HEALING + 1 + SCROLL_LAST - SCROLL_IDENTIFY + 1 + RING_ILLUMINATION - RING_SEE_INVISIBLE + 1)"
         index = re.sub(r'\b[A-Z][A-Z_0-9]+\b', lambda m: "rogue::ItemType::" + m[0], index)
         fields["amulet_known"] = f"(rogue::game.identified_items[{index} >> 3] & (1u << ({index} & 7))) != 0"
         fields["cursed"] = "(rogue::game.inventory[0].info & rogue::ITEM_CURSED) != 0"
@@ -266,6 +274,16 @@ def validate_outcome(case, before, after, explored):
     require(after["turns"] == expected_turns, "expected no game turn while browsing" if case.setup in ("browse", "projectile_browse")
             else "expected one completed game turn")
     require(after["valid"] and after["hp"], "turn unexpectedly ended the run")
+    if case.name=="pets_summon":
+        require(after["pet_type_14"]!=0 and after["mana"]==before["mana"]-10,"pet summon benchmark did not acquire/pay")
+    if case.name=="pets_swap":
+        require(after["x"]==before["x"]+1 and after["pet_hp_12"]<before["pet_hp_12"],"pet swap benchmark missed trap")
+    if case.name=="pets_rest":
+        require(all(after[f"pet_hp_{i}"]==before[f"pet_hp_{i}"]+1 for i in range(12,16)),"pet recovery benchmark did not heal all four companions")
+    if case.name=="pets_recall":
+        require(all(abs(after[f"pet_x_{i}"]-after["x"])+abs(after[f"pet_y_{i}"]-after["y"])<=3 for i in range(12,16)),"recall benchmark did not recall all four")
+    if case.name=="pets_friendly_fire":
+        require(after["pet_hp_12"]<before["pet_hp_12"],"friendly-fire benchmark passed through pet")
     if case.name.startswith("magic_"):
         require(after["mana"]<before["mana"],"spell did not spend mana")
     if case.name=="magic_phase": require(after["x"]==before["x"]+3 and after["hp"]<before["hp"],"Phase Step did not land on trap")

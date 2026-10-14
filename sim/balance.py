@@ -22,7 +22,7 @@ from scipy import linalg, special, stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-SCHEMA = 10
+SCHEMA = 11
 STREAMS = ("runs", "floors", "items", "monsters", "visit_items", "visit_monsters", "interventions", "ranged", "features")
 NOTICE = ("Adjusted observational association is not proof of causation. "
           "Controlled A/B interventions are preferred for causal balance conclusions.")
@@ -58,10 +58,10 @@ def read_manifest(directory):
                 "seed_selection", "experiment", "variant", "options")
     if any(k not in m for k in required) or m["schema_version"] != 1:
         raise ValueError(f"unsupported/incomplete manifest: {path}")
-    if m["telemetry_schema_version"] not in (6, 7, 8, 9, SCHEMA):
+    if m["telemetry_schema_version"] not in (6, 7, 8, 9, 10, SCHEMA):
         raise ValueError(f"incompatible telemetry schema: {path}")
     for name, digest in m.get("output_csv_sha256", {}).items():
-        if name not in {s + ".csv" for s in (*STREAMS, "exploration", "spells", "magic")} or sha256(Path(directory) / name) != digest:
+        if name not in {s + ".csv" for s in (*STREAMS, "exploration", "spells", "magic", "pets", "encounters", "milestones", "entry_state")} or sha256(Path(directory) / name) != digest:
             raise ValueError(f"output hash mismatch: {name}")
     return m
 
@@ -78,6 +78,11 @@ def seal_manifest(directory, executable=None, spec=None):
     m["output_csv_sha256"] = {s + ".csv": sha256(directory / (s + ".csv")) for s in STREAMS}
     if (directory / "exploration.csv").is_file():
         m["output_csv_sha256"]["exploration.csv"] = sha256(directory / "exploration.csv")
+    for name in ("encounters", "milestones", "entry_state"):
+        if (directory / (name + ".csv")).is_file():
+            m["output_csv_sha256"][name + ".csv"] = sha256(directory / (name + ".csv"))
+    if (directory / "pets.csv").is_file():
+        m["output_csv_sha256"]["pets.csv"] = sha256(directory / "pets.csv")
     if (directory / "magic.csv").is_file():
         m["output_csv_sha256"]["magic.csv"] = sha256(directory / "magic.csv")
     if (directory / "spells.csv").is_file():

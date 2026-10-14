@@ -1,21 +1,15 @@
+#include "status.hpp"
+#include "companions.hpp"
 #include "spells.hpp"
 #include "app_state.hpp"
-#include "spells.hpp"
 #include "game.hpp"
-#include "spells.hpp"
 #include "inventory_view.hpp"
-#include "spells.hpp"
 #include "render.hpp"
-#include "spells.hpp"
 #include "ui.hpp"
 
-#include "spells.hpp"
 #include <cstdio>
-#include "spells.hpp"
 #include <cstdlib>
-#include "spells.hpp"
 #include <cstring>
-#include "spells.hpp"
 #include <initializer_list>
 
 uint8_t avm_test_buttons[16] = {};
@@ -32,6 +26,7 @@ static void require(bool condition, const char* message);
 
 namespace rogue {
 Game game = {};
+bool status_has_message() { return false; }
 const char* status_word(const char*) { return nullptr; }
 void status_words(const char*) { study_status_output();}
 void status_suffix(char) {}
@@ -40,6 +35,7 @@ void status(const char*) { study_status_output();}
 void status(const char*, char) { study_status_output();}
 void status(Item) { study_status_output();}
 void status(Item, char) { study_status_output();}
+void status_visible_monster(const Monster& m) { status(m); }
 void status(const Monster&) { study_status_output();}
 void status(const Monster&, char) { study_status_output();}
 void status_number(uint8_t) { study_status_output();}
@@ -85,7 +81,11 @@ static void require(bool condition, const char* message)
 static rogue::InputAction dispatch_input(uint8_t buttons)
 {
     using namespace rogue;
-    InputAction input = handle_input(buttons);
+    InputAction input = resolve_move_input(handle_input(buttons));
+    if(input == INPUT_DROP || input == INPUT_DISCARD) drop_inventory(ui.selection, input == INPUT_DISCARD);
+    if(input == INPUT_WAIT_SEARCH) wait_search();
+    if(input == INPUT_WAIT) end_turn();
+    if(input == INPUT_DISMISS_PET) dismiss_pet(ui.use_target);
     if(input == INPUT_USE_INVENTORY) use_inventory(ui.selection, ui.use_target);
     if(session.object_detection) { session.object_detection=false; ui.mode=OBJECT_MAP; }
     if(input >= INPUT_PROJECTILE_UP && input <= INPUT_PROJECTILE_LEFT) {
@@ -125,7 +125,7 @@ int main()
             cancel_study(false);
         }
     }
-    start_new(71); game.inventory[0]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=0xffff; ui={};
+    start_new(71); game.inventory[0]={SPELLBOOK,BOOK_CONTROL}; game.known_spells=ALL_SPELLS; ui={};
     require(choose_book_spell(0)==NONE && !studying(),"completed book opened empty learning menu");
     // Inventory modals return a command; consumption and effects run afterwards.
     for(uint8_t type : {uint8_t(SCROLL_DETECT_OBJECTS), uint8_t(POTION_HASTE)}) {
@@ -329,7 +329,7 @@ int main()
             game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
             game.inventory[0]=make_equipment(LONG_SWORD,0);
             game.features[0]={{11,10},type};
-            require(handle_input(AVM_BUTTON_R)==INPUT_MOVED && session.pending_move && !game.turns,
+            require(resolve_move_input(handle_input(AVM_BUTTON_R))==INPUT_MOVED && session.pending_move && !game.turns,
                 "feature input resolved before modal frame unwound");
             const uint8_t buttons[]={0,uint8_t(response==0 ? AVM_BUTTON_B : AVM_BUTTON_A),0,uint8_t(response==1 ? AVM_BUTTON_B : AVM_BUTTON_A)};
             std::memcpy(avm_test_buttons,buttons,sizeof buttons); avm_test_button_count=sizeof buttons; avm_test_button_index=0;
@@ -348,7 +348,7 @@ int main()
         game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
         game.features[0]={{11,10},FEATURE_TELEPORT_TRAP|MAP_FEATURE_HIDDEN};
         game.ground[0]={{11,10},{YENDOR_AMULET,1}};
-        require(handle_input(AVM_BUTTON_R)==INPUT_MOVED && session.pending_pickups && !game.turns,
+        require(resolve_move_input(handle_input(AVM_BUTTON_R))==INPUT_MOVED && session.pending_pickups && !game.turns,
             "UI item/feature overlap activated before pickup");
         const uint8_t buttons[]={0,uint8_t(accept ? AVM_BUTTON_A : AVM_BUTTON_B)};
         std::memcpy(avm_test_buttons,buttons,sizeof buttons); avm_test_button_count=sizeof buttons; avm_test_button_index=0;
@@ -366,7 +366,7 @@ int main()
         game.player={10,10}; game.up={2,2}; game.down={40,20};
         game.weapon_slot=game.armor_slot=game.amulet_slot=game.ring_slots[0]=game.ring_slots[1]=NONE;
         game.features[0]={{11,10},FEATURE_STATUE}; game.ground[0]={{11,10},{FOOD,1}};
-        require(handle_input(AVM_BUTTON_R)==INPUT_MOVED,"gift overlap entry");
+        require(resolve_move_input(handle_input(AVM_BUTTON_R))==INPUT_MOVED,"gift overlap entry");
         Position pickup_position=game.player;
         const uint8_t buttons[]={0,AVM_BUTTON_A};
         std::memcpy(avm_test_buttons,buttons,sizeof buttons); avm_test_button_count=sizeof buttons; avm_test_button_index=0;
@@ -409,12 +409,28 @@ int main()
     ui.next_repeat_ms=0;
     require(handle_input(AVM_BUTTON_R)==INPUT_STUDY_TURN,"held movement repeatedly paused study");
     handle_input(0); handle_input(AVM_BUTTON_B); require(!studying(),"B failed to cancel between study turns");
-    game.known_spells=0xffff; game.mana=16; session.study_slot=NONE;
+    game.known_spells=ALL_SPELLS; game.mana=16; session.study_slot=NONE;
     ui={}; ui.mode=SPELL_MENU; ui.selection=MAGIC_DART;
     for(uint8_t s=1;s<SPELL_COUNT;++s) { handle_input(AVM_BUTTON_D); handle_input(0); require(ui.selection==s,"16-spell menu skipped/wrapped a spell"); }
-    require(ui.selection==BLOOD_BOLT,"spell menu cannot reach bit 15");
-    unchanged=game; handle_input(AVM_BUTTON_A); handle_input(0); handle_input(AVM_BUTTON_B);
+    require(ui.selection==SUMMON_GOLEM,"spell menu cannot reach bit 19");
+    ui.selection=BLOOD_BOLT; unchanged=game; handle_input(AVM_BUTTON_A); handle_input(0); handle_input(AVM_BUTTON_B);
     require(ui.mode==PLAY && !std::memcmp(&unchanged,&game,sizeof game),"Blood Bolt cancellation paid HP/MP");
+    start_new(71); std::memset(game.monsters,0,sizeof game.monsters);
+    ui={}; ui.mode=MENU; ui.selection=8; Game pet_ui_before=game;
+    require(handle_input(AVM_BUTTON_A)==INPUT_NONE && ui.mode==COMPANIONS && ui.selection==NONE,"empty companions UI");
+    handle_input(0); handle_input(AVM_BUTTON_B);
+    require(ui.mode==PLAY && !std::memcmp(&pet_ui_before,&game,sizeof game),"empty companions cancellation costs turn");
+    for(uint8_t i=12;i<16;++i) game.monsters[i]={{uint8_t(10+i),15},uint8_t(HOUND+i-12),14,255,{0,0},0};
+    ui={}; ui.mode=MENU; ui.selection=8; handle_input(AVM_BUTTON_A);
+    require(ui.mode==COMPANIONS && ui.selection==12,"companions first entry");
+    handle_input(0); handle_input(AVM_BUTTON_D); require(ui.selection==13,"companions selection");
+    handle_input(0); handle_input(AVM_BUTTON_A); pet_ui_before=game;
+    require(ui.mode==DISMISS_CONFIRM,"dismissal missing confirmation");
+    handle_input(0); handle_input(AVM_BUTTON_B);
+    require(ui.mode==COMPANIONS && !std::memcmp(&pet_ui_before,&game,sizeof game),"dismissal B removes pet");
+    handle_input(0); handle_input(AVM_BUTTON_A); handle_input(0);
+    require(handle_input(AVM_BUTTON_A)==INPUT_DISMISS_PET && !std::memcmp(&pet_ui_before,&game,sizeof game),"dismissal resolves inside UI frame");
+    require(dismiss_pet(ui.use_target) && !game.monsters[13].type && game.turns==uint8_t(pet_ui_before.turns+1),"confirmed dismissal turn/free slot");
     std::puts("equipment, scroll, wand, inventory, spell and feature UI flow passed");
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "spells.hpp"
+#include "companions.hpp"
 #include "game.hpp"
 #include "features.hpp"
 #include "game_internal.hpp"
@@ -416,6 +417,7 @@ __attribute__((noinline)) void apply_scroll_effect(uint8_t type, uint8_t target_
         }
         return;
     }
+    if(type == SCROLL_TAMING) { tame_monster(target_slot, TamingMethod::Scroll); return; }
     if(type == SCROLL_TELEPORT) {
         teleport_player();
         return;
@@ -585,7 +587,7 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
     case SCROLL_TELEPORT: case SCROLL_MAPPING: case SCROLL_FEAR:
     case SCROLL_TORMENT: case SCROLL_MASS_CONFUSE: case SCROLL_MASS_POISON:
     case SCROLL_HOLD_MONSTER: case SCROLL_DETECT_TRAPS: case SCROLL_SUMMONING:
-    case SCROLL_MASS_TELEPORT: case SCROLL_FIRE: case SCROLL_DETECT_OBJECTS: {
+    case SCROLL_MASS_TELEPORT: case SCROLL_FIRE: case SCROLL_DETECT_OBJECTS: case SCROLL_TAMING: {
         uint8_t type = item.type;
         bool known = item_type_identified(type);
         status(F("You read"));
@@ -614,7 +616,7 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
     case POTION_STRENGTH: case POTION_DEXTERITY: case POTION_PARALYSIS: case POTION_SLOWING:
     case POTION_EXPERIENCE: case POTION_INVISIBILITY: case POTION_BLINDNESS:
     case POTION_SEE_INVISIBLE: case POTION_EXTRA_HEALING: case POTION_RESTORE_VITALITY:
-    case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: case POTION_FIRE: case POTION_MANA_RESTORATION: {
+    case POTION_HASTE: case POTION_LEVITATION: case POTION_FIRE_RESISTANCE: case POTION_FIRE: case POTION_MANA_RESTORATION: case POTION_FRIENDSHIP: {
         uint8_t type = item.type;
         bool known = potion_identified(type);
         status(F("You drink"));
@@ -628,6 +630,7 @@ __attribute__((noinline)) static bool apply_inventory(uint8_t slot)
             status(Item{type, 1}, '.');
         }
         switch(type) {
+        case POTION_FRIENDSHIP: status(F("You feel friendly, but nothing answers.")); break;
         case POTION_MANA_RESTORATION: {
             uint8_t maximum = player_max_mana();
             uint16_t restored = static_cast<uint16_t>(game.mana) + mana_restoration_amount(maximum);
@@ -764,6 +767,10 @@ __attribute__((noinline)) bool use_inventory(uint8_t slot, uint8_t target_slot)
     if(studying()) return false;
     if(slot < INVENTORY && game.inventory[slot].type == SPELLBOOK) return begin_study(slot, target_slot);
     uint8_t used_type = slot < INVENTORY ? game.inventory[slot].type : NO_ITEM;
+    if(used_type == SCROLL_TAMING && (free_pet_slot() == NONE || !taming_target(target_slot))) {
+        status(free_pet_slot() == NONE ? F("You already have four companions.") : F("No visible target in range."));
+        return false;
+    }
     if(!apply_inventory(slot))
         return false;
     if(is_scroll(used_type)) {
@@ -914,6 +921,7 @@ __attribute__((noinline)) static bool relocate_monster(uint8_t index)
     }
     if(destination.x == NONE) return false;
     target.pos = destination;
+    delay_pet_recall(index);
     return true;
 }
 // Placement work unwinds before wand feedback; traps use relocation alone.
@@ -977,15 +985,18 @@ static void dig_ray(int8_t dx, int8_t dy, bool powerful)
 static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
                              bool powerful)
 {
-    if(powerful && (type == WAND_TELEPORT || type == WAND_ICE ||
+    if(type == WAND_DOMINATION && free_pet_slot() == NONE) return;
+    if(powerful && (type == WAND_DOMINATION || type == WAND_TELEPORT || type == WAND_ICE ||
                     type == WAND_POLYMORPH)) {
         bool found = false;
         for(uint8_t i = 0; i < MONSTERS; ++i) {
+            if(type == WAND_DOMINATION && free_pet_slot() == NONE) break;
             Monster& target = game.monsters[i];
-            if(!target.type || !in_wand_area(target.pos, end)) continue;
+            if(!target.type || !in_wand_area(target.pos, end) || (type == WAND_DOMINATION && friendly_slot(i))) continue;
             found = true;
             target.state |= MON_AGGRO;
             SIM_EVENT(sim::EventKind::PlayerAttack, i, target.type);
+            if(type == WAND_DOMINATION) { tame_monster(i, TamingMethod::Wand); continue; }
             if(type == WAND_TELEPORT) teleport_monster(i);
             else if(type == WAND_POLYMORPH) polymorph_monster(i);
             else {
@@ -1003,6 +1014,7 @@ static void resolve_wand_ray(uint8_t type, Position end, uint8_t hit,
     target.state |= MON_AGGRO;
     SIM_EVENT(sim::EventKind::PlayerAttack, hit, target.type);
     switch(type) {
+    case WAND_DOMINATION: tame_monster(hit, TamingMethod::Wand); break;
     case WAND_TELEPORT:
         teleport_monster(hit);
         break;
@@ -1029,6 +1041,10 @@ static const int8_t PROGMEM wand_directions[] = {0, -1, 1, 0, 0, 1, -1, 0};
 static void cursed_wand_effect(uint8_t type)
 {
     switch(type) {
+    case WAND_DOMINATION:
+        if(amulet_bonus(AMULET_CLARITY)<=0) { game.confused=4; status(F("The wand clouds your thoughts!")); }
+        else status(F("You resist the whisper."));
+        break;
     case WAND_FORCE: {
         uint8_t direction = roll(4);
         force_player(wand_directions[direction * 2], wand_directions[direction * 2 + 1]);
@@ -1154,6 +1170,7 @@ __attribute__((noinline)) static bool prepare_wand(uint8_t slot, int8_t dx, int8
        ((dx == 0 && dy == 0) || (dx != 0 && dy != 0) ||
         dx < -1 || dx > 1 || dy < -1 || dy > 1))
         return false;
+    if(item.type == WAND_DOMINATION && free_pet_slot() == NONE) { status(F("You already have four companions.")); return false; }
     if(!wand_charges(item)) {
         status(F("The wand has no charges."));
         return false;

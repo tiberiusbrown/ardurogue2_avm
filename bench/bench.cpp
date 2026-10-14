@@ -1,5 +1,6 @@
 #include "bench.hpp"
 #include "game.hpp"
+#include "companions.hpp"
 #include "spells.hpp"
 #include "game_internal.hpp"
 #include "inventory_view.hpp"
@@ -144,7 +145,18 @@ using namespace rogue;
     X(magic_blood, "Blood Bolt health sacrifice and damage", spell_ray, RIGHT, room, NO_ITEM, 0, 0) \
     X(wand_lightning, "Normal lightning wand with two targets", wand, RIGHT, room, WAND_LIGHTNING, 2, 0) \
     X(wand_lightning_powerful, "Powerful lightning wand with three targets", wand, RIGHT, room, WAND_LIGHTNING, 2, 0) \
-    X(wand_lightning_overpowered, "Overpowered spreading lightning in dense group", use, A, room, WAND_LIGHTNING, 2, 0)
+    X(wand_lightning_overpowered, "Overpowered spreading lightning in dense group", use, A, room, WAND_LIGHTNING, 2, 0) \
+    X(pets_dense, "Twelve hostiles and four fighting companions", wait, A, dense, NO_ITEM, 0, 0) \
+    X(pets_swap, "Player swaps with a companion onto a trap", play, RIGHT, dense, NO_ITEM, 0, 0) \
+    X(pets_recall, "Four stranded companions recall during a dense turn", wait, A, dense, NO_ITEM, 0, 0) \
+    X(pets_summon, "Summon Wisp with twelve hostiles and three pets", spell, A, dense, NO_ITEM, 0, 0) \
+    X(pets_study, "Study while twelve hostiles and four pets act", study, A, dense, NO_ITEM, 0, 0) \
+    X(pets_domination, "Powerful spreading domination with full population", use, A, dense, WAND_DOMINATION, 2, 0) \
+    X(pets_friendly_fire, "Piercing Bolt intercepts pet before hostile", spell_ray, RIGHT, dense, NO_ITEM, 0, 0) \
+    X(pets_magic, "Wisp casts beside three pets and twelve hostiles", wait, A, dense, NO_ITEM, 0, 0) \
+    X(pets_traps, "Twelve traps with twelve hostiles and four pets", wait, A, dense, NO_ITEM, 0, 0) \
+    X(pets_recovery, "Deny recovery to four fighting pets during clock wrap", wait, A, dense, NO_ITEM, 0, 0) \
+    X(pets_rest, "Four pets heal with twelve living distant hostiles", wait, A, dense, NO_ITEM, 0, 0)
 
 
 namespace {
@@ -294,11 +306,56 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
     if(scenario >= Case::trap_spike && scenario <= Case::trap_rust)
         game.features[0] = {{33,16}, static_cast<uint8_t>(FEATURE_SPIKE_TRAP + 2 *
             (static_cast<uint8_t>(scenario) - static_cast<uint8_t>(Case::trap_spike)) + MAP_FEATURE_HIDDEN)};
+    if(scenario >= Case::pets_dense) {
+        for(uint8_t p=0;p<PETS;++p) {
+            Position pos{uint8_t(p==0 ? 33 : p==1 ? 32 : p==2 ? 31 : 32),uint8_t(p==1 || p==2 ? 15 : p==3 ? 17 : 16)};
+            add_monster(HOSTILE_MONSTERS+p,pos,HOUND+p,monster_health(HOUND+p));
+        }
+        game.inventory[15]={GLOWING_ORB,0}; game.offhand_slot=15;
+        game.inventory[14]={AMULET_BRILLIANCE,1}; game.amulet_slot=14;
+        if(scenario==Case::pets_traps) {
+            for(uint8_t f=0;f<MAP_FEATURES;++f) game.features[f]={{uint8_t(26+f),uint8_t(f<6 ? 15 : 17)},uint8_t(FEATURE_SPIKE_TRAP+(f%5)*2)};
+        }
+        if(scenario==Case::pets_recovery || scenario==Case::pets_rest) {
+            game.turns=255;
+            for(uint8_t p=12;p<16;++p) --game.monsters[p].hp;
+            if(scenario==Case::pets_rest) for(uint8_t h=0;h<HOSTILE_MONSTERS;++h) {
+                game.monsters[h].pos={uint8_t(4+h),4}; carve(4+h,4);
+                game.monsters[h].stun=15;
+            }
+        }
+        if(scenario==Case::pets_recall) {
+            for(uint8_t p=0;p<PETS;++p) {
+                game.monsters[12+p].pos={uint8_t(52+p),26}; carve(52+p,26);
+                session.pet_leash[p]=10;
+            }
+        }
+        if(scenario==Case::pets_swap) {
+            game.monsters[12].stun=15;
+            game.features[0]={{33,16},FEATURE_POISON_DART_TRAP|MAP_FEATURE_HIDDEN};
+            game.features[1]={{32,16},FEATURE_SPIKE_TRAP};
+        }
+        if(scenario==Case::pets_summon || scenario==Case::pets_friendly_fire) {
+            game.known_spells=spell_bit(scenario==Case::pets_summon ? SUMMON_WISP : PIERCING_BOLT);
+            game.mana=16;
+            if(scenario==Case::pets_summon) game.monsters[14]={};
+            else game.monsters[12].stun=15;
+        }
+        if(scenario==Case::pets_study) {
+            game.inventory[0]={SPELLBOOK,BOOK_COMPANIONS}; game.known_spells=1;
+            session.study_slot=0; session.study_spell=SUMMON_HOUND;
+        }
+        if(scenario==Case::pets_domination) {
+            game.monsters[15]={}; set_wand_modifier(game.inventory[0],WAND_OVERPOWERED);
+            game.monsters[12].pos={30,15}; game.monsters[13].pos={31,14}; game.monsters[14].pos={30,17};
+            carve(30,15); carve(31,14); carve(30,17);
+        }
+    }
     switch(scenario) {
     case Case::scroll_hold: case Case::scroll_mass_teleport:
         game.inventory[15]={GLOWING_ORB,0}; game.offhand_slot=15;
         game.inventory[14]={AMULET_BRILLIANCE,uint8_t(1|ITEM_IDENTIFIED)}; game.amulet_slot=14;
-        for(uint8_t i=0;i<MONSTERS;++i) {
+        for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) {
             add_monster(i,{uint8_t(30+i%4),uint8_t(i<4 ? 14 : 16+i/4)},ORC);
             game.monsters[i].stun=15;
         }
@@ -357,7 +414,7 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         break;
     case Case::feature_holy:
         game.features[0]={{33,16},FEATURE_HOLY_SYMBOL};
-        for(uint8_t i=0;i<MONSTERS;++i) {
+        for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) {
             add_monster(i,{static_cast<uint8_t>(32+i%4),static_cast<uint8_t>(i<4 ? 14 : 16+i/4)},i==11 ? LORD : ZOMBIE);
             game.monsters[i].stun=15;
         }
@@ -416,7 +473,7 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         break;
     case Case::monster_trap_busy:
         game.floor=15;
-        for(uint8_t i=0;i<MONSTERS;++i) {
+        for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) {
             Position p=game.monsters[i].pos;
             if(p.x!=32) p.x=p.x>32 ? p.x-1:p.x+1;
             else p.y=p.y>16 ? p.y-1:p.y+1;
@@ -543,7 +600,7 @@ void prepare(Case scenario, Terrain terrain, ItemType item)
         game.inventory[14]={AMULET_BRILLIANCE,uint8_t(1|ITEM_IDENTIFIED)}; game.amulet_slot=14;
         if(scenario==Case::wand_lightning_overpowered) {
             const Position group[]={{32,14},{33,14},{34,15},{34,16},{34,17},{33,18},{32,18},{31,18},{30,17},{30,16},{30,15},{31,14}};
-            for(uint8_t i=0;i<MONSTERS;++i) add_monster(i,group[i],GOBLIN,100);
+            for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) add_monster(i,group[i],GOBLIN,100);
         } else {
             add_monster(0,{34,16},GOBLIN,100); add_monster(1,{35,17},GOBLIN,100);
             if(scenario==Case::wand_lightning_powerful) add_monster(2,{36,18},GOBLIN,100);
@@ -649,7 +706,7 @@ void bench_setup()
     // Detect SDK/font drift before measuring any case; no runtime game cost.
     for(uint8_t n=0;n<95;++n)
         if(AVM_FONT_BR5D->glyph_first!=32 || AVM_FONT_BR5D->num_glyphs!=95 ||
-           STATUS_ADVANCES[n]!=AVM_FONT_BR5D->data[uint16_t(n)*sizeof(avm_font_glyph_t)+6]) {
+           STATUS_ADVANCES[32+n]!=AVM_FONT_BR5D->data[uint16_t(n)*sizeof(avm_font_glyph_t)+6]) {
             game.valid=0; return;
         }
 #endif

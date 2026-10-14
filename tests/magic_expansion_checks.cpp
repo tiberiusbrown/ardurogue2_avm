@@ -12,7 +12,7 @@ void arena(uint16_t seed=71) {
     game={}; session={NONE,DEATH,false};
     game.player={20,15}; game.up={2,2}; game.down={40,25};
     game.random_state=game.run_seed=seed; game.hp=game.max_hp=200;
-    game.level=1; game.hunger=255; game.speed=1; game.mana=16; game.known_spells=0xffff;
+    game.level=1; game.hunger=255; game.speed=1; game.mana=16; game.known_spells=ALL_SPELLS;
     game.weapon_slot=game.armor_slot=game.amulet_slot=game.offhand_slot=NONE;
     game.ring_slots[0]=game.ring_slots[1]=NONE;
     game.inventory[18]={GLOWING_ORB,0}; game.offhand_slot=18;
@@ -26,9 +26,9 @@ void wand(WandModifier modifier=WAND_NORMAL,uint8_t charges=3) {
     game.inventory[0]={WAND_LIGHTNING,0}; set_wand_modifier(game.inventory[0],modifier); set_wand_charges(game.inventory[0],charges);
 }
 void metadata_and_learning() {
-    static_assert(SPELL_COUNT==16 && spell_bit(BLOOD_BOLT)==0x8000 && sizeof(Game::known_spells)==2 && sizeof(Item)==2);
-    const uint8_t costs[]={2,2,2,3,2,4,4,3,4,4,4,4,4,4,4,2};
-    const uint8_t turns[]={40,40,40,40,40,60,60,40,60,60,60,60,60,60,60,60};
+    static_assert(SPELL_COUNT==20 && spell_bit(BLOOD_BOLT)==0x8000 && sizeof(Game::known_spells)==4 && sizeof(Item)==2);
+    const uint8_t costs[]={2,2,2,3,2,4,4,3,4,4,4,4,4,4,4,2,7,8,10,12};
+    const uint8_t turns[]={40,40,40,40,40,60,60,40,60,60,60,60,60,60,60,60,60,60,60,60};
     for(uint8_t s=0;s<SPELL_COUNT;++s) {
         require(spell_cost(s)==costs[s] && spell_study_turns(s)==turns[s] &&
                 spell_hp_cost(s)==(s==BLOOD_BOLT ? 3 : 0),"explicit spell metadata changed");

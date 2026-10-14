@@ -1,4 +1,6 @@
 #include "spells.hpp"
+#include "companions.hpp"
+#include "game_internal.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -43,8 +45,12 @@ static const uint8_t PROGMEM monster_icons[] = {
     0x0f, 0x09, 0x09, 0x06, // dragon
     0x00, 0x0e, 0x05, 0x0e, // fallen angel
     0x00, 0x0f, 0x08, 0x08, // Lord of Darkness
+    0x0f, 0x04, 0x04, 0x0c, // h
+    0x08, 0x0a, 0x05, 0x01, // s
+    0x06, 0x0c, 0x0c, 0x06, // w
+    0x02, 0x05, 0x05, 0x0e, // g
 };
-static_assert(sizeof(monster_icons) == 2 + 4 * (LORD + 1),
+static_assert(sizeof(monster_icons) == 2 + 4 * MONSTER_TYPES,
               "monster icon roster changed");
 // Shared visual categories are independent of ItemType ordering and roster size.
 enum ItemIconCategory : uint8_t {
@@ -362,8 +368,10 @@ struct DungeonView {
 static uint16_t map_row_bits(const uint8_t* map, uint8_t y, int16_t left,
                              uint8_t width)
 {
+    // Callers extract only the 13-tile viewport or its 15-tile wall halo.
+    uint16_t mask = width == 13 ? 0x1fff : 0x7fff;
     if(y >= MAP_H || left <= -static_cast<int16_t>(width) || left >= MAP_W)
-        return static_cast<uint16_t>((1u << width) - 1);
+        return mask;
     // Most viewport rows are wholly within the map. Avoid clipping arithmetic
     // on this measured hot path; the edge path retains solid outside cells.
     if(left >= 0 && left + width <= MAP_W) {
@@ -373,7 +381,7 @@ static uint16_t map_row_bits(const uint8_t* map, uint8_t y, int16_t left,
         if(shift + width > 8) bits |= static_cast<uint16_t>(source[1]) << 8;
         bits >>= shift;
         if(shift + width > 16) bits |= static_cast<uint16_t>(source[2]) << (16 - shift);
-        return bits & static_cast<uint16_t>((1u << width) - 1);
+        return bits & mask;
     }
     uint8_t first = left < 0 ? static_cast<uint8_t>(-left) : 0;
     uint8_t end = left + width > MAP_W
@@ -393,7 +401,7 @@ static uint16_t map_row_bits(const uint8_t* map, uint8_t y, int16_t left,
         bits |= static_cast<uint16_t>(source[2]) << (16 - shift);
     uint16_t run = static_cast<uint16_t>((1u << count) - 1);
     uint16_t valid = static_cast<uint16_t>(run << first);
-    return static_cast<uint16_t>((((1u << width) - 1) & ~valid) | ((bits & run) << first));
+    return static_cast<uint16_t>((mask & ~valid) | ((bits & run) << first));
 }
 
 uint16_t wall_row_bits(uint8_t y, int16_t left)
@@ -475,6 +483,19 @@ struct TerrainRow {
     uint16_t walls, shown_walls;
 };
 
+__attribute__((always_inline)) static inline uint16_t two_columns(uint8_t mask)
+{
+    uint16_t pair = static_cast<uint16_t>(mask | (uint16_t(mask) << 8));
+    return pair;
+}
+__attribute__((always_inline)) static inline void or_two_columns(uint8_t* output, uint16_t mask)
+{
+    uint16_t pixels;
+    __builtin_memcpy(&pixels,output,sizeof pixels);
+    pixels |= mask;
+    __builtin_memcpy(output,&pixels,sizeof pixels);
+}
+
 __attribute__((always_inline)) static inline void draw_terrain_row(
     uint16_t floor, uint16_t walls, uint16_t below, uint8_t sy)
 {
@@ -486,20 +507,29 @@ __attribute__((always_inline)) static inline void draw_terrain_row(
     uint8_t low_short = static_cast<uint8_t>(0x0f << shift);
     uint8_t high_full = shift > 3 && y < 60 ? static_cast<uint8_t>(0x1f >> (8 - shift)) : 0;
     uint8_t high_short = shift > 4 && y < 60 ? static_cast<uint8_t>(0x0f >> (8 - shift)) : 0;
-    for(uint8_t sx = 0; sx < 13; ++sx, output += 5,
+    uint16_t low_full_columns=two_columns(low_full), low_short_columns=two_columns(low_short);
+    uint16_t high_full_columns=two_columns(high_full), high_short_columns=two_columns(high_short);
+    uint8_t dot = static_cast<uint8_t>(1u << ((shift + 2) & 7));
+    uint8_t* dots = output + (shift < 6 ? 2 : 130);
+#if defined(__clang__)
+#pragma clang loop unroll(full)
+#endif
+    for(uint8_t sx = 0; sx < 13; ++sx, output += 5, dots += 5,
         floor >>= 1, walls >>= 1, below >>= 1) {
         if(walls & 1) {
-            uint8_t first = below & 1 ? low_full : low_short;
-            for(uint8_t col = 0; col < 4; ++col) output[col] |= first;
+            uint16_t first=below & 1 ? low_full_columns : low_short_columns;
+            or_two_columns(output,first); or_two_columns(output+2,first);
             uint8_t second = below & 1 ? high_full : high_short;
-            if(second) for(uint8_t col = 0; col < 4; ++col) output[128 + col] |= second;
+            if(second) {
+                uint16_t second_pair=below & 1 ? high_full_columns : high_short_columns;
+                or_two_columns(output+128,second_pair); or_two_columns(output+130,second_pair);
+            }
             if(walls & 2) {
                 output[4] |= low_short;
                 if(high_short) output[132] |= high_short;
             }
         } else if(floor & 1) {
-            if(shift < 6) output[2] |= static_cast<uint8_t>(1u << (shift + 2));
-            else output[130] |= static_cast<uint8_t>(1u << (shift - 6));
+            *dots |= dot;
         }
     }
 }
@@ -711,11 +741,11 @@ __attribute__((noinline)) static void render_menu()
 {
     static const char AVM_PROGMEM* const AVM_PROGMEM names[] = {
         F("WAIT/SEARCH"), F("USE ITEM"), F("DROP ITEM"), F("Throw/Shoot"),
-        F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON"), F("CAST SPELL")
+        F("FULL MAP"), F("SAVE & EXIT"), F("ABANDON"), F("CAST SPELL"), F("COMPANIONS")
     };
     avm_draw_text_P(10, 8, F("ACTION MENU"));
     uint8_t top = ui.selection < 7 ? 0 : ui.selection - 6;
-    for(uint8_t row = 0; row < 7 && top + row < 8; ++row) {
+    for(uint8_t row = 0; row < 7 && top + row < 9; ++row) {
         uint8_t i = top + row;
         if(i == ui.selection)
             avm_draw_text_P(4, static_cast<int16_t>(17 + 7 * row), F(">"));
@@ -827,15 +857,44 @@ __attribute__((noinline)) static void render_spells()
 __attribute__((noinline)) static void render_spell_target()
 {
     render_play(); status_clear();
-    avm_draw_text_P(67, 30, F("EXCHANGE"));
+    bool taming = ui.mode == TAMING_TARGET;
+    avm_draw_text_P(67, 30, taming ? F("TAMING") : F("EXCHANGE"));
     avm_draw_text_P(67, 39, F("D-pad: target"));
-    avm_draw_text_P(67, 49, F("A: CAST"));
+    avm_draw_text_P(67, 49, taming ? F("A: READ") : F("A: CAST"));
     avm_draw_text_P(67, 63, F("B: BACK"));
-    if(exchange_target(ui.use_target)) {
+    if(taming ? taming_target(ui.use_target) : exchange_target(ui.use_target)) {
         const Position pos = game.monsters[ui.use_target].pos;
         avm_draw_filled_rect_white((int16_t(pos.x) - game.player.x + 6) * 5,
                                   (int16_t(pos.y) - game.player.y + 6) * 5 + 4, 4, 1);
     }
+}
+
+__attribute__((noinline)) static void render_companions()
+{
+    avm_draw_text_P(1, 7, ui.mode == DISMISS_CONFIRM ? F("DISMISS PERMANENTLY?") : F("COMPANIONS"));
+    uint8_t row = 0;
+    for(uint8_t i = HOSTILE_MONSTERS; i < MONSTERS; ++i) {
+        const Monster& pet = game.monsters[i];
+        if(!pet.type) continue;
+        int16_t y = 17 + row++ * 7;
+        if(i == ui.selection) avm_draw_text_P(1, y, F(">"));
+        avm_draw_text_P(9, y, monster_name(pet.type));
+        avm_draw_textf_P(87, y, F("%u/%u"), pet.hp, monster_health(pet.type));
+    }
+    if(!row) avm_draw_text_P(1, 22, F("No companions."));
+    if(friendly_slot(ui.selection) && game.monsters[ui.selection].type) {
+        const Monster& pet = game.monsters[ui.selection];
+        avm_draw_text_P(1, 46, (pet.state & MON_SUMMONED) ? F("Summoned") : F("Tamed"));
+        int16_t x = 47;
+        if(pet.stun) x = avm_draw_text_P(x, 46, F("Stun ")).x;
+        if(monster_effect(pet, MON_CONFUSED)) x = avm_draw_text_P(x, 46, (pet.state & MON_BLINDED) ? F("Blind ") : F("Conf ")).x;
+        if(monster_effect(pet, MON_SLOWED)) x = avm_draw_text_P(x, 46, F("Slow ")).x;
+        x=1;
+        if(monster_effect(pet, MON_WEAKENED)) x=avm_draw_text_P(x,54,F("Weak ")).x;
+        if(pet.state & MON_AFRAID) x=avm_draw_text_P(x,54,F("Afraid ")).x;
+        if(monster_effect(pet, MON_INVISIBLE)) avm_draw_text_P(x,54,F("Invisible"));
+    }
+    avm_draw_text_P(38, 63, ui.mode == DISMISS_CONFIRM ? F("A:YES  B:CANCEL") : F("A:DISMISS B:BACK"));
 }
 
 static uint16_t full_map_wall_word(uint16_t index)
@@ -955,7 +1014,8 @@ __attribute__((noinline)) void render()
     case WAND_DIRECTION: render_direction_prompt(); break;
     case SPELL_DIRECTION: render_direction_prompt(); break;
     case SPELL_MENU: render_spells(); break;
-    case SPELL_TARGET: render_spell_target(); break;
+    case SPELL_TARGET: case TAMING_TARGET: render_spell_target(); break;
+    case COMPANIONS: case DISMISS_CONFIRM: render_companions(); break;
     case FULL_MAP: render_full_map(); break;
     case OBJECT_MAP: render_full_map(); break;
     case END: render_end(); break;

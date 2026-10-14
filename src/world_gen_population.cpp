@@ -81,6 +81,8 @@ static uint8_t floor_ring_type(uint16_t& seed)
 static uint8_t floor_wand_type(uint16_t& seed)
 {
     uint8_t original = floor_roll(seed, 7);
+    uint16_t pet_seed = static_cast<uint16_t>(seed ^ 0x57cbu);
+    if(BALANCE_VALUE("pets", 1) && floor_roll(pet_seed, 100) < 6) return WAND_DOMINATION;
     uint16_t extra_seed = static_cast<uint16_t>(seed ^ 0xa359u);
     return floor_roll(extra_seed, 100) < BALANCE_VALUE("lightning-wand-percent", 12)
         ? uint8_t(WAND_LIGHTNING) : uint8_t(WAND_FIRST + original);
@@ -115,6 +117,8 @@ static uint8_t floor_potion_type(uint16_t& seed)
     uint16_t sight_seed = static_cast<uint16_t>(seed ^ 0x53e9u);
     uint8_t sight_roll = floor_roll(sight_seed, 100);
     uint8_t chance = floor_roll(seed, 22);
+    uint16_t pet_seed = static_cast<uint16_t>(seed ^ 0x57cbu);
+    if(BALANCE_VALUE("pets", 1) && floor_roll(pet_seed, 100) < 4) return POTION_FRIENDSHIP;
     uint16_t mana_seed = static_cast<uint16_t>(seed ^ 0xd137u);
     if(floor_equipment_roll(mana_seed, 100) < BALANCE_VALUE("mana-potion-percent", 8)) return POTION_MANA_RESTORATION;
     uint8_t sight_percent = BALANCE_VALUE("sight-percent", SEE_INVISIBLE_POTION_PERCENT);
@@ -143,6 +147,8 @@ static uint8_t floor_potion_type(uint16_t& seed)
 static uint8_t floor_scroll_type(uint16_t& seed)
 {
     uint8_t original = floor_roll(seed, 9);
+    uint16_t pet_seed = static_cast<uint16_t>(seed ^ 0x57cbu);
+    if(BALANCE_VALUE("pets", 1) && floor_roll(pet_seed, 100) < 6) return SCROLL_TAMING;
     uint16_t extra_seed = static_cast<uint16_t>(seed ^ 0x39adu);
     if(floor_roll(extra_seed, 100) >= BALANCE_VALUE("new-consumables-percent", 25))
         return static_cast<uint8_t>(SCROLL_FIRST + original);
@@ -208,7 +214,7 @@ static Position select_tile(uint16_t seed, uint8_t preference, bool monster)
                 for(uint8_t i = 0; i < GROUND_ITEMS; ++i)
                     if(game.ground[i].item.type && game.ground[i].pos == pos) occupied = true;
             } else if(pass == 0) {
-                for(uint8_t i = 0; i < MONSTERS; ++i)
+                for(uint8_t i = 0; i < HOSTILE_MONSTERS; ++i)
                     if(game.monsters[i].type && distance_squared(pos, game.monsters[i].pos) < 9) occupied = true;
             }
             if(occupied) continue;
@@ -221,7 +227,7 @@ static Position select_tile(uint16_t seed, uint8_t preference, bool monster)
 __attribute__((noinline)) void populate_monsters(uint16_t seed)
 {
     uint16_t placement_seed = seed;
-    uint8_t count = BALANCE_VALUE("monsters", MONSTERS);
+    uint8_t count = BALANCE_VALUE("monsters", HOSTILE_MONSTERS);
     if(game.floor == 4) count = BALANCE_VALUE("phantom-count", count);
     for(uint8_t i = 0; i < count; ++i) {
         uint8_t type = 0;
@@ -500,7 +506,7 @@ __attribute__((noinline)) void populate_features(uint16_t seed)
     if(!sim::features_enabled()) return;
 #endif
     uint8_t unholy = 0;
-    for(const Monster& m : game.monsters) if(undead_or_demonic(m.type)) ++unholy;
+    for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) if(undead_or_demonic(game.monsters[i].type)) ++unholy;
     uint8_t depth = game.floor, roster_depth = game.floor;
 #if defined(ARDUROGUE2_SIM)
     if(sim::original_features(sim::FeatureVariant::Early) || sim::original_features(sim::FeatureVariant::Density)) depth = 4;

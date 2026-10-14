@@ -47,6 +47,7 @@ uint8_t mana_regeneration_interval();
 uint8_t mana_restoration_amount(uint8_t maximum);
 inline const char PROGMEM* spellbook_name(uint8_t book) {
     switch(book) {
+    case BOOK_COMPANIONS: return F("Book of Companions");
     case BOOK_CONTROL: return F("Book of Control");
     case BOOK_DISPLACEMENT: return F("Book of Displacement");
     case BOOK_SURVIVAL: return F("Book of Survival");

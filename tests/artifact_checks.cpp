@@ -424,7 +424,7 @@ void hearts()
 void artifact_generation()
 {
     using namespace rogue::generation;
-    static_assert(sizeof(Item) == 2 && offsetof(Game, see_invisible) == 814 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION == 32 &&
+    static_assert(sizeof(Item) == 2 && offsetof(Game, see_invisible) == 846 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && SAVE_VERSION == 33 &&
                   WEAPON_LAST + 1 == ARMOR_FIRST && ARMOR_LAST + 1 == OFFHAND_FIRST && OFFHAND_LAST + 1 == YENDOR_AMULET &&
                   RING_LAST + 1 == AMULET_FIRST && AMULET_LAST + 1 == SCROLL_FIRST,
                   "artifact groups or saved layout changed");
@@ -519,9 +519,9 @@ void artifact_generation()
         }
     }
     arena(); game.floor = 15; make_floor();
-    require(!game.ground[GROUND_ITEMS - 1].item.type && game.monsters[MONSTERS - 1].type == LORD,
+    require(!game.ground[GROUND_ITEMS - 1].item.type && game.monsters[HOSTILE_MONSTERS - 1].type == LORD,
             "artifact generation overwrote Yendor reservation");
-    defeat_monster(MONSTERS - 1); require(game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET, "Yendor drop lost");
+    defeat_monster(HOSTILE_MONSTERS - 1); require(game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET, "Yendor drop lost");
     game.has_amulet = 1; game.floor = 7; make_floor();
     for(const auto& item : game.ground) require(!item.item.type, "artifacts regenerated on ascent");
     for(unsigned seed = 0; seed < 256; ++seed) {
@@ -536,7 +536,7 @@ void artifact_generation()
             }
         }
         for(uint8_t type = WAND_FIRST; type <= WAND_LAST; ++type) identify_type(type);
-        require((game.identified_items[8] & 0xfe) == 0, "identification exceeded 65 bits");
+        require((game.identified_items[8] & 0xf0) == 0, "identification exceeded 68 bits");
     }
 }
 }

@@ -7,13 +7,13 @@ content interventions, see [BALANCE.md](BALANCE.md). Demonstration results are i
 The explorer invisible-contact state machine, historical observation protocol 3,
 schema-5 diagnostics and descriptive policy comparisons are documented in
 [EXPLORER_INVISIBLE_CONTACT.md](../docs/EXPLORER_INVISIBLE_CONTACT.md).
-Current magic support keeps the same `explorer-v1` name, uses observation
-protocol 6, core telemetry 9 and exploration telemetry 6; see
-[CONSUMABLES.md](../docs/CONSUMABLES.md).
+Current companion support keeps the same `explorer-v1` name, uses observation
+protocol 10, core telemetry 11 and exploration telemetry 6; see
+[PETS.md](../docs/PETS.md).
 Both agents support real multi-turn learning and all spells. Magic, book identity,
 study state and visible Exchange handles are public observations; hidden hazards
 remain privileged. See [SPELLS.md](../docs/SPELLS.md). `spells.csv` is an additional
-version-1 sidecar. Run `python sim/spell_report.py DATASET --output REPORT_DIRECTORY`
+version-2 sidecar. Run `python sim/spell_report.py DATASET --output REPORT_DIRECTORY`
 with the balance Python dependencies to report study, spells and retained resources.
 `sim/invisible_contact_experiments.py` snapshots the executable and complete
 parameters, runs legacy/disabled/contact variants on identical seeds, seals
@@ -113,13 +113,13 @@ Existing files changed: root `README.md` links these instructions; root
 `CMakeLists.txt` adds the host-only subdirectory
 and the production hook-header build dependency; `src/state.cpp`,
 `src/combat.cpp`, `src/items.cpp`, `src/world_gen.cpp` gain gated hooks.
-Instrumentation adds no saved fields. Current gameplay uses save version 32 and
-an 845-byte AVM `Game`; magic appends three bytes to the earlier consumables
-layout. See [the magic guide](../docs/SPELLS.md) and [the consumables guide](../docs/CONSUMABLES.md).
+Instrumentation adds no saved fields. Current gameplay uses save version 33 and
+an 879-byte AVM `Game`; companions add 32 monster bytes and expand spell knowledge
+by two bytes. See [the companion guide](../docs/PETS.md) and [the magic guide](../docs/SPELLS.md).
 
 The simulator library compiles and links `state.cpp`, `combat.cpp`,
 `combat_math.cpp`, `items.cpp`, `world.cpp`, `world_gen.cpp` and
-`world_gen_population.cpp`, `features.cpp` and `spells.cpp`. It does not link `main.cpp`, `ui.cpp`, `render.cpp`,
+`world_gen_population.cpp`, `features.cpp`, `companions.cpp` and `spells.cpp`. It does not link `main.cpp`, `ui.cpp`, `render.cpp`,
 `status.cpp` or persistence. Normal SDK configurations never enter `sim/`.
 
 The runner owns execution, counters and output. Agents return choices and never
@@ -553,3 +553,30 @@ Explorer observation. See [BALANCE.md](BALANCE.md) and
 [the implementation report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).
 
 The public host control `balance:legacy-spell-rules=1` restores pre-tuning MP costs and 40/60/80-turn studies. The default is 0. Observation protocol 9 supplies this public rule profile without exposing hidden game state. Use it with the four multi-spell comparison controls to retain the previous gameplay comparator. Agents rank spells across carried books and limit learned additions to `2 + floor / 2` before further study (zero-based floor). `spells.csv` and `magic.csv` schema 2 expose damage, displacement, stun, slow/confusion, reveal and cleanse effects; assigned durations are not realized enemy turns prevented. See [the implementation report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).
+
+## Persistent companion validation
+
+Current explorer observations use protocol 10, core telemetry schema 11, and
+spells/magic sidecar schema 2. `pets.csv` adds sparse per-visit/per-species records
+for acquisitions by source, taming by method, combat/rewards, damage absorbed,
+friendly fire, deaths/lifetimes, roster/active turns, recall and recovery, and
+study interruptions. It contains reporting information only; neither agent reads
+it. Fifteen CSV streams are emitted with telemetry, and `--entry-state` adds a
+sixteenth. All streams are sealed by `balance.py`, including entry state.
+
+Use one frozen executable and the same policy in each pair:
+
+```text
+<sim> --agent explorer-v1 --seeds 1:10000 --jobs 8 --max-actions 100000 --entry-state --experiment pets --variant enabled --intervention balance:pets=1 --output build/pets-on
+<sim> --agent explorer-v1 --seeds 1:10000 --jobs 8 --max-actions 100000 --entry-state --experiment pets --variant disabled --intervention balance:pets=0 --output build/pets-off
+```
+
+Repeat for omniscient-v2. The availability control restores same-slot ordinary
+loot and altar outcomes, removes scheduled Companions books, and rejects pet
+creation/taming. Existing monster capacity and generation stay at twelve hostile
+slots in both arms. No post-divergence RNG resynchronization occurs. Expanded
+appearance permutations and the updated policy belong to both arms; historical
+pre-pet executables are descriptive comparisons with different policy identities.
+`pet_agents` and `companions` are correctness targets. Raw runs and profiles live
+under ignored `build/`; [PETS-RESULTS.md](../docs/PETS-RESULTS.md) contains the
+small committed scorecard and its provenance.

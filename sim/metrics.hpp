@@ -35,7 +35,7 @@ struct RangedMetrics {
         first_generated=255, first_picked=255, generation_gap=0, acquisition_gap=0;
     std::array<ShotMetrics,2> bows{};
     std::array<ShotMetrics,7> distances{}; // 0 records an adjacent blocker.
-    std::array<ShotMetrics,rogue::LORD+1> targets{};
+    std::array<ShotMetrics,rogue::MONSTER_TYPES> targets{};
 };
 struct FeatureMetrics {
     uint64_t generated=0, discovered=0, activated=0, declined=0, damage=0, deaths=0, spawned=0, holy_damage=0, repeated=0, max_entries=0, displacement=0;
@@ -72,9 +72,13 @@ struct MagicMetrics {
     uint64_t books_generated=0, books_collected=0, books_completed=0,
         mana_regenerated=0, mana_restored=0, meditation_mp=0, amulet_hp=0,
         study_deaths=0, shortly_after_study_deaths=0;
-    uint16_t entry_known=0, exit_known=0;
+    uint32_t entry_known=0, exit_known=0;
+};
+struct PetMetrics {
+    uint64_t base_xp=0, scroll_attempts=0, scroll_successes=0, potion_attempts=0, potion_successes=0, wand_attempts=0, wand_successes=0, interceptions=0, chain_hits=0, friendly_effects=0, acquired_spell=0, acquired_scroll=0, acquired_potion=0, acquired_wand=0, acquired_altar=0, tame_attempts=0, tame_successes=0, attacks=0, hits=0, damage=0, kills=0, xp=0, control_events=0, control_turns=0, damage_absorbed=0, friendly_damage=0, deaths=0, hostile_deaths=0, player_deaths=0, trap_deaths=0, other_deaths=0, dismissals=0, lifetime_turns=0, recalls=0, recall_distance=0, visible_recalls=0, regenerated=0, active_turns=0, entry_count=0, exit_count=0, study_interruptions=0;
 };
 struct FloorMetrics {
+    std::array<PetMetrics,rogue::MONSTER_TYPES> pets{};
     MagicMetrics magic;
     ExplorationMetrics exploration;
     std::array<FeatureMetrics, rogue::FEATURE_TYPES + 1> features{};
@@ -96,7 +100,7 @@ struct FloorMetrics {
     int floor_tiles=0, major_features=0, corridors=0, loops=0, open_connections=0;
     std::array<uint8_t,16> families{};
     std::array<ItemMetrics, rogue::SPELLBOOK+1> items{};
-    std::array<MonsterMetrics, rogue::LORD+1> monsters{};
+    std::array<MonsterMetrics, rogue::MONSTER_TYPES> monsters{};
     uint64_t turns=0, actions=0, kills=0, damage_taken=0, damage_dealt=0,
         pickups=0, consumables=0;
 };
@@ -114,7 +118,7 @@ struct RunMetrics {
         floors_entered=0, floors_exited=0;
     bool has_yendor=false, stuck=false, lord_killed=false;
     std::array<ItemMetrics, rogue::SPELLBOOK+1> items{};
-    std::array<MonsterMetrics, rogue::LORD+1> monsters{};
+    std::array<MonsterMetrics, rogue::MONSTER_TYPES> monsters{};
     std::vector<FloorMetrics> floors;
     std::vector<Intervention> interventions;
     std::string experiment="baseline", variant="control";
@@ -189,6 +193,9 @@ struct Collector {
     uint64_t generation_gap=0, acquisition_gap=0;
     uint8_t last_weapon=rogue::NO_ITEM;
     int closed_ranged_visit=0;
+    std::array<uint64_t,rogue::PETS> pet_born{};
+    std::array<uint8_t,rogue::PETS> pet_death_cause{};
+    bool study_pet_event=false;
     uint64_t last_study_turn=0;
     bool has_studied=false, died_during_study=false;
     bool enabled=true;
@@ -203,7 +210,7 @@ struct Collector {
     std::vector<uint8_t> wand_flags{0};
     std::shared_ptr<const Experiment> experiment;
     std::array<ItemMetrics, rogue::SPELLBOOK+1> entry_items{};
-    std::array<MonsterMetrics, rogue::LORD+1> entry_monsters{};
+    std::array<MonsterMetrics, rogue::MONSTER_TYPES> entry_monsters{};
     uint8_t pickup_slot=rogue::NONE, drop_slot=rogue::NONE;
     size_t new_wand();
     void prepare_action(const struct Action&);
@@ -239,8 +246,8 @@ struct CsvStream {
     void (*header)(std::ostream&);
     void (*rows)(std::ostream&, const RunMetrics&);
 };
-inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=10;
-inline constexpr size_t CSV_STREAM_COUNT=13;
+inline constexpr unsigned TELEMETRY_SCHEMA_VERSION=11;
+inline constexpr size_t CSV_STREAM_COUNT=14;
 inline constexpr unsigned SURVIVAL_SCHEMA_VERSION=2;
 void write_encounters_header(std::ostream&);
 void write_encounters(std::ostream&,const RunMetrics&);
@@ -248,6 +255,8 @@ void write_milestones_header(std::ostream&);
 void write_milestones(std::ostream&,const RunMetrics&);
 void write_ranged_header(std::ostream&);
 void write_ranged(std::ostream&, const RunMetrics&);
+void write_pets_header(std::ostream&);
+void write_pets(std::ostream&, const RunMetrics&);
 extern const std::array<CsvStream,CSV_STREAM_COUNT> csv_streams;
 // The production hooks have one non-owning, scoped sink. Execution is serial.
 class CollectScope {

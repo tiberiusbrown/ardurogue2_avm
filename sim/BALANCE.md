@@ -728,3 +728,20 @@ availability and lighting/fuel use. None of this collector state is exposed to
 Explorer. See [the report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).
 
 The public host control `balance:legacy-spell-rules=1` restores pre-tuning MP costs and 40/60/80-turn studies. The default is 0. Observation protocol 9 supplies this public rule profile without exposing hidden game state. Use it with the four multi-spell comparison controls to retain the previous gameplay comparator. Agents rank spells across carried books and limit learned additions to `2 + floor / 2` before further study (zero-based floor). `spells.csv` and `magic.csv` schema 2 expose damage, displacement, stun, slow/confusion, reveal and cleanse effects; assigned durations are not realized enemy turns prevented. See [the implementation report](../docs/MULTI-SPELL-BOOKS-RESULTS.md).
+
+## Pets availability experiment
+
+`balance:pets=0|1` is a same-executable availability control. Disabled restores
+ordinary same-slot generation, omits the independent Companions-book schedule,
+and retains ordinary altar outcomes. Enabled supplies persistent companions,
+taming and their opportunity costs. Both arms use the newly competent maintained
+policy and identical effective seeds/action limits. Older appearances, schemas
+and policies are not interchangeable references. See [the pet report](../docs/PETS-RESULTS.md).
+
+Schema 11 appends `pets.csv` to the core telemetry outputs. `seal_manifest` seals
+pets, spells, magic, encounters, milestones and optional entry_state alongside
+the original streams. Simulator errors/stalls invalidate a cohort. Lifetime
+means use completed pet deaths only; active-turn occupancy includes living pets.
+Control counters record assigned strengths/ticks, including the ordinary poison
+weakening marker, rather than measured HP prevented. Resource and species totals
+on reached floors are descriptive and affected by survival and route selection.

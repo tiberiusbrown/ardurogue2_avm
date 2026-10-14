@@ -1,4 +1,5 @@
 #include "agent.hpp"
+#include "companions.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
 #include "spells.hpp"
@@ -31,13 +32,14 @@ Action planned_lightning() {
         if(wand.type!=WAND_LIGHTNING || wand_afflicted(wand) || !wand_charges(wand)) continue;
         const auto* profile=wand_powerful(wand) ? &LIGHTNING_POWERFUL : &LIGHTNING_WAND;
         for(int d=0;d<(wand_spreads(wand) ? 1 : 4);++d) {
-            uint16_t mask=0; int value=0,hits=0;
+            uint16_t mask=0; int value=0,hits=0; bool safe=true;
             for(int ray=0;ray<(wand_spreads(wand) ? 4 : 1);++ray) {
                 int direction=wand_spreads(wand) ? ray : d;
                 auto first=scan_ray(game.player,dxs[direction],dys[direction],profile->range);
                 uint8_t hit=first.monster;
                 if(hit==NONE || (mask&(1u<<hit))) continue;
                 for(int n=0;n<profile->targets && hit!=NONE;++n) {
+                    if(friendly_slot(hit)) safe=false;
                     mask|=uint16_t(1u<<hit); ++hits;
                     const auto& m=game.monsters[hit];
                     value+=std::min<int>(m.hp,profile->minimum[n]+(profile->spread[n]-1)/2);
@@ -45,7 +47,7 @@ Action planned_lightning() {
                     hit=lightning_target(m.pos,mask);
                 }
             }
-            if(hits<2 || value<=best_value) continue;
+            if(!safe || hits<2 || value<=best_value) continue;
             best_value=value; best.kind=ActionKind::Wand; best.slot=s;
             best.dx=wand_needs_direction(wand) ? dxs[d] : 0; best.dy=wand_needs_direction(wand) ? dys[d] : 0;
             best.goal="efficient lightning chain";
@@ -56,7 +58,7 @@ Action planned_lightning() {
 Action plan_magic() {
     auto available=[](uint8_t s) { return (game.known_spells & spell_bit(s)) && game.mana>=active_spell_cost(s); };
     int nearby=0,adjacent=0,escapes=0;
-    for(const auto& m:game.monsters) if(m.type) {
+    for(const auto& m:game.monsters) if(m.type && !friendly_slot(static_cast<uint8_t>(&m-game.monsters))) {
         if(square_contains(game.player,m.pos,1)) ++adjacent;
         if(distance(m.pos,game.player)<=3) ++nearby;
     }
@@ -70,15 +72,15 @@ Action plan_magic() {
     for(uint8_t s : {uint8_t(BLINK),uint8_t(SHOCKWAVE),uint8_t(BANISH),uint8_t(EXCHANGE)})
         if(game.known_spells & spell_bit(s)) reserve=std::max(reserve,active_spell_cost(s));
     if(available(CLEANSE) && (game.blindness || (nearby && (game.confused || game.slowed)))) return cast(CLEANSE);
-    if(urgent && available(SHOCKWAVE) && adjacent>=2) return cast(SHOCKWAVE);
-    if(urgent && available(EXCHANGE)) for(uint8_t i=0;i<MONSTERS;++i) if(exchange_target(i) && distance(game.player,game.monsters[i].pos)>=2) {
+    if(!pet_count() && urgent && available(SHOCKWAVE) && adjacent>=2) return cast(SHOCKWAVE);
+    if(urgent && available(EXCHANGE)) for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) if(exchange_target(i) && distance(game.player,game.monsters[i].pos)>=2) {
         Position p=game.monsters[i].pos;
         if(feature_is_trap(observed_feature_at(game,p))) continue;
-        int enemies=0; for(uint8_t n=0;n<MONSTERS;++n) if(n!=i && game.monsters[n].type && square_contains(p,game.monsters[n].pos,1)) ++enemies;
+        int enemies=0; for(uint8_t n=0;n<HOSTILE_MONSTERS;++n) if(n!=i && game.monsters[n].type && square_contains(p,game.monsters[n].pos,1)) ++enemies;
         if(enemies<adjacent) return cast(EXCHANGE,-1,i);
     }
     if((urgent || (adjacent && game.hp*2<player_max_hp())) && available(PHASE_STEP)) {
-        auto threats=[](Position p) { int n=0; for(const auto& m:game.monsters) if(m.type && square_contains(p,m.pos,2)) ++n; return n; };
+        auto threats=[](Position p) { int n=0; for(const auto& m:game.monsters) if(m.type && !friendly_slot(static_cast<uint8_t>(&m-game.monsters)) && square_contains(p,m.pos,2)) ++n; return n; };
         int current=threats(game.player),walk=current;
         for(int d=0;d<4;++d) { Position p{uint8_t(game.player.x+dxs[d]),uint8_t(game.player.y+dys[d])}; if(!blocked(p.x,p.y) && monster_at(p)==NONE) walk=std::min(walk,threats(p)); }
         for(int d=0;d<4;++d) {
@@ -96,7 +98,7 @@ Action plan_magic() {
     auto lightning=planned_lightning(); if(lightning.kind==ActionKind::Wand) return lightning;
     for(int d=0;d<4;++d) {
         RayResult ray=scan_ray(game.player,dxs[d],dys[d],5);
-        if(ray.monster==NONE || (!urgent && (!player_can_see_monster(ray.monster) || !can_see(ray.end)))) continue;
+        if(ray.monster==NONE || friendly_slot(ray.monster) || (!urgent && (!player_can_see_monster(ray.monster) || !can_see(ray.end)))) continue;
         const auto& m=game.monsters[ray.monster];
         if(urgent && adjacent && ray.steps>1) continue;
         if(urgent && available(BANISH)) return cast(BANISH,d);
@@ -105,9 +107,10 @@ Action plan_magic() {
            feature_is_trap(observed_feature_at(game,pushed)) && feature_type(observed_feature_at(game,pushed))!=FEATURE_SUMMONING_TRAP) return cast(REPULSION,d);
         if(available(FIREBURST) && (player_fire_effect()>0 || ray.steps>=2)) {
             int cluster=0; for(const auto& n:game.monsters) if(n.type && n.type!=DRAGON && square_contains(ray.end,n.pos,1)) ++cluster;
-            if(cluster>=2 && (urgent || game.mana>=active_spell_cost(FIREBURST)+reserve)) return cast(FIREBURST,d);
+            bool safe=true; for(uint8_t p=HOSTILE_MONSTERS;p<MONSTERS;++p) if(game.monsters[p].type && square_contains(ray.end,game.monsters[p].pos,1)) safe=false;
+            if(safe && cluster>=2 && (urgent || game.mana>=active_spell_cost(FIREBURST)+reserve)) return cast(FIREBURST,d);
         }
-        if(available(CHAIN_LIGHTNING) && lightning_target(ray.end,uint16_t(1u<<ray.monster))!=NONE &&
+        if(available(CHAIN_LIGHTNING) && lightning_target(ray.end,uint16_t(1u<<ray.monster))!=NONE && !friendly_slot(lightning_target(ray.end,uint16_t(1u<<ray.monster))) &&
            (urgent || game.mana>=active_spell_cost(CHAIN_LIGHTNING)+reserve)) return cast(CHAIN_LIGHTNING,d);
         if(available(SLUMBER) && ray.steps<=4 && !m.stun &&
            (urgent || (ray.steps<=2 && monster_strength(m.type)>=player_strength()+2))) return cast(SLUMBER,d);
@@ -118,7 +121,7 @@ Action plan_magic() {
             return cast(BLOOD_BOLT,d);
         if(available(PIERCING_BOLT) && ray.steps<5) {
             auto second=scan_ray(ray.end,dxs[d],dys[d],5-ray.steps);
-            if(second.monster!=NONE && player_can_see_monster(second.monster) && can_see(second.end) &&
+            if(second.monster!=NONE && !friendly_slot(second.monster) && player_can_see_monster(second.monster) && can_see(second.end) &&
                (urgent || game.mana>=active_spell_cost(PIERCING_BOLT)+std::max<uint8_t>(slow_mana ? 3 : fast_mana ? 1 : 2,reserve))) return cast(PIERCING_BOLT,d);
         }
         if(ray.steps<=2 && (urgent || monster_strength(m.type)>=player_strength()+2)) {
@@ -261,7 +264,10 @@ int value(Item i) {
             reserve += owned.type == GLOWING_ORB ? 10000 : int(owned.info)*fuel_denominator(owned.type);
         }
         if(equipment_score(i) > best) return 100+equipment_score(i);
-        return reserve < 600 ? 120 + equipment_score(i)/2 : 0;
+        // Adding this light can cross the reserve threshold. Its acquisition
+        // value must stay below its retention value in the resulting pack,
+        // otherwise a useful book and reserve candle can replace each other.
+        return reserve < 600 ? std::min(100+equipment_score(i),120+equipment_score(i)/2) : 0;
     }
     if(is_equipment(i.type) || is_ring(i.type) || is_amulet(i.type))
         return upgrade(i) ? 100+equipment_score(i) : 0;
@@ -275,6 +281,7 @@ int value(Item i) {
         case WAND_FORCE: return 45 + 4*wand_charges(i);
         case WAND_TELEPORT: return 65 + 5*wand_charges(i);
         case WAND_POLYMORPH: return 30 + 3*wand_charges(i);
+        case WAND_DOMINATION: return pet_count()<4 ? 130+6*wand_charges(i) : 35;
         // Digging carves terrain but does not move/control anyone. The policy
         // deliberately gives speculative shortcuts no tactical value.
         case WAND_DIGGING: return 0;
@@ -283,6 +290,8 @@ int value(Item i) {
     }
     switch(i.type) {
     case FOOD: return quantity(FOOD) >= 8 ? 0 : (game.hunger < 60 ? 180 : 70);
+    case SCROLL_TAMING: return pet_count()<4 ? 180 : 60;
+    case POTION_FRIENDSHIP: return pet_count()<4 ? 100 : 25;
     case POTION_MANA_RESTORATION: return 120;
     case POTION_EXTRA_HEALING: return 220;
     case POTION_RESTORE_VITALITY: return game.vamp_drain || game.weakened ? 160 : 70;
@@ -365,7 +374,12 @@ int replacement(Item i) {
            quantity(ARROWS)==item_value(game.inventory[s])) continue;
         if(is_bow(i.type) && is_ammo(game.inventory[s].type) &&
            quantity(ARROWS)==item_value(game.inventory[s])) continue;
-        if(game.inventory[s].type && discard_value(s) < worst) { best = s; worst = discard_value(s); }
+        int retention=discard_value(s);
+        if(is_light(i.type) && is_light(owned.type) && (i.type==GLOWING_ORB || int(i.info)*fuel_denominator(i.type)>int(owned.info)*fuel_denominator(owned.type)))
+            // Break equal capability scores in favor of strictly more fuel.
+            // The guard above rejects reversing this improvement.
+            retention=99+equipment_score(owned);
+        if(game.inventory[s].type && retention < worst) { best = s; worst = retention; }
     }
     return best;
 }
@@ -383,7 +397,9 @@ Action pickup(int index) {
 bool controlled(const Monster& m) {
     return m.stun || (m.state & MON_AFRAID) || monster_effect(m,MON_CONFUSED);
 }
+bool friendly(const Monster& m) { return friendly_slot(static_cast<uint8_t>(&m-game.monsters)); }
 bool hostile(const Monster& m) {
+    if(friendly(m)) return false;
     uint16_t flags = monster_flags(m.type);
     return ((flags & MON_MEAN) || (m.state & MON_AGGRO)) &&
         (!player_is_invisible() || (flags & MON_SEE_INVIS));
@@ -420,7 +436,7 @@ bool bow_opportunity(Action& choice, int bow) {
     bool ready=game.weapon_slot==bow;
     for(int d=0;d<4;++d) {
         auto ray=scan_ray(game.player,dxs[d],dys[d],w.range);
-        if(ray.monster==NONE || !player_can_see_monster(ray.monster)) continue;
+        if(ray.monster==NONE || friendly_slot(ray.monster) || !player_can_see_monster(ray.monster)) continue;
         const auto& m=game.monsters[ray.monster];
         if(!can_see(m.pos) || !hostile(m) || m.type==BAT) continue;
         int pressure=offensive_pressure(m);
@@ -470,7 +486,34 @@ Danger danger() {
          ((game.confused || game.weakened || game.slowed) && result.adjacent && game.hp*2 < player_max_hp()));
     return result;
 }
+bool projectile_safe(Item item,int direction) {
+    uint16_t mask=0;
+    for(int ray=0;ray<(is_wand(item.type) && wand_spreads(item) ? 4 : 1);++ray) {
+        int d=is_wand(item.type) && wand_spreads(item) ? ray : direction;
+        auto ray_hit=scan_ray(game.player,dxs[d],dys[d],6);
+        uint8_t hit=ray_hit.monster;
+        if(hit==NONE) continue;
+        if(friendly_slot(hit)) return false;
+        if(item.type==WAND_LIGHTNING) {
+            for(int jump=0;jump<(wand_powerful(item) ? 3 : 2) && hit!=NONE;++jump) {
+                if(friendly_slot(hit)) return false;
+                mask|=uint16_t(1u<<hit); hit=lightning_target(game.monsters[hit].pos,mask);
+            }
+        } else {
+            uint8_t radius=item.type==WAND_FIRE ? wand_fire_radius(wand_powerful(item)) : item.type==POTION_FIRE ? 1 :
+                wand_powerful(item) && (item.type==WAND_ICE || item.type==WAND_TELEPORT || item.type==WAND_POLYMORPH) ? 1 : 0;
+            for(uint8_t p=HOSTILE_MONSTERS;p<MONSTERS;++p) if(radius && game.monsters[p].type && square_contains(ray_hit.end,game.monsters[p].pos,radius)) return false;
+        }
+    }
+    return true;
+}
+
 bool fire_safe(Item wand, int d) {
+    for(int n=0;n<(wand_spreads(wand) ? 4 : 1);++n) {
+        int direction=wand_spreads(wand) ? n : d;
+        auto ray=scan_ray(game.player,dxs[direction],dys[direction],6);
+        for(uint8_t p=HOSTILE_MONSTERS;p<MONSTERS;++p) if(game.monsters[p].type && square_contains(ray.end,game.monsters[p].pos,wand_fire_radius(wand_powerful(wand)))) return false;
+    }
     if(wand_afflicted(wand) || !wand_charges(wand)) return false;
     if(player_fire_effect() > 0) return true;
     int rays = wand_spreads(wand) ? 4 : 1;
@@ -510,6 +553,7 @@ bool emergency_wand(uint8_t type, Action& choice) {
             int score = 0; Position target{NONE,NONE}; bool unsuitable = false;
             for(int i = 0; i < MONSTERS; ++i) if(mask & (1u << i)) {
                 const auto& m = game.monsters[i];
+                if(friendly(m)) { unsuitable=true; break; }
                 if(type == WAND_POLYMORPH && (m.type < INCUBUS || m.type == LORD || m.hp < monster_health(m.type)/2)) {
                     unsuitable = true; break;
                 }
@@ -575,7 +619,7 @@ bool emergency_control(Action& choice) {
         int s = find(type); if(s < 0) continue;
         for(int d = 0; d < 4; ++d) {
             auto ray = scan_ray(game.player,dxs[d],dys[d],6);
-            if(ray.monster == NONE || ray.steps > 2) continue;
+            if(ray.monster == NONE || friendly_slot(ray.monster) || ray.steps > 2) continue;
             const auto& m = game.monsters[ray.monster];
             if(!hostile(m) || controlled(m)) continue;
             choice.kind = ActionKind::Throw; choice.slot = static_cast<uint8_t>(s);
@@ -585,7 +629,7 @@ bool emergency_control(Action& choice) {
     }
     for(uint8_t type : {uint8_t(SCROLL_MASS_CONFUSE),uint8_t(SCROLL_FEAR)}) {
         int s = find(type); if(s < 0) continue;
-        for(int i = 0; i < MONSTERS; ++i) {
+        for(int i = 0; i < HOSTILE_MONSTERS; ++i) {
             const auto& m = game.monsters[i];
             if(m.type && hostile(m) && !controlled(m) && distance(m.pos,game.player) <= 2 &&
                player_can_see_monster(static_cast<uint8_t>(i)) && can_see(m.pos)) {
@@ -609,13 +653,13 @@ bool emergency_control(Action& choice) {
 Paths::Paths(bool allow_monsters, bool allow_teleports) {
     distance.fill(-1); first.fill(-1);
     std::array<bool, MAP_W*MAP_H> occupied{};
-    for(const Monster& m : game.monsters) if(m.type) occupied[cell(m.pos)] = true;
+    for(const Monster& m : game.monsters) if(m.type && !friendly(m)) occupied[cell(m.pos)] = true;
     std::array<int, MAP_W*MAP_H> queue{};
     std::array<int, MAP_W*MAP_H> penalty{};
     bool traps = false;
     std::array<bool, MAP_W*MAP_H> teleport{};
     int pressure = 0;
-    for(const Monster& m : game.monsters) if(m.type && square_contains(m.pos, game.player, 2)) ++pressure;
+    for(const Monster& m : game.monsters) if(m.type && !friendly(m) && square_contains(m.pos, game.player, 2)) ++pressure;
     for(const MapFeature& f : observed_features(game)) if(feature_is_trap(f.id)) {
         teleport[cell(f.pos)] = f.id == FEATURE_TELEPORT_TRAP && !allow_teleports;
         penalty[cell(f.pos)] = f.id == FEATURE_TELEPORT_TRAP ? 60 : pressure ? 3 :
@@ -716,7 +760,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
     if(studying()) { Action a; a.goal="continue spellbook study"; return a; }
     if(game.paralyzed) { Action a; a.goal = "wait for paralysis"; return a; }
     int adjacent = -1, threats = 0;
-    for(int i = 0; i < MONSTERS; ++i) if(game.monsters[i].type) {
+    for(int i = 0; i < HOSTILE_MONSTERS; ++i) if(game.monsters[i].type) {
         const Monster& m = game.monsters[i];
         int d = distance(m.pos,game.player);
         if(d <= 5 && can_see(m.pos)) ++threats;
@@ -731,15 +775,50 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
         bool known=false; for(const auto& f:observed_features(game)) if(feature_is_trap(f.id) && distance(f.pos,game.player)<=4) known=true;
         if(!known) { sense_until=context.turns+96; return cast(SENSE_TRAPS); }
     }
+    if(pet_count()==4 && context.turns>=last_summon+128 && find(SCROLL_TAMING)>=0 && game.hp>danger().pressure+8) {
+        bool better=false;
+        for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) if(taming_target(i) && game.monsters[i].type>=GOBLIN && taming_chance(game.monsters[i],TamingMethod::Scroll)==100) better=true;
+        if(better) for(uint8_t p=HOSTILE_MONSTERS;p<MONSTERS;++p) if(game.monsters[p].type && game.monsters[p].type<=RATTLESNAKE) {
+            last_summon=context.turns; Action a; a.kind=ActionKind::Dismiss; a.target=p; a.goal="make room for substantially stronger companion"; return a;
+        }
+    }
+    if(!game.confused && !game.blindness && game.hp>danger().pressure+4 && pet_count()<4) {
+        for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) {
+            const Monster& target=game.monsters[i];
+            if(!target.type || !taming_target(i) || !taming_chance(target,TamingMethod::Wand) ||
+               (pet_count() && target.type<=RATTLESNAKE)) continue;
+            int scroll=find(SCROLL_TAMING);
+            if(scroll>=0 && taming_chance(target,TamingMethod::Scroll)>=50) return use(scroll,"tame valuable creature",i);
+            for(int d=0;d<4;++d) {
+                if(scan_ray(game.player,dxs[d],dys[d],6).monster!=i) continue;
+                for(int type:{WAND_DOMINATION,POTION_FRIENDSHIP}) {
+                    int slot=find(type); if(slot<0) continue;
+                    Item item=game.inventory[slot];
+                    if(type==WAND_DOMINATION && (wand_afflicted(item) || !wand_charges(item) || wand_spreads(item))) continue;
+                    Action a; a.kind=type==WAND_DOMINATION ? ActionKind::Wand : ActionKind::Throw;
+                    a.slot=uint8_t(slot); a.dx=dxs[d]; a.dy=dys[d]; a.goal="tame valuable creature"; return a;
+                }
+            }
+        }
+    }
+    if(!threats && context.turns>=last_summon+96 && pet_count()<(game.floor<6 ? 1 : game.floor<11 ? 2 : 3)) {
+        bool safe=true; for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) if(game.monsters[i].type && distance(game.player,game.monsters[i].pos)<=6) safe=false;
+        if(safe && game.hp*4>=player_max_hp()*3) for(uint8_t rank=0;rank<4;++rank) {
+            uint8_t spell=summon_preference(rank,game.floor);
+            if(!(game.known_spells&spell_bit(spell)) || game.mana<active_spell_cost(spell) ||
+               game.mana<active_spell_cost(spell)+((game.known_spells & (spell_bit(BLINK)|spell_bit(PHASE_STEP)|spell_bit(EXCHANGE))) ? 4 : 2) || !can_create_pet(HOUND+spell-SUMMON_HOUND,false)) continue;
+            last_summon=context.turns; return cast(spell);
+        }
+    }
     if(!game.blindness && !game.confused && game.hp*4>=player_max_hp()*3 && context.turns>=study_defer_until && study_budget_available(game.known_spells,game.floor)) {
-        bool safe=true; for(const auto& m:game.monsters) if(m.type && distance(m.pos,game.player)<10) safe=false;
+        bool safe=true; for(const auto& m:game.monsters) if(m.type && !friendly_slot(static_cast<uint8_t>(&m-game.monsters)) && distance(m.pos,game.player)<10) safe=false;
         int exits=0; for(int d=0;d<4;++d) { Position p{uint8_t(game.player.x+dxs[d]),uint8_t(game.player.y+dys[d])};
             if(!blocked(p.x,p.y) && !feature_is_trap(observed_feature_at(game,p))) ++exits;
         }
         Item light=game.offhand_slot<INVENTORY ? game.inventory[game.offhand_slot] : Item{};
         int best_book=-1, best_priority=79;
         for(uint8_t s=0;s<inventory_capacity();++s) if(game.inventory[s].type==SPELLBOOK) {
-            uint8_t spell=preferred_book_spell(game.inventory[s].info,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules());
+            uint8_t spell=preferred_book_spell(game.inventory[s].info,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules(),player_max_mana());
             int priority=study_priority(spell,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules());
             if(priority>best_priority) { best_book=s; best_priority=priority; }
         }
@@ -747,7 +826,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
             if(s!=best_book) continue;
             Item book=game.inventory[s];
             if(book.type!=SPELLBOOK || game.has_amulet) continue;
-            uint8_t spell=preferred_book_spell(book.info,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules());
+            uint8_t spell=preferred_book_spell(book.info,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules(),player_max_mana());
             if(spell==NONE || study_priority(spell,game.known_spells,game.floor,best_bow()!=NONE,legacy_spell_rules())<80) continue;
             bool fuel=light.type==GLOWING_ORB || (is_fueled_light(light.type) && light.info*fuel_denominator(light.type)>=active_study_turns(spell)+24);
             if((!fuel || player_light_radius()<2) && !item_is_cursed(light)) {
@@ -834,7 +913,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
     // Track current hostile identities, not a distance/visibility threshold.
     // Stepping beyond sight or around a corner must not renew the same retreat.
     bool encounter_alive = false;
-    for(int i=0; i<MONSTERS; ++i) if((retreat_threats & (1u<<i)) &&
+    for(int i=0; i<HOSTILE_MONSTERS; ++i) if((retreat_threats & (1u<<i)) &&
         game.monsters[i].type && hostile(game.monsters[i])) encounter_alive = true;
     if(!encounter_alive) { retreat_origin = {NONE,NONE}; retreat_steps = 0; retreat_threats = 0; }
     if(healing >= 0 && (game.hp*100 <= player_max_hp()*(adjacent >= 0 ? 65 : 45) ||
@@ -844,9 +923,9 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
     if(!game.fire_resistance && find(POTION_FIRE_RESISTANCE)>=0)
         for(const auto& m:game.monsters) if(m.type==DRAGON && can_see(m.pos)) return use(find(POTION_FIRE_RESISTANCE),"resist dragon fire");
     if(adjacent>=0 && player_can_see_monster(uint8_t(adjacent)) && can_see(game.monsters[adjacent].pos)) {
-        if(find(SCROLL_HOLD_MONSTER)>=0 && !game.monsters[adjacent].stun && (risk.emergency || threats>1)) return use(find(SCROLL_HOLD_MONSTER),"hold nearby threats");
+        if(!pet_count() && find(SCROLL_HOLD_MONSTER)>=0 && !game.monsters[adjacent].stun && (risk.emergency || threats>1)) return use(find(SCROLL_HOLD_MONSTER),"hold nearby threats");
         if(find(SCROLL_MASS_TELEPORT)>=0 && risk.emergency) return use(find(SCROLL_MASS_TELEPORT),"displace visible threats");
-        if(find(SCROLL_FIRE)>=0 && player_fire_effect()>0 && game.monsters[adjacent].type!=DRAGON) return use(find(SCROLL_FIRE),"fire burst with immunity");
+        if(!pet_count() && find(SCROLL_FIRE)>=0 && player_fire_effect()>0 && game.monsters[adjacent].type!=DRAGON) return use(find(SCROLL_FIRE),"fire burst with immunity");
     }
     if(risk.emergency) {
         int experience = find(POTION_EXPERIENCE);
@@ -855,7 +934,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
         if(emergency_control(choice)) return choice;
         // Bounded retreat avoids ping-pong, indefinite kiting and stalling.
         if(retreat_steps < 3 && retreat(retreat_origin,choice)) {
-            for(int i=0; i<MONSTERS; ++i) if(game.monsters[i].type && hostile(game.monsters[i]) &&
+            for(int i=0; i<HOSTILE_MONSTERS; ++i) if(game.monsters[i].type && hostile(game.monsters[i]) &&
                 distance(game.monsters[i].pos,game.player)<=4) retreat_threats |= static_cast<uint16_t>(1u<<i);
             retreat_origin = game.player; ++retreat_steps; return choice;
         }
@@ -890,7 +969,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
     // Real ray scanning determines the first hittable monster, including mimics.
     for(int d = 0; d < 4; ++d) {
         auto ray = scan_ray(game.player,dxs[d],dys[d],6);
-        if(ray.monster == NONE) continue;
+        if(ray.monster == NONE || friendly_slot(ray.monster)) continue;
         const Monster& m = game.monsters[ray.monster];
         bool dangerous = m.type >= ORC || game.hp < 12 || threats > 1;
         if(!dangerous || (ray.steps > 4 && m.type != LORD)) continue;
@@ -908,6 +987,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
         for(uint8_t type : {uint8_t(WAND_LIGHTNING),uint8_t(WAND_STRIKING),uint8_t(WAND_ICE),uint8_t(WAND_FIRE),uint8_t(POTION_HARMING),uint8_t(POTION_FIRE)}) {
             int s = find(type); if(s < 0) continue;
             Item i = game.inventory[s];
+            if(!projectile_safe(i,d)) continue;
             if(is_wand(type) && (wand_afflicted(i) || !wand_charges(i))) continue;
             if(type == WAND_FIRE && (m.type == DRAGON || !fire_safe(i,d))) continue;
             if(type == POTION_FIRE && (m.type == DRAGON || (player_fire_effect()<=0 && square_contains(ray.end,game.player,1)))) continue;
@@ -1008,7 +1088,7 @@ Action OmniscientAgent::choose_action(const DecisionContext& context) {
     // Early, weak monsters provide levels and HP recovery. Avoid chasing bats.
     if(game.floor < 4 && !game.weakened && game.hp > player_max_hp()/2) {
         int target = -1, nearest = 10000;
-        for(int i = 0; i < MONSTERS; ++i) {
+        for(int i = 0; i < HOSTILE_MONSTERS; ++i) {
             const Monster& m = game.monsters[i]; int d = paths.to(m.pos);
             if(!(m.state & MON_TRAP_SUMMONED) && m.type > BAT && m.type <= GOBLIN && d > 0 && d <= 16 && d < nearest) { nearest = d; target = i; }
         }

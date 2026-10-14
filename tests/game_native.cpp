@@ -1,23 +1,15 @@
+#include "status.hpp"
 #include "spells.hpp"
 #include "game.hpp"
-#include "spells.hpp"
 #include "game_internal.hpp"
-#include "spells.hpp"
 #include "inventory_view.hpp"
-#include "spells.hpp"
 #include "persistence.hpp"
-#include "spells.hpp"
 #include "world.hpp"
 
-#include "spells.hpp"
 #include <array>
-#include "spells.hpp"
 #include <cstdio>
-#include "spells.hpp"
 #include <cstdlib>
-#include "spells.hpp"
 #include <cstring>
-#include "spells.hpp"
 #include <string>
 
 static std::string status_text;
@@ -42,6 +34,7 @@ void check_monster_awareness();
 
 namespace rogue {
 const char* status_word(const char*) { return nullptr; }
+bool status_has_message() { return !status_text.empty(); }
 void status_words(const char*) { study_status_output();}
 void status_suffix(char) {}
 void status_capitalize() {}
@@ -53,6 +46,7 @@ void status(const char* words, char punctuation) { study_status_output();
 }
 void status(Item item) { study_status_output(); last_status_item = item; }
 void status(Item item, char) { study_status_output(); last_status_item = item; }
+void status_visible_monster(const Monster& m) { status(m); }
 void status(const Monster&) { study_status_output(); ++monster_status_count; }
 void status(const Monster&, char) { study_status_output(); ++monster_status_count; }
 
@@ -96,7 +90,7 @@ void check_position_value_and_boundaries()
                   "position equality changed");
     static_assert(sizeof(Position) == 2 && sizeof(Door) == 2 &&
                   sizeof(Monster) == 8 && sizeof(GroundItem) == 4 &&
-                  offsetof(Game, see_invisible) == 814 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
+                  offsetof(Game, see_invisible) == 846 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && sizeof(Item) == 2,
                   "saved entity layout changed");
     const Position corners[] = {{0, 0}, {MAP_W - 1, 0},
                                 {0, MAP_H - 1}, {MAP_W - 1, MAP_H - 1}};
@@ -185,8 +179,8 @@ void check_floor_generation_snapshots()
     const uint16_t seeds[] = {0, 0x1234, 0x4312, 0xffff};
     const uint32_t expected[4][2] = {
         // Descent includes themed books and mana loot; ascent stays identical.
-        {0xf6d14743u, 0x091ec48cu}, {0x1ed33ba6u, 0xc3c40c3bu},
-        {0x50436fcau, 0x5fe53bf0u}, {0xa7d2c623u, 0x41e15138u}
+        {0x901b445cu, 0x5590906cu}, {0x795ba468u, 0xb9cd7c6bu},
+        {0x04f7eb94u, 0x9d37fbd0u}, {0x2a5ce7dcu, 0xb7b31278u}
     };
     bool matched = true;
     for(unsigned sample = 0; sample < 4; ++sample)
@@ -468,7 +462,7 @@ void check_monster_accessors()
                 monster_health(type) == info.health &&
                 monster_xp(type) == info.xp,
                 "specialized monster accessor differs from full info");
-        if(type == NO_MONSTER || type > LORD)
+        if(type == NO_MONSTER || type >= MONSTER_TYPES)
             require(!info.flags && !info.strength && !info.dexterity &&
                     !info.speed && !info.armor && !info.health && !info.xp,
                     "invalid monster type has nonzero stats");
@@ -646,8 +640,8 @@ void check_rogue_progression()
             "ascent repeated the descending layout");
     for(const GroundItem& item : game.ground)
         require(item.item.type == NO_ITEM, "ordinary loot spawned on ascent");
-    for(const Monster& monster : game.monsters)
-        require(monster.type != NO_MONSTER,
+    for(uint8_t i=0;i<HOSTILE_MONSTERS;++i)
+        require(game.monsters[i].type != NO_MONSTER,
                 "ascent floor did not contain monsters");
     for(uint8_t i = 0; i < game.door_count; ++i)
         require(!door_open(i), "opened door survived onto ascent floor");
@@ -684,7 +678,7 @@ void check_rogue_progression()
     start_new(seed);
     game.floor = FLOORS - 1;
     make_floor();
-    require(game.monsters[MONSTERS - 1].type == LORD,
+    require(game.monsters[HOSTILE_MONSTERS - 1].type == LORD,
             "Lord did not spawn at final descending depth");
     game.player = game.down;
     require(!take_stairs() && game.floor == FLOORS - 1,
@@ -692,7 +686,7 @@ void check_rogue_progression()
     game.inventory[0] = {LONG_SWORD, 1};
     require(drop_disposition(0) == DROP_DISCARD_ALL,
             "Yendor spawn slot was reused before the Lord died");
-    defeat_monster(MONSTERS - 1);
+    defeat_monster(HOSTILE_MONSTERS - 1);
     require(game.monsters[MONSTERS - 1].type == NO_MONSTER &&
             game.ground[GROUND_ITEMS - 1].item.type == YENDOR_AMULET,
             "Lord death did not leave Yendor");
@@ -1603,7 +1597,8 @@ void check_enemy_roster()
             start_new(seed);
             game.floor = floor;
             make_floor();
-            for(const Monster& monster : game.monsters) {
+            for(uint8_t i=0;i<HOSTILE_MONSTERS;++i) {
+                const Monster& monster=game.monsters[i];
                 require(monster.type > NO_MONSTER && monster.type <= LORD &&
                         (floor_types[floor] & (1u << monster.type)),
                         "enemy generated on the wrong floor");
@@ -1990,7 +1985,7 @@ void check_wand_encoding_and_scrolls()
 
 void check_wand_identity_and_generation()
 {
-    static_assert(WAND_COUNT == 8 && sizeof(Item) == 2,
+    static_assert(WAND_COUNT == 9 && sizeof(Item) == 2,
                   "wand layout changed");
     start_new(0x1248);
     uint8_t first[WAND_COUNT];
@@ -2678,6 +2673,7 @@ bool generation_command(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
+    if(argc==2 && std::string(argv[1])=="--companions") { extern void check_companions(); check_companions(); return 0; }
     if(argc==2 && std::string(argv[1])=="--consumables") { extern void check_new_consumables(); check_new_consumables(); return 0; }
     if(argc==2 && std::string(argv[1])=="--spells") { extern void check_spells(); check_spells(); return 0; }
     if(argc==2 && std::string(argv[1])=="--recovery") { extern void check_recovery(); check_recovery(); return 0; }
@@ -2707,6 +2703,7 @@ int main(int argc, char** argv)
     extern void check_spells(); check_spells();
     extern void check_recovery(); check_recovery();
     extern void check_new_consumables(); check_new_consumables();
+    extern void check_companions(); check_companions();
     check_benchmark_scenarios();
     check_combat_rules();
     check_weapon_and_equipment_rules();

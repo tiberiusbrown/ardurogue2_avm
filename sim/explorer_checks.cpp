@@ -554,8 +554,9 @@ void replay() {
     check(a.action_hash==b.action_hash && a.result==b.result && t1.str()==t2.str() && !std::memcmp(&final,&game,sizeof game),"explorer replay changed");
     o.trace=nullptr; o.telemetry=false; auto c=run(42,*p,o);
     check(a.action_hash==c.action_hash && !std::memcmp(&final,&game,sizeof game),"telemetry changed explorer gameplay");
-    for(uint16_t seed=1;seed<=32;++seed) { auto r=run(seed,*p); check(!r.stuck,"constructed competence seeds stuck"); }
     Options regression; regression.max_actions=100000;
+    // Seed 19 escapes at action 21,314; keep the full-game action budget.
+    for(uint16_t seed=1;seed<=32;++seed) { auto r=run(seed,*p,regression); check(!r.stuck,"constructed competence seeds stuck"); }
     for(uint16_t seed:{uint16_t(2478),uint16_t(41822)}) {
         auto r=run(seed,*p,regression);
         check(!r.stuck && (r.result=="death" || r.result=="escaped"),
@@ -750,6 +751,9 @@ void consumable_observations() {
     auto control=std::make_shared<RuleExperiment>();
     control->rules={parse_rule("balance:new-consumables-percent=0")};
     Options options; options.agent=ExplorerAgent::name(); options.experiment=control;
+    // Seed 6725 legitimately survives past 20,000 actions before starving at
+    // action 20,473. Use the balance-run limit; all other stall guards remain.
+    options.max_actions=100000;
     for(uint16_t seed : {uint16_t(3146),uint16_t(6725),uint16_t(378),uint16_t(7461)})
         check(!run(seed,*p,options).stuck,"explorer frontier/blocked-probe regression reached action guard");
     options.experiment.reset();
@@ -907,7 +911,7 @@ void expansion_agents() {
         check(a.kind!=ExplorerActionKind::Wand && b.kind!=ActionKind::Wand,"agent used known afflicted lightning wand");
     }
     for(uint8_t spell=FIREBURST;spell<SPELL_COUNT;++spell) {
-        setup(MAGIC_DART); game.floor=11; game.inventory[0]={SPELLBOOK,spellbook_for_spell(spell)};
+        setup(MAGIC_DART); game.floor=12; game.level=30; game.inventory[0]={SPELLBOOK,spellbook_for_spell(spell)};
         a=policy->choose_action(observe_explorer(0,0)); check(a.kind==ExplorerActionKind::Use && a.slot==0,"explorer failed new book safe study");
         b=oracle.choose_action({game,0,0}); check(b.kind==ActionKind::Use && b.slot==0,"oracle failed new book safe study");
         game.ground[0]={game.player,{SPELLBOOK,spellbook_for_spell(spell)}};

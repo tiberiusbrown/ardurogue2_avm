@@ -86,7 +86,7 @@ void scrolls() {
     arena(); game.ground[0]={{63,31},{POTION_FIRE,1}}; auto before=game;
     apply_scroll_effect(SCROLL_DETECT_OBJECTS);
     require(session.object_detection && !std::memcmp(&game,&before,sizeof game),"detect objects changed saved state");
-    for(uint8_t type=SCROLL_HOLD_MONSTER;type<=SCROLL_LAST;++type) {
+    for(uint8_t type=SCROLL_HOLD_MONSTER;type<=SCROLL_DETECT_OBJECTS;++type) {
         arena(); game.inventory[0]={type,2}; game.fire_resistance=10;
         require(use_inventory(0) && game.turns==1 && item_value(game.inventory[0])==1 && item_type_identified(type),"scroll no-op use/stack/turn/identity");
     }
@@ -204,6 +204,6 @@ void check_new_consumables() {
             bool seen[POTION_COUNT]={}; auto size=is_potion(group)?POTION_COUNT:is_scroll(group)?SCROLL_COUNT:is_ring(group)?RING_COUNT:is_amulet(group)?AMULET_COUNT:WAND_COUNT;
             for(uint8_t i=0;i<size;++i) { auto t=uint8_t(group+i); auto a=item_appearance(t); require(a<size && !seen[a],"appearance collision/overrun"); seen[a]=true; identify_type(t); require(item_type_identified(t),"expanded identification"); ++count; }
         }
-        require(count==65 && !(game.identified_items[8]&0xfe),"63-type identification bounds");
+        require(count==68 && !(game.identified_items[8]&0xf0),"63-type identification bounds");
     }
 }

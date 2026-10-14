@@ -1,4 +1,6 @@
 #include "features.hpp"
+#include <string.h>
+#include "companions.hpp"
 #include "spells.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
@@ -8,6 +10,13 @@
 #include "sim_hooks.hpp"
 
 namespace rogue {
+static uint8_t feature_rows[MAP_H / 8] = {255,255,255,255};
+void begin_feature_lookup() {
+    memset(feature_rows,0,sizeof feature_rows);
+    for(const MapFeature& f:game.features) if(f.id && f.pos.y<MAP_H)
+        feature_rows[f.pos.y>>3] |= static_cast<uint8_t>(1u<<(f.pos.y&7));
+}
+void end_feature_lookup() { memset(feature_rows,255,sizeof feature_rows); }
 uint8_t trap_tuning_depth() {
 #if defined(ARDUROGUE2_SIM)
     if(sim::original_features(sim::FeatureVariant::Early) || sim::original_features(sim::FeatureVariant::Damage)) return 4;
@@ -15,6 +24,7 @@ uint8_t trap_tuning_depth() {
     return game.floor;
 }
 uint8_t feature_at(Position pos) {
+    if(pos.y>=MAP_H || !(feature_rows[pos.y>>3] & (1u<<(pos.y&7)))) return NONE;
     for(uint8_t i = 0; i < MAP_FEATURES; ++i)
         if(game.features[i].id && game.features[i].pos == pos) return i;
     return NONE;
@@ -138,7 +148,7 @@ static void improve_equipped() {
     else set_equipment_enchant(game.inventory[slot], equipment_enchant(game.inventory[slot]) + 1);
 }
 bool summon_monster(uint8_t slot, Position pos, bool no_rewards, bool undead) {
-    if(slot >= MONSTERS || game.monsters[slot].type || blocked(pos.x, pos.y) ||
+    if(slot >= HOSTILE_MONSTERS || game.monsters[slot].type || blocked(pos.x, pos.y) ||
        pos == game.player || monster_at(pos) != NONE) return false;
     uint8_t type = undead ? (game.floor >= 4 ? PHANTOM : ZOMBIE) :
         generation::encounter_type(game.floor, game.random_state);
@@ -152,7 +162,7 @@ bool summon_monster(uint8_t slot, Position pos, bool no_rewards, bool undead) {
 
 bool summon_adjacent_monster() {
     uint8_t slot = NONE;
-    for(uint8_t i = 0; i < MONSTERS; ++i) if(!game.monsters[i].type) { slot = i; break; }
+    for(uint8_t i = 0; i < HOSTILE_MONSTERS; ++i) if(!game.monsters[i].type) { slot = i; break; }
     if(slot == NONE) return false;
     Position chosen{NONE, NONE};
     uint8_t count = 0;
@@ -172,7 +182,7 @@ bool summon_adjacent_monster() {
 // Only bounded local work during activation, never a map-sized gameplay scan.
 static bool summon(Position origin, bool trap, bool undead = false, bool visible = true) {
     uint8_t slot = NONE;
-    for(uint8_t i = 0; i < MONSTERS; ++i) if(!game.monsters[i].type) { slot = i; break; }
+    for(uint8_t i = 0; i < HOSTILE_MONSTERS; ++i) if(!game.monsters[i].type) { slot = i; break; }
     if(slot == NONE) return false;
     uint8_t start = roll(25);
     for(uint8_t n = 0; n < 25; ++n) {
@@ -218,7 +228,7 @@ __attribute__((noinline)) static void monster_trap_message(uint8_t index, uint8_
     }
     if(lethal) { visible_trap_status(monster, F("dies in a trap!")); return; }
     switch(type) {
-    case FEATURE_SPIKE_TRAP: visible_trap_status(monster, F("is struck by spikes!")); break;
+    case FEATURE_SPIKE_TRAP: visible_trap_status(monster, F("hits spikes!")); break;
     case FEATURE_POISON_DART_TRAP: visible_trap_status(monster, F("is poisoned!")); break;
     case FEATURE_FLAME_TRAP: visible_trap_status(monster, monster.type == DRAGON ? F("ignores the flames!") : F("is burned!")); break;
     case FEATURE_FROST_TRAP: visible_trap_status(monster, F("is chilled!")); break;
@@ -433,7 +443,11 @@ __attribute__((noinline)) bool resolve_feature(uint8_t index, FeatureChoice choi
     case FEATURE_HEALING_SPRING: blessing(2); cure(); break;
     case FEATURE_ALTAR: {
         uint8_t outcome = roll(8);
-        if(outcome < 3) blessing();
+        if(outcome == 0 && BALANCE_VALUE("pets", 1)) {
+            uint8_t pick = roll(8);
+            uint8_t pet = pick < 5 ? HOUND : pick < 7 ? SPIDER : WISP;
+            if(!create_pet(pet, PetSource::Altar)) blessing();
+        } else if(outcome < 3) blessing();
         else if(outcome < 5) random_uncurse();
         else if(outcome == 5) random_identify();
         else if(outcome == 6) { if(roll(2)) weaken(); else confuse(); }

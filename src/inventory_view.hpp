@@ -165,18 +165,18 @@ struct InventoryView {
 
 // Fixed membership and the player's known mask are the complete book UI model.
 struct SpellbookView {
-    uint16_t contents, known;
-    uint8_t count() const {
+    uint32_t contents, known;
+    __attribute__((noinline)) uint8_t count() const {
         uint8_t total = 0;
         for(uint8_t s = 0; s < SPELL_COUNT; ++s) if(contents & spell_bit(s)) ++total;
         return total;
     }
-    uint8_t entry_at(uint8_t row) const {
+    __attribute__((noinline)) uint8_t entry_at(uint8_t row) const {
         for(uint8_t s = 0; s < SPELL_COUNT; ++s)
             if((contents & spell_bit(s)) && row-- == 0) return s;
         return NONE;
     }
-    uint8_t position(uint8_t spell) const {
+    __attribute__((noinline)) uint8_t position(uint8_t spell) const {
         uint8_t row = 0;
         for(uint8_t s = 0; s < SPELL_COUNT; ++s) if(contents & spell_bit(s)) {
             if(s == spell) return row;
@@ -184,7 +184,7 @@ struct SpellbookView {
         }
         return NONE;
     }
-    uint8_t move(uint8_t spell, int8_t step) const {
+    __attribute__((noinline)) uint8_t move(uint8_t spell, int8_t step) const {
         int16_t start = spell == NONE ? (step > 0 ? 0 : SPELL_COUNT - 1) : int16_t(spell) + step;
         for(int16_t s = start; s >= 0 && s < SPELL_COUNT; s += step)
             if((contents & ~known) & spell_bit(static_cast<uint8_t>(s))) return static_cast<uint8_t>(s);

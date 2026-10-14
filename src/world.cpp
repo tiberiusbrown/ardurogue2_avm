@@ -68,8 +68,22 @@ bool explored(Position pos)
     return (game.explored[index >> 3] & (1u << (index & 7))) != 0;
 }
 
+static uint8_t door_rows[MAP_H / 8] = {255,255,255,255};
+// Door positions remain fixed during creature actions; opening a door does
+// not invalidate this conservative row filter.
+void begin_door_lookup()
+{
+    for(auto& row:door_rows) row=0;
+    for(uint8_t i=0;i<game.door_count;++i) {
+        uint8_t y=door_position(i).y;
+        if(y<MAP_H) door_rows[y>>3] |= static_cast<uint8_t>(1u<<(y&7));
+    }
+}
+void end_door_lookup() { for(auto& row:door_rows) row=255; }
+
 uint8_t door_at(Position pos)
 {
+    if(pos.y>=MAP_H || !(door_rows[pos.y>>3] & (1u<<(pos.y&7)))) return NONE;
     for(uint8_t i = 0; i < game.door_count; ++i)
         if(door_position(i) == pos)
             return i;

@@ -7,8 +7,8 @@
 #include "explorer_parameters.hpp"
 
 namespace sim {
-inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 9;
-inline constexpr int EXPLORER_APPEARANCES = 19;
+inline constexpr unsigned EXPLORER_OBSERVATION_VERSION = 10;
+inline constexpr int EXPLORER_APPEARANCES = 20;
 inline constexpr int EXPLORER_W = 64, EXPLORER_H = 32, EXPLORER_CELLS = 2048;
 struct SeenPosition {
     uint8_t x=255, y=255;
@@ -30,6 +30,12 @@ struct SeenMonster {
     uint8_t type=0, strength=0, speed=0, armor=0;
     uint16_t traits=0; // Public species definitions, never live HP/status/AI.
     uint8_t handle=255;
+    bool friendly=false;
+};
+struct SeenCompanion {
+    uint8_t type=0, hp=0, maximum=0, stun=0, effects[2]{}, state=0, handle=255;
+    bool summoned=false;
+    // Location exists only in the ordinary visible-monster list.
 };
 enum class MeleeFeedback : uint8_t { None, Miss, Hit, Defeat };
 struct ExplorerObservation {
@@ -37,7 +43,7 @@ struct ExplorerObservation {
     uint8_t floor=0, hp=0, max_hp=0, level=0, xp=0, strength=0, dexterity=0, speed=0, hunger=0;
     uint8_t weakened=0, confused=0, paralyzed=0, slowed=0, invisible=0, blindness=0; // Known flags, not hidden timers.
     uint8_t radius=0, inventory_capacity=20;
-    uint16_t known_spells=0;
+    uint32_t known_spells=0;
     uint8_t mana=0, max_mana=0, study_spell=255, study_progress=0;
     bool studying=false;
     bool legacy_spell_rules=false; // Public experimental costs/durations, never hidden state.
@@ -52,8 +58,10 @@ struct ExplorerObservation {
     std::array<Terrain,EXPLORER_CELLS> terrain{}; // Only current sight or explicit mechanical reveals.
     std::bitset<EXPLORER_CELLS> visible;
     std::array<uint8_t,EXPLORER_CELLS> features{};
-    std::array<SeenGround,36> ground{}; // Includes indistinguishable mimic sprites.
-    std::array<SeenMonster,12> monsters{};
+    std::array<SeenGround,40> ground{}; // Includes indistinguishable mimic sprites.
+    std::array<SeenMonster,16> monsters{};
+    std::array<SeenCompanion,4> companions{};
+    uint8_t companion_count=0;
     uint8_t ground_count=0, monster_count=0;
     std::array<std::array<uint8_t,EXPLORER_APPEARANCES>,6> identities{}; // Only identified appearance mappings.
     bool attacked=false, last_rejected=false; // Public feedback, never raw attacker coordinates.
@@ -68,7 +76,7 @@ struct ExplorerObservation {
     uint8_t incoming_attacks=0, anonymous_attacks=0; // Printed attacks, no bearings.
     bool encounter_changed=false, summoning_reported=false; // Public status prose.
 };
-enum class ExplorerActionKind { Move, Wait, Take, Stairs, Use, Throw, Wand, Drop, Cast, CancelStudy };
+enum class ExplorerActionKind { Move, Wait, Take, Stairs, Use, Throw, Wand, Drop, Cast, CancelStudy, Dismiss };
 struct ExplorerAction {
     ExplorerActionKind kind=ExplorerActionKind::Wait;
     int8_t dx=0, dy=0;
@@ -135,6 +143,7 @@ class ExplorerAgent final {
     unsigned retreat_budget=0, quiet_turns=0, stalled=0, bow_cooldown=0;
     SeenPosition prolonged_target;
     unsigned prolonged_melee=0;
+    uint64_t last_summon=0;
     uint64_t study_defer_until=0, magic_control_until=0, trap_sense_until=0, blood_until=0;
     uint8_t previous_study=255;
     uint8_t pending_ring=255;

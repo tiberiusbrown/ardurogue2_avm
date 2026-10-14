@@ -1,4 +1,5 @@
 #include "spells.hpp"
+#include "companions.hpp"
 #include "game.hpp"
 #include "game_internal.hpp"
 #include "world.hpp"
@@ -66,10 +67,7 @@ void cancel_study(bool announce) {
     session.study_progress = 0;
     if(announce) status(F("You lose your concentration."));
 }
-__attribute__((noinline)) bool advance_study() {
-    if(!studying()) return false;
-    SIM_EVENT(sim::EventKind::StudyTurn, session.study_slot, session.study_spell);
-    end_turn();
+__attribute__((noinline)) static bool finish_study_step() {
     if(!studying()) return true; // Death/floor transition canceled the activity.
     ++session.study_progress;
     if(session.study_message || !can_read() || game.hunger < STUDY_HUNGRY ||
@@ -95,6 +93,13 @@ __attribute__((noinline)) bool advance_study() {
     return true;
 }
 
+__attribute__((noinline)) bool advance_study() {
+    if(!studying()) return false;
+    SIM_EVENT(sim::EventKind::StudyTurn, session.study_slot, session.study_spell);
+    end_turn();
+    return finish_study_step();
+}
+
 bool exchange_target(uint8_t index) {
     return index < MONSTERS && player_can_see_monster(index) &&
         in_spell_radius(int16_t(game.monsters[index].pos.x) - game.player.x,
@@ -112,6 +117,7 @@ __attribute__((noinline)) static bool knockback_step(uint8_t index,int8_t dx,int
         return false;
     }
     knockback_landing=next; game.monsters[index].pos=next;
+    delay_pet_recall(index);
     return true;
 }
 __attribute__((noinline)) uint8_t knockback_monster(uint8_t index,int8_t dx,int8_t dy,uint8_t distance) {
@@ -196,6 +202,7 @@ __attribute__((noinline)) void lightning_ray(int8_t dx,int8_t dy,const Lightning
     uint8_t hit=lightning_state.target;
     if(hit==NONE || (hit_mask & (1u<<hit))) return;
     for(uint8_t jump=0;jump<profile->targets && !session.ended;++jump) {
+        if(friendly_slot(lightning_state.target)) SIM_EVENT(sim::EventKind::PetIntercept, lightning_state.target, game.monsters[lightning_state.target].type, 1, jump ? 1 : 0);
         hit_mask |= uint16_t(1u<<lightning_state.target);
         // Origin survives death of the target; never retain Monster references.
         lightning_state.origin=game.monsters[lightning_state.target].pos;
@@ -211,6 +218,7 @@ __attribute__((noinline)) static void fireburst(int8_t dx,int8_t dy) {
     RayResult ray=scan_ray(game.player,dx,dy,5);
     animate_ray(game.player,dx,dy,ray.steps);
     animate_fire_burst(ray.end);
+    if(friendly_slot(ray.monster)) SIM_EVENT(sim::EventKind::PetIntercept, ray.monster, game.monsters[ray.monster].type, 1, 0);
     fire_burst_damage(ray.end,true,1,3,4);
 }
 __attribute__((noinline)) static void phase_step(int8_t dx,int8_t dy) {
@@ -240,6 +248,7 @@ __attribute__((noinline)) static void spell_ray(uint8_t spell, int8_t dx, int8_t
     do {
         uint8_t hit = spell_ray_target(dx, dy);
         if(hit == NONE) { if(!ray_state.hits) status(F("Nothing happens.")); break; }
+        if(friendly_slot(hit)) SIM_EVENT(sim::EventKind::PetIntercept, hit, game.monsters[hit].type, 1, 0);
         game.monsters[hit].state |= MON_AGGRO;
         SIM_EVENT(sim::EventKind::PlayerAttack, hit, game.monsters[hit].type);
         ++ray_state.hits;
@@ -302,14 +311,18 @@ __attribute__((noinline)) static void cleanse() {
     else if(game.slowed) { game.slowed=0; status(F("Your movement clears.")); }
     else status(F("Nothing needs cleansing."));
 }
-__attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, uint8_t target) {
+__attribute__((noinline)) static bool prepare_spell(uint8_t spell, int8_t dx, int8_t dy, uint8_t target) {
     if(studying() || session.ended || game.paralyzed || spell >= SPELL_COUNT ||
        !(game.known_spells & spell_bit(spell))) return false;
     if(spell_directional(spell) && !((dx == 0 && (dy == -1 || dy == 1)) || (dy == 0 && (dx == -1 || dx == 1)))) return false;
     if(spell == EXCHANGE && !exchange_target(target)) { status(F("No visible target in range.")); return false; }
+    if(summon_spell(spell) && !can_create_pet(static_cast<uint8_t>(HOUND + spell - SUMMON_HOUND))) return false;
     if(game.mana < active_spell_cost(spell)) { status(F("Not enough mana.")); return false; }
     game.mana -= active_spell_cost(spell);
     SIM_EVENT(sim::EventKind::SpellCast, target, spell, active_spell_cost(spell));
+    return true;
+}
+__attribute__((noinline)) static void resolve_spell(uint8_t spell, int8_t dx, int8_t dy, uint8_t target) {
     {
 #if defined(ARDUROGUE2_SIM)
         sim::DamageScope source(sim::Cause::Spell, spell);
@@ -319,10 +332,11 @@ __attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, u
             // MR, bonuses or fire mitigation and consumes Phoenix Heart normally.
             SIM_EVENT(sim::EventKind::HealthSacrificed,NONE,spell,game.hp<spell_hp_cost(spell) ? game.hp : spell_hp_cost(spell));
             hurt_player(spell_hp_cost(spell));
-            if(session.ended) { SIM_EVENT(sim::EventKind::BloodDeath,NONE,spell); return true; }
+            if(session.ended) { SIM_EVENT(sim::EventKind::BloodDeath,NONE,spell); return; }
             status(F("You sacrifice 3 HP!"));
         }
-        if(spell == FIREBURST) fireburst(dx,dy);
+        if(summon_spell(spell)) create_prepared_pet(static_cast<uint8_t>(HOUND + spell - SUMMON_HOUND), PetSource::Spell);
+        else if(spell == FIREBURST) fireburst(dx,dy);
         else if(spell == PHASE_STEP) phase_step(dx,dy);
         else if(spell == CHAIN_LIGHTNING) { uint16_t hit_mask=0; lightning_ray(dx,dy,&LIGHTNING_SPELL,hit_mask); }
         else if(spell_directional(spell)) spell_ray(spell,dx,dy);
@@ -332,6 +346,11 @@ __attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, u
         case CLEANSE: cleanse(); break; default: break;
         }
     }
+}
+
+__attribute__((noinline)) bool cast_spell(uint8_t spell, int8_t dx, int8_t dy, uint8_t target) {
+    if(!prepare_spell(spell, dx, dy, target)) return false;
+    resolve_spell(spell, dx, dy, target);
     if(!session.ended) end_turn();
     return true;
 }
@@ -342,13 +361,13 @@ static uint8_t book_from_pool(uint16_t draw,bool basic,bool expanded) {
     uint8_t total=0;
     for(uint8_t s=0;s<SPELL_COUNT;++s) {
         auto def=spell_definition(s);
-        if(!def.weight || (!expanded && expansion_spell(s)) || (def.category==SpellCategory::Basic)!=basic) continue;
+        if(summon_spell(s) || !def.weight || (!expanded && expansion_spell(s)) || (def.category==SpellCategory::Basic)!=basic) continue;
         total+=expanded ? def.weight : 1;
     }
     uint8_t pick=draw%total;
     for(uint8_t s=0;s<SPELL_COUNT;++s) {
         auto def=spell_definition(s);
-        if(!def.weight || (!expanded && expansion_spell(s)) || (def.category==SpellCategory::Basic)!=basic) continue;
+        if(summon_spell(s) || !def.weight || (!expanded && expansion_spell(s)) || (def.category==SpellCategory::Basic)!=basic) continue;
         uint8_t weight=expanded ? def.weight : 1;
         if(pick<weight) return s;
         pick-=weight;
@@ -366,6 +385,23 @@ void generate_spellbooks() {
         if(item.type == SPELLBOOK && item.info < BOOK_COUNT) unavailable |= uint8_t(1u << item.info);
     for(const GroundItem& ground : game.ground)
         if(ground.item.type == SPELLBOOK && ground.item.info < BOOK_COUNT) unavailable |= uint8_t(1u << ground.item.info);
+    uint8_t companion_slot = NONE;
+    // Separate domain: scheduled on the first physical floor, retried through
+    // floor three if it has no eligible ordinary loot. No saved acquisition bit.
+    if(BALANCE_VALUE("pets", 1) && BALANCE_VALUE("multi-spell-books", 1) && !(unavailable & (1u << BOOK_COMPANIONS))) {
+        uint16_t pet_seed = static_cast<uint16_t>(game.run_seed ^ ((game.floor + 1u) * 0x57cbu));
+        uint8_t slots = ground_item_capacity();
+        uint8_t start = next_random(pet_seed) % slots;
+        bool scheduled = game.floor < 3 || next_random(pet_seed) % 100 < 35;
+        if(scheduled) for(uint8_t n = 0; n < slots; ++n) {
+            GroundItem& candidate = game.ground[(start + n) % slots];
+            uint8_t t = candidate.item.type;
+            if(!t || t == SPELLBOOK || is_artifact(t) || t == YENDOR_AMULET || t == FOOD || is_ammo(t) || is_light(t) ||
+               t == POTION_HEALING || t == POTION_EXTRA_HEALING || t == POTION_MANA_RESTORATION) continue;
+            companion_slot = static_cast<uint8_t>((start + n) % slots);
+            break;
+        }
+    }
     for(GroundItem& ground : game.ground) {
         uint8_t type = ground.item.type;
         if(!type || type == SPELLBOOK || is_artifact(type) || type == YENDOR_AMULET || type == FOOD || is_ammo(type) || is_light(type)) continue;
@@ -386,5 +422,6 @@ void generate_spellbooks() {
         unavailable |= uint8_t(1u << book);
         ground.item = {SPELLBOOK, book};
     }
+    if(companion_slot != NONE) game.ground[companion_slot].item = {SPELLBOOK, BOOK_COMPANIONS};
 }
 }

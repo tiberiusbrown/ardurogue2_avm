@@ -15,13 +15,14 @@ namespace {
 
 static uint8_t status_x = 67, status_y = 28;
 
+bool has_status_message() { return status_x != 67 || status_y != 28; }
+
 int16_t status_character_width(char c)
 {
 #if defined(__AVM__)
     // main.cpp fixes the gameplay font to BR5D. Read its public x-advance
     // table instead of invoking the text renderer just to measure one word.
-    uint8_t index = static_cast<uint8_t>(c) - 32;
-    return index < 95 ? STATUS_ADVANCES[index] : 0;
+    return STATUS_ADVANCES[static_cast<uint8_t>(c)];
 #else
     char word[2] = {c, 0};
     return avm_draw_text(128, 0, word).x - 128;
@@ -149,28 +150,6 @@ void status_formatted_number(uint8_t value, char sign)
     status_word(buf);
 }
 
-const char AVM_PROGMEM* monster_name(uint8_t type)
-{
-    switch(type) {
-    case BAT: return F("bat");
-    case SNAKE: return F("snake");
-    case RATTLESNAKE: return F("rattlesnake");
-    case ZOMBIE: return F("zombie");
-    case GOBLIN: return F("goblin");
-    case PHANTOM: return F("phantom");
-    case ORC: return F("orc");
-    case TARANTULA: return F("tarantula");
-    case HOBGOBLIN: return F("hobgoblin");
-    case MIMIC: return F("mimic");
-    case INCUBUS: return F("incubus");
-    case TROLL: return F("troll");
-    case GRIFFIN: return F("griffin");
-    case DRAGON: return F("dragon");
-    case ANGEL: return F("fallen angel");
-    case LORD: return F("Lord of Darkness");
-    default: return F("foe");
-    }
-}
 
 void status_entity(const Monster& monster, char punctuation = 0)
 {
@@ -184,12 +163,12 @@ static const char PROGMEM* const PROGMEM potion_effect_names[] = {
     F("healing"), F("confusion"), F("poison"), F("harming"),
     F("strength"), F("dexterity"), F("paralysis"), F("slowing"),
     F("experience"), F("invisibility"), F("blindness"), F("see invisible"),
-    F("extra healing"), F("restore vitality"), F("haste"), F("levitation"), F("fire resistance"), F("fire"), F("mana restoration")
+    F("extra healing"), F("restore vitality"), F("haste"), F("levitation"), F("fire resistance"), F("fire"), F("mana restoration"), F("friendship")
 };
 static const char PROGMEM* const PROGMEM potion_color_names[] = {
     F("red"), F("clear"), F("orange"), F("green"), F("blue"),
     F("white"), F("yellow"), F("violet"), F("black"), F("pink"), F("brown"), F("silver"),
-    F("amber"), F("cyan"), F("golden"), F("crimson"), F("indigo"), F("turquoise"), F("lavender")
+    F("amber"), F("cyan"), F("golden"), F("crimson"), F("indigo"), F("turquoise"), F("lavender"), F("peach")
 };
 static const char PROGMEM* const PROGMEM ring_names[] = {
     F("see invisible"), F("strength"), F("dexterity"), F("protection"),
@@ -205,12 +184,12 @@ static const char PROGMEM* const PROGMEM scroll_names[] = {
     F("identify"), F("enchanting"), F("remove curse"),
     F("teleportation"), F("magic mapping"), F("fear"),
     F("torment"), F("mass confusion"), F("mass poison"), F("hold monster"),
-    F("detect traps"), F("summoning"), F("mass teleportation"), F("fire"), F("detect objects")
+    F("detect traps"), F("summoning"), F("mass teleportation"), F("fire"), F("detect objects"), F("taming")
 };
 static const char PROGMEM* const PROGMEM scroll_descriptors[] = {
     F("faded"), F("yellowed"), F("tattered"), F("glowing"),
     F("shimmering"), F("humming"), F("dark"), F("bright"),
-    F("brilliant"), F("smoky"), F("crisp"), F("creased"), F("speckled"), F("silky"), F("rune-covered")
+    F("brilliant"), F("smoky"), F("crisp"), F("creased"), F("speckled"), F("silky"), F("rune-covered"), F("velvety")
 };
 static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
     F("diamond"), F("ruby"), F("emerald"), F("topaz"),
@@ -219,7 +198,7 @@ static const char PROGMEM* const PROGMEM jewel_descriptors[] = {
 };
 static const char PROGMEM* const PROGMEM wand_names[] = {
     F("force"), F("teleportation"), F("digging"), F("fire"),
-    F("striking"), F("ice"), F("polymorph"), F("lightning")
+    F("striking"), F("ice"), F("polymorph"), F("lightning"), F("domination")
 };
 static const char PROGMEM* const PROGMEM wand_modifier_names[] = {
     F(""), F("cursed"), F("unreliable"), F("spreading"),
@@ -227,7 +206,7 @@ static const char PROGMEM* const PROGMEM wand_modifier_names[] = {
 };
 static const char PROGMEM* const PROGMEM wand_descriptors[] = {
     F("long"), F("short"), F("slender"), F("thick"),
-    F("twisted"), F("curved"), F("glossy"), F("forked")
+    F("twisted"), F("curved"), F("glossy"), F("forked"), F("knotted")
 };
 
 static_assert(sizeof(potion_effect_names) / sizeof(*potion_effect_names) == POTION_COUNT &&
@@ -614,6 +593,8 @@ void rogue::reset_status_position()
     status_x = 67;
     status_y = 28;
 }
+
+bool rogue::status_has_message() { return has_status_message(); }
 
 uint8_t rogue::status_baseline()
 {

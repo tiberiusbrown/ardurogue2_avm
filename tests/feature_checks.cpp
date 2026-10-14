@@ -135,14 +135,14 @@ void summons_and_holy() {
     }
     arena(FEATURE_SUMMONING_TRAP); activate_entry_feature(0);
     unsigned count = 0;
-    for(uint8_t i = 0; i < MONSTERS; ++i) if(game.monsters[i].type) {
+    for(uint8_t i = 0; i < HOSTILE_MONSTERS; ++i) if(game.monsters[i].type) {
         ++count; require(game.monsters[i].pos != game.player && (game.monsters[i].state & MON_TRAP_SUMMONED), "trap monster initialization");
         defeat_monster(i);
     }
     require(count >= 1 && count <= 2 && !game.score && !game.xp, "summoning XP farming");
     for(unsigned n = 0; n < 20; ++n) activate_entry_feature(0);
     count = 0; for(const Monster& m : game.monsters) count += bool(m.type);
-    require(count == MONSTERS, "summoning capacity");
+    require(count == HOSTILE_MONSTERS, "summoning capacity");
     auto monsters = std::array<Monster, MONSTERS>{}; std::memcpy(monsters.data(), game.monsters, sizeof game.monsters);
     activate_entry_feature(0); require(!std::memcmp(monsters.data(), game.monsters, sizeof game.monsters), "full monster array overwritten");
     arena(FEATURE_HOLY_SYMBOL);
@@ -211,7 +211,8 @@ void outcome_checks() {
         arena(FEATURE_ALTAR); game.hp=20; game.random_state=seed_for(8,outcome);
         game.inventory[0]=make_equipment(LONG_SWORD,0); game.inventory[0].info|=ITEM_CURSED;
         resolve_feature(0,{true,NONE});
-        if(outcome<3) require(game.hp==45,"altar healing weights");
+        if(outcome==0) require(game.monsters[12].type>=HOUND && game.monsters[12].type<=WISP && game.hp==20,"altar companion outcome");
+        else if(outcome<3) require(game.hp==45,"altar healing weights");
         else if(outcome<5) require(!item_is_cursed(game.inventory[0]),"altar uncurse weights");
         else if(outcome==5) require(item_is_identified(game.inventory[0]),"altar identify");
         else if(outcome==6) require(game.weakened || game.confused,"altar affliction");
@@ -350,7 +351,7 @@ void monster_traps() {
                 m.pos!=game.up && m.pos!=game.down && m.hp==before.hp && m.effects[0]==0 && m.effects[1]==0,"monster teleport invariants");
             if(trap==FEATURE_SUMMONING_TRAP) {
                 unsigned count=0;
-                for(unsigned i=1;i<MONSTERS;++i) if(game.monsters[i].type) {
+                for(unsigned i=1;i<HOSTILE_MONSTERS;++i) if(game.monsters[i].type) {
                     ++count; const auto& spawn=game.monsters[i];
                     require(square_contains(before.pos,spawn.pos,2) && spawn.pos!=game.player && !blocked(spawn.pos.x,spawn.pos.y) &&
                         (spawn.state&MON_TRAP_SUMMONED) && monster_at(spawn.pos)==i,"monster-origin summon");
@@ -377,7 +378,7 @@ void monster_traps() {
     setup(FEATURE_SPIKE_TRAP); game.monsters[0].hp=1; game.monsters[0].state=MON_TRAP_SUMMONED; activate_monster_trap(0);
     require(!game.monsters[0].type && !game.score && !game.xp,"summoned trap kill credit");
     setup(FEATURE_SUMMONING_TRAP);
-    for(uint8_t i=1;i<MONSTERS;++i) game.monsters[i]={{uint8_t(20+i),20},GOBLIN,42,7,{255,255},MON_AGGRO};
+    for(uint8_t i=1;i<HOSTILE_MONSTERS;++i) game.monsters[i]={{uint8_t(20+i),20},GOBLIN,42,7,{255,255},MON_AGGRO};
     Game full=game; activate_monster_trap(0);
     require(!std::memcmp(full.monsters,game.monsters,sizeof game.monsters),"full summon overwrote monster");
     game.monsters[1].type=0; activate_monster_trap(0);
@@ -480,7 +481,7 @@ void monster_entry_checks() {
     setup(); game.speed=4; game.features[0].id=FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN;
     for(uint8_t i=1;i<MAP_FEATURES;++i) game.features[i]={{uint8_t(8+i%5),uint8_t(8+i/5)},FEATURE_SUMMONING_TRAP|MAP_FEATURE_HIDDEN};
     end_turn(); unsigned count=0;
-    for(uint8_t i=1;i<MONSTERS;++i) if(game.monsters[i].type) {
+    for(uint8_t i=1;i<HOSTILE_MONSTERS;++i) if(game.monsters[i].type) {
         ++count; require(game.monsters[i].hp==monster_health(game.monsters[i].type) && (game.monsters[i].state&MON_TRAP_SUMMONED),"new summon action/state");
     }
     require(count>=1 && count<=2,"new summon recursively acted this turn");
@@ -564,7 +565,7 @@ void generation_checks() {
     for(uint16_t seed = 1; seed <= 1000; ++seed) {
         for(bool unholy : {false, true}) {
             arena(); game.run_seed = seed;
-            for(uint8_t i = 0; i < MONSTERS; ++i) game.monsters[i] = {{uint8_t(30 + i), 25}, uint8_t(unholy ? ZOMBIE : GOBLIN), 10, 0, {0, 0}, 0};
+            for(uint8_t i = 0; i < HOSTILE_MONSTERS; ++i) game.monsters[i] = {{uint8_t(30 + i), 25}, uint8_t(unholy ? ZOMBIE : GOBLIN), 10, 0, {0, 0}, 0};
             generation::populate_features(generation::floor_seed(generation::MAP_FEATURE_DOMAIN));
             for(const MapFeature& f : game.features) if(f.id == FEATURE_HOLY_SYMBOL) { if(unholy) ++high; else ++low; }
         }
@@ -579,7 +580,7 @@ void generation_checks() {
 }
 }
 void check_map_features() {
-    static_assert(sizeof(MapFeature) == 3 && offsetof(Game, see_invisible) == 814 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && offsetof(Game, features) == 776 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16), "map feature saved layout");
+    static_assert(sizeof(MapFeature) == 3 && offsetof(Game, see_invisible) == 846 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && offsetof(Game, features) == 808 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16), "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
     monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
 }

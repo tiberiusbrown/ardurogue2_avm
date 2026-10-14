@@ -9,6 +9,8 @@ bool wall_exposed(uint8_t x, uint8_t y);
 void explore(Position pos);
 bool explored(Position pos);
 uint8_t door_at(Position pos);
+void begin_door_lookup();
+void end_door_lookup();
 bool door_open(uint8_t index);
 void open_door(uint8_t index);
 Position door_position(uint8_t index);

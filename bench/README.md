@@ -39,12 +39,12 @@ pushes multiple tiles and enters an intermediate trap. Cast confirmation uses th
 actual scrolling action menu and deferred targeting flow. Study benchmarks exclude
 the intentional 90 ms presentation pacing and measure gameplay plus rendering.
 The [magic report](../docs/SPELLS-RESULTS.md) records the historical 115-case run.
-The [expansion report](../docs/MAGIC-EXPANSION-RESULTS.md) records the current
+The [expansion report](../docs/MAGIC-EXPANSION-RESULTS.md) records the historical
 123-case run, including five additional spells and three lightning wand workloads.
 
 ## Run
 
-Build the game and run all 123 cases once:
+Build the game and run all 140 cases once:
 
 ```text
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DAVM_SDK_ROOT=<sdk>
@@ -262,3 +262,14 @@ and costs as well as the ordinary turn. Deliberate animations are excluded;
 gameplay, status paging and final rendering remain measured. The linker proves
 the complete stack bound for production and benchmark ELFs. Results are in
 [MAGIC-EXPANSION-RESULTS.md](../docs/MAGIC-EXPANSION-RESULTS.md).
+
+## Companion workloads
+
+The current 140-case suite retains every previous workload and adds full-party
+turns, player/pet trap swapping, four recalls, summoning with three existing pets,
+real study, overpowered Domination, friendly spell interception, Wisp attacks,
+twelve traps with twelve hostiles/four pets, combat recovery denial at clock wrap,
+and actual four-pet recovery with twelve distant living hostiles. Outcome checks
+verify that recalls, swaps, healing, resource payment and first-hit damage really
+occur. [The pet report](../docs/PETS-RESULTS.md) records the final stack bound,
+maximum timings, localized optimizations, and retained artifacts.

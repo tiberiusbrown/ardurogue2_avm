@@ -5,7 +5,7 @@
 #include <string>
 
 namespace sim {
-enum class ActionKind { Move, Wait, Take, Swap, Stairs, Use, Throw, Wand, Drop, Cast, CancelStudy };
+enum class ActionKind { Move, Wait, Take, Swap, Stairs, Use, Throw, Wand, Drop, Cast, CancelStudy, Dismiss };
 enum class Diagnostic { None, NoPath };
 struct Action {
     ActionKind kind = ActionKind::Wait;
@@ -50,6 +50,7 @@ class OmniscientAgent final : public Agent {
     uint8_t retreat_floor = rogue::NONE;
     unsigned retreat_steps = 0;
     unsigned bow_idle = 0, bow_cooldown = 0;
+    uint64_t last_summon=0;
     uint64_t study_defer_until=0, sense_until=0;
     uint8_t previous_study=rogue::NONE;
     rogue::Position summoned_origin{rogue::NONE, rogue::NONE};
@@ -68,7 +69,7 @@ public:
     // Maintained balance policy. The automatic build hash identifies its exact
     // implementation; establish a fresh reference after extending mechanics.
     const char* name() const override { return "omniscient-v2"; }
-    void reset() override { study_defer_until=sense_until=0; previous_study=rogue::NONE; retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = summoned_combat_steps = 0; summoned_origin = {rogue::NONE, rogue::NONE}; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); navigation_goal = {rogue::NONE, rogue::NONE}; navigation_cursor = navigation_stale = 0; navigation_best = 10000; navigation_history.fill({rogue::NONE, rogue::NONE}); abandoned_loot.fill(false); }
+    void reset() override { last_summon=0; study_defer_until=sense_until=0; previous_study=rogue::NONE; retreat_origin = {rogue::NONE, rogue::NONE}; retreat_floor = rogue::NONE; retreat_steps = 0; retreat_threats = 0; bow_idle = bow_cooldown = holy_entries = summoned_combat_steps = 0; summoned_origin = {rogue::NONE, rogue::NONE}; feature_floor = rogue::NONE; feature_steps = 0; feature_attempted.fill(false); navigation_goal = {rogue::NONE, rogue::NONE}; navigation_cursor = navigation_stale = 0; navigation_best = 10000; navigation_history.fill({rogue::NONE, rogue::NONE}); abandoned_loot.fill(false); }
     Action choose_action(const DecisionContext&) override;
     Action choose_pickup(const DecisionContext&) override;
 };

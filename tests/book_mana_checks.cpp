@@ -36,10 +36,10 @@ void books() {
         Game snapshot=game;
         for(uint8_t invalid=0;invalid<SPELL_COUNT;++invalid) if(!(unknown_book_spells(book,game.known_spells)&spell_bit(invalid)))
             require(!begin_study(0,invalid) && !std::memcmp(&snapshot,&game,sizeof game),"invalid/known spell spent resources");
-        game.known_spells=uint16_t(0xffffu & ~spell_bit(spell)); game.hunger=255;
+        game.known_spells=(ALL_SPELLS & ~spell_bit(spell)); game.hunger=255;
         require(begin_study(0,spell),"final member refused");
         for(uint8_t n=0;n<spell_study_turns(spell);++n) advance_study();
-        require(!game.inventory[0].type && game.known_spells==0xffff && !studying() &&
+        require(!game.inventory[0].type && game.known_spells==ALL_SPELLS && !studying() &&
                 session.study_spell==NONE && session.repeat_slot==NONE,"final member stale references");
     }
     arena(); game.inventory[0]={SPELLBOOK,255}; Game invalid=game;

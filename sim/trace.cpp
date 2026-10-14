@@ -35,6 +35,7 @@ std::string action_text(const Action& a) {
     case ActionKind::Wand: return "WAND slot="+std::to_string(a.slot)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
     case ActionKind::Cast: return "CAST spell="+std::to_string(a.slot)+" target="+std::to_string(a.target)+" direction="+std::to_string(a.dx)+","+std::to_string(a.dy);
     case ActionKind::CancelStudy: return "CANCEL_STUDY";
+    case ActionKind::Dismiss: return "DISMISS pet="+std::to_string(a.target);
     case ActionKind::Drop: return "DROP slot="+std::to_string(a.slot)+" discard="+std::to_string(a.discard);
     }
     return "INVALID";

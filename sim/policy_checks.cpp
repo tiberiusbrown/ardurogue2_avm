@@ -386,6 +386,34 @@ void check_v2_policy() {
     check(dispatch(light_pick),"reserve fuel replacement failed");
     light_pick=agent.choose_pickup({game,0,0});
     check(!(light_pick.kind==ActionKind::Take && light_pick.slot==0),"reserve fuel replacement reversed");
+    // The Companions book exposed a reserve-light/book reverse-swap cycle.
+    arena(); agent.reset(); game.floor=7;
+    for(auto& item:game.inventory) item={POTION_HEALING,1};
+    game.inventory[0]={CANDLE,1}; game.inventory[15]=make_equipment(BUCKLER,0);
+    game.offhand_slot=15; game.amulet_slot=NONE;
+    game.ground[0]={game.player,{SPELLBOOK,BOOK_COMPANIONS}};
+    light_pick=agent.choose_pickup({game,0,0});
+    if(light_pick.kind==ActionKind::Take) {
+        check(dispatch(light_pick),"book/light swap fixture rejected");
+        auto reverse=agent.choose_pickup({game,0,0});
+        check(!(reverse.kind==ActionKind::Take && reverse.slot==light_pick.slot),"book/light swap reversed");
+    }
+    // Seed 3170: the second full candle crosses the 600-turn fuel threshold.
+    // Acquiring it must not evict a book valued between light acquisition and
+    // retention, which previously made the same slot alternate indefinitely.
+    arena(); agent.reset(); game.floor=7; game.known_spells=66617;
+    for(auto& item:game.inventory) item={POTION_HEALING,1};
+    game.offhand_slot=14;
+    // A shield supplies no fuel; public illumination keeps candle score low.
+    game.inventory[14]=make_equipment(BUCKLER,0);
+    game.inventory[18]={AMULET_BRILLIANCE,1}; game.amulet_slot=18;
+    game.inventory[0]={TORCH,25}; game.inventory[2]={TORCH,28};
+    game.inventory[5]={TORCH,41}; game.inventory[6]={TORCH,29};
+    game.inventory[7]={TORCH,29}; game.inventory[19]={CANDLE,125};
+    game.inventory[15]={SPELLBOOK,BOOK_DISPLACEMENT};
+    game.ground[0]={game.player,{CANDLE,125}};
+    light_pick=agent.choose_pickup({game,0,0});
+    check(light_pick.kind!=ActionKind::Take,"fuel-threshold candle displaced useful book");
     // Acquisition and retention must not reverse the bow-owned ammo/wand swap.
     arena(); agent.reset(); for(auto& i:game.inventory) i={POTION_HEALING,1};
     game.inventory[0]=make_equipment(LONG_BOW,0); game.inventory[1]={ARROWS,2};

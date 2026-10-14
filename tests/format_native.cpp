@@ -461,12 +461,12 @@ int main()
     using namespace rogue;
     const char* unknown[] = {
         "long wand", "short wand", "slender wand", "thick wand",
-        "twisted wand", "curved wand", "glossy wand", "forked wand"
+        "twisted wand", "curved wand", "glossy wand", "forked wand", "knotted wand"
     };
     const char* identified[] = {
         "wand of force 5", "wand of teleportation 5",
         "wand of digging 5", "wand of fire 5", "wand of striking 5",
-        "wand of ice 5", "wand of polymorph 5", "wand of lightning 5"
+        "wand of ice 5", "wand of polymorph 5", "wand of lightning 5", "wand of domination 5"
     };
     for(uint8_t i = 0; i < WAND_COUNT; ++i) {
         char text[ITEM_TEXT_CAPACITY];
@@ -481,7 +481,7 @@ int main()
         const char* bare[] = {
             "wand of force", "wand of teleportation", "wand of digging",
             "wand of fire", "wand of striking", "wand of ice",
-            "wand of polymorph", "wand of lightning"
+            "wand of polymorph", "wand of lightning", "wand of domination"
         };
         if(std::strcmp(text, bare[i])) {
             std::fprintf(stderr, "wrong type-known wand text: %s\n", text);

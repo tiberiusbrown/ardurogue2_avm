@@ -1,4 +1,5 @@
 #include "spells.hpp"
+#include "companions.hpp"
 #include <avm.h>
 #include "app_state.hpp"
 #include "game.hpp"
@@ -221,6 +222,22 @@ static uint8_t next_exchange_target(uint8_t from, int8_t step) {
     }
     return NONE;
 }
+static uint8_t next_taming_target(uint8_t from, int8_t step) {
+    for(uint8_t n = 0; n < HOSTILE_MONSTERS; ++n) {
+        from = from == NONE ? (step > 0 ? 0 : HOSTILE_MONSTERS - 1) :
+            static_cast<uint8_t>((from + HOSTILE_MONSTERS + step) % HOSTILE_MONSTERS);
+        if(taming_target(from)) return from;
+    }
+    return NONE;
+}
+static uint8_t next_pet(uint8_t from, int8_t step) {
+    for(uint8_t n = 0; n < PETS; ++n) {
+        from = from == NONE ? (step > 0 ? HOSTILE_MONSTERS : MONSTERS - 1) :
+            static_cast<uint8_t>(HOSTILE_MONSTERS + (from - HOSTILE_MONSTERS + PETS + step) % PETS);
+        if(game.monsters[from].type) return from;
+    }
+    return NONE;
+}
 // Defer wand/projectile activation to the main loop so this UI frame unwinds first.
 __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
 {
@@ -239,6 +256,24 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         return INPUT_NONE;
     }
     uint8_t direction = directional_press(buttons, edges);
+    if(ui.mode == COMPANIONS || ui.mode == DISMISS_CONFIRM) {
+        if(edges & AVM_BUTTON_B) { ui.mode = ui.mode == COMPANIONS ? PLAY : COMPANIONS; ui.dirty = true; }
+        else if(direction && ui.mode == COMPANIONS) {
+            ui.selection = next_pet(ui.selection, direction == AVM_BUTTON_U || direction == AVM_BUTTON_L ? -1 : 1);
+            ui.dirty = true;
+        } else if(edges & AVM_BUTTON_A) {
+            if(ui.mode == DISMISS_CONFIRM) { ui.use_target = ui.selection; ui.mode = PLAY; ui.dirty = true; return INPUT_DISMISS_PET; }
+            if(ui.selection != NONE) ui.mode = DISMISS_CONFIRM;
+            ui.dirty = true;
+        }
+        return INPUT_NONE;
+    }
+    if(ui.mode == TAMING_TARGET) {
+        if(edges & AVM_BUTTON_B) { ui.mode = PLAY; status_clear(); ui.dirty = true; }
+        else if(direction) { ui.use_target = next_taming_target(ui.use_target, direction == AVM_BUTTON_U || direction == AVM_BUTTON_L ? -1 : 1); ui.dirty = true; }
+        else if(edges & AVM_BUTTON_A) { ui.mode = PLAY; status_clear(); defer_play_render(); ui.dirty = true; return INPUT_USE_INVENTORY; }
+        return INPUT_NONE;
+    }
     if(ui.mode == SPELL_MENU || ui.mode == SPELL_TARGET) {
         if(edges & AVM_BUTTON_B) {
             ui.mode = PLAY; status_clear(); ui.dirty = true;
@@ -332,7 +367,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         if(direction == AVM_BUTTON_U && ui.selection) {
             --ui.selection;
             ui.dirty = true;
-        } else if(direction == AVM_BUTTON_D && ui.selection < 7) {
+        } else if(direction == AVM_BUTTON_D && ui.selection < 8) {
             ++ui.selection;
             ui.dirty = true;
         } else if(edges & AVM_BUTTON_B) {
@@ -345,7 +380,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                 ui.mode = PLAY;
                 status_clear();
                 status(F("You wait and search."));
-                wait_search();
+                pending = INPUT_WAIT_SEARCH;
                 break;
             case 1: {
                 ui.mode = PLAY;
@@ -361,6 +396,14 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                             ui.mode = WAND_DIRECTION;
                         else
                             pending = INPUT_WAND_IMMEDIATE;
+                    } else if(type == SCROLL_TAMING) {
+                        ui.selection = slot;
+                        ui.use_target = next_taming_target(NONE, 1);
+                        status_clear();
+                        if(free_pet_slot() == NONE) status(F("You already have four companions."));
+                        else if(ui.use_target == NONE) status(F("No visible target in range."));
+                        else ui.mode = TAMING_TARGET;
+                        break;
                     } else if(type == SPELLBOOK) {
                         target = choose_book_spell(slot);
                         if(target == NONE) { status_clear(); break; }
@@ -399,9 +442,9 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                                 ? yesno(F("Discard this item?"))
                                 : yesno(F("Discard"), game.inventory[slot]));
                         status_clear();
-                        if(confirmed) drop_inventory(slot, true);
+                        if(confirmed) { ui.selection = slot; pending = INPUT_DISCARD; }
                     } else {
-                        drop_inventory(slot);
+                        ui.selection = slot; pending = INPUT_DROP;
                     }
                 } else status_clear();
                 break;
@@ -427,6 +470,7 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
                 ui.has_save = true;
                 ui.mode = TITLE;
                 break;
+            case 8: ui.mode = COMPANIONS; ui.selection = next_pet(NONE, 1); status_clear(); break;
             case 7:
                 status_clear();
                 ui.mode = SPELL_MENU;
@@ -448,13 +492,11 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         ui.selection = 0;
     } else if(direction) {
         status_clear();
-        Position old = game.player;
         int8_t dx = direction == AVM_BUTTON_L ? -1 :
                     direction == AVM_BUTTON_R ? 1 : 0;
         int8_t dy = direction == AVM_BUTTON_U ? -1 :
                     direction == AVM_BUTTON_D ? 1 : 0;
-        begin_player_move(dx, dy);
-        moved = !session.ended && game.player != old;
+        pending = dx > 0 ? INPUT_MOVE_RIGHT : dx < 0 ? INPUT_MOVE_LEFT : dy > 0 ? INPUT_MOVE_DOWN : INPUT_MOVE_UP;
     } else if(edges & AVM_BUTTON_A) {
         status_clear();
         if(!game.paralyzed && session.repeat_slot < INVENTORY &&
@@ -464,13 +506,23 @@ __attribute__((noinline)) InputAction handle_input(uint8_t buttons)
         } else {
             session.repeat_slot = NONE;
             status(game.paralyzed ? F("You cannot act!") : F("There is nothing here."));
-            end_turn();
+            pending = INPUT_WAIT;
         }
     } else {
         return INPUT_NONE;
     }
     ui.dirty = true;
     return moved ? INPUT_MOVED : pending;
+}
+
+__attribute__((noinline)) InputAction resolve_move_input(InputAction input)
+{
+    if(input < INPUT_MOVE_UP || input > INPUT_MOVE_LEFT) return input;
+    Position old = game.player;
+    int8_t dx = input == INPUT_MOVE_RIGHT ? 1 : input == INPUT_MOVE_LEFT ? -1 : 0;
+    int8_t dy = input == INPUT_MOVE_DOWN ? 1 : input == INPUT_MOVE_UP ? -1 : 0;
+    begin_player_move(dx, dy);
+    return !session.ended && game.player != old ? INPUT_MOVED : INPUT_NONE;
 }
 
 uint8_t choose_item(const char AVM_PROGMEM* prompt_text,

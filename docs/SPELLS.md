@@ -28,8 +28,12 @@ player buff timers.
 | Chain Lightning | 4 | 60 | Range-5 first hit for 3–5 magic damage; one visible secondary within Chebyshev 2 takes 3–4. Clear geometric jump path required, nearest target then lowest slot. Invisible monsters cannot receive secondary arcs; lightning can strike and reveal a disguised mimic. |
 | Slumber | 4 | 60 | Range-4 ray; first monster stunned for 3–4 enemy actions, refreshing to the greater duration. The immediate enemy response consumes a stun action. |
 | Blood Bolt | 2 + **3 HP** | 60 | Range-5 first hit for 6–9 magic damage. Sacrifice current HP before firing, even on a miss; bypasses all mitigation, can kill the caster. Phoenix Heart uses its ordinary resurrection lifecycle. No bolt or enemy turn after final death. |
+| Summon Hound | 7 | 60 | Create a persistent fast melee companion with scent. |
+| Summon Spider | 8 | 60 | Create a persistent melee companion that weakens and slows. |
+| Summon Wisp | 10 | 60 | Create a fragile persistent companion that attacks with magic. |
+| Summon Golem | 12 | 60 | Create a slow armored companion that can stun and open doors. |
 
-Names and descriptions are flash strings. A single `SPELL_DEFINITIONS` roster defines IDs, mana/HP costs, study durations, targeting modes and weighted generation categories. IDs 0–10 remain unchanged; IDs 11–15 fill the existing 16-bit known-spell mask. Compile-time checks guard coverage and the two-byte Item layout. Identify and Remove Curse remain future possibilities, with no
+Names and descriptions are flash strings. A single `SPELL_DEFINITIONS` roster defines IDs, mana/HP costs, study durations, targeting modes and weighted generation categories. IDs 0–10 remain unchanged; IDs 11–15 retain the expansion spells; IDs 16–19 add companions in a 32-bit known-spell mask. Compile-time checks guard coverage and the two-byte Item layout. Identify and Remove Curse remain future possibilities, with no
 spell IDs or effects implemented. Illumination, Arcane Ward, Stone to Mud,
 Survey and Fetch are absent.
 
@@ -66,7 +70,7 @@ The authorized balance pass lowers selected MP costs and shortens Piercing Bolt,
 
 ## Books and study
 
-Four fixed, public books cover the fifteen learnable spells. Magic Dart is known
+Five fixed, public books cover the nineteen learnable spells. Magic Dart is known
 initially and appears in no book.
 
 | Book | Contents |
@@ -75,6 +79,7 @@ initially and appears in no book.
 | Book of Displacement | Repulsion, Blink, Shockwave, Phase Step |
 | Book of Survival | Sense Traps, Cleanse, Exchange |
 | Book of Destruction | Piercing Bolt, Blood Bolt, Fireburst, Chain Lightning |
+| Book of Companions | Summon Hound, Summon Spider, Summon Wisp, Summon Golem |
 
 Books occupy ordinary inventory slots and do not stack. The two-byte `Item`
 stores `SPELLBOOK` and a book ID in `info`. Names and memberships never randomize.
@@ -120,12 +125,12 @@ blindness, confusion and lifecycle transitions also stop study. Progress resets
 to zero; ordinary turns, damage and resource costs remain spent.
 
 Progress is transient session state. Save/exit and resume cancel study while
-retaining the book. MP and known spells persist. Save version 32 rejects older
+retaining the book. MP and known spells persist. Save version 33 rejects older
 versions under the existing no-migration policy.
 
 ## Controls
 
-Open the action menu with B and scroll to **CAST SPELL**. The eight-entry action
+Open the action menu with B and scroll to **CAST SPELL**. The nine-entry action
 menu scrolls through seven rows. The spell menu contains only learned spells;
 each shows its cost, with `!` for insufficient MP. A confirms; B cancels freely.
 Directional spells request a cardinal direction. Exchange offers eligible visible
@@ -182,16 +187,17 @@ other amulets still compete through equipment scores.
 
 Explorer-v1 uses only public observations and memory: visible monsters, printed
 attacks, known terrain/hazards, legitimately inspected book IDs, learned spells,
-displayed MP and study progress. Observation protocol 9 withholds remote book
+displayed MP and study progress. Observation protocol 10 withholds remote book
 identities until standing pickup inspection; carried and inspected books expose
 public membership through compile-time rules. Hidden item identities, monster
 HP/statuses, map cells and timers remain inaccessible. Its policy compiles
 independently of production `Game` declarations. Omniscient-v2 retains its
 deliberate knowledge advantages and uses the same authoritative gameplay API.
 
-Policies support all sixteen effects: emergency displacement/teleportation,
+Policies support all twenty effects: emergency displacement/teleportation,
 trap-directed Repulsion, dangerous-monster control, two-target bolts, conservative
-dart attacks, local trap detection and harmful-condition cleansing. Omniscient-v2
+dart attacks, local trap detection, harmful-condition cleansing and safe companion
+summoning. They account for friendly interception and area effects. Omniscient-v2
 retains its deliberate knowledge advantages while obeying the same actual action,
 resource and study rules. Weapons, modifier wands, area scrolls, healing potions,
 food and light retain distinct roles. Fireburst requires a useful cluster and
@@ -210,3 +216,14 @@ are in [SPELLS-RESULTS.md](SPELLS-RESULTS.md) for the historical eleven-spell sy
 in ignored `build/`. `sim/spell_report.py` reports spell use, learning cohorts,
 resources, death causes and floor survival from validated datasets. Sidecar schema 2 also records actual status applications, trap reveals, cleansing and successful movement, so every spell has measurable effect counters. `spells.csv`
 has one row per run/spell, including direct/chained lightning damage, Slumber disables and rolled stun actions, HP sacrificed and self-inflicted Blood Bolt deaths. Core telemetry is version 10; observation is 9 and exploration telemetry remains 6.
+
+## Companions
+
+Summons retain the listed substantial MP cost and ordinary action cost. Full
+parties, duplicate active summoned species, and unsafe placement reject without
+spending resources. Companion knowledge does not reserve or reduce maximum MP.
+All applicable rays, chains, bursts and displacement effects can strike friends.
+The Companions book has an independent early placement guarantee on eligible
+floors 0–2, later availability, and the same carry/known/no-duplicate exclusions.
+The all-phantom floor and ascent remain excluded. See [PETS.md](PETS.md) for
+statistics, persistence, taming, follow/recall rules, and dismissal controls.

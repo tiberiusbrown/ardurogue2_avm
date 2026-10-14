@@ -48,37 +48,37 @@ Arrows use all eight info bits as unsigned quantity
 known. Wands use four charge bits, three modifier bits,
 and an individual identification bit. Ground slots store coordinates and a
 complete item.
-Save version 32 stores one active floor in an 845-byte AVM `Game`. Generation
+Save version 33 stores one active floor and four companions in an 879-byte AVM `Game`. Generation
 uses one temporary feature descriptor and flash templates, with no room records.
-Version 31 and older saves are incompatible; no migration is attempted.
+Version 32 and older saves are incompatible; no migration is attempted.
 Ammo, weapons and armor each occupy contiguous `ItemType` ranges. Inserting
 Ammo near Food and bows within Weapons shifts raw saved item IDs. Long sword and chain mail preserve
 the former generic equipment baselines. Equipment generation selects weighted
 subtypes with independent enchantment and curse rolls. The former attack and
 cached defense fields store strength and magic resistance.
 It derives potion, scroll, ring, amulet, and wand appearances from the run seed
-instead of storing mapping arrays. Nine bytes track discoveries across 65
+instead of storing mapping arrays. Nine bytes track discoveries across 68
 identifiable types. It stores monster potion effects,
 enemy aggression and disguises, player speed, and accessory slots.
 
-The nineteen potions include healing, strength, dexterity, experience,
+The twenty potions include healing, strength, dexterity, experience,
 invisibility, harming, poison, confusion, paralysis, slowing, blindness,
 See Invisible, Extra Healing, Restore Vitality, Haste, Levitation, Fire Resistance,
-Fire, and Mana Restoration. Every new run assigns each type a different color. Potions of the same type keep that
+Fire, Mana Restoration, and Friendship. Every new run assigns each type a different color. Potions of the same type keep that
 color until drinking one reveals its effect for the rest of the run. Healing
 also removes poison's weakening, while strength removes weakening before it
 can increase strength. Strength potions cap permanent base STR at 12; strength
 rings and weakness adjust effective STR separately. Confusion, paralysis, slowing, and invisibility wear off
 after several turns.
 
-The fifteen scrolls include the original nine that identify or enchant an item, remove a curse,
+The sixteen scrolls include the original nine that identify or enchant an item, remove a curse,
 teleport the player, map the floor, or affect visible monsters with fear,
 torment, confusion, or poison. Reading a scroll reveals its type. Each run
 randomly assigns unknown scroll descriptions, and scrolls of the same type
 stack in inventory.
 
-Every character starts with Magic Dart and 6/6 MP. Learn fifteen other spells from
-four fixed themed, nonstacking spellbooks through 40–80 ordinary turns of study.
+Every character starts with Magic Dart and 6/6 MP. Learn nineteen other spells from
+five fixed themed, nonstacking spellbooks through 40–80 ordinary turns of study.
 Prepare food and light, choose a quiet location, and press B to cancel between
 animated study updates. Any gameplay message interrupts learning and keeps the
 book. **CAST SPELL** is in the scrolling action menu; the HUD shows MP. Mana
@@ -88,12 +88,20 @@ Use Item opens a book member menu; each spell requires separate study and a
 book remains until all its spells are learned. HP amulet regeneration is silent. See the complete roster, targeting,
 controls and validation in [the magic guide](docs/SPELLS.md).
 
+Up to four persistent companions follow, swap places with you, fight nearby
+hostiles, and recall when stranded. Learn Summon Hound/Spider/Wisp/Golem from
+the reliably early Book of Companions, tame eligible creatures with scrolls,
+thrown Friendship potions or Domination wands, or receive an altar companion.
+Use **COMPANIONS** to inspect HP and conditions or confirm permanent dismissal.
+Pets can die, intercept your spells, and retain their ordinary glyphs when tamed.
+See [the companion guide](docs/PETS.md) and [measured results](docs/PETS-RESULTS.md).
+
 The six additional scrolls hold nearby visible monsters, discover traps, summon
 a hostile creature, teleport visible monsters, explode in fire, or display ground
 objects. See [the consumables guide](docs/CONSUMABLES.md) for all effects, thrown
 behavior, duration ordering, generation weights, and validation results.
 
-Rings and amulets are separate item types, with eleven variants of each including artifacts. Rings
+Rings and amulets are separate item types, with eleven rings and twelve amulets including artifacts. Rings
 can be worn two at a time, and one amulet can be worn. Their effects include
 bonuses to combat, visibility, speed, physical protection, health, and experience, plus
 sustenance, regeneration, life drain, clarity, conservation, ironblood, and
@@ -116,7 +124,7 @@ The player has a base speed of 4. Enemy speed values are turn costs, as in
 ArduRogue: lower values act more often. Slowing doubles an enemy's turn cost;
 a slowed player gives enemies more turns.
 
-The eight wands are force, teleportation, digging, fire, striking, ice, polymorph, and lightning. Each type has a permuted unknown appearance (long, short, slender,
+The nine wands are force, teleportation, digging, fire, striking, ice, polymorph, lightning, and domination. Each type has a permuted unknown appearance (long, short, slender,
 thick, twisted, curved, glossy, or forked). Using or identifying a wand reveals that
 appearance's type for the run. Every individual wand also has one modifier:
 normal, cursed, unreliable, spreading, powerful, or overpowered. Its modifier
@@ -463,18 +471,19 @@ Light circles use a half-tile radius bias: radius one covers all eight adjacent
 tiles, and larger radii have wider edges at their cardinal extremes. Radius zero
 still shows only the player's tile; walls and closed doors still block rays.
 
-The AVM build uses an 845-byte saved layout and two-byte items, eight-byte
-monsters, and four-byte ground items. The magic build has a complete
-249-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM
+The AVM build uses an 879-byte saved layout and two-byte items, eight-byte
+monsters, and four-byte ground items. The companion build has a complete
+256-byte production and benchmark maximum stack bound and zero analysis gaps within the 256-byte VM
 stack. Future changes must continue checking the linker report. Rendering
 reuses transient row scratch outside the saved layout and preserves explored
-terrain separately from current sight. See the [themed-book report](docs/MULTI-SPELL-BOOKS-RESULTS.md)
+terrain separately from current sight. See the [companion report](docs/PETS-RESULTS.md)
 for RAM, flash, final-ELF benchmarks and paired balance validation.
 
 
-The learned magic roster now contains sixteen spells. Fireburst, Phase Step,
+The learned magic roster now contains twenty spells. Fireburst, Phase Step,
 Chain Lightning, Slumber and Blood Bolt append IDs 11–15; the original eleven
-retain their costs and mechanics. Blood Bolt explicitly costs 3 MP and 3 current
+retain their costs and mechanics. Four companion summons append IDs 16–19.
+Blood Bolt explicitly costs 3 MP and 3 current
 HP and can kill its caster. The [spell guide](docs/SPELLS.md) contains all exact
-effects, study durations and generation weights. Save version 32 rejects older
-raw item IDs after adding mana potions and Meditation; the saved Game is 845 bytes.
+effects, study durations and generation weights. Save version 33 rejects older
+raw layouts after adding companions, taming items, and a 32-bit spell mask; the saved Game is 879 bytes.

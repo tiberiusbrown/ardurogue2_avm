@@ -1,4 +1,5 @@
 #include "world_gen.hpp"
+#include "companions.hpp"
 #include "sim_hooks.hpp"
 #include "world_gen_templates.hpp"
 #include "world.hpp"
@@ -520,7 +521,7 @@ static __attribute__((noinline)) bool short_route(Position a, Position b, Positi
 {
     uint8_t x = center.x < 11 ? 0 : center.x > 52 ? 41 : center.x - 11;
     uint8_t y = center.y < 11 ? 0 : center.y > 20 ? 9 : center.y - 11;
-    static_assert(sizeof game.monsters >= 23 * 4, "floor-mask scratch capacity");
+    static_assert(HOSTILE_MONSTERS * sizeof(Monster) >= 23 * 4, "floor-mask scratch capacity");
     for(uint8_t row = 0; row < 23; ++row) {
         if(!(row & 3)) progress();
         uint32_t value = floor_row(x, static_cast<uint8_t>(y + row));
@@ -586,7 +587,7 @@ __attribute__((noinline)) void add_secondary_connections(uint16_t seed)
         }
     }
     // No cached mask bytes may be mistaken for an existing occupant.
-    memset(game.monsters, 0, sizeof game.monsters);
+    memset(game.monsters, 0, HOSTILE_MONSTERS * sizeof(Monster));
 #if !defined(__AVM__)
     diagnostics.loops = made;
 #endif
@@ -689,13 +690,17 @@ namespace rogue {
 
 void make_floor()
 {
+    for(uint8_t i = HOSTILE_MONSTERS; i < MONSTERS; ++i)
+        game.monsters[i].pos = {NONE, NONE};
+    memset(session.pet_leash, 0, sizeof session.pet_leash);
+    session.pet_trail = {NONE, NONE};
 #if defined(__AVM__)
     begin_generation_render();
 #endif
     memset(game.walls, 0xff, sizeof game.walls);
     memset(game.explored, 0, sizeof game.explored);
     memset(game.doors, 0, sizeof game.doors);
-    memset(game.monsters, 0, sizeof game.monsters);
+    memset(game.monsters, 0, HOSTILE_MONSTERS * sizeof(Monster));
     memset(game.ground, 0, sizeof game.ground);
     memset(game.features, 0, sizeof game.features);
     session.forced_entry = false;
@@ -726,6 +731,7 @@ void make_floor()
 #if defined(ARDUROGUE2_SIM)
     sim::after_floor_generation();
 #endif
+    place_floor_pets();
     SIM_EVENT(sim::EventKind::FloorEntered);
 #if defined(__AVM__)
     end_generation_render();

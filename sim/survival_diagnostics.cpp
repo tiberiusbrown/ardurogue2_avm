@@ -64,7 +64,7 @@ void Collector::update_encounters(bool final) {
 }
 void Collector::encounter_event(EventKind k,uint8_t index,uint8_t type,uint16_t amount,uint8_t detail) {
     if(!enabled) return;
-    bool contact=(k==EventKind::PlayerAttack || k==EventKind::MonsterAttack) && index<rogue::MONSTERS;
+    bool contact=(k==EventKind::PlayerAttack || k==EventKind::MonsterAttack) && index<rogue::HOSTILE_MONSTERS;
     if(contact) {
         if(current_encounter<0) {
             RunMetrics::Encounter e; auto& g=rogue::game; auto s=supplies();

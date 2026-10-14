@@ -5,6 +5,7 @@
 #include <stdint.h>
 namespace sim {
 enum class EventKind {
+    ExperienceAwarded, PetMessage, PetIntercept, PetAcquired, TamingAttempt, PetAttack, PetHit, PetDealtDamage, PetKilled, PetControl, PetDamage, PetDied, PetDismissed, PetRecall, PetRegenerated,
     ManaRegenerated, ManaRestored, AmuletHealthRegenerated, StudyStarted, StudyTurn, StudyInterrupted, SpellLearned, SpellCast, SpellDisplacement, LightningDamage, SpellDisabled, SpellStatus, TrapRevealed, StatusCleared, HealthSacrificed, BloodDeath,
     ItemIdentified, InventoryFull, SeeInvisibleExpired, PlayerEffectExpired, FuelExhausted, FloorEntered, FloorExited, Turn, Finished, PlayerDamage,
     PlayerAttack, MonsterDamage, MonsterKilled, MonsterAttack, MonsterHit,
@@ -12,7 +13,7 @@ enum class EventKind {
     ItemUsed, Consumed, PotionThrown, ChargeUsed, MonsterChanged, ArrowFired, ArrowTarget,
     FeatureDiscovered, FeatureActivated, FeatureDisplacement, FeatureDeclined, FeatureSpawn, HolyDamage, MonsterTrapActivated, MonsterTrapTeleport, MonsterTrapStatus, MonsterAware, MonsterSummoned
 };
-enum class Cause : uint8_t { Other, Monster, Starvation, Item, Fire, Trap, Feature, MonsterTrap, Spell };
+enum class Cause : uint8_t { Other, Monster, Starvation, Item, Fire, Trap, Feature, MonsterTrap, Spell, Pet };
 enum class Special : uint8_t { Poison, Confusion, Paralysis, Fire };
 void event(EventKind, uint8_t index = 255, uint8_t type = 0,
            uint16_t amount = 1, uint8_t detail = 0);

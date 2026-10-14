@@ -8,8 +8,8 @@ competence experiments and preserved historical reference are described in
 [the competence and rebalance report](EXPLORER_COMPETENCE_AND_REBALANCE.md).
 Consumable tactics and the earlier protocol-5 measurements are described in
 [the consumables report](CONSUMABLES.md).
-Learned magic extends the same policy with observation protocol 7, spellbook
-valuation, food/light preparation, safe study, interruption deferral and all sixteen
+Learned magic extends the same policy with observation protocol 10, spellbook
+valuation, food/light preparation, safe study, interruption deferral and all twenty
 spell tactics. Mana reserves protect learned escapes. Urgent ray targets may use
 a just-confirmed public melee bearing; anonymous attack counts may justify an
 untargeted Shockwave, without revealing hidden coordinates. See
@@ -512,3 +512,23 @@ lightning is tested only with health to cover a full 12-point backfire and curre
 threats. Group opportunities justify spending identified lightning charges.
 
 See [MAGIC-EXPANSION-RESULTS.md](MAGIC-EXPANSION-RESULTS.md) for paired outcomes.
+
+## Companions and protocol 10
+
+The visible creature array has sixteen entries; ground objects/disguises have
+forty. Visible friends include public allegiance. A separate four-entry public
+Companions roster includes identity, HP/max HP, origin and active condition flags,
+including when the pet is offscreen. It excludes positions, aggression, remaining
+timers and recall counters. Enemy HP and hidden positions stay unavailable.
+Hound/Wisp detection never expands the player's observation.
+
+Navigation treats visible friends as passable swaps. Ray, burst, chain, wave
+and teleport decisions consider friendly occupancy. Quiet summoning protects two
+MP, or four with learned displacement, uses a 96-turn cooldown and favors Hound
+early, Wisp/Spider in the middle and Golem/Wisp late. A second summon competes
+conservatively with ordinary spell study; unaffordable summons are not studied.
+The ordinary study budget is retained. Taming uses public species resistance,
+never live enemy HP. Immune, full-party and obstructed attempts are rejected by
+policy. Both agents can dismiss weak Bat/Snake/Rattlesnake companions for a
+substantially better ordinary scroll target, with a 128-turn replacement guard.
+See [the companion guide](PETS.md) and [paired results](PETS-RESULTS.md).

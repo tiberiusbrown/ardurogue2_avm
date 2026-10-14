@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
                     "--agent-params loads explorer preferences from JSON; omitted fields use defaults.\n"
                     "--write-agent-defaults FILE writes the complete default configuration and exits.\n"
                     "Seeds are unsigned 16-bit; ranges are inclusive. Trace goes to stderr.\n"
-                    "Without --output, runs.csv goes to stdout. With --output nine core CSVs, exploration.csv, encounters.csv, milestones.csv and manifest.json are written.\n"
+                    "Without --output, runs.csv goes to stdout. With --output fifteen CSVs and manifest.json are written; --entry-state adds entry_state.csv.\n"
                     "--entry-state adds entry_state.csv for balance reports; requires --output and telemetry.\n"
                     "  [--experiment ID] [--variant ID] [--intervention RULE] (repeatable)\n"
                     "RULE: replace-item:FROM:TO[:floor=N][:direction=descent|ascent][:max=N][:info=default|preserve|BYTE]\n"

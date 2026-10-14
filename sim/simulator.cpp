@@ -2,6 +2,8 @@
 #include "trace.hpp"
 #include "world.hpp"
 #include "spells.hpp"
+#include "companions.hpp"
+#include "status.hpp"
 #include "explorer_observation.hpp"
 #include "explorer_events.hpp"
 #include <cstring>
@@ -36,6 +38,7 @@ Action decide(ExplorerAgent& agent,const ExplorerObservation& o,uint64_t,uint64_
     case ExplorerActionKind::Wand:a.kind=ActionKind::Wand;break;
     case ExplorerActionKind::Drop:a.kind=ActionKind::Drop;break;
     case ExplorerActionKind::Cast:a.kind=ActionKind::Cast;break;
+    case ExplorerActionKind::Dismiss:a.kind=ActionKind::Dismiss;break;
     case ExplorerActionKind::CancelStudy:a.kind=ActionKind::CancelStudy;break;
     }
     a.dx=e.dx; a.dy=e.dy; a.slot=e.slot; a.target=e.target; a.discard=e.discard;
@@ -145,6 +148,7 @@ RunMetrics execute(Collector& c, Policy& agent, const Options& options) {
 }
 bool dispatch(const Action& a) {
     if(session.ended) return false;
+    reset_status_position();
     switch(a.kind) {
     case ActionKind::Move: {
         if(!cardinal(a)) return false;
@@ -167,6 +171,7 @@ bool dispatch(const Action& a) {
     }
     case ActionKind::Swap: return !game.paralyzed && ground_here(a.target) && swap_ground_item(a.target,a.slot);
     case ActionKind::Stairs: return take_stairs();
+    case ActionKind::Dismiss: return dismiss_pet(a.target);
     case ActionKind::Use: return use_inventory(a.slot,a.target);
     case ActionKind::Throw: return cardinal(a) && throw_or_shoot(a.slot,a.dx,a.dy);
     case ActionKind::Wand: return use_wand(a.slot,a.dx,a.dy);
@@ -193,6 +198,7 @@ RunMetrics run_started(uint16_t seed, Agent& agent, const Options& options) {
 bool dispatch_explorer(const Action& a,ExplorerAgent& agent) {
     if(a.kind!=ActionKind::Move) return dispatch(a);
     if(session.ended || !cardinal(a)) return false;
+    reset_status_position();
     Game before=game;
     begin_player_move(a.dx,a.dy);
     if(session.pending_move && !session.pending_pickups) complete_player_move(feature_choice(agent,0,0));

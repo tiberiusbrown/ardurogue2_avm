@@ -11,6 +11,9 @@ constexpr uint8_t MIDDLE_FLAME_MIN = 3, MIDDLE_FLAME_ROLL = 3;
 constexpr uint8_t MIDDLE_FROST_MIN = 2, MIDDLE_FROST_ROLL = 3;
 constexpr uint8_t MIDDLE_SNARE_MIN = 1;
 uint8_t feature_at(Position pos);
+// Turn-local row rejection; no features are created during monster actions.
+void begin_feature_lookup();
+void end_feature_lookup();
 // Filtered observations also erase position, preventing hidden information leaks.
 constexpr MapFeature observed_feature(const MapFeature& feature) {
     return feature_is_hidden(feature.id) ? MapFeature{} : feature;

@@ -1,6 +1,7 @@
 add_library(ardurogue2_sim_core STATIC
     simulator.cpp omniscient_agent.cpp explorer_observation.cpp explorer_events.cpp explorer_parameters.cpp policy_hash.cpp metrics.cpp survival_diagnostics.cpp trace.cpp frontend.cpp experiment.cpp
     ../src/features.cpp
+    ../src/companions.cpp
     ../src/spells.cpp ../src/state.cpp ../src/combat.cpp ../src/combat_math.cpp ../src/items.cpp
     ../src/world.cpp ../src/world_gen.cpp ../src/world_gen_population.cpp)
 target_compile_features(ardurogue2_sim_core PUBLIC cxx_std_17)
@@ -78,6 +79,9 @@ add_executable(ardurogue2_explorer_tune explorer_tune.cpp parallel.cpp)
 target_include_directories(ardurogue2_explorer_tune PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(ardurogue2_explorer_tune PRIVATE ardurogue2_sim_core)
 add_executable(sim_checks magic_expansion_tests.cpp tests.cpp policy_checks.cpp)
+add_executable(pet_checks pet_checks.cpp)
+target_link_libraries(pet_checks PRIVATE ardurogue2_sim_core)
+add_test(NAME pet_agents COMMAND pet_checks)
 target_link_libraries(sim_checks PRIVATE ardurogue2_sim_core)
 add_test(NAME simulator_checks COMMAND sim_checks)
 add_executable(explorer_checks explorer_checks.cpp)
@@ -123,3 +127,6 @@ target_link_libraries(feature_generation_audit PRIVATE ardurogue2_sim_core)
 
 add_executable(game_balance_arenas game_balance_arenas.cpp)
 target_link_libraries(game_balance_arenas PRIVATE ardurogue2_sim_core)
+
+add_executable(pet_arenas pet_arenas.cpp)
+target_link_libraries(pet_arenas PRIVATE ardurogue2_sim_core)
