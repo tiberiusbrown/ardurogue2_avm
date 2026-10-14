@@ -443,15 +443,20 @@ int identity_group(ItemCategory c) {
     default:return 5; }
 }
 bool fits(const ExplorerObservation& o,const SeenItem& incoming) {
+    bool empty = false;
     for(int s=0;s<o.inventory_capacity;++s) {
         const auto& i=o.inventory[s];
-        if(i.category==ItemCategory::None) return true;
+        if(i.category==ItemCategory::None) empty = true;
         bool stack=incoming.category==ItemCategory::Food||incoming.category==ItemCategory::Ammo||incoming.category==ItemCategory::Potion||incoming.category==ItemCategory::Scroll;
-        if(stack && same_item(i,incoming) && int(i.quantity)+incoming.quantity<=(incoming.category==ItemCategory::Ammo ? 255 : 63)) return true;
+        if(stack && same_item(i,incoming)) return i.quantity < (incoming.category==ItemCategory::Ammo ? 255 : 63);
     }
-    return false;
+    return empty;
 }
 int replacement(const ExplorerParameters& prefs,const ExplorerObservation& o,const SeenItem& incoming) {
+    for(const auto& i : o.inventory)
+        if((incoming.category==ItemCategory::Food || incoming.category==ItemCategory::Ammo ||
+            incoming.category==ItemCategory::Potion || incoming.category==ItemCategory::Scroll) &&
+           same_item(i,incoming)) return -1;
     int worst=value(prefs,o,incoming)-10,slot=-1;
     int bow=best_weapon(prefs,o,true), melee=best_weapon(prefs,o,false);
     for(int s=0;s<o.inventory_capacity;++s) {

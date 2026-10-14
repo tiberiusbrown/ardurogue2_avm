@@ -6,6 +6,7 @@
 #include "game_internal.hpp"
 #include "render.hpp"
 #include "status.hpp"
+#include "ui.hpp"
 #include "world.hpp"
 
 #include <cstdio>
@@ -21,7 +22,9 @@ unsigned avm_test_displays = 0;
 uint16_t avm_test_millis = 0;
 namespace rogue {
 Game game = {};
-Ui ui = {};
+void invalidate_saved_game() {}
+void resume_saved_game() {}
+void save_resumable_game() {}
 }
 
 static uint32_t hash_bytes(uint32_t hash, const uint8_t* bytes, size_t size)
@@ -29,6 +32,100 @@ static uint32_t hash_bytes(uint32_t hash, const uint8_t* bytes, size_t size)
     for(size_t i = 0; i < size; ++i)
         hash = (hash ^ bytes[i]) * 16777619u;
     return hash;
+}
+
+static std::string pickup_message;
+static int16_t pickup_next_x, pickup_last_y;
+static void capture_pickup_message(int16_t x, int16_t y, const char* text)
+{
+    if(x < 67 || x >= 128 || y < 23 || !std::strcmp(text, "[more]")) return;
+    if(!pickup_message.empty() && (x != pickup_next_x || y != pickup_last_y)) pickup_message += ' ';
+    pickup_message += text;
+    pickup_next_x = int16_t(x + std::strlen(text) * 4); pickup_last_y = y;
+}
+
+static void pickup_fixture()
+{
+    using namespace rogue;
+    game = {}; session = {NONE, DEATH, false}; ui = {}; ui.mode = PLAY;
+    game.player = {10, 10}; game.up = {2, 2}; game.down = {40, 20};
+    game.hp = game.max_hp = 100; game.hunger = 220; game.speed = 4; game.level = 1;
+    game.random_state = 123;
+    game.weapon_slot = game.armor_slot = game.amulet_slot = game.offhand_slot =
+        game.ring_slots[0] = game.ring_slots[1] = NONE;
+    status_clear(); pickup_message.clear();
+}
+
+static bool check_pickup_messages()
+{
+    using namespace rogue;
+    struct Case {
+        uint8_t type, carried, incoming; bool known; const char* expected;
+        uint8_t left = 0; PickupResult result = PICKUP_TAKEN;
+    };
+    const Case cases[] = {
+        {POTION_HEALING, 0, 1, false, "You picked up a red potion."},
+        {POTION_HEALING, 0, 3, false, "You picked up 3 red potions."},
+        {POTION_HEALING, 2, 1, false, "You have 3 red potions."},
+        {POTION_HEALING, 62, 3, false, "You have 63 red potions.", 2},
+        {POTION_HEALING, 63, 1, false, "You can't carry any more red potions.", 1, PICKUP_LIMIT},
+        {POTION_HEALING, 63, 1, true, "You can't carry any more potions of healing.", 1, PICKUP_LIMIT},
+        {POTION_HEALING, 2, 1, true, "You have 3 potions of healing."},
+        {ARROWS, 0, 3, false, "You picked up 3 arrows."},
+        {ARROWS, 10, 3, false, "You have 13 arrows."},
+        {ARROWS, 254, 2, false, "You have 255 arrows.", 1},
+        {ARROWS, 255, 3, false, "You can't carry any more arrows.", 3, PICKUP_LIMIT},
+        {FOOD, 2, 1, false, "You have 3 food rations."},
+        {SCROLL_MAPPING, 2, 1, false, "You have 3 faded scrolls."},
+        {SCROLL_MAPPING, 2, 1, true, "You have 3 scrolls of magic mapping."},
+        {LONG_SWORD, 1, 1, false, "You picked up a long sword."},
+    };
+    for(const Case& c : cases) {
+        pickup_fixture();
+        // Choose the run's red/faded appearance without revealing the item type.
+        game.run_seed = 1;
+        while((is_potion(c.type) || is_scroll(c.type)) && item_appearance(c.type) != 0)
+            if(++game.run_seed == 0) return false;
+        if(c.known) identify_type(c.type);
+        uint16_t remaining = c.carried;
+        for(Item& item : game.inventory) {
+            if(!remaining) break;
+            uint8_t quantity = remaining > maximum_stack(c.type) ? maximum_stack(c.type) : uint8_t(remaining);
+            item = {c.type, quantity}; remaining -= quantity;
+        }
+        game.ground[5] = {game.player, {c.type, c.incoming}};
+        avm_test_text_hook = capture_pickup_message;
+        PickupResult result = take_item(5);
+        avm_test_text_hook = nullptr;
+        unsigned stacks = 0;
+        for(Item item : game.inventory) stacks += item.type == c.type;
+        if(result != c.result || pickup_message != c.expected ||
+           bool(game.ground[5].item.type) != bool(c.left) ||
+           (c.left && item_value(game.ground[5].item) != c.left) ||
+           game.turns != (c.result == PICKUP_TAKEN ? 1 : 0) ||
+           (is_stackable(c.type) && stacks != 1)) {
+            std::fprintf(stderr, "Pickup message: %s != %s\n", pickup_message.c_str(), c.expected);
+            return false;
+        }
+    }
+    // Full-pack exchanges cannot bypass an existing stack's limit.
+    for(uint8_t slot : {uint8_t(0), uint8_t(1)}) {
+        pickup_fixture();
+        for(Item& item : game.inventory) item = make_equipment(LONG_SWORD, 0);
+        game.inventory[0] = {ARROWS, 255};
+        game.ground[5] = {game.player, {ARROWS, 3}};
+        if(take_item(5) != PICKUP_LIMIT || game.turns || swap_ground_item(5, slot)) return false;
+        game.ground[5] = {game.player, {FOOD, 3}};
+        if(take_item(5) != PICKUP_NEEDS_SWAP || game.turns) return false;
+        status_clear();
+        avm_test_text_hook = capture_pickup_message;
+        bool swapped = swap_ground_item(5, slot);
+        avm_test_text_hook = nullptr;
+        const char* expected = slot == 0 ? "You picked up 3 food rations. You leave 255 arrows behind." :
+            "You picked up 3 food rations. You leave a long sword behind.";
+        if(!swapped || pickup_message != expected || game.turns != 1) return false;
+    }
+    return true;
 }
 
 static uint8_t arrow_frames[7][1024];
@@ -532,6 +629,84 @@ static bool check_deferred_pages()
     return true;
 }
 
+static uint8_t feature_destination_frame[1024];
+static unsigned feature_prompt_displays;
+static bool feature_prompt_frame_ok;
+
+static void capture_feature_prompt()
+{
+    using namespace rogue;
+    if(feature_prompt_displays++ != 0) return;
+    for(unsigned row = 0; row < 8; ++row)
+        if(std::memcmp(__avm_framebuffer + row * 128,
+                       feature_destination_frame + row * 128, 65))
+            feature_prompt_frame_ok = false;
+    if(game.player != Position{11, 10} || game.turns || game.hp != 20)
+        feature_prompt_frame_ok = false;
+}
+
+static bool check_feature_prompts()
+{
+    using namespace rogue;
+    for(uint8_t type : {uint8_t(FEATURE_FOUNTAIN), uint8_t(FEATURE_HEALING_SPRING),
+            uint8_t(FEATURE_ALTAR), uint8_t(FEATURE_SACRIFICIAL_ALTAR),
+            uint8_t(FEATURE_ENCHANTED_FORGE), uint8_t(FEATURE_STATUE),
+            uint8_t(FEATURE_SARCOPHAGUS), uint8_t(FEATURE_RUNESTONE),
+            uint8_t(FEATURE_ALCHEMICAL_POOL)}) {
+        bool picks_item = type == FEATURE_SACRIFICIAL_ALTAR ||
+            type == FEATURE_ENCHANTED_FORGE || type == FEATURE_ALCHEMICAL_POOL;
+        for(unsigned response = 0; response < (picks_item ? 3u : 2u); ++response) {
+            game = {}; session = {NONE, DEATH, false}; ui = {}; ui.mode = PLAY;
+            game.player = {10, 10}; game.up = {2, 2}; game.down = {40, 20};
+            game.hp = 20; game.max_hp = 100; game.hunger = 220;
+            game.speed = 4; game.level = 1; game.random_state = 123;
+            game.weapon_slot = game.armor_slot = game.amulet_slot = game.offhand_slot =
+                game.ring_slots[0] = game.ring_slots[1] = NONE;
+            game.inventory[0] = make_equipment(LONG_SWORD, 0);
+            game.features[0] = {{11, 10}, type};
+            unsigned wall = 9 * MAP_W + 10;
+            game.walls[wall >> 3] |= uint8_t(1u << (wall & 7));
+            status_clear(); render_play();
+            uint8_t origin_frame[1024];
+            std::memcpy(origin_frame, __avm_framebuffer, sizeof origin_frame);
+            if(resolve_move_input(handle_input(AVM_BUTTON_R)) != INPUT_MOVED ||
+               !session.pending_move || game.turns) return false;
+            render_play();
+            std::memcpy(feature_destination_frame, __avm_framebuffer, sizeof feature_destination_frame);
+            if(!std::memcmp(origin_frame, feature_destination_frame, sizeof origin_frame)) return false;
+            // Leave the old view on screen, just as main does before the modal.
+            std::memcpy(__avm_framebuffer, origin_frame, sizeof origin_frame);
+            const uint8_t buttons[] = {0, uint8_t(response ? AVM_BUTTON_A : AVM_BUTTON_B),
+                                      0, uint8_t(response == 2 ? AVM_BUTTON_B : AVM_BUTTON_A)};
+            std::memcpy(avm_test_buttons, buttons, sizeof buttons);
+            avm_test_button_count = sizeof buttons; avm_test_button_index = 0;
+            feature_prompt_displays = 0; feature_prompt_frame_ok = true;
+            avm_test_display_hook = capture_feature_prompt;
+            FeatureChoice choice = prompt_feature();
+            avm_test_display_hook = nullptr;
+            if(!feature_prompt_frame_ok || !feature_prompt_displays ||
+               choice.accept != bool(response) ||
+               choice.slot != (picks_item && response == 1 ? 0 : NONE) ||
+               game.turns || game.features[0].id != type ||
+               status_has_message() || status_baseline() != 28) return false;
+            // Questions, button icons and picker text must not survive into results.
+            for(int y = 23; y < 64; ++y) for(int x = 65; x < 128; ++x)
+                if(__avm_framebuffer[(y >> 3) * 128 + x] & (1u << (y & 7))) return false;
+            restore_play_render();
+            if(std::memcmp(__avm_framebuffer, feature_destination_frame, sizeof feature_destination_frame))
+                return false;
+            // Healing's result must start at the top of the cleared status pane.
+            if(type == FEATURE_HEALING_SPRING) {
+                complete_player_move(choice);
+                if(game.turns != 1 || (response && (!status_has_message() || game.hp <= 20)) ||
+                   (!response && status_has_message())) return false;
+            }
+        }
+    }
+    avm_test_button_count = 0;
+    return true;
+}
+
 static bool loading_text_in_pane, loading_stats_visible;
 
 static void capture_loading_text(int16_t x, int16_t y, const char* text)
@@ -766,6 +941,14 @@ static bool check_book_render() {
 }
 int main()
 {
+    if(!check_pickup_messages()) {
+        std::fprintf(stderr, "New/existing pickup stack messages failed\n");
+        return 1;
+    }
+    if(!check_feature_prompts()) {
+        std::fprintf(stderr, "Feature prompt showed stale movement or left modal graphics in results\n");
+        return 1;
+    }
     if(!check_book_render()) { std::fprintf(stderr,"Book name/Known/duration rendering failed\n"); return 1; }
     if(!check_study_render()) { std::fprintf(stderr,"Study rendering cadence/rune failed\n"); return 1; }
     using namespace rogue;

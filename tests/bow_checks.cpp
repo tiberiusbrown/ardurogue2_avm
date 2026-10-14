@@ -56,13 +56,13 @@ void check_bows() {
     for(uint8_t incoming:{5,10}) {
         arena(); game.inventory[1]={ARROWS,250}; game.ground[0]={game.player,{ARROWS,incoming}};
         require(take_item(0)==PICKUP_TAKEN && item_value(game.inventory[1])==255,"arrow merge to 255 failed");
-        if(incoming==10) require(game.inventory[2].type==ARROWS && item_value(game.inventory[2])==5,"arrow remainder not in second slot");
+        if(incoming==10) require(game.inventory[2].type==NO_ITEM && item_value(game.ground[0].item)==5,"arrow remainder left the ground");
     }
     arena(); for(auto& i:game.inventory) i={FOOD,63}; game.inventory[1]={ARROWS,250};
-    game.ground[0]={game.player,{ARROWS,10}}; Game before=game;
-    require(take_item(0)==PICKUP_NEEDS_SWAP && !std::memcmp(&game,&before,sizeof game),"full-pack arrow failure was not atomic");
-    game.ground[0].item.info=5;
-    require(take_item(0)==PICKUP_TAKEN && game.inventory[1].info==255,"full-pack arrow merge failed");
+    game.ground[0]={game.player,{ARROWS,10}};
+    require(take_item(0)==PICKUP_TAKEN && game.inventory[1].info==255 && game.ground[0].item.info==5,"full-pack partial arrow merge failed");
+    Game before=game;
+    require(take_item(0)==PICKUP_LIMIT && !std::memcmp(&game,&before,sizeof game),"arrow cap refusal changed state");
     arena(); game.inventory[1]={ARROWS,250}; game.ground[0]={game.player,{ARROWS,10}};
     require(drop_inventory(1) && game.ground[0].item.info==255 && game.ground[1].item.info==5,"ground merge overflow failed");
 

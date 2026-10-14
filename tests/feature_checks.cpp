@@ -236,6 +236,51 @@ void outcome_checks() {
     carve(10,10); carve(11,10); game.up={11,10}; game.down={10,10};
     activate_entry_feature(0); require(game.player==Position{11,10},"sparse teleport fallback");
 }
+void feature_feedback() {
+    // Every reward branch has feedback before its closing feature message.
+    for(uint8_t type = FEATURE_FOUNTAIN; type <= FEATURE_ALCHEMICAL_POOL; type += 2) {
+        for(uint16_t seed = 1; seed <= 128; ++seed) {
+            arena(type); game.hp = 20; game.random_state = seed;
+            game.inventory[0] = make_equipment(LONG_SWORD, 0);
+            reset_feature_status();
+            require(resolve_feature(0, {true, 0}), "feature feedback fixture failed");
+            const auto& text = feature_status_text();
+            size_t closing = text.rfind("The ");
+            require(closing != std::string::npos && closing > 0,
+                    "feature reported only its closing message");
+        }
+    }
+    for(uint8_t type : {uint8_t(FEATURE_FOUNTAIN), uint8_t(FEATURE_HEALING_SPRING),
+                       uint8_t(FEATURE_ALTAR), uint8_t(FEATURE_RUNESTONE),
+                       uint8_t(FEATURE_ENCHANTED_FORGE), uint8_t(FEATURE_ALCHEMICAL_POOL),
+                       uint8_t(FEATURE_SACRIFICIAL_ALTAR)}) {
+        arena(type); game.hunger = 255;
+        game.inventory[0] = make_equipment(LONG_SWORD, 0);
+        if(type == FEATURE_FOUNTAIN) game.random_state = seed_for(100, 25);
+        if(type == FEATURE_ALTAR) game.random_state = seed_for(8, 1);
+        if(type == FEATURE_RUNESTONE) game.random_state = seed_for(4, 1);
+        if(type == FEATURE_ENCHANTED_FORGE) {
+            game.inventory[0].info |= ITEM_CURSED; game.random_state = seed_for(8, 7);
+        }
+        if(type == FEATURE_ALCHEMICAL_POOL) game.random_state = seed_for(5, 2);
+        if(type == FEATURE_SACRIFICIAL_ALTAR) game.random_state = seed_for(4, 0);
+        reset_feature_status();
+        require(resolve_feature(0, {true, 0}) && feature_status_text().find("Nothing happens.") == 0,
+                "feature no-op did not report Nothing happens before closing");
+    }
+    arena(FEATURE_HEALING_SPRING); game.weakened = game.confused = game.slowed = 3;
+    reset_feature_status(); resolve_feature(0, {true, NONE});
+    require(feature_status_text().find("Your ailments fade away.") == 0 &&
+            feature_status_text().find("Nothing happens") == std::string::npos,
+            "full-health spring cure incorrectly reported no effect");
+    arena(FEATURE_ALCHEMICAL_POOL); game.inventory[0] = {WAND_FORCE, 0};
+    set_wand_charges(game.inventory[0], 3); set_wand_modifier(game.inventory[0], WAND_UNRELIABLE);
+    game.random_state = seed_for(5, 2); reset_feature_status();
+    resolve_feature(0, {true, 0});
+    require(wand_modifier(game.inventory[0]) == WAND_NORMAL && wand_charges(game.inventory[0]) == 3 &&
+            feature_status_text().find("becomes reliable.") != std::string::npos,
+            "pool removal of unreliability incorrectly reported extra charges");
+}
 void interactive_roster() {
     for(uint8_t type = FEATURE_FOUNTAIN; type <= FEATURE_ALCHEMICAL_POOL; type += 2) {
         arena(type); Game before = game;
@@ -582,5 +627,5 @@ void generation_checks() {
 void check_map_features() {
     static_assert(sizeof(MapFeature) == 3 && offsetof(Game, see_invisible) == 846 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16) && offsetof(Game, features) == 808 + 4*(GROUND_ITEMS-16) + 2*(INVENTORY-16), "map feature saved layout");
     static_assert(valid_feature_icons(), "feature atlas");
-    monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); generation_checks();
+    monster_traps(); monster_entry_checks(); teleport_topology(); trap_roster(); protections_and_death(); searching_and_movement(); summons_and_holy(); pickup_order(); interactive_roster(); outcome_checks(); feature_feedback(); generation_checks();
 }

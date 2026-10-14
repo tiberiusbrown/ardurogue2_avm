@@ -79,6 +79,7 @@ add_test(NAME ui_native COMMAND ui_native)
 
 add_executable(render_native
     render_native.cpp
+    ../src/ui.cpp
     ../src/render.cpp
     ../src/status.cpp
     ../src/features.cpp

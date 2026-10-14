@@ -27,6 +27,8 @@ void status(const char PROGMEM* words);
 void status(const char PROGMEM* words, char punctuation);
 void status(Item item);
 void status(Item item, char punctuation);
+// Item name in the plural, without a quantity or article.
+void status_plural(Item item, char punctuation);
 // Includes "the" only for a legitimately visible target, otherwise "something".
 void status(const Monster& monster);
 void status(const Monster& monster, char punctuation);

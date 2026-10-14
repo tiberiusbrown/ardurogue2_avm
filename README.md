@@ -218,8 +218,11 @@ remain 6%/4% within Weapons; the depth-dependent heavy region is unchanged.
 These values follow the specified initial 17/3, 3..5 and 2..5/3..6 measurements;
 the iterations and census are in [the bow balance report](docs/BOW_BALANCE_2026-10-06.md).
 
-Arrow stacks merge up to 255 with wider capacity arithmetic; overflowing pickup
-or ground stacks retain a remainder. Four flash 4x4 directional arrow sprites
+Inventory holds one stack per item type: up to 255 arrows or 63 food rations,
+potions or scrolls. A pickup fills the existing stack and leaves excess on the
+ground; a full stack refuses further pickups. New stacks say "You picked up",
+while additions say "You have" followed by the resulting quantity. Ground
+stacks can retain overflow in another ground slot. Four flash 4x4 directional arrow sprites
 animate at 60 ms per tile, restoring the playfield. Shots resolve after the UI
 frame unwinds; simulation/headless gameplay skips animation. Monster status text
 uses `status(const Monster&)` throughout, checking position, light/line of sight,

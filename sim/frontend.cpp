@@ -17,6 +17,7 @@ void status(const char* s) { message=true; study_status_output(); sim::explorer_
 void status(const char*, char) { message=true; study_status_output();}
 void status(Item) { message=true; study_status_output();}
 void status(Item, char) { message=true; study_status_output();}
+void status_plural(Item item, char punctuation) { status(item, punctuation); }
 void status_visible_monster(const Monster& m) { status(m); }
 void status(const Monster& m) { message=true; study_status_output();
     // Match status_entity: an unseen creature is printed as "something".

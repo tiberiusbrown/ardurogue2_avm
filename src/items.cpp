@@ -99,38 +99,42 @@ static uint8_t merge_ground(Item item, uint8_t amount)
     return amount;
 }
 
-static bool add_inventory(Item incoming)
+static uint8_t inventory_stack(Item incoming)
 {
-    // Decide whether the complete pickup fits before touching any stack.
-    uint16_t capacity = 0;
-    uint8_t empty = NONE;
+    if(!stackable(incoming.type)) return NONE;
     for(uint8_t i = 0; i < inventory_capacity(); ++i) {
-        const Item& item = game.inventory[i];
-        if(item.type == NO_ITEM && empty == NONE) empty = i;
-        if(compatible(item, incoming)) capacity += stack_space(item);
+        if(game.inventory[i].type == incoming.type) return i;
     }
-    if(stackable(incoming.type)) {
-        if(capacity + (empty == NONE ? 0 : maximum_stack(incoming.type)) <
-           item_value(incoming)) return false;
-        uint8_t remaining = item_value(incoming);
-        for(Item& item : game.inventory) {
-            if(!remaining) break;
-            if(!compatible(item, incoming)) continue;
-            uint8_t moved = remaining < stack_space(item)
-                ? remaining : stack_space(item);
-            if(moved) merge_stack(item, incoming, moved);
-            remaining = static_cast<uint8_t>(remaining - moved);
-        }
-        if(remaining) {
-            Item& target = game.inventory[empty];
-            target = clean_stack(incoming);
-            set_item_value(target, remaining);
-        }
+    return NONE;
+}
+
+static bool add_inventory(Item& incoming, uint8_t stack)
+{
+    if(stack != NONE) {
+        Item& target = game.inventory[stack];
+        uint8_t amount = item_value(incoming);
+        if(amount > stack_space(target)) amount = stack_space(target);
+        merge_stack(target, incoming, amount);
+        set_item_value(incoming, amount);
         return true;
     }
-    if(empty == NONE) return false;
-    game.inventory[empty] = incoming;
-    return true;
+    for(uint8_t i = 0; i < inventory_capacity(); ++i) {
+        if(game.inventory[i].type) continue;
+        game.inventory[i] = stackable(incoming.type) ? clean_stack(incoming) : incoming;
+        return true;
+    }
+    return false;
+}
+
+__attribute__((noinline)) static void pickup_status(Item item, uint8_t stack)
+{
+    if(stack != NONE) {
+        status(F("You have"));
+        status(game.inventory[stack], '.');
+    } else {
+        status(F("You picked up"));
+        status(item, '.');
+    }
 }
 
 __attribute__((noinline)) static PickupResult apply_pickup(uint8_t index)
@@ -139,19 +143,25 @@ __attribute__((noinline)) static PickupResult apply_pickup(uint8_t index)
         return PICKUP_INVALID;
     GroundItem& ground = game.ground[index];
     Item item = ground.item;
+    uint8_t stack = inventory_stack(item);
+    if(stack != NONE && !stack_space(game.inventory[stack])) {
+        status(F("You can't carry any more")); status_plural(item, '.');
+        return PICKUP_LIMIT;
+    }
     if(item.type == YENDOR_AMULET) {
         game.has_amulet = 1;
         game.score += 100;
         status(F("You found the amulet!"));
-    } else if(add_inventory(item)) {
-        status(F("You picked up"));
-        status(item, '.');
+    } else if(add_inventory(item, stack)) {
+        pickup_status(item, stack);
     } else {
         SIM_EVENT(sim::EventKind::InventoryFull, NONE, item.type);
         status(F("Your pack is full."));
         return PICKUP_NEEDS_SWAP;
     }
-    ground.item.type = NO_ITEM;
+    if(stackable(item.type) && item_value(ground.item) > item_value(item))
+        set_item_value(ground.item, static_cast<uint8_t>(item_value(ground.item) - item_value(item)));
+    else ground.item.type = NO_ITEM;
     SIM_EVENT(sim::EventKind::Pickup, index, item.type,
               stackable(item.type) ? item_value(item) : 1, item.info);
     return PICKUP_TAKEN;
@@ -239,8 +249,10 @@ __attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t s
        !inventory_item_removable(slot)) return false;
     Item incoming = game.ground[index].item;
     Item outgoing = game.inventory[slot];
+    // Existing stacks merge through take_item; swaps cannot bypass their cap.
+    if(inventory_stack(incoming) != NONE) return false;
     bool became_visible = remove_equipment_slot(slot);
-    game.inventory[slot] = incoming;
+    game.inventory[slot] = stackable(incoming.type) ? clean_stack(incoming) : incoming;
     // Keep the player's item in the slot being collected.
     game.ground[index].item = outgoing;
     SIM_EVENT(sim::EventKind::Pickup, index, incoming.type,
@@ -248,8 +260,7 @@ __attribute__((noinline)) static bool apply_ground_swap(uint8_t index, uint8_t s
     SIM_EVENT(sim::EventKind::Dropped, index, outgoing.type,
               stackable(outgoing.type) ? item_value(outgoing) : 1);
     session.repeat_slot = NONE;
-    status(F("You picked up"));
-    status(incoming, '.');
+    pickup_status(incoming, NONE);
     status(F("You leave"));
     status(outgoing);
     status(F("behind."));

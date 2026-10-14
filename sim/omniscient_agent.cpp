@@ -343,16 +343,17 @@ int discard_value(int s) {
     return value(i) + (is_stackable(i.type) ? item_value(i)*5 : 0);
 }
 bool fits(Item incoming) {
-    int capacity = 0;
+    bool empty = false;
     bool stack = is_stackable(incoming.type);
     for(uint8_t s=0;s<inventory_capacity();++s) {
         Item i=game.inventory[s];
-        if(!i.type) return true;
-        if(stack && i.type == incoming.type) capacity += maximum_stack(i.type)-item_value(i);
+        if(!i.type) empty = true;
+        if(stack && i.type == incoming.type) return item_value(i) < maximum_stack(i.type);
     }
-    return stack && capacity >= item_value(incoming);
+    return empty;
 }
 int replacement(Item i) {
+    if(is_stackable(i.type) && quantity(i.type)) return -1;
     int best = -1, worst = value(i);
     for(int s = 0; s < inventory_capacity(); ++s) {
         // Reserve acquisition can exceed a depleted candle's retention value.

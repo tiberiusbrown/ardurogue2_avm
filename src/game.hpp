@@ -16,7 +16,7 @@ bool player_can_see_monster(uint8_t index);
 bool player_can_see_monster(const Monster& monster);
 void end_turn();
 void move_player(int8_t dx, int8_t dy);
-enum PickupResult : uint8_t { PICKUP_INVALID, PICKUP_TAKEN, PICKUP_NEEDS_SWAP };
+enum PickupResult : uint8_t { PICKUP_INVALID, PICKUP_TAKEN, PICKUP_NEEDS_SWAP, PICKUP_LIMIT };
 PickupResult take_item(uint8_t index);
 bool swap_ground_item(uint8_t index, uint8_t slot);
 bool inventory_item_removable(uint8_t slot);

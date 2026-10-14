@@ -585,15 +585,21 @@ static const char PROGMEM* feature_prompt(uint8_t type) {
 }
 static bool sacrifice_filter(uint8_t type) { return type != YENDOR_AMULET; }
 static bool pool_filter(uint8_t type) { return is_equipment(type) || is_wand(type) || is_ring(type) || is_amulet(type); }
-FeatureChoice prompt_feature() {
+__attribute__((noinline)) FeatureChoice prompt_feature() {
     FeatureChoice choice;
     uint8_t index = session.pending_feature;
     if(!session.pending_move || index >= MAP_FEATURES || session.ended) return choice;
     uint8_t type = feature_type(game.features[index].id);
+    // Show the completed step before asking, as for ground items and stairs.
+    render_play();
     choice.accept = yesno(feature_prompt(type));
+    status_clear();
     if(choice.accept && (type == FEATURE_SACRIFICIAL_ALTAR || type == FEATURE_ENCHANTED_FORGE || type == FEATURE_ALCHEMICAL_POOL)) {
         choice.slot = choose_item(F("Choose an item:"), type == FEATURE_ENCHANTED_FORGE ? is_equipment :
             type == FEATURE_ALCHEMICAL_POOL ? pool_filter : sacrifice_filter);
+        // Results may paginate before the main loop redraws the completed turn.
+        status_clear();
+        defer_play_render();
         if(choice.slot != NONE && !feature_accepts_item(type, choice.slot)) {
             status(F("That item cannot be offered.")); choice.slot = NONE;
         }

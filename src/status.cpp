@@ -315,7 +315,7 @@ struct DrawItemText {
     void final_number(uint8_t value, char) { number(value); }
 };
 
-enum ItemTextStyle : uint8_t { STATUS_ITEM, INVENTORY_ITEM, PROMPT_ITEM };
+enum ItemTextStyle : uint8_t { STATUS_ITEM, INVENTORY_ITEM, PROMPT_ITEM, PLURAL_ITEM };
 
 const char AVM_PROGMEM* article_for(const char AVM_PROGMEM* word)
 {
@@ -456,8 +456,8 @@ __attribute__((noinline)) void emit_consumable(Item item, ItemTextStyle style, O
             ? scroll_descriptors[item_appearance(item.type)]
             : potion_color_names[item_appearance(item.type)]);
     uint8_t quantity = item_value(item);
-    bool plural = quantity > 1 && style != PROMPT_ITEM;
-    if(plural) text.number(quantity);
+    bool plural = (quantity > 1 || style == PLURAL_ITEM) && style != PROMPT_ITEM;
+    if(plural && style != PLURAL_ITEM) text.number(quantity);
     else if(style == PROMPT_ITEM) text.word(F("the"));
     else if(style == STATUS_ITEM) text.word(article_for(first_word));
     if(known) {
@@ -532,13 +532,13 @@ void emit_other_item(Item item, ItemTextStyle style, Output& text, char suffix)
     switch(item.type) {
     case ARROWS:
         if(style == PROMPT_ITEM) text.word(F("the"));
-        text.number(item_value(item));
-        text.final_word(item_value(item) == 1 ? F("arrow") : F("arrows"), suffix);
+        if(style != PLURAL_ITEM) text.number(item_value(item));
+        text.final_word(item_value(item) == 1 && style != PLURAL_ITEM ? F("arrow") : F("arrows"), suffix);
         break;
     case FOOD:
-        if(item_value(item) > 1) {
+        if(item_value(item) > 1 || style == PLURAL_ITEM) {
             if(style == PROMPT_ITEM) text.word(F("the"));
-            text.number(item_value(item));
+            if(style != PLURAL_ITEM) text.number(item_value(item));
             text.final_word(F("food rations"), suffix);
         } else {
             if(style == PROMPT_ITEM) text.word(F("the"));
@@ -649,6 +649,12 @@ void rogue::status(Item item, char punctuation)
     StatusItemText text;
     emit_item(item, punctuation == '?' ? PROMPT_ITEM : STATUS_ITEM,
               text, punctuation);
+}
+
+void rogue::status_plural(Item item, char punctuation)
+{
+    StatusItemText text;
+    emit_item(item, PLURAL_ITEM, text, punctuation);
 }
 
 void rogue::status(const Monster& monster)

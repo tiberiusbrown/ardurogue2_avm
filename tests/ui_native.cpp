@@ -35,6 +35,7 @@ void status(const char*) { study_status_output();}
 void status(const char*, char) { study_status_output();}
 void status(Item) { study_status_output();}
 void status(Item, char) { study_status_output();}
+void status_plural(Item item, char punctuation) { status(item, punctuation); }
 void status_visible_monster(const Monster& m) { status(m); }
 void status(const Monster&) { study_status_output();}
 void status(const Monster&, char) { study_status_output();}

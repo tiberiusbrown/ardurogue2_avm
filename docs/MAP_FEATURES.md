@@ -193,6 +193,10 @@ The frontend gathers the explicit `FeatureChoice` after the combat frame
 unwinds, then `complete_player_move` resolves it and completes the movement turn
 plus any accepted pickup turns.
 Cancellation still completes that movement turn. Fatal traps stop turn processing.
+The player is rendered on the feature before its Yes/No question. Prompt text
+and button graphics clear before results. Accepted interactions report the
+effect, or "Nothing happens." when no effect occurred, followed by the feature's
+closing message. Declining or cancelling item selection leaves the feature intact.
 Knockback queues its final landing activation until the combat frame unwinds,
 without an extra turn or teleport recursion. Monster entry activates traps as
 described below; monsters do not activate interactive objects or holy symbols.

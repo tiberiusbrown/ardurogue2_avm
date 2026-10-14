@@ -82,18 +82,32 @@ static uint8_t trap_damage_roll(uint8_t type) {
     default: return 0;
     }
 }
-static void weaken() { if(game.weakened < 3) ++game.weakened; }
-static void confuse(bool trap = false) {
+static bool report_effect(bool changed, const char PROGMEM* message) {
+    if(changed) status(message);
+    return changed;
+}
+static bool weaken() {
+    if(game.weakened >= 3) return false;
+    ++game.weakened; return true;
+}
+static bool confuse(bool trap = false) {
+    uint8_t previous = game.confused;
     if(amulet_bonus(AMULET_CLARITY) <= 0) {
         uint8_t duration = static_cast<uint8_t>(trap && trap_tuning_depth() < 2 ? OPENING_CONFUSION_MIN + roll(OPENING_CONFUSION_ROLL) : 5 + roll(4));
         if(game.confused < duration) game.confused = duration;
     }
+    return game.confused != previous;
 }
-static void cure() { game.weakened = game.confused = game.slowed = 0; }
-static void blessing(uint8_t divisor = 4) {
+static bool cure() {
+    bool changed = game.weakened || game.confused || game.slowed;
+    game.weakened = game.confused = game.slowed = 0;
+    return report_effect(changed, F("Your ailments fade away."));
+}
+static bool blessing(uint8_t divisor = 4) {
     uint8_t amount = player_max_hp() / divisor;
+    uint8_t previous = game.hp;
     heal_player(amount ? amount : 1);
-    status(F("You feel renewed."));
+    return report_effect(game.hp != previous, F("You feel renewed."));
 }
 static void set_curse(Item& item, bool cursed) {
     if(uses_full_info(item.type)) return;
@@ -116,17 +130,19 @@ static uint8_t random_item(uint8_t mode) {
     }
     return selected;
 }
-static void random_identify() {
+static bool random_identify() {
     uint8_t slot = random_item(0);
-    if(slot == NONE) { blessing(); return; }
+    if(slot == NONE) return blessing();
     identify_item(slot);
     status(F("You identify")); status(game.inventory[slot], '.');
+    return true;
 }
-static void random_uncurse() {
+static bool random_uncurse() {
     uint8_t slot = random_item(1);
-    if(slot == NONE) { blessing(); return; }
+    if(slot == NONE) return blessing();
     set_curse(game.inventory[slot], false);
     status(F("The curse lifts from")); status(game.inventory[slot], '.');
+    return true;
 }
 static uint8_t random_equipped() {
     bool weapon = game.weapon_slot < INVENTORY && is_weapon(game.inventory[game.weapon_slot].type);
@@ -142,10 +158,24 @@ static uint8_t random_equipped() {
     if(weapon && armor) return roll(2) ? game.weapon_slot : game.armor_slot;
     return weapon ? game.weapon_slot : armor ? game.armor_slot : NONE;
 }
-static void improve_equipped() {
+static bool report_item_change(Item before, Item after) {
+    if(before.info == after.info) return false;
+    status_capitalize(); status(after);
+    if(item_is_cursed(before) != item_is_cursed(after))
+        status(item_is_cursed(after) ? F("is cursed.") : F("is no longer cursed."));
+    else if(is_wand(after.type))
+        status(wand_modifier(before) != wand_modifier(after) ? F("becomes reliable.") : F("fills with magical power."));
+    else if(is_equipment(after.type))
+        status(equipment_enchant(after) > equipment_enchant(before) ? F("grows stronger.") : F("grows weaker."));
+    else status(F("grows stronger."));
+    return true;
+}
+static bool improve_equipped() {
     uint8_t slot = random_equipped();
-    if(slot == NONE) blessing();
-    else set_equipment_enchant(game.inventory[slot], equipment_enchant(game.inventory[slot]) + 1);
+    if(slot == NONE) return blessing();
+    Item before = game.inventory[slot];
+    set_equipment_enchant(game.inventory[slot], equipment_enchant(game.inventory[slot]) + 1);
+    return report_item_change(before, game.inventory[slot]);
 }
 bool summon_monster(uint8_t slot, Position pos, bool no_rewards, bool undead) {
     if(slot >= HOSTILE_MONSTERS || game.monsters[slot].type || blocked(pos.x, pos.y) ||
@@ -198,15 +228,16 @@ static bool summon(Position origin, bool trap, bool undead = false, bool visible
     }
     return false;
 }
-static void gift_item() {
+static bool gift_item() {
     uint8_t slot = NONE;
     for(uint8_t i = 0; i < ground_item_capacity(); ++i) if(!game.ground[i].item.type &&
         !(game.floor==FLOORS-1 && !game.has_amulet && i==yendor_ground_slot())) { slot = i; break; }
-    if(slot == NONE || item_at(game.player) != NONE) { blessing(); return; }
+    if(slot == NONE || item_at(game.player) != NONE) return blessing();
     Item item = generation::useful_item(game.random_state);
     game.ground[slot] = {game.player, item};
     SIM_EVENT(sim::EventKind::GeneratedItem, slot, item.type, is_stackable(item.type) ? item_value(item) : 1);
     status(F("You discover")); status(item, '.');
+    return true;
 }
 // Formatting and paging run after effect/placement temporaries have unwound.
 static void visible_trap_status(const Monster& monster, const char PROGMEM* message) {
@@ -383,33 +414,51 @@ bool feature_accepts_item(uint8_t type, uint8_t slot) {
         return is_equipment(item.type) || is_wand(item.type) || is_ring(item.type) || is_amulet(item.type);
     return false;
 }
-static void fountain() {
+static bool feature_summon(bool undead = false) {
+    if(!summon(game.player, false, undead)) return blessing();
+    status(F("A creature appears!")); return true;
+}
+static bool fountain() {
     uint8_t outcome = roll(100);
-    if(outcome < 25) blessing();
-    else if(outcome < 40) game.hunger = game.hunger > 215 ? 255 : game.hunger + 40;
-    else if(outcome < 55) cure();
-    else if(outcome < 70) confuse();
-    else if(outcome < 80) weaken();
+    if(outcome < 25) return blessing();
+    else if(outcome < 40) {
+        uint8_t previous = game.hunger;
+        game.hunger = game.hunger > 215 ? 255 : game.hunger + 40;
+        return report_effect(game.hunger != previous, F("You feel nourished."));
+    }
+    else if(outcome < 55) return cure();
+    else if(outcome < 70) return report_effect(confuse(), F("You feel confused."));
+    else if(outcome < 80) return report_effect(weaken(), F("You feel weaker."));
     else if(outcome < 85) {
         uint8_t& stat = roll(2) ? game.strength : game.dexterity;
-        if(stat < 12) ++stat; else blessing();
-    } else if(outcome < 90) { if(!summon(game.player, false)) blessing(); }
-    else if(outcome < 95) random_identify();
-    else teleport_player();
+        if(stat >= 12) return blessing();
+        ++stat;
+        status(&stat == &game.strength ? F("You feel stronger.") : F("You feel more agile."));
+        return true;
+    } else if(outcome < 90) return feature_summon();
+    else if(outcome < 95) return random_identify();
+    else {
+        teleport_player(); return true; // Teleport reports success or no effect itself.
+    }
 }
-static void sacrifice(uint8_t slot) {
+static bool sacrifice(uint8_t slot) {
     Item item = game.inventory[slot];
     uint8_t value = is_artifact(item.type) ? 3 : is_equipment(item.type) || is_wand(item.type) ? 2 :
         is_stackable(item.type) && item_value(item) >= 3 ? 2 : 1;
     destroy_inventory_item(slot);
     switch(roll(4)) {
-    case 0: heal_player(player_max_hp() * static_cast<uint16_t>(value) / 4); break;
-    case 1: gain_xp(5 * value); break;
-    case 2: random_uncurse(); break;
-    case 3: improve_equipped(); break;
+    case 0: {
+        uint8_t previous = game.hp;
+        heal_player(player_max_hp() * static_cast<uint16_t>(value) / 4);
+        return report_effect(game.hp != previous, F("You feel renewed."));
+    }
+    case 1: gain_xp(5 * value); status(F("You gain experience.")); return true;
+    case 2: return random_uncurse();
+    default: return improve_equipped();
     }
 }
-static void pool(Item& item) {
+static bool pool(Item& item) {
+    Item previous = item;
     uint8_t outcome = roll(5);
     if(outcome < 2 && !is_equipment(item.type)) outcome = 4;
     if(outcome == 0) set_equipment_enchant(item, equipment_enchant(item) + 1);
@@ -421,6 +470,7 @@ static void pool(Item& item) {
         set_wand_charges(item, charges > 12 ? 15 : charges + 3);
     } else if(is_equipment(item.type)) set_equipment_enchant(item, equipment_enchant(item) + 1);
     else if(item_value(item) < ITEM_VALUE_MASK) set_item_value(item, item_value(item) + 1);
+    return report_item_change(previous, item);
 }
 __attribute__((noinline)) bool resolve_feature(uint8_t index, FeatureChoice choice) {
     if(index >= MAP_FEATURES || session.ended || game.paralyzed ||
@@ -438,50 +488,60 @@ __attribute__((noinline)) bool resolve_feature(uint8_t index, FeatureChoice choi
 #if defined(ARDUROGUE2_SIM)
     sim::DamageScope source(sim::Cause::Feature, type);
 #endif
+    bool reported = false;
     switch(type) {
-    case FEATURE_FOUNTAIN: fountain(); break;
-    case FEATURE_HEALING_SPRING: blessing(2); cure(); break;
+    case FEATURE_FOUNTAIN: reported = fountain(); break;
+    case FEATURE_HEALING_SPRING: reported = blessing(2); if(cure()) reported = true; break;
     case FEATURE_ALTAR: {
         uint8_t outcome = roll(8);
         if(outcome == 0 && BALANCE_VALUE("pets", 1)) {
             uint8_t pick = roll(8);
             uint8_t pet = pick < 5 ? HOUND : pick < 7 ? SPIDER : WISP;
-            if(!create_pet(pet, PetSource::Altar)) blessing();
-        } else if(outcome < 3) blessing();
-        else if(outcome < 5) random_uncurse();
-        else if(outcome == 5) random_identify();
-        else if(outcome == 6) { if(roll(2)) weaken(); else confuse(); }
-        else if(!summon(game.player, false)) blessing();
+            reported = create_pet(pet, PetSource::Altar);
+            if(!reported) reported = blessing();
+        } else if(outcome < 3) reported = blessing();
+        else if(outcome < 5) reported = random_uncurse();
+        else if(outcome == 5) reported = random_identify();
+        else if(outcome == 6) {
+            if(roll(2)) reported = report_effect(weaken(), F("You feel weaker."));
+            else reported = report_effect(confuse(), F("You feel confused."));
+        }
+        else reported = feature_summon();
         break;
     }
-    case FEATURE_SACRIFICIAL_ALTAR: sacrifice(choice.slot); break;
+    case FEATURE_SACRIFICIAL_ALTAR: reported = sacrifice(choice.slot); break;
     case FEATURE_ENCHANTED_FORGE: {
-        Item& item = game.inventory[choice.slot]; uint8_t outcome = roll(8);
+        Item& item = game.inventory[choice.slot]; Item previous = item; uint8_t outcome = roll(8);
         if(outcome < 7) set_equipment_enchant(item, equipment_enchant(item) + (outcome < 6 ? 1 : -1));
-        else set_curse(item, true); break;
+        else set_curse(item, true);
+        reported = report_item_change(previous, item); break;
     }
     case FEATURE_STATUE: {
         uint8_t outcome = roll(4);
-        if(outcome < 2) { if(!summon(game.player, false)) blessing(); }
-        else if(outcome == 2) gift_item();
-        else { blessing(); cure(); } break;
+        if(outcome < 2) reported = feature_summon();
+        else if(outcome == 2) reported = gift_item();
+        else { reported = blessing(); if(cure()) reported = true; } break;
     }
     case FEATURE_SARCOPHAGUS: {
         uint8_t outcome = roll(4);
-        if(outcome < 2) { if(!summon(game.player, false, true)) blessing(); }
-        else if(outcome == 2) gift_item();
-        else game.score += 25; break;
+        if(outcome < 2) reported = feature_summon(true);
+        else if(outcome == 2) reported = gift_item();
+        else { game.score += 25; status(F("You find hidden treasure!")); reported = true; } break;
     }
     case FEATURE_RUNESTONE:
         switch(roll(4)) {
-        case 0: blessing(); break;
-        case 1: cure(); break;
-        case 2: if(game.magic_resistance < 127) ++game.magic_resistance; else blessing(); break;
-        case 3: player_take_magic_damage(3 + roll(4), 6); break;
+        case 0: reported = blessing(); break;
+        case 1: reported = cure(); break;
+        case 2:
+            if(game.magic_resistance < 127) {
+                ++game.magic_resistance; status(F("You feel resistant to magic.")); reported = true;
+            } else reported = blessing(); break;
+        case 3: status(F("Magical energy burns you!")); player_take_magic_damage(3 + roll(4), 6); reported = true; break;
         } break;
-    case FEATURE_ALCHEMICAL_POOL: pool(game.inventory[choice.slot]); break;
+    case FEATURE_ALCHEMICAL_POOL: reported = pool(game.inventory[choice.slot]); break;
     default: break;
     }
+    if(!reported) status(F("Nothing happens."));
     switch(type) {
     case FEATURE_FOUNTAIN: status(F("The fountain dries up.")); break;
     case FEATURE_HEALING_SPRING: status(F("The spring dries up.")); break;

@@ -564,6 +564,13 @@ int main()
     if(!std::strstr(text,"Book of Survival")) { std::fprintf(stderr,"spellbook name: %s\n",text); return 1; }
     check_drawn_item(book);
     check_streaming_status();
+    begin_capture();
+    status_plural(Item{ARROWS, 1}, '.');
+    expect_status("arrows.");
+    other_known[POTION_HEALING] = false;
+    begin_capture();
+    status_plural(Item{POTION_HEALING, 1}, '.');
+    expect_status("red potions.");
     check_item_status();
     check_equipment_roster_text();
     check_cursed_equipment();

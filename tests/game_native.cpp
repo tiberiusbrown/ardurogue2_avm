@@ -46,6 +46,7 @@ void status(const char* words, char punctuation) { study_status_output();
 }
 void status(Item item) { study_status_output(); last_status_item = item; }
 void status(Item item, char) { study_status_output(); last_status_item = item; }
+void status_plural(Item item, char punctuation) { status(item, punctuation); }
 void status_visible_monster(const Monster& m) { status(m); }
 void status(const Monster&) { study_status_output(); ++monster_status_count; }
 void status(const Monster&, char) { study_status_output(); ++monster_status_count; }
@@ -974,29 +975,28 @@ void check_ground_item_exchange()
     reset_item_fixture();
     fill_item_inventory();
     game.inventory[0] = {FOOD, 60};
-    game.inventory[1] = {FOOD, 59};
     game.ground[5] = {{3, 4}, {FOOD, 7}};
     require(take_item(5) == PICKUP_TAKEN &&
             item_value(game.inventory[0]) == 63 &&
-            item_value(game.inventory[1]) == 63,
-            "pickup did not span compatible stacks");
+            game.inventory[1].type == LONG_SWORD && item_value(game.ground[5].item) == 4,
+            "pickup exceeded the single stack or lost excess ground units");
 
     reset_item_fixture();
     game.inventory[0] = {SCROLL_MAPPING, 60};
     game.ground[5] = {{3, 4}, {SCROLL_MAPPING, 8}};
     require(take_item(5) == PICKUP_TAKEN &&
             item_value(game.inventory[0]) == 63 &&
-            game.inventory[1].type == SCROLL_MAPPING &&
-            item_value(game.inventory[1]) == 5,
-            "pickup did not put remainder in an empty slot");
+            game.inventory[1].type == NO_ITEM &&
+            item_value(game.ground[5].item) == 5,
+            "pickup created a second stack instead of leaving excess on the ground");
 
     reset_item_fixture();
     fill_item_inventory();
-    game.inventory[0] = {FOOD, 62};
+    game.inventory[0] = {FOOD, 63};
     game.ground[5] = {{3, 4}, {FOOD, 2}};
     Game unchanged = game;
     Session unchanged_session = session;
-    require(take_item(5) == PICKUP_NEEDS_SWAP &&
+    require(take_item(5) == PICKUP_LIMIT &&
             std::memcmp(&game, &unchanged, sizeof(game)) == 0 &&
             std::memcmp(&session, &unchanged_session, sizeof(session)) == 0,
             "failed pickup partially changed game state");
