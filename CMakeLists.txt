@@ -85,7 +85,7 @@ function(ardurogue2_compile ARDUROGUE2_SOURCE_FILE ARDUROGUE2_OBJECT)
         COMMAND "${AVM_CLANG}"
             --target=avm-unknown-arduboyfx
             -g -std=c++17 -O2 -flto -ffreestanding -fomit-frame-pointer
-            -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables
+            -fno-stack-protector -fno-asynchronous-unwind-tables
             -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit
             -ffunction-sections -fdata-sections -Wall -Wextra -Werror
             -isystem "${AVM_SYSROOT}/include"
